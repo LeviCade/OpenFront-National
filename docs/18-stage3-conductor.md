@@ -44,10 +44,10 @@ No AI-only facade is an acceptable substitute for integrated behavior.
 
 Engineering branch policy after M0 integration:
 
-- Integration: \`stage3/integration-20261115\`.
-- Engineer 1: \`stage3/engineer-1-politics-20261115\`.
-- Engineer 2: \`stage3/engineer-2-conflict-20261115\`.
-- Engineer 3: \`stage3/engineer-3-intelligence-20261115\`.
+- Integration: `stage3/integration-20261115`.
+- Engineer 1: `stage3/engineer-1-politics-20261115`.
+- Engineer 2: `stage3/engineer-2-conflict-20261115`.
+- Engineer 3: `stage3/engineer-3-intelligence-20261115`.
 
 All engineers start from the same conductor-approved integration SHA and
 submit small PRs targeting integration, not ad hoc direct commits to main.
@@ -61,7 +61,7 @@ NAP/MDA constitutional politics, admissions, unanimity, betrayal,
 leadership, transfer, Ungovernable crisis and collapse; later treasury,
 construction authority and three imperial military modes.
 Tests: SOV-01..07, COAL-01..07 and relevant D-003..D-013.
-Prefer new modules in \`packages/engine/src/national/politics/\`
+Prefer new modules in `packages/engine/src/national/politics/`
 and scoped tests. Shared engine API changes require a conductor contract PR.
 
 ## Engineer 2 — war/peace, combat and coercion
@@ -71,7 +71,7 @@ in-flight combat semantics, instantaneous **real troop** defensive levies,
 campaign anti-abuse accounting, embargoes, secondary sanctions,
 coercive ultimatums and wartime naval blockades.
 Tests: WAR-01..12, LEVY-01..07, ECON-01..08, NAV-01..05.
-Prefer new modules in \`packages/engine/src/national/conflict/\`.
+Prefer new modules in `packages/engine/src/national/conflict/`.
 Prove troop/gold conservation, no single-action replay double spend,
 effective hostility derivation, and correct peace-layer survival.
 
@@ -81,8 +81,8 @@ Own the NATIONAL national-interest planner, strategic objectives and
 credibility memory, legitimate observation and fog rights, emperor shared
 intelligence, intelligence costs, and bounded AI update cadence.
 Tests: AI-01..07 and FOG-01..07; same observations for AI and human.
-Prefer new modules in \`packages/engine/src/national/ai/\` and
-\`packages/engine/src/national/observation/\`. Do not implement omniscient
+Prefer new modules in `packages/engine/src/national/ai/` and
+`packages/engine/src/national/observation/`. Do not implement omniscient
 global-state reads, implicit human bias or independent command legality.
 
 ## Mandatory PR contract

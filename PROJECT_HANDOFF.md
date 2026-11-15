@@ -32,21 +32,21 @@ Read this handoff, [AGENTS.md](AGENTS.md), [the design index](docs/README.md), [
 - src/server/gatekeeper is an unexpanded git submodule pointer. Upstream src/server/Gatekeeper.ts explicitly provides a **no-op fallback** when the optional module is absent (described there as normal for forks and public CI); this need not block the public game baseline, though the optional security module's absence must be recorded.
 - There is no NATIONAL game logic in the imported upstream snapshot. Source import is not feature coding.
 
-## Historical Stage 2 recovery instructions (closed; do not rerun as active work)
+## First actions in every new Stage 3 conductor session
 
-The following steps document how migration was recovered. **Do not replay the
-pinned import or Stage 2 repair as normal Stage 3 work.** Begin new coding
-sessions from main and [the conductor plan](docs/18-stage3-conductor.md).
-
-## First actions in a new chat
-
-1. Fetch live repository heads for main and stage2/upstream-import-20261115.
-2. Inspect [run #43767389661](https://github.com/LeviCade/OpenFront-National/actions/runs/43767389661) and its job logs for import/verification status.
-3. If import failed, fix the exact error on the dedicated branch. The workflow triggers on changes to its workflow file; a script-only update does not automatically retrigger. Use a permitted Actions rerun or a small audited workflow edit. Never force-push or delete the Stage 1 docs.
-4. If import succeeded, confirm code/config/resources, license and attribution files are present, Stage 1 docs are intact, upstream workflows are inert, and NO restricted proprietary assets were committed.
-5. If verification failed, inspect docs/16-stage2-verification.md plus the Actions log artifact. Resolve actual install, typecheck, tests, lint, format, build and asset/submodule issues. Do not call source presence a verified runnable game.
-6. Once baseline builds and tests pass, rights are respected, and no unexpected deploy automation is active, open/review Stage 2 PR to main and merge safely, then update status documentation and close issue #2.
-7. Begin Stage 3 ONLY after verified Stage 2 acceptance. Follow existing roadmap and scenario IDs.
+1. Read [Stage 2 acceptance](docs/17-stage2-acceptance.md),
+   [Stage 3 ownership](docs/18-stage3-conductor.md),
+   [AGENTS](AGENTS.md), the decision register and acceptance scenarios.
+2. Verify live main/integration SHAs, current PRs and CI; don't infer
+   current state from an old chat or a previous checkpoint.
+3. Confirm Stage 2 landed in main via PR #4 and that the original
+   pinned importer remains manual-only. Do not rerun it.
+4. Establish M0 shared mode/state contracts on an integration branch
+   before engineers create diverging definitions of sovereignty.
+5. Send three scoped engineering assignments, using the
+   agreed branch and contract SHA, and merge only integrated green work.
+6. Maintain open pre-release asset and security gates in issues #5/#6.
+7. NATIONAL economics overhaul stays deferred to another version.
 
 ## The full vision — DO NOT REDESIGN OR FORGET
 
@@ -84,14 +84,18 @@ sessions from main and [the conductor plan](docs/18-stage3-conductor.md).
 - [Migration plan](docs/13-migration-plan.md)
 - [Stage 3 roadmap](docs/14-roadmap.md)
 
-## Historical reuse prompt for Stage 2 (superseded)
-
-This previous prompt is retained for provenance. For new work, use
-[the Stage 3 conductor plan](docs/18-stage3-conductor.md) instead.
-
 ## Reuse prompt for next ChatGPT conductor
 
-> Inspect LeviCade/OpenFront-National on GitHub. Read PROJECT_HANDOFF.md, AGENTS.md, docs/README.md, docs/11-decisions.md, docs/10-scenarios.md, and docs/14-roadmap.md. Check both main and stage2/upstream-import-20261115 and Actions run #43767389661. Determine exactly what migrated, whether baseline tests/build passed, what asset/licensing blockers remain, and whether Stage 2 is ready for merge. Preserve all Stage 1 design, current code and test evidence. No Stage 3 coding before migration acceptance. Summarize verified progress with SHAs and next tasks.
+> Take conductor ownership of LeviCade/OpenFront-National. Stage 2
+> development baseline was merged by PR #4 on November 15, 2026.
+> Read PROJECT_HANDOFF.md, AGENTS.md, docs/17-stage2-acceptance.md,
+> docs/18-stage3-conductor.md, the decision register and scenario matrix.
+> Verify current GitHub SHAs, CI and issue statuses. Own M0 shared
+> NATIONAL contracts, integration, reviews and test gates. Coordinate
+> three engineers in isolated politics, conflict, and AI/observation
+> workstreams; user relays engineer messages. Keep old modes unaffected.
+> Do not add deferred economy or claim production readiness before
+> completing outstanding asset and dependency security audits.
 
 ## Conductor engineering rules
 
