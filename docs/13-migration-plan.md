@@ -1,6 +1,6 @@
 # 13 — Stage 2: Upstream migration plan
 
-**STATUS: NOT STARTED.** No OpenFront source files or game assets have yet been imported into LeviCade/OpenFront-National. Stage 1 establishes design docs first.
+**STATUS: ACTIVE ON A DEDICATED STAGE 2 BRANCH (as of November 15, 2026); not yet accepted on main.** The import workflow and its verification are tracked in [PROJECT_HANDOFF.md](../PROJECT_HANDOFF.md) and [Stage 2 issue #2](https://github.com/LeviCade/OpenFront-National/issues/2). Do not claim success until exact build/test and licensing gates pass.
 
 ## Source of truth
 
@@ -25,7 +25,7 @@ A source-code fork can contain upstream materials subject to different licenses.
 
 1. **Record documentation baseline:** freeze Stage 1 docs as tagged/reviewed milestone. Don't overwrite the product vision with upstream's README.
 2. **Review upstream repo and dependencies:** latest default branch HEAD, node/npm versions, lockfile, tooling, build/test scripts, server deployment expectations, assets/licenses, readme and upstream notice locations.
-3. **Choose history-preserving migration approach:** create a dedicated migration branch and import the upstream repository with documented provenance, preferably retaining upstream history/authorship as far as technically feasible. Since this repository already contains unrelated design-doc commits, inspect Git history merge options and handle root README/CONTRIBUTING/AGENTS collisions explicitly. Avoid broad force-pushes that erase Stage 1 history.
+3. **Choose history-preserving migration approach:** create a dedicated migration branch and import the upstream repository with documented provenance, the current Stage 2 attempt uses a pinned snapshot commit rather than importing upstream ancestry, because its history also contains assets subject to restricted proprietary terms. It preserves authorship/provenance through the exact original upstream SHA and license notices; never redistribute upstream historical Git objects blindly. Since this repository already contains unrelated design-doc commits, inspect Git history merge options and handle root README/CONTRIBUTING/AGENTS collisions explicitly. Avoid broad force-pushes that erase Stage 1 history.
 4. **Preserve NATIONAL docs:** make sure project-level README and docs remain discoverable and link-valid after the import. Preserve upstream readme and migration instructions in suitable clearly labeled locations.
 5. **Check legal/asset inventory:** include required license and copyright notices and a provenance inventory. Check asset license terms before shipping assets.
 6. **Baseline run:** follow upstream's then-current exact install instructions, typecheck, lint, build, unit/integration tests, game smoke, server/client startup. Don't weaken or skip gates simply to call migration done.

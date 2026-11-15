@@ -2,7 +2,7 @@
 
 ## Current stage
 
-**Stage 1 — VISION ONLY.** This repository intentionally begins with documentation and no game code. Do **not** fetch and overwrite the repository with OpenFront source, edit upstream, implement mechanics, or declare feature completion until Stage 2 is expressly started and baseline is verified.
+**Stage 1 — VISION COMPLETE. Stage 2 — MIGRATION ACTIVE ON SEPARATE BRANCH, NOT YET ACCEPTED.** First read [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) and verify the live GitHub Actions result and branch state. The default branch may intentionally contain only the documentation baseline until Stage 2 import and tests pass. Never overwrite the vision or treat source import as completion. Do not implement NATIONAL mechanics (Stage 3) until Stage 2 baseline is verified.
 
 ## Authoritative documentation
 

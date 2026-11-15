@@ -1,5 +1,7 @@
 # NATIONAL design library
 
+**New chat?** Read [the permanent project handoff](../PROJECT_HANDOFF.md) for verified GitHub links and Stage 2 recovery instructions.
+
 **Status: Stage 1 / design documentation, not implemented code.** The documents below capture the intended NATIONAL ruleset. Their requirements are the target for Stage 3, not claims about what current OpenFront supports.
 
 ## Navigation
