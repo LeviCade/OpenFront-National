@@ -1,0 +1,50 @@
+name: Stage 2 - Deterministic Full-Game Smoke
+
+on:
+  push:
+    branches:
+      - stage2/upstream-import-20261115
+    paths:
+      - .github/workflows/stage2-headless-game.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  headless-game:
+    if: github.repository == 'LeviCade/OpenFront-National'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout imported game without optional private gatekeeper
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Pinned npm
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Reproducible lockfile install
+        run: npm run inst
+      - name: Run real game engine twice with identical seed and compare final hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 480 npm run perf:game -- --map World --ticks 200 --bots 12 --nations 10 --seed stage2-source-baseline --no-cpu-profile --no-exec-profile --no-gc-profile --no-alloc-profile > /tmp/national-game-1.log 2>&1 || {
+            tail -100 /tmp/national-game-1.log
+            exit 1
+          }
+          timeout 480 npm run perf:game -- --map World --ticks 200 --bots 12 --nations 10 --seed stage2-source-baseline --no-cpu-profile --no-exec-profile --no-gc-profile --no-alloc-profile > /tmp/national-game-2.log 2>&1 || {
+            tail -100 /tmp/national-game-2.log
+            exit 1
+          }
+          tail -45 /tmp/national-game-1.log
+          tail -45 /tmp/national-game-2.log
+          h1="$(grep -m1 'Final hash:' /tmp/national-game-1.log | sed 's/.*Final hash:[[:space:]]*//')"
+          h2="$(grep -m1 'Final hash:' /tmp/national-game-2.log | sed 's/.*Final hash:[[:space:]]*//')"
+          [[ -n "$h1" && "$h1" != "n/a" ]] || { echo "::error::No recorded game hash"; exit 1; }
+          [[ "$h1" == "$h2" ]] || { echo "::error::Non-deterministic hashes: $h1 vs $h2"; exit 1; }
+          echo "PASS: full-game simulation and deterministic replay-equivalent hash: $h1"
