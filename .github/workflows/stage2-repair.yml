@@ -1,3 +1,4 @@
+# Idempotent repair recheck: verify the final formatting and runnable source baseline.
 name: Stage 2 - Repair and Prove Migrated Baseline
 
 on:
