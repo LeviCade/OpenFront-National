@@ -2,9 +2,9 @@ name: NATIONAL - Source Baseline CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, stage3/integration-20261115]
   push:
-    branches: [main]
+    branches: [main, stage3/integration-20261115]
   workflow_dispatch:
 
 permissions:
