@@ -33,7 +33,7 @@ for old, new in replacements.items():
     count = s.count(old)
     if count == 1:
         s = s.replace(old, new)
-    elif count == 0 and s.count(new) == 1:
+    elif count == 0 and s.count(new) >= 1:
         print(f"Already migrated: {new}")
     else:
         raise SystemExit(f"Unexpected vite asset reference state: {old!r} -> {new!r}")
