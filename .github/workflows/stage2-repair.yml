@@ -1,0 +1,75 @@
+name: Stage 2 - Repair and Prove Migrated Baseline
+
+on:
+  push:
+    branches:
+      - stage2/upstream-import-20261115
+    paths:
+      - .github/workflows/stage2-repair.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: national-stage2-repair
+  cancel-in-progress: false
+
+jobs:
+  repair-and-verify:
+    name: Repair migration, then verify full OpenFront baseline
+    if: github.repository == 'LeviCade/OpenFront-National'
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    steps:
+      - name: Checkout exact migration branch with full fork history (no submodule)
+        uses: actions/checkout@v4
+        with:
+          ref: stage2/upstream-import-20261115
+          fetch-depth: 0
+          persist-credentials: true
+          submodules: false
+
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+
+      - name: Setup pinned npm
+        run: npm install --global --ignore-scripts npm@12.1.0
+
+      - name: Merge current Stage 1 documents and CI, generate permitted NATIONAL assets and format
+        shell: bash
+        run: bash .github/scripts/stage2-baseline-repair.sh
+
+      - name: Verify exact lockfile, typecheck, unit tests, lint and formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run inst
+          npm run typecheck
+          npm test
+          npm run lint
+          npm run format:check
+
+      - name: Production build (without protected upstream proprietary artwork)
+        run: npm run build-prod
+
+      - name: Verify local client HTTP, original replacement assets and server startup
+        shell: bash
+        run: bash .github/scripts/stage2-smoke.sh
+
+      - name: Verify source and ownership boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e CODEOWNERS
+          test ! -e proprietary
+          test -f LICENSE
+          test -f LICENSE-ASSETS
+          test -f LICENSING.md
+          test -f PROJECT_HANDOFF.md
+          test -f docs/10-scenarios.md
+          test -f docs/11-decisions.md
+          test -f UPSTREAM-README.md
+          echo 'PASS: imported source, authoritative docs, license boundaries'
