@@ -23,33 +23,43 @@ Go/no-go: complete baseline acceptance per [migration plan](13-migration-plan.md
 Feature work should proceed as vertical slices that keep real gameplay working at each milestone. Proposed sequencing:
 
 ### M0 — Mode isolation and test harness
+
 Feature gate NATIONAL in Solo FFA; add deterministic fixture scenarios, replay checks and unobtrusive UI scaffolding. Existing modes remain unchanged.
 
 ### M1 — Sovereignty and victory
+
 Represent independent nations, empires, member status, emperor transfer and collapse; enforce last-sovereign-standing victory and prestige labels.
 
 ### M2 — Constitutional treaty engine
+
 NAP/MDA records, membership, leadership powers, admission votes, unanimous amendments, Betray and automatic expulsion, secrecy, alliance replacement within NATIONAL.
 
 ### M3 — War, peace and scope
+
 National/empire-wide war records, delegated diplomacy, layered peace, war permission for combat, peacetime embargo, existing-in-flight attack semantics.
 
 ### M4 — Mutual defensive levy
+
 Attack interception before tile loss, weighted caps/protected reserves, real troop deduction/returns, campaign-spam protection and simultaneous allocation.
 
 ### M5 — Imperial administration
+
 Exclusive membership, standing response policy, central/hybrid/decentralized armies, population-cap redistribution, treasury routing, member construction authority, trade overrides, Ungovernable crisis and Imperial Transfer.
 
 ### M6 — Economic coercion and maritime enforcement
+
 Secondary sanctions, refusal/compliance and enforcement, credible ultimatums, proxy wars, physically enforceable naval blockades and neutral merchant return.
 
 ### M7 — Fog and intelligence
+
 Public vs hidden nation observations, border/coast/ship visibility, secret treaty terms, empire-shared reconnaissance, funded regional/national/global intelligence, no client leaks.
 
 ### M8 — Unified NATIONAL strategic AI
+
 Self-interested objectives and persistent memory, no human bias, imperial decisions, betrayal, credible threats, limited-information inference. It may help build scaffolding early but must be integrated against actual earlier mechanics.
 
 ### M9 — World simulation, UX polish and release
+
 Coalition/empire panels, clear war badges, notifications, accessibility, complete scenario suite, multiplayer/legacy regression, CPU/memory benchmarks and anti-abuse fuzzing.
 
 ## Cross-cutting engineering ownership
@@ -57,6 +67,7 @@ Coalition/empire panels, clear war badges, notifications, accessibility, complet
 Parallel implementation must assign one owner of **political/sovereign state model and migrations**, one owner of **war/combat/levy resource accounting**, one owner of **AI/observation/visibility**, and one integration conductor ensuring branch compatibility, CI and invariants. Different engineers should not independently invent incompatible versions of sovereign identity or war scope.
 
 Every PR:
+
 - links to relevant specification/decision and scenario IDs,
 - states the authoritative state transitions,
 - includes tests and precise evidence,

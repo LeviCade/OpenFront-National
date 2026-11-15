@@ -18,7 +18,7 @@ OpenFront: NATIONAL — **The Age of Sovereignty** — is a proposed next-level 
 
 ## A strategic world, not an anti-leader script
 
-A group of ten 200K nations may collectively defeat a 1M nation but individual members risk elimination. An individual AI should examine who bears retaliation, which allies will follow through, and whether intervening improves its *own* chance of surviving and ultimately winning. The most rational move may be to consolidate, free-ride, align with the giant, attack when the giant is overcommitted, or fight an existential war. NATIONAL permits all outcomes.
+A group of ten 200K nations may collectively defeat a 1M nation but individual members risk elimination. An individual AI should examine who bears retaliation, which allies will follow through, and whether intervening improves its _own_ chance of surviving and ultimately winning. The most rational move may be to consolidate, free-ride, align with the giant, attack when the giant is overcommitted, or fight an existential war. NATIONAL permits all outcomes.
 
 No rule forces nations to attack the largest player simply because its land share exceeds a difficulty threshold. The "crown" threat becomes one input to a larger national-interest assessment.
 

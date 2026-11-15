@@ -13,6 +13,7 @@ At migration time, pin a **specific current upstream commit SHA** as the baselin
 ## Verified upstream licensing notes (pre-migration)
 
 The official upstream README states:
+
 - Code is **GNU Affero General Public License v3.0**.
 - Assets have a separately documented **CC BY-SA 4.0** licensing framework.
 - Upstream uses a **LICENSE**, **LICENSE-ASSETS**, and **LICENSING.md**, with visible copyright notices in footer/loading screen and possibly other relevant references.

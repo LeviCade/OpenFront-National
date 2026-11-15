@@ -14,7 +14,7 @@ An independent power A can issue a formal public or targeted demand: "Nations de
 
 It **cannot magically command** recipient nations to comply. They independently assess their revenue ties to A and B, substitutes, military/financial prospects, reputation, and likelihood A follows through.
 
-At expiry or detection of noncompliance, A must either implement its declared embargoes, negotiate, or visibly back down. Backing down affects *observed credibility*; no automatic financial penalty or omniscient reputation is necessary. No war is required for ordinary sanctions. Sanctions by themselves never authorize piracy or attack.
+At expiry or detection of noncompliance, A must either implement its declared embargoes, negotiate, or visibly back down. Backing down affects _observed credibility_; no automatic financial penalty or omniscient reputation is necessary. No war is required for ordinary sanctions. Sanctions by themselves never authorize piracy or attack.
 
 **Imperial sanctions:** Imperial Nation may issue a sweeping secondary sanction backed by the collective trading power of all members. A subordinate can propose but **cannot issue an empire-binding secondary sanction without the emperor's approval**. External sanctions demands may be handled locally by permitted imperial members or centrally by emperor policy. External calls for one imperial member to embargo another default to rejection; the emperor may override on internal policy grounds.
 
@@ -41,6 +41,7 @@ Funding and warships are real assets; imperial troop/treasury policy governs tra
 This is **not** an arbitrary passive income debuff. A nation at war with target X may use actual warships near X's ports or maritime approaches to blockade X's maritime trade routes. Zone radius and path-interception details are **OPEN** balance/engineering choices.
 
 When a valid blockading warship meets an eligible ship trying to access the blockaded port/route:
+
 - **Enemy ship** (owning nation at war with blockading power): normal wartime capture/piracy behavior.
 - **Neutral nation's trade ship**: it is **not captured**. It is turned around toward its nearest eligible home port; on return it yields **no trade income** to either party from that failed journey.
 - **Ship unrelated to restricted destination or route**: unaffected.

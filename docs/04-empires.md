@@ -9,6 +9,7 @@ No constituent nation or Imperial Nation can form or join other coalitions for a
 ## Admission
 
 Two symmetrical methods:
+
 1. The Imperial Nation invites an independent nation; the recipient accepts or rejects.
 2. An independent nation applies to an empire; the Imperial Nation accepts or rejects.
 
@@ -26,18 +27,18 @@ The supreme leader has **unilateral amendment authority** over the entire imperi
 
 Every domain except fundamental sovereignty and exclusive coalition membership may be controlled separately:
 
-| Domain | Delegated / localized | Centralized / imperial |
-| --- | --- | --- |
-| National war declaration | Members can declare national war under policy | Emperor alone authorizes national wars |
-| National peace | Members may negotiate own national peace | Emperor exclusively negotiates for them |
-| Imperial war | Never delegated | Emperor alone declares and ends empire-wide war |
-| Response to member attack | No response or targeted defense levy | Optional automatic empire-wide war, levy, or both |
-| Economy / treasury | Member retains income, may contribute portion | All or selected revenue classes go to imperial treasury |
-| Construction | Member can build allowed types | Emperor builds, upgrades or demolishes member structures, paying from imperial treasury |
-| Army | Members control national troops | One imperial military controlled only by emperor |
-| Trade | Members can trade within imperial policy | Emperor imposes bilateral and empire-wide embargoes |
-| External secondary sanctions | Local response per allowed member | One binding empire-wide response |
-| Intelligence | Shared in all cases | Shared in all cases |
+| Domain                       | Delegated / localized                         | Centralized / imperial                                                                  |
+| ---------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| National war declaration     | Members can declare national war under policy | Emperor alone authorizes national wars                                                  |
+| National peace               | Members may negotiate own national peace      | Emperor exclusively negotiates for them                                                 |
+| Imperial war                 | Never delegated                               | Emperor alone declares and ends empire-wide war                                         |
+| Response to member attack    | No response or targeted defense levy          | Optional automatic empire-wide war, levy, or both                                       |
+| Economy / treasury           | Member retains income, may contribute portion | All or selected revenue classes go to imperial treasury                                 |
+| Construction                 | Member can build allowed types                | Emperor builds, upgrades or demolishes member structures, paying from imperial treasury |
+| Army                         | Members control national troops               | One imperial military controlled only by emperor                                        |
+| Trade                        | Members can trade within imperial policy      | Emperor imposes bilateral and empire-wide embargoes                                     |
+| External secondary sanctions | Local response per allowed member             | One binding empire-wide response                                                        |
+| Intelligence                 | Shared in all cases                           | Shared in all cases                                                                     |
 
 An emperor may change these policies at any time, with authoritative atomic conversion of affected state.
 
@@ -61,7 +62,7 @@ On full centralization -> decentralization, distribute currently pooled active t
 
 ## National war versus imperial war
 
-A member may fight a *national war* while the rest of the empire remains at peace. The emperor controls which national actions are permitted. An *empire-wide war* binds every member, and **only the emperor** can settle it.
+A member may fight a _national war_ while the rest of the empire remains at peace. The emperor controls which national actions are permitted. An _empire-wide war_ binds every member, and **only the emperor** can settle it.
 
 An empire-wide war layered over an existing national war does not overwrite it. When the emperor ends the imperial war, a prior member's individual national war **remains active**.
 
@@ -71,7 +72,7 @@ The emperor's own nation may be in a national war while the empire is collective
 
 ## Coercive accession
 
-The Imperial Nation can send an **Imperial Ultimatum** demanding submission with declared consequences (embargo, secondary sanctions, national war, empire-wide war, or invasion). The recipient evaluates whether the emperor can *actually* execute them: distance, fleet and transport capabilities, border access, defense, alliances, costs, and imperial survival prospects. Refusal does not magically annex it. Threat follow-through affects reputation.
+The Imperial Nation can send an **Imperial Ultimatum** demanding submission with declared consequences (embargo, secondary sanctions, national war, empire-wide war, or invasion). The recipient evaluates whether the emperor can _actually_ execute them: distance, fleet and transport capabilities, border access, defense, alliances, costs, and imperial survival prospects. Refusal does not magically annex it. Threat follow-through affects reputation.
 
 ## Leadership transfer and the Ungovernable
 
