@@ -6,7 +6,7 @@
 >
 > Every nation exists to **WIN**. It does not exist to balance the game, attack the human, or sacrifice itself for the collective good.
 
-**Status:** Stage 1 vision baseline documented and committed. Stages 2 (migration) and 3 (coding) have not started. **No OpenFront game code has been migrated or modified in this repository yet.**
+**Status:** Stage 1 complete. Stage 2 pinned upstream source **imported on migration branch; verification pending**. Stage 3 has not started. Protected upstream assets are intentionally omitted pending proper licensing or replacement.
 
 **Project:** Independent, community-driven experimental project by the maintainers of this repository. It is **not** the official OpenFront.io repository and does not claim endorsement by the upstream maintainers.
 
@@ -23,10 +23,10 @@ A tiny island fortress can survive an enormous land empire. A small state can se
 | Stage | Goal | State |
 | --- | --- | --- |
 | **1 — Vision** | Establish durable design principles, complete rule specifications, scenarios, and acceptance criteria in GitHub | **Documentation baseline complete** |
-| **2 — Migration** | Import OpenFront upstream into this repository with history/provenance, license compliance, baseline tests, and an upstream update strategy | Not started |
+| **2 — Migration** | Import upstream source with provenance, license compliance, baseline tests, and an upstream update strategy | **Snapshot imported; verification pending** |
 | **3 — Coding** | Implement NATIONAL incrementally with deterministic simulation, tests, UX, AI, and performance gates | Not started |
 
-**Stage 1 is documentation-only.** No claim of implemented features should be inferred from the documents in this repo.
+**Stage 1 remains design-only.** Imported upstream source does not implement NATIONAL; see [Stage 2 evidence](docs/15-stage2-import-evidence.md).
 
 ## NATIONAL pillars
 
