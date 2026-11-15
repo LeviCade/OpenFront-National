@@ -6,7 +6,7 @@
 >
 > Every nation exists to **WIN**. It does not exist to balance the game, attack the human, or sacrifice itself for the collective good.
 
-**Status:** Stage 1 — vision and rules documentation. **No OpenFront game code has been migrated or modified in this repository yet.**
+**Status:** Stage 1 vision baseline documented and committed. Stages 2 (migration) and 3 (coding) have not started. **No OpenFront game code has been migrated or modified in this repository yet.**
 
 **Project:** Independent, community-driven experimental project by the maintainers of this repository. It is **not** the official OpenFront.io repository and does not claim endorsement by the upstream maintainers.
 
@@ -22,7 +22,7 @@ A tiny island fortress can survive an enormous land empire. A small state can se
 
 | Stage | Goal | State |
 | --- | --- | --- |
-| **1 — Vision** | Establish durable design principles, complete rule specifications, scenarios, and acceptance criteria in GitHub | **In progress** |
+| **1 — Vision** | Establish durable design principles, complete rule specifications, scenarios, and acceptance criteria in GitHub | **Documentation baseline complete** |
 | **2 — Migration** | Import OpenFront upstream into this repository with history/provenance, license compliance, baseline tests, and an upstream update strategy | Not started |
 | **3 — Coding** | Implement NATIONAL incrementally with deterministic simulation, tests, UX, AI, and performance gates | Not started |
 
