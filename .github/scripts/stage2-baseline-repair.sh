@@ -79,9 +79,6 @@ echo "::group::Format existing NATIONAL docs and bootstrap files with upstream f
 npm run inst
 npm exec -- oxfmt --write \
   README.md \
-  .github/workflows/stage2-import.yml \
-  .github/workflows/stage2-repair.yml \
-  .github/workflows/national-baseline-ci.yml \
   docs/00-vision.md docs/01-victory-and-difficulty.md \
   docs/02-national-ai.md docs/03-coalitions.md docs/04-empires.md \
   docs/05-war-and-peace.md docs/06-sanctions-and-blockades.md \
