@@ -31,9 +31,12 @@ replacements = {
 }
 for old, new in replacements.items():
     count = s.count(old)
-    if count != 1:
-        raise SystemExit(f"Expected one vite reference {old!r}, found {count}")
-    s = s.replace(old, new)
+    if count == 1:
+        s = s.replace(old, new)
+    elif count == 0 and s.count(new) == 1:
+        print(f"Already migrated: {new}")
+    else:
+        raise SystemExit(f"Unexpected vite asset reference state: {old!r} -> {new!r}")
 p.write_text(s)
 
 p = Path("resources/manifest.json")
