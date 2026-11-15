@@ -34,6 +34,7 @@ done
 git restore --source="$STAGE1_SHA" --staged --worktree -- \
   README.md CONTRIBUTING.md AGENTS.md \
   .github/scripts/stage2-import.sh \
+  .github/scripts/stage2-verify.sh \
   .github/workflows/stage2-import.yml
 
 # Archive upstream workflows as inert source; do not execute upstream deploys.
