@@ -1,11 +1,8 @@
 name: Stage 2 - Import and Verify Upstream OpenFront
 
+# The pinned import has completed. Deliberately no automatic push trigger:
+# rerunning the importer would discard the repaired baseline.
 on:
-  push:
-    branches:
-      - stage2/upstream-import-20261115
-    paths:
-      - .github/workflows/stage2-import.yml
   workflow_dispatch:
 
 permissions:
@@ -55,7 +52,7 @@ jobs:
       - name: Setup Node.js as required by pinned upstream
         uses: actions/setup-node@v4
         with:
-          node-version: '24.15.0'
+          node-version: "24.15.0"
       - name: Setup npm as required by pinned upstream
         run: npm install --global --ignore-scripts npm@12.1.0
       - name: Record baseline checks; preserve diagnostic evidence even on failure

@@ -84,6 +84,7 @@ npm exec -- oxfmt --write \
   docs/05-war-and-peace.md docs/06-sanctions-and-blockades.md \
   docs/07-intelligence.md docs/08-experience.md docs/11-decisions.md \
   docs/13-migration-plan.md docs/14-roadmap.md docs/README.md \
+  docs/16-stage2-verification.md \
   resources/manifest.json vite.config.ts index.html
 echo "::endgroup::"
 
