@@ -29,7 +29,7 @@ Read this handoff, [AGENTS.md](AGENTS.md), [the design index](docs/README.md), [
 - Original upstream README/contributor files are preserved under UPSTREAM-README.md and UPSTREAM-CONTRIBUTING.md. Stage 1 design, README, AGENTS and CONTRIBUTING are preserved. Unrelated upstream docs survive.
 - Upstream CI/deploy/cron workflows are preserved as inert references under .github/upstream-workflows, not activated in this new repo.
 - Licensing: code AGPL-3.0, open /resources assets CC BY-SA 4.0, and /proprietary assets **all rights reserved** with restrictions against separate copying or redistribution. The independent fork import **intentionally excludes restricted /proprietary assets** while retaining the original licensing language. Those omissions may prevent successful build/run pending license permission or original permitted replacements. Do not republish those images, music or fonts without appropriate rights.
-- src/server/gatekeeper is a git submodule pointer, not included executable submodule content. Assess its access and necessity when verifying the baseline.
+- src/server/gatekeeper is an unexpanded git submodule pointer. Upstream src/server/Gatekeeper.ts explicitly provides a **no-op fallback** when the optional module is absent (described there as normal for forks and public CI); this need not block the public game baseline, though the optional security module's absence must be recorded.
 - There is no NATIONAL game logic in the imported upstream snapshot. Source import is not feature coding.
 
 ## First actions in a new chat
