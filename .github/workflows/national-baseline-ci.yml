@@ -1,0 +1,80 @@
+name: NATIONAL - Source Baseline CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-baseline:
+    name: Docs + Typecheck + Test + Lint + Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: Checkout repository (no private submodule checkout)
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Verify NATIONAL design and handoff survive
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f PROJECT_HANDOFF.md
+          test -f AGENTS.md
+          test -f docs/00-vision.md
+          test -f docs/10-scenarios.md
+          test -f docs/11-decisions.md
+          test -f docs/14-roadmap.md
+          echo "NATIONAL design baseline present"
+
+      - name: Detect source migration status
+        id: source
+        shell: bash
+        run: |
+          if [[ -f package.json && -d packages/engine ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "Migrated source tree found"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Stage 1 docs-only baseline; source checks are gated until migration"
+          fi
+
+      - name: Setup required Node
+        if: steps.source.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+
+      - name: Setup required npm
+        if: steps.source.outputs.present == 'true'
+        run: npm install --global --ignore-scripts npm@12.1.0
+
+      - name: Install pinned dependencies without install scripts
+        if: steps.source.outputs.present == 'true'
+        run: npm run inst
+
+      - name: Typecheck
+        if: steps.source.outputs.present == 'true'
+        run: npm run typecheck
+
+      - name: Tests
+        if: steps.source.outputs.present == 'true'
+        run: npm test
+
+      - name: Lint
+        if: steps.source.outputs.present == 'true'
+        run: npm run lint
+
+      - name: Format
+        if: steps.source.outputs.present == 'true'
+        run: npm run format:check
+
+      - name: Production build
+        if: steps.source.outputs.present == 'true'
+        run: npm run build-prod
