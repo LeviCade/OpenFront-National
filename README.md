@@ -6,11 +6,13 @@
 >
 > Every nation exists to **WIN**. It does not exist to balance the game, attack the human, or sacrifice itself for the collective good.
 
-**Status:** Stage 1 vision baseline documented and committed. Stages 2 (migration) and 3 (coding) have not started. **No OpenFront game code has been migrated or modified in this repository yet.**
+**Status:** Stage 1 vision complete. Stage 2 is being imported and verified on a dedicated branch; it has **not yet been accepted or merged into main**. Stage 3 coding has not begun. See [permanent project handoff](PROJECT_HANDOFF.md).
 
 **Project:** Independent, community-driven experimental project by the maintainers of this repository. It is **not** the official OpenFront.io repository and does not claim endorsement by the upstream maintainers.
 
 **Upstream:** [openfrontio/OpenFrontIO](https://github.com/openfrontio/OpenFrontIO) · [OpenFront.io](https://openfront.io/)
+
+**New chat / new engineer?** Begin with [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) for the complete vision, the pinned upstream source, the live migration run, licensing caveats, recovery steps, and Stage 3 gates.
 
 ## The ambition
 
@@ -23,7 +25,7 @@ A tiny island fortress can survive an enormous land empire. A small state can se
 | Stage | Goal | State |
 | --- | --- | --- |
 | **1 — Vision** | Establish durable design principles, complete rule specifications, scenarios, and acceptance criteria in GitHub | **Documentation baseline complete** |
-| **2 — Migration** | Import OpenFront upstream into this repository with history/provenance, license compliance, baseline tests, and an upstream update strategy | Not started |
+| **2 — Migration** | Import source with provenance, license compliance, baseline tests, and upstream update strategy | **Migration branch active; not verified** |
 | **3 — Coding** | Implement NATIONAL incrementally with deterministic simulation, tests, UX, AI, and performance gates | Not started |
 
 **Stage 1 is documentation-only.** No claim of implemented features should be inferred from the documents in this repo.
