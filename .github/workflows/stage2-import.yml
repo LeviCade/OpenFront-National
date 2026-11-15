@@ -20,7 +20,7 @@ jobs:
     if: github.repository == 'LeviCade/OpenFront-National'
     steps:
       - name: Checkout NATIONAL Stage 1 history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: stage2/upstream-import-20261115
           fetch-depth: 0
@@ -43,14 +43,14 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Checkout newly imported source branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: stage2/upstream-import-20261115
           fetch-depth: 0
           persist-credentials: true
           submodules: false
       - name: Setup Node.js as required by pinned upstream
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24.15.0"
       - name: Setup npm as required by pinned upstream
@@ -60,7 +60,7 @@ jobs:
         run: bash .github/scripts/stage2-verify.sh
       - name: Upload complete baseline logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: national-stage2-baseline-logs
           path: stage2-logs/
