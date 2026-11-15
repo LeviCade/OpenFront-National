@@ -22,11 +22,11 @@ A tiny island fortress can survive an enormous land empire. A small state can se
 
 ## Three development stages
 
-| Stage             | Goal                                                                                                            | State                                     |
-| ----------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| **1 — Vision**    | Establish durable design principles, complete rule specifications, scenarios, and acceptance criteria in GitHub | **Documentation baseline complete**       |
-| **2 — Migration** | Import source with provenance, license compliance, baseline tests, and upstream update strategy                 | **Accepted and merged** |
-| **3 — Coding**    | Implement NATIONAL incrementally with deterministic simulation, tests, UX, AI, and performance gates            | **Authorized; implementation pending**   |
+| Stage             | Goal                                                                                                            | State                                  |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| **1 — Vision**    | Establish durable design principles, complete rule specifications, scenarios, and acceptance criteria in GitHub | **Documentation baseline complete**    |
+| **2 — Migration** | Import source with provenance, license compliance, baseline tests, and upstream update strategy                 | **Accepted and merged**                |
+| **3 — Coding**    | Implement NATIONAL incrementally with deterministic simulation, tests, UX, AI, and performance gates            | **Authorized; implementation pending** |
 
 **Stage 1 is documentation-only.** No claim of implemented features should be inferred from the documents in this repo.
 
