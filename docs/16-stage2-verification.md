@@ -20,14 +20,14 @@ Fork commit: ad1cd7da8d8307f0bd172e8899f48af50576ab8c
 
 ## Verification results
 
-| Check | Result | Detail |
-| --- | --- | --- |
-| Lockfile install  |  PASS  |  Exit 0 |
-| Typecheck  |  PASS  |  Exit 0 |
-| Unit tests  |  PASS  |  Exit 0 |
-| Lint  |  PASS  |  Exit 0 |
-| Format  |  FAIL  |  Exit 1 |
-| Production build  |  FAIL  |  Exit 1 |
+| Check            | Result | Detail |
+| ---------------- | ------ | ------ |
+| Lockfile install | PASS   | Exit 0 |
+| Typecheck        | PASS   | Exit 0 |
+| Unit tests       | PASS   | Exit 0 |
+| Lint             | PASS   | Exit 0 |
+| Format           | FAIL   | Exit 1 |
+| Production build | FAIL   | Exit 1 |
 
 ## Readiness
 
