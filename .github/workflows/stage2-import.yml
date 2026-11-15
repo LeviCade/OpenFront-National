@@ -1,0 +1,71 @@
+name: Stage 2 - Import and Verify Upstream OpenFront
+
+on:
+  push:
+    branches:
+      - stage2/upstream-import-20261115
+    paths:
+      - .github/workflows/stage2-import.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: national-stage2-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    name: Import pinned upstream source into migration branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    if: github.repository == 'LeviCade/OpenFront-National'
+    steps:
+      - name: Checkout NATIONAL Stage 1 history
+        uses: actions/checkout@v4
+        with:
+          ref: stage2/upstream-import-20261115
+          fetch-depth: 0
+          persist-credentials: true
+          submodules: false
+      - name: Git executable and workspace
+        run: |
+          git --version
+          git status --short
+          df -h .
+      - name: Import exact pinned upstream source; omit restricted assets and quarantine workflows
+        shell: bash
+        run: bash .github/scripts/stage2-import.sh
+
+  verify:
+    name: Verify imported baseline and persist exact results
+    needs: import
+    if: needs.import.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout newly imported source branch
+        uses: actions/checkout@v4
+        with:
+          ref: stage2/upstream-import-20261115
+          fetch-depth: 0
+          persist-credentials: true
+          submodules: false
+      - name: Setup Node.js as required by pinned upstream
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+      - name: Setup npm as required by pinned upstream
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Record baseline checks; preserve diagnostic evidence even on failure
+        shell: bash
+        run: bash .github/scripts/stage2-verify.sh
+      - name: Upload complete baseline logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-stage2-baseline-logs
+          path: stage2-logs/
+          retention-days: 30
+          if-no-files-found: warn
