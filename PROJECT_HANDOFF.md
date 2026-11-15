@@ -14,6 +14,8 @@ Read this handoff, [AGENTS.md](AGENTS.md), [the design index](docs/README.md), [
 
 **Stage 2 — MIGRATION: ACTIVE ON A SEPARATE BRANCH, NOT YET ACCEPTED AT THIS CHECKPOINT.** [Issue #2](https://github.com/LeviCade/OpenFront-National/issues/2). Branch: [stage2/upstream-import-20261115](https://github.com/LeviCade/OpenFront-National/tree/stage2/upstream-import-20261115). [GitHub Actions import and verification run #43767389661](https://github.com/LeviCade/OpenFront-National/actions/runs/43767389661) launched. **Do not assume the run passed simply because it started.**
 
+**Stage 2 review PR:** [Draft migration PR #4](https://github.com/LeviCade/OpenFront-National/pull/4). Additional focused asset-readiness tracking: [issue #5](https://github.com/LeviCade/OpenFront-National/issues/5). Fork-native [baseline CI](.github/workflows/national-baseline-ci.yml) is available for documentation checks now and full tests when a source tree is present.
+
 **Stage 3 — CODING: NOT STARTED.** [Issue #3](https://github.com/LeviCade/OpenFront-National/issues/3) is blocked by Stage 2 verification.
 
 ## Stage 2 exact reproducible facts
