@@ -1,6 +1,6 @@
 # Stage 2 — source import evidence
 
-**State: PINNED SOURCE SNAPSHOT IMPORTED; BASELINE BUILD/TEST VALIDATION PENDING.**
+**Historical import record:** The pinned source snapshot was imported, then the final development baseline was accepted and merged. See [Stage 2 acceptance](17-stage2-acceptance.md).
 This is not an assertion that the fork is deployable or that NATIONAL is implemented.
 
 - Repository: `LeviCade/OpenFront-National`

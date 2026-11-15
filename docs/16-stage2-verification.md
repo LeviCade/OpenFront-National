@@ -1,4 +1,8 @@
-# Stage 2 — reproducible source verification
+# Stage 2 — initial verification attempt (historical)
+
+**The failures recorded below were repaired.** For final passing CI,
+merged source evidence and remaining release caveats see
+[Stage 2 acceptance](17-stage2-acceptance.md).
 
 The imported source snapshot was verified in GitHub Actions. This file is generated
 by the verification job. Check the workflow logs/artifacts for full stdout.

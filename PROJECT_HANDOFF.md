@@ -4,7 +4,7 @@
 
 **Official upstream:** https://github.com/openfrontio/OpenFrontIO
 
-**Checkpoint recorded November 15, 2026.** This is a durable status/handoff guide; verify current GitHub branch heads, Actions conclusion, and issues before making any claims about progress.
+**Checkpoint refreshed November 15, 2026 after Stage 2 merge.** Source of truth is GitHub; always verify branch heads and CI before new work. Historical migration logs below are retained for provenance. See [final Stage 2 acceptance](docs/17-stage2-acceptance.md) and [Stage 3 conductor orders](docs/18-stage3-conductor.md).
 
 ## Start here in every future chat
 
@@ -12,11 +12,11 @@ Read this handoff, [AGENTS.md](AGENTS.md), [the design index](docs/README.md), [
 
 **Stage 1 — VISION: COMPLETE.** 20 original docs/contributor/agent files committed. [Issue #1](https://github.com/LeviCade/OpenFront-National/issues/1) closed.
 
-**Stage 2 — MIGRATION: ACTIVE ON A SEPARATE BRANCH, NOT YET ACCEPTED AT THIS CHECKPOINT.** [Issue #2](https://github.com/LeviCade/OpenFront-National/issues/2). Branch: [stage2/upstream-import-20261115](https://github.com/LeviCade/OpenFront-National/tree/stage2/upstream-import-20261115). [GitHub Actions import and verification run #43767389661](https://github.com/LeviCade/OpenFront-National/actions/runs/43767389661) launched. **Do not assume the run passed simply because it started.**
+**Stage 2 — MIGRATION: ACCEPTED AND MERGED INTO MAIN.** [PR #4](https://github.com/LeviCade/OpenFront-National/pull/4) merged at `232be2f592343817108200d465578e2e3fe71ff5`. Full repair/build/startup, independent PR CI, and deterministic headless game simulation all passed. Refer to [evidence and limitations](docs/17-stage2-acceptance.md).
 
-**Stage 2 review PR:** [Draft migration PR #4](https://github.com/LeviCade/OpenFront-National/pull/4). Additional focused asset-readiness tracking: [issue #5](https://github.com/LeviCade/OpenFront-National/issues/5). Fork-native [baseline CI](.github/workflows/national-baseline-ci.yml) is available for documentation checks now and full tests when a source tree is present.
+**Stage 2 evidence:** [repair CI #43773995771](https://github.com/LeviCade/OpenFront-National/actions/runs/43773995771), [independent CI #43774123038](https://github.com/LeviCade/OpenFront-National/actions/runs/43774123038), and [headless game simulation #43774110387](https://github.com/LeviCade/OpenFront-National/actions/runs/43774110387) are successful. [Asset/completeness issue #5](https://github.com/LeviCade/OpenFront-National/issues/5) and [dependency security issue #6](https://github.com/LeviCade/OpenFront-National/issues/6) remain open as pre-release gates.
 
-**Stage 3 — CODING: NOT STARTED.** [Issue #3](https://github.com/LeviCade/OpenFront-National/issues/3) is blocked by Stage 2 verification.
+**Stage 3 — CODING: AUTHORIZED, NOT IMPLEMENTED.** [Issue #3](https://github.com/LeviCade/OpenFront-National/issues/3). Conductor owns shared contract, integration, CI and release gates; three engineers own distinct subsystem slices under [the conductor plan](docs/18-stage3-conductor.md).
 
 ## Stage 2 exact reproducible facts
 
@@ -31,6 +31,12 @@ Read this handoff, [AGENTS.md](AGENTS.md), [the design index](docs/README.md), [
 - Licensing: code AGPL-3.0, open /resources assets CC BY-SA 4.0, and /proprietary assets **all rights reserved** with restrictions against separate copying or redistribution. The independent fork import **intentionally excludes restricted /proprietary assets** while retaining the original licensing language. Those omissions may prevent successful build/run pending license permission or original permitted replacements. Do not republish those images, music or fonts without appropriate rights.
 - src/server/gatekeeper is an unexpanded git submodule pointer. Upstream src/server/Gatekeeper.ts explicitly provides a **no-op fallback** when the optional module is absent (described there as normal for forks and public CI); this need not block the public game baseline, though the optional security module's absence must be recorded.
 - There is no NATIONAL game logic in the imported upstream snapshot. Source import is not feature coding.
+
+## Historical Stage 2 recovery instructions (closed; do not rerun as active work)
+
+The following steps document how migration was recovered. **Do not replay the
+pinned import or Stage 2 repair as normal Stage 3 work.** Begin new coding
+sessions from main and [the conductor plan](docs/18-stage3-conductor.md).
 
 ## First actions in a new chat
 
@@ -77,6 +83,11 @@ Read this handoff, [AGENTS.md](AGENTS.md), [the design index](docs/README.md), [
 - [Deferred economics](docs/12-deferred-economics.md)
 - [Migration plan](docs/13-migration-plan.md)
 - [Stage 3 roadmap](docs/14-roadmap.md)
+
+## Historical reuse prompt for Stage 2 (superseded)
+
+This previous prompt is retained for provenance. For new work, use
+[the Stage 3 conductor plan](docs/18-stage3-conductor.md) instead.
 
 ## Reuse prompt for next ChatGPT conductor
 

@@ -1,12 +1,12 @@
 # 14 — Three-stage roadmap and Stage 3 workstreams
 
-## Stage 1 — The Vision (current)
+## Stage 1 — The Vision (completed)
 
 **Deliverable:** Public repository contains complete, internally consistent design docs, source attribution and migration strategy, precise acceptance scenarios, decision register, and contributor/agent instructions.
 
 Success requires every proposed core subsystem represented in written source of truth; outstanding numerical or engine detail explicitly marked OPEN; deferred economy outside scope. No game coding or source migration yet.
 
-## Stage 2 — The Migration (next)
+## Stage 2 — The Migration (completed)
 
 **Deliverable:** Reproducible, legally attributed upstream OpenFront source baseline in this independent repository.
 
@@ -18,7 +18,7 @@ Success requires every proposed core subsystem represented in written source of 
 
 Go/no-go: complete baseline acceptance per [migration plan](13-migration-plan.md).
 
-## Stage 3 — The Coding (after successful migration)
+## Stage 3 — The Coding (authorized after migration)
 
 Feature work should proceed as vertical slices that keep real gameplay working at each milestone. Proposed sequencing:
 

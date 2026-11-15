@@ -40,3 +40,8 @@ In case of conflicting older discussion, the detailed documents and [decision re
 Every meaningful proposal should state (1) why a self-interested nation would use it, (2) the exact authoritative state transition, (3) enforcement and failure rules, (4) effect on empires and overlapping coalitions, (5) what human and AI can know, (6) anti-abuse invariants, and (7) at least one automated scenario.
 
 **Do not start Stage 2 migration or Stage 3 coding in a Stage 1 documentation change.**
+
+## Verified migration and delivery protocol
+
+- [Stage 2 verified development baseline](17-stage2-acceptance.md) — evidence, licenses, runtime limits and release caveats.
+- [Stage 3 conductor and engineer ownership](18-stage3-conductor.md) — integration rules, branches, shared contracts, responsibilities and PR gates.

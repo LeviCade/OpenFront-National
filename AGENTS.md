@@ -2,7 +2,7 @@
 
 ## Current stage
 
-**Stage 1 — VISION COMPLETE. Stage 2 — MIGRATION ACTIVE ON SEPARATE BRANCH, NOT YET ACCEPTED.** First read [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) and verify the live GitHub Actions result and branch state. The default branch may intentionally contain only the documentation baseline until Stage 2 import and tests pass. Never overwrite the vision or treat source import as completion. Do not implement NATIONAL mechanics (Stage 3) until Stage 2 baseline is verified.
+**Stage 1 — VISION COMPLETE. Stage 2 — SOURCE MIGRATION ACCEPTED AND MERGED. Stage 3 — AUTHORIZED, NOT YET IMPLEMENTED.** Read [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md), [docs/17-stage2-acceptance.md](docs/17-stage2-acceptance.md), and [docs/18-stage3-conductor.md](docs/18-stage3-conductor.md) before changing implementation. Use the verified merged source on main. Preserve the vision, upstream notices, original NATIONAL asset replacements, and legacy behavior. Do not ship publicly until remaining pre-release checks are resolved.
 
 ## Authoritative documentation
 
