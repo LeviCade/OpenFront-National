@@ -18,7 +18,7 @@ A nation periodically maintains a strategic state describing:
 - Current primary objective and shorter-range tactical subgoals.
 - Credible future risks and opportunities under incomplete information.
 
-The nation should choose a *strategy* rather than merely apply isolated, conflicting attack/donation/alliance heuristics. Tactical systems act inside that strategy and may override it when immediate defense is necessary.
+The nation should choose a _strategy_ rather than merely apply isolated, conflicting attack/donation/alliance heuristics. Tactical systems act inside that strategy and may override it when immediate defense is necessary.
 
 ## Examples of admissible strategies
 

@@ -15,6 +15,7 @@ Hidden by default: detailed troop count, treasury, economic figures, structure p
 ## Geographic line of sight
 
 **RECOMMENDED INITIAL DISTANCES** (subject to map-scale and performance validation):
+
 - Shared land border: see structures within **100 tiles** inside the neighboring nation along that frontier.
 - Own coast: observe foreign vessels within **200 tiles** of the national coastline.
 - Own warship: observe foreign vessels within **200 tiles** of that ship.

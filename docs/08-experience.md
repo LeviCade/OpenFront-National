@@ -4,7 +4,7 @@
 
 NATIONAL appears **above Impossible** in Solo FFA difficulty selection with a dramatic **gold crown-and-shield icon** and a concise promise: "Every nation fights to win. Deep diplomacy, sovereign empires, and one final world power." Provide a brief rules summary explaining that it substantially changes gameplay and victory.
 
-This is a *new ruleset*, not the claim that the official upstream difficulty already has these mechanics.
+This is a _new ruleset_, not the claim that the official upstream difficulty already has these mechanics.
 
 ## Core navigation
 
@@ -25,7 +25,7 @@ More advanced coalition constitutions, standing imperial policy and intelligence
 
 Public coalition roster and type can be inspected by any player. Confidential treaty terms only appear to an existing member or recipient of a pending invitation/offer. Do **not** put a warning in an outsider's UI revealing secret levy percentages or automatic empire-wide response policy before they attack.
 
-Display consequences of *one's own* treaty and empire policies clearly. Do not leak unseen enemy structures, troop strength, fleet positions or landing destinations through tooltips, notifications, request payloads, activity feed, or UI affordances.
+Display consequences of _one's own_ treaty and empire policies clearly. Do not leak unseen enemy structures, troop strength, fleet positions or landing destinations through tooltips, notifications, request payloads, activity feed, or UI affordances.
 
 ## Specific spectacles
 
@@ -38,6 +38,6 @@ Display consequences of *one's own* treaty and empire policies clearly. Do not l
 
 ## Quality criteria
 
-Accessible color contrast, screen-reader labels, reduced-motion support, mobile legibility, interaction under latency, keyboard controls where practical, localization-ready strings, and a minimum of unnecessary modal dialogs. Make it understandable *which real rule caused an event*.
+Accessible color contrast, screen-reader labels, reduced-motion support, mobile legibility, interaction under latency, keyboard controls where practical, localization-ready strings, and a minimum of unnecessary modal dialogs. Make it understandable _which real rule caused an event_.
 
 **OPEN:** final visual assets, precise component layouts and whether user-facing coalition policies are presets, advanced options, or both.

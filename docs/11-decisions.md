@@ -1,31 +1,31 @@
 # 11 — Decision register: agreed direction and open questions
 
-**Purpose:** avoid losing the latest user-approved constraints in a sea of hypothetical ideas. This register is authoritative for *product direction*, not a substitute for detailed specs. Changes require a documented decision and scenario update.
+**Purpose:** avoid losing the latest user-approved constraints in a sea of hypothetical ideas. This register is authoritative for _product direction_, not a substitute for detailed specs. Changes require a documented decision and scenario update.
 
 ## Locked product direction (CORE)
 
-| ID | Decision |
-| --- | --- |
-| D-001 | NATIONAL sits above Impossible as an optional Solo FFA strategic mode. |
-| D-002 | Every nation wants to win; human identity does not influence AI targeting; equal legitimate information and mechanics; no artificial anti-leader dogpile. |
-| D-003 | Last sovereign wins. Only one independent nation or one empire can remain; land percentage alone never ends NATIONAL. |
-| D-004 | Independent Sovereign Victor and imperial sovereign Imperial Victor have equally high prestige; surviving subordinate Empire Victors are legitimate but lesser prestige wins. |
+| ID    | Decision                                                                                                                                                                                                                                                                       |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D-001 | NATIONAL sits above Impossible as an optional Solo FFA strategic mode.                                                                                                                                                                                                         |
+| D-002 | Every nation wants to win; human identity does not influence AI targeting; equal legitimate information and mechanics; no artificial anti-leader dogpile.                                                                                                                      |
+| D-003 | Last sovereign wins. Only one independent nation or one empire can remain; land percentage alone never ends NATIONAL.                                                                                                                                                          |
+| D-004 | Independent Sovereign Victor and imperial sovereign Imperial Victor have equally high prestige; surviving subordinate Empire Victors are legitimate but lesser prestige wins.                                                                                                  |
 | D-005 | Independent nations resist empire submission. Inferior current power or low abstract win chance alone is insufficient; require credible existential deterioration, endangered options, and a desirable surviving empire. After membership, pursue empire win with full effort. |
-| D-006 | NAP, MDA and Empire are the only initial coalition categories, replacing ordinary Ally/Betray controls in NATIONAL. Independent nations may join multiple ordinary coalitions. |
-| D-007 | NAP/MDA have constitutions for admission, discretionary expulsion, enforcement and governance. Constitution amendments require unanimity. Sovereign exit requires Betray, always allowed, and always causes expulsion; prohibited co-member attacks require betrayal first. |
-| D-008 | Defense treaties execute instantaneous weighted troop levies at actual incoming attack time, before territorial loss. Only enough troops are pulled; every contribution is conserved. |
-| D-009 | Empire has exactly one supreme Imperial Nation. Every member including emperor is barred from membership in any other coalition; member states cannot unilaterally betray/secede. Emperor can dissolve empire and transfer leadership. |
-| D-010 | Emperor exclusively controls imperial external sovereignty and can delegate member-specific national declarations/peace. All empire-wide wars require imperial control. Imperial and national wars can coexist; settling one does not erase the other. |
-| D-011 | Emperor unilaterally sets treasury, spending/building, national war/peace and defense response, trade/embargo, military centralization (fully centralized, hybrid, decentralized), and troop transfer policies. |
-| D-012 | Ungovernable triggers only when emperor is strictly lowest across all eight metrics at once, followed by ten-second transfer-or-collapse window. Leader elimination without transfer collapses empire. |
-| D-013 | Empire accession only by emperor invitation + applicant acceptance or applicant request + emperor acceptance. Coercive demands are threats, never automatic annexation. |
-| D-014 | Default diplomatic state is peace. Formal declaration required before offensive military action. Peace requires proposal + acceptance. An embargo may exist in peace. Piracy requires war. |
-| D-015 | Naval blockade physically intercepts neutral merchant traffic heading to blockaded wartime enemy and turns it toward home without revenue; actual enemy ships can be pirated. |
-| D-016 | Formal secondary sanctions demand that recipients stop trading with a target or face issuer embargo; recipients choose freely. Emperor alone can commit the whole empire; national delegated responses to outsiders remain possible. |
-| D-017 | External coalition membership rosters are public; detailed constitutions hidden from outsiders; invited party sees terms. Basic foreign force/structures/ships are hidden without legitimate visibility. All empire members share intelligence. |
-| D-018 | In-flight missile still hits after peace; already-sailing naval transport reaches one landing tile and returns rest; active land attack halts/returns when effective peace genuinely begins. |
-| D-019 | Economy overhaul (multiple currencies, goods, debt, collateral, market notes, standardized structure prices, removal of discounts) is **deferred to a different version**. |
-| D-020 | Stage 1 vision documentation, Stage 2 upstream migration, Stage 3 feature coding, sequentially. |
+| D-006 | NAP, MDA and Empire are the only initial coalition categories, replacing ordinary Ally/Betray controls in NATIONAL. Independent nations may join multiple ordinary coalitions.                                                                                                 |
+| D-007 | NAP/MDA have constitutions for admission, discretionary expulsion, enforcement and governance. Constitution amendments require unanimity. Sovereign exit requires Betray, always allowed, and always causes expulsion; prohibited co-member attacks require betrayal first.    |
+| D-008 | Defense treaties execute instantaneous weighted troop levies at actual incoming attack time, before territorial loss. Only enough troops are pulled; every contribution is conserved.                                                                                          |
+| D-009 | Empire has exactly one supreme Imperial Nation. Every member including emperor is barred from membership in any other coalition; member states cannot unilaterally betray/secede. Emperor can dissolve empire and transfer leadership.                                         |
+| D-010 | Emperor exclusively controls imperial external sovereignty and can delegate member-specific national declarations/peace. All empire-wide wars require imperial control. Imperial and national wars can coexist; settling one does not erase the other.                         |
+| D-011 | Emperor unilaterally sets treasury, spending/building, national war/peace and defense response, trade/embargo, military centralization (fully centralized, hybrid, decentralized), and troop transfer policies.                                                                |
+| D-012 | Ungovernable triggers only when emperor is strictly lowest across all eight metrics at once, followed by ten-second transfer-or-collapse window. Leader elimination without transfer collapses empire.                                                                         |
+| D-013 | Empire accession only by emperor invitation + applicant acceptance or applicant request + emperor acceptance. Coercive demands are threats, never automatic annexation.                                                                                                        |
+| D-014 | Default diplomatic state is peace. Formal declaration required before offensive military action. Peace requires proposal + acceptance. An embargo may exist in peace. Piracy requires war.                                                                                     |
+| D-015 | Naval blockade physically intercepts neutral merchant traffic heading to blockaded wartime enemy and turns it toward home without revenue; actual enemy ships can be pirated.                                                                                                  |
+| D-016 | Formal secondary sanctions demand that recipients stop trading with a target or face issuer embargo; recipients choose freely. Emperor alone can commit the whole empire; national delegated responses to outsiders remain possible.                                           |
+| D-017 | External coalition membership rosters are public; detailed constitutions hidden from outsiders; invited party sees terms. Basic foreign force/structures/ships are hidden without legitimate visibility. All empire members share intelligence.                                |
+| D-018 | In-flight missile still hits after peace; already-sailing naval transport reaches one landing tile and returns rest; active land attack halts/returns when effective peace genuinely begins.                                                                                   |
+| D-019 | Economy overhaul (multiple currencies, goods, debt, collateral, market notes, standardized structure prices, removal of discounts) is **deferred to a different version**.                                                                                                     |
+| D-020 | Stage 1 vision documentation, Stage 2 upstream migration, Stage 3 feature coding, sequentially.                                                                                                                                                                                |
 
 ## Recommended initial values (not immutable)
 

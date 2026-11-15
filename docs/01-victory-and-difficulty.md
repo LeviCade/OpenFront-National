@@ -20,11 +20,11 @@ Replace land-percentage-based victory for NATIONAL with the **last surviving sov
 
 ## Victory prestige
 
-| Position at resolution | Result | Prestige |
-| --- | --- | --- |
-| Last independent sovereign nation | **Sovereign Victor** | Highest |
-| Imperial Nation leading the last surviving empire | **Imperial Victor** | Highest — equal to sovereign victory |
-| Surviving constituent member of victorious empire | **Empire Victor** | Legitimate win, lower prestige |
+| Position at resolution                            | Result               | Prestige                             |
+| ------------------------------------------------- | -------------------- | ------------------------------------ |
+| Last independent sovereign nation                 | **Sovereign Victor** | Highest                              |
+| Imperial Nation leading the last surviving empire | **Imperial Victor**  | Highest — equal to sovereign victory |
+| Surviving constituent member of victorious empire | **Empire Victor**    | Legitimate win, lower prestige       |
 
 Each surviving imperial member is a winner, but **not** the supreme winner. This avoids requiring puppet-state cannibalization and makes empire submission potentially rational. It should not make instant empire submission optimal.
 
@@ -37,6 +37,7 @@ For an independent nation, **supreme victory** is the strategic preference. Rela
 ## No fake difficulty
 
 NATIONAL AI:
+
 - Receives no economic boosts, troop multipliers, free intel, combat bonuses, or human player targeting.
 - Uses the same authoritative game rules, visibility, and action constraints as a human.
 - Differs in planning, optimization, risk assessment, strategy memory, coalition choice, and diplomatic judgment.

@@ -8,9 +8,10 @@ Independent nations may create and join multiple NAPs and MDAs. An empire member
 
 ## Coalition constitution
 
-Each NAP or MDA is a stateful agreement with public name, type, member roster and leader/administrator identity (where applicable). The actual constitution is *secret from nonmembers* until an invitation or offer is pending; members see it in full.
+Each NAP or MDA is a stateful agreement with public name, type, member roster and leader/administrator identity (where applicable). The actual constitution is _secret from nonmembers_ until an invitation or offer is pending; members see it in full.
 
 Configurable separate constitutional powers:
+
 - Admission: unilateral named administrator, leader, selected approvers, simple majority, supermajority or unanimous vote.
 - Expulsion of **compliant** members: unilateral administrator, vote thresholds, or forbidden.
 - Amendments to the standing constitution: **unanimous agreement** of all current members (CORE RULE).
@@ -19,7 +20,7 @@ Configurable separate constitutional powers:
 - MDA defense levy: maximum percentage and protected reserve; contribution policy defined in treaty.
 - Admission and expulsion authority are independent. A pact can have unanimous admission and prohibit discretionary expulsion.
 
-**Terminology:** bilateral means *two parties*. "One nation decides admissions/expulsions" is **leader-governed**, not bilateral. Multilateral refers to multiple parties. Do not conflate size and governance.
+**Terminology:** bilateral means _two parties_. "One nation decides admissions/expulsions" is **leader-governed**, not bilateral. Multilateral refers to multiple parties. Do not conflate size and governance.
 
 ## Sovereign exit and betrayal
 
@@ -37,7 +38,7 @@ A NAP is not a merged sovereign, a victory team, or a guarantee that a member wo
 
 ## Mutual Defense Alliances: instantaneous levy
 
-**CORE RULE:** A valid incoming hostile attack on an eligible member triggers automatic defensive troop commitments *at execution time and before any territory is conquered*. The treaty is the decision to commit; do not ask allies for real-time permission on every attack.
+**CORE RULE:** A valid incoming hostile attack on an eligible member triggers automatic defensive troop commitments _at execution time and before any territory is conquered_. The treaty is the decision to commit; do not ask allies for real-time permission on every attack.
 
 Example: A attacks B with 50K, and B's MDA ally C contributes 45K before territorial combat. With one-for-one defensive interception, only 5K of attacking force remains to proceed. If eligible contributions fully intercept, no land is lost to that push.
 
@@ -52,15 +53,16 @@ The triggering instant is the moment a **valid attack actually begins**, not a b
 Independent nations may join multiple NAPs/MDAs **even when that creates strategically unwise conflicting commitments**. Automatic defensive levies may fund defense against a nation in a separate coalition; that is the consequence of joining multiple treaties.
 
 However:
+
 - Mandatory defensive contributions are not themselves a conscious offensive betrayal.
 - Troops cannot be double-levied across multiple treaties at the same timestamp.
-- An independent nation must still betray a pact before conducting its *own* prohibited attack on a co-member.
+- An independent nation must still betray a pact before conducting its _own_ prohibited attack on a co-member.
 - Deterministic ordering and pro-rata allocation for simultaneous demands are mandatory.
 - A defensive levy does not, by itself, declare a war for the contributing nation; it is scoped defensive support.
 
 ## Coalition discovery and secrecy
 
-Public: names, types, members, known administrators, active membership status. Hidden: exact rules, vote thresholds, levies, sanctions, amendment clauses, and imperial policies. A nation receiving a valid offer or pending invitation can review the constitution *before consenting*.
+Public: names, types, members, known administrators, active membership status. Hidden: exact rules, vote thresholds, levies, sanctions, amendment clauses, and imperial policies. A nation receiving a valid offer or pending invitation can review the constitution _before consenting_.
 
 Do not leak hidden treaty data in client payloads or AI state. Coalition secrecy is a gameplay rule, not merely UI hiding.
 
