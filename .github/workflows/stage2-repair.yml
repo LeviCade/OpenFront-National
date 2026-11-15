@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: bash .github/scripts/stage2-baseline-repair.sh
 
-      - name: Verify exact lockfile, typecheck, unit tests, lint and formatting
+      - name: Verify exact lockfile, typecheck, unit tests and lint
         shell: bash
         run: |
           set -euo pipefail
@@ -50,7 +50,6 @@ jobs:
           npm run typecheck
           npm test
           npm run lint
-          npm run format:check
 
       - name: Production build (without protected upstream proprietary artwork)
         run: npm run build-prod
@@ -58,6 +57,19 @@ jobs:
       - name: Verify local client HTTP, original replacement assets and server startup
         shell: bash
         run: bash .github/scripts/stage2-smoke.sh
+
+      - name: Full formatting gate
+        run: npm run format:check
+
+      - name: Diagnose exact workflow formatting diffs (read-only)
+        if: always()
+        shell: bash
+        run: |
+          if [[ -x node_modules/.bin/oxfmt ]]; then
+            npm exec -- oxfmt --write .github/workflows/stage2-import.yml .github/workflows/stage2-repair.yml .github/workflows/national-baseline-ci.yml
+            git diff -- .github/workflows/stage2-import.yml .github/workflows/stage2-repair.yml .github/workflows/national-baseline-ci.yml || true
+            git restore -- .github/workflows/stage2-import.yml .github/workflows/stage2-repair.yml .github/workflows/national-baseline-ci.yml
+          fi
 
       - name: Verify source and ownership boundaries
         shell: bash
