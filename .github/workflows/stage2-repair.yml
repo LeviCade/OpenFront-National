@@ -1,4 +1,4 @@
-# Idempotent repair recheck: verify the final formatting and runnable source baseline.
+# Idempotent repair recheck: verify both uses of the shared NATIONAL mark.
 name: Stage 2 - Repair and Prove Migrated Baseline
 
 on:
