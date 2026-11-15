@@ -1,0 +1,36 @@
+# NATIONAL glossary
+
+- **Independent nation:** Full external sovereign power; can create/join ordinary coalitions and fight for Sovereign Victory.
+- **Imperial Nation / Emperor:** Exactly one lead nation per empire, with unilateral supreme constitutional authority and Imperial Victor status if empire wins.
+- **Member nation / constituent:** Nation inside an empire, without right to join outside coalitions or leave unilaterally; works for Empire Victory.
+- **Empire:** One sovereign power with an Imperial Nation and constituent nations. It is not a fourth ordinary alliance and is not an automatic union of all war records.
+- **Sovereign power:** One independent nation or one existing empire for victory counting.
+- **Sovereign Victory:** Top-tier win by final independent nation.
+- **Imperial Victory / Imperial Victor:** Top-tier win and title of emperor of victorious empire.
+- **Empire Victor:** Lower-prestige but legitimate win awarded to surviving member nations.
+- **Non-Aggression Pact / NAP:** Independent signatories commit not to attack fellow members without betrayal first.
+- **Mutual Defense Alliance / MDA:** Treaty creates formal automatic defensive troop contributions when signatories are attacked.
+- **Constitution:** Binding rules governing admission, expulsion, amendment, obligations, levies and enforcement in an ordinary coalition; unilaterally amendable by emperor within empire.
+- **Leader-governed coalition:** Ordinary coalition where named administrator/leader holds defined authority; not equivalent to a bilateral two-member agreement.
+- **Betrayal:** Independent sovereign exit or required prior exit from ordinary coalition, with immediate expulsion and consequences. Empires cannot be betrayed.
+- **Defense levy:** Real allied troop deduction and interception at execution of eligible incoming invasion; no arbitrary troop creation.
+- **National war:** Specific conflict between named nations, including constituent member and outsider, independent of empire's collective war records.
+- **Empire-wide war:** Conflict involving entire empire as a sovereign, automatically making every constituent belligerent, settled only by emperor.
+- **Effective war:** Hostility authorization arising from one or more active, applicable national or empire-wide war records.
+- **Peace motion:** Proposed bilateral settlement of specified war records, binding only when accepted by authorized counterparty.
+- **Embargo:** Trade restriction independent of war; war causes a mandatory wartime trade prohibition.
+- **Secondary sanctions:** A demand to third parties to stop trading with target or lose access to issuer's trade; actual compliance and follow-through matter.
+- **Imperial Ultimatum:** Emperor demands accession and threatens explicit enforceable consequences; target still accepts or refuses.
+- **Piracy:** Wartime hostile action against enemy commercial ships; never authorized solely by an embargo.
+- **Naval blockade:** Wartime physical enforcement around enemy routes/ports; enemy ships may be captured, neutral merchants turned home with no earned revenue.
+- **Hybrid army:** Member armies retain threshold; surplus generated troops flow into imperial army with capacity.
+- **Fully centralized army:** One imperial troop pool, emperor commanding, cap derived from sum of constituent caps.
+- **Decentralized army:** Independent member troop counts and caps, subject to imperial controls.
+- **The Ungovernable:** Extraordinary constitutional collapse countdown when imperial sovereign is uniquely least across eight defined metrics simultaneously.
+- **National objective:** AI's current strategic plan for eventual victory, not a fixed order to attack the land leader.
+- **Strategic memory:** Historical observed diplomatic conduct used to evaluate credibility and risk.
+- **Observation:** Information a nation legitimately knows through public data, proximity, coalition or empire, and funded intelligence.
+- **Fog of war:** Visibility system hiding unobserved infrastructure, fleet positions, resources and operational intentions.
+- **CORE:** Agreed directional requirement. Numeric implementation may still require tuning.
+- **OPEN:** Needs an explicit written choice before dependent code.
+- **DEFERRED:** Concept intentionally excluded from initial NATIONAL release.
