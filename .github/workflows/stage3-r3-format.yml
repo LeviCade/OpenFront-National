@@ -1,0 +1,62 @@
+name: Stage 3 Round Three - One-time Formatting
+
+on:
+  push:
+    branches:
+      - stage3/integration-20261115
+    paths:
+      - .github/workflows/stage3-r3-format.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stage3-r3-one-time-formatter
+  cancel-in-progress: false
+
+jobs:
+  format:
+    if: github.repository == 'LeviCade/OpenFront-National'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stage3/integration-20261115
+          fetch-depth: 0
+          persist-credentials: true
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Install pinned npm
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Install pinned dependencies
+        run: npm run inst
+      - name: Apply repository formatter only to Round Three handoff files
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm exec -- oxfmt --write \
+            AGENTS.md \
+            docs/18-stage3-conductor.md \
+            docs/19-stage3-m0-interface.md \
+            docs/20-stage3-round3-integration.md \
+            prompts/ENGINEER_1_ROUND_3.md \
+            prompts/ENGINEER_2_ROUND_3.md \
+            prompts/ENGINEER_3_ROUND_3.md
+          git diff --stat
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            AGENTS.md \
+            docs/18-stage3-conductor.md \
+            docs/19-stage3-m0-interface.md \
+            docs/20-stage3-round3-integration.md \
+            prompts/ENGINEER_1_ROUND_3.md \
+            prompts/ENGINEER_2_ROUND_3.md \
+            prompts/ENGINEER_3_ROUND_3.md
+          if ! git diff --cached --quiet; then
+            git commit -m "style(stage3 R3): format current handoff and agent instructions"
+            git push origin HEAD:refs/heads/stage3/integration-20261115
+          fi
