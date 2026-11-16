@@ -325,7 +325,9 @@ export class GameView implements GameLike {
               nationalPacket.nationalCommandResults,
             ).filter((outcome) => outcome.actorId === myActorId);
       this._nationalFoundingOutcome =
-        this._nationalFoundingResults.at(-1) ?? null;
+        this._nationalFoundingResults[
+          this._nationalFoundingResults.length - 1
+        ] ?? null;
     }
 
     this.updatedTiles = [];
