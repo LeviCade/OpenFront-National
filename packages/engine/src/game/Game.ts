@@ -67,6 +67,10 @@ import type {
   NationalConflictPoliticsPort,
 } from "../national/politics/PoliticalAuthorityAdapter";
 import type { LastSovereignResult } from "../national/politics/sovereignty";
+import type {
+  NationalFoundEmpireResult,
+} from "../national/politics/NationalGovernanceState";
+import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { PathFinder } from "../pathfinding/types";
 import type { ExecRecord, SnapshotWriter } from "../snapshot/SnapshotContext";
@@ -618,6 +622,20 @@ export interface Game extends GameLike {
   applyNationalDefenseLevy(
     attacks: readonly IncomingDefense[],
   ): readonly DefenseResult[];
+  /** Trusted execution records real Found Empire acceptance/rejection once. */
+  performNationalFoundEmpireWithOutcome(
+    actor: Player,
+    empireId: string,
+    requestId?: string | null,
+  ): NationalFoundEmpireResult;
+  /** Detached per-actor journal. Never enumerate results for other players. */
+  nationalCommandResults(observer: Player): readonly NationalFoundEmpireResult[];
+  /** E3 stores each human observer's verified, principal-bound sightings. */
+  readNationalObserverMemory(observerId: PlayerID): NationalSightMemory | null;
+  writeNationalObserverMemory(
+    observerId: PlayerID,
+    data: NationalSightMemory,
+  ): void;
   nationalWinner(): PlayerID | null;
   performNationalCommand(actor: Player, command: NationalCommand): void;
   isPaused(): boolean;
