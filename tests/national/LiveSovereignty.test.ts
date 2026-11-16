@@ -418,6 +418,15 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
         successorId: S,
       }),
     ).toThrow(/deadline/);
+    // The warning clears when one strict inequality becomes a tie. This is
+    // an actual engine unit deletion, not a fabricated metric override.
+    south.units(UnitType.City)[0].delete();
+    restored.player(S).units(UnitType.City)[0].delete();
+    game.executeNextTick();
+    restored.executeNextTick();
+    expect(game.nationalUngovernableWarnings()).toEqual([]);
+    expect(restored.nationalUngovernableWarnings()).toEqual([]);
+    expect(snapshot(restored)).toEqual(snapshot(game));
   });
 
   it("P5 explicit test-only policy: real unspawned contender cannot be forfeited while spawn is pending", async () => {
