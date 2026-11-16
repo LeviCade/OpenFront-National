@@ -47,7 +47,15 @@ import {
 } from "@openfront/engine-api/Schemas";
 import { MotionPlanRecord } from "@openfront/engine-lib/game/MotionPlans";
 import type { EngineConfig } from "../configuration/EngineConfig";
-import type { NationalCommand } from "../national/NationalRuntime";
+import type {
+  NationalCommand,
+  NationalUngovernableWarning,
+} from "../national/NationalRuntime";
+import type {
+  NationalPoliticalAuthority,
+  NationalConflictPoliticsPort,
+} from "../national/politics/PoliticalAuthorityAdapter";
+import type { LastSovereignResult } from "../national/politics/sovereignty";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { PathFinder } from "../pathfinding/types";
 import type { ExecRecord, SnapshotWriter } from "../snapshot/SnapshotContext";
@@ -577,6 +585,12 @@ export interface Game extends GameLike {
   ): void;
   getWinner(): Player | Team | null;
   config(): EngineConfig;
+  /** Single live NATIONAL political source for conflict/AI; null for legacy games. */
+  nationalPoliticalAuthority(): Readonly<
+    NationalPoliticalAuthority & NationalConflictPoliticsPort
+  > | null;
+  nationalVictoryRoster(): LastSovereignResult | null;
+  nationalUngovernableWarnings(): readonly NationalUngovernableWarning[];
   nationalWinner(): PlayerID | null;
   performNationalCommand(actor: Player, command: NationalCommand): void;
   isPaused(): boolean;

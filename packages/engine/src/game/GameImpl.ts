@@ -73,7 +73,14 @@ import {
   NationalRuntime,
   NationalRuntimeSnapshotSchema,
   type NationalCommand,
+  type NationalUngovernableWarning,
 } from "../national/NationalRuntime";
+import {
+  PoliticalAuthorityAdapter,
+  type NationalPoliticalAuthority,
+  type NationalConflictPoliticsPort,
+} from "../national/politics/PoliticalAuthorityAdapter";
+import type { LastSovereignResult } from "../national/politics/sovereignty";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathFinder } from "../pathfinding/types";
@@ -179,6 +186,8 @@ export class GameImpl implements Game {
   private _isPaused: boolean = false;
   private _winner: Player | Team | null = null;
   private _national: NationalRuntime | null = null;
+  /** Cached query facade; the closure resolves the CURRENT runtime after restore. */
+  private _nationalAuthority: PoliticalAuthorityAdapter | null = null;
   private _waterManager: WaterManager;
   private _sharedWaterCache: SharedWaterCache;
   private _teamGameSpawnAreas: TeamGameSpawnAreas | undefined;
@@ -538,19 +547,59 @@ export class GameImpl implements Game {
   /** Sync the identity/territory picture after executions have changed it. */
   private synchronizeNationalState(): void {
     if (this._national === null) return;
+    // Read the eight live facts from real engine players after each tick.
+    const standingCount = (player: Player, type: UnitType): number =>
+      player
+        .units(type)
+        .filter((unit) => unit.isActive() && !unit.isUnderConstruction())
+        .length;
     this._national.synchronize(
       this._playersBySmallID.map((p) => ({
         id: p.id(),
         alive: p.isAlive(),
         spawned: p.hasSpawned(),
-        land: p.numTilesOwned(),
+        metrics: {
+          land: p.numTilesOwned(),
+          maxPopulation: Math.floor(this._config.maxTroops(p)),
+          activePopulation: p.troops(),
+          cities: standingCount(p, UnitType.City),
+          factories: standingCount(p, UnitType.Factory),
+          ports: standingCount(p, UnitType.Port),
+          silos: standingCount(p, UnitType.MissileSilo),
+          warships: standingCount(p, UnitType.Warship),
+        },
       })),
       this._ticks,
       !this.inSpawnPhase(),
     );
   }
 
-  /** Returns the actual victorious sovereign (no legacy-mode shortcut). */
+  /** Never exposes the mutable PoliticsProjection to a caller. */
+  nationalPoliticalAuthority(): Readonly<
+    NationalPoliticalAuthority & NationalConflictPoliticsPort
+  > | null {
+    if (this._national === null) return null;
+    this._nationalAuthority ??= new PoliticalAuthorityAdapter(() => {
+      if (this._national === null) throw new Error("NATIONAL is not enabled");
+      // A defensive, validated snapshot; never give another subsystem the
+      // mutable PoliticsProjection. The callback follows restoreState().
+      return this._national.snapshot().politics;
+    });
+    return this._nationalAuthority;
+  }
+
+  /** Complete NATIONAL victor roster; old game Winner schema stays unchanged. */
+  nationalVictoryRoster(): LastSovereignResult | null {
+    this.synchronizeNationalState();
+    return this._national?.victoryRoster() ?? null;
+  }
+
+  /** Ten-second crisis deadlines in deterministic engine-time milliseconds. */
+  nationalUngovernableWarnings(): readonly NationalUngovernableWarning[] {
+    this.synchronizeNationalState();
+    return this._national?.ungovernableWarnings() ?? [];
+  }
+
   nationalWinner(): PlayerID | null {
     this.synchronizeNationalState();
     return this._national?.winner() ?? null;
