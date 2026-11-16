@@ -232,6 +232,12 @@ export class NationalOutboundFilter {
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
     return {
+      // E1's public detached DTO is allowed to every honest-client NATIONAL
+      // viewer, including reconnect. It must never be synthesized from
+      // outbound private PlayerUpdate fields.
+      ...("nationalPolitics" in data && data.nationalPolitics !== null
+        ? { nationalPolitics: data.nationalPolitics }
+        : {}),
       tick: data.tick,
       updates,
       packedTileUpdates: new Uint32Array(packedTile),
