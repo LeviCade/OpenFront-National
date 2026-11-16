@@ -15,15 +15,14 @@ combined gameplay. A green standalone PR earns zero on its own.
 - E4 PR #27 guarded founding UI is merged. Founding _request_ is clickable;
   a game-authoritative accepted/rejected result and political roster must
   still cross the worker boundary to prove full playability.
-- E1 PR #23 contains the canonical WAR/LEVY Game service and public view.
-  It must be formatted, remove its diagnostic probe, pass exact full CI,
-  and be merged before the E2/E3 dependent source is accepted.
-- E2 PR #25 contains combat authorization and troop CAS; it cannot claim
-  full MDA interception while the canonical MDA donor-discovery port is
-  absent. Integrate with E1 service and prove same-run conservation.
-- E3 PR #24 contains scoped-war AI and fixed empire sight provenance;
-  human last-known memory remains detached from GameSnapshot and public
-  political view/outcomes are not yet transmitted.
+- E1 PR #23 **MERGED** (`f882b389`): canonical Game-owned WAR/LEVY state,
+  deterministic snapshots and a detached public political view.
+- E2 PR #25 **MERGED** (`d3279d84`): authenticated war execution,
+  offensive legality and real troop CAS. Missing MDA discovery now
+  **fails closed**; complete donor enumeration in Round Five.
+- E3 PR #24 **MERGED** (`2172f926`): scoped-war AI and corrected
+  inherited empire sight. Human last-known memory remains detached,
+  and political view/outcomes are not yet sent to the client.
 - **Do not block engineers waiting for merges.** All have independent
   tasks and explicit file ownership. The conductor merges after CI.
 
@@ -129,9 +128,10 @@ mass upgrading dependencies.
 
 1. E5 QA and E4 UI foundations are in integration already. Keep them
    feature-limited until E3 public packet bridge is accepted.
-2. Merge E1 #23 only after exact-head green CI, then run full combined CI.
-3. Merge E2 #25 and validate actual authenticated WAR/AttackExecution.
-4. Merge E3 #24 and validate legal observed AI/packet canaries.
+2. E1 #23 merged after independent exact-source full CI.
+3. E2 #25 merged after fail-closed MDA safety repair and exact-head CI.
+4. E3 #24 merged after actual combat legality enforcement. Combined
+   source and independent QA must pass on the same integrated SHA.
 5. Merge incremental E1/E2/E3/E4/E5 Round Five PRs in independent tested
    slices, updating E5 QA every time; do not wait for every engineer to finish.
 6. For each accepted slice, record exact integration SHA, full CI, real
