@@ -4,7 +4,11 @@ function summarize(path) {
   try {
     const report = JSON.parse(readFileSync(path, "utf8"));
     if (report.error) {
-      return { path, status: "error", detail: report.error.summary ?? report.error.code };
+      return {
+        path,
+        status: "error",
+        detail: report.error.summary ?? report.error.code,
+      };
     }
     const v = report.metadata?.vulnerabilities;
     return {
