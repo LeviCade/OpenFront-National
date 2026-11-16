@@ -187,6 +187,9 @@ describe("NATIONAL independently integrated acceptance (actual Game + GameRunner
       }),
     ).toThrow();
     const { game, runner } = await fixture(true, "qa-fraud");
+    // A rejected command may synchronize derived metrics before validation.
+    // Snapshot after canonical synchronization to detect illegal mutations only.
+    game.nationalVictoryRoster();
     const originalBytes = snapshotGame(game);
     expect(() =>
       game.performNationalCommand(game.player(north.id), {
