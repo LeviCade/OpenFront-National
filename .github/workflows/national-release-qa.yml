@@ -91,6 +91,33 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
+  browser-landing:
+    name: Actual Chromium homepage and screenshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Launch Chromium against a real Vite server
+        env:
+          SKIP_BROWSER_OPEN: "true"
+          CHROME_BIN: /usr/bin/google-chrome
+        run: node scripts/national-qa/browser-smoke.mjs
+      - name: Upload screenshot and browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-qa-browser-landing-${{ github.sha }}
+          path: national-qa-artifacts/
+          retention-days: 30
+          if-no-files-found: warn
+
   browser-release-smoke:
     name: Browser release smoke (manual, requires UI integration)
     if: github.event_name == 'workflow_dispatch'
