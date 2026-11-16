@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 /** Fail closed on missing known shell assets or an accidentally imported restricted tree. */
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+  mkdirSync,
+} from "node:fs";
 import { join } from "node:path";
 
 const required = [
@@ -44,7 +51,10 @@ if (existsSync("resources/manifest.json")) {
 }
 if (existsSync("LICENSE-ASSETS")) {
   const text = readFileSync("LICENSE-ASSETS", "utf8");
-  if (!text.includes("Creative Commons") || !text.includes("All Rights Reserved")) {
+  if (
+    !text.includes("Creative Commons") ||
+    !text.includes("All Rights Reserved")
+  ) {
     failed.push("upstream mixed asset license notice missing");
   }
 }
@@ -57,7 +67,8 @@ function scan(dir) {
   for (const item of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, item.name);
     if (item.isDirectory()) {
-      if (!["node_modules", ".git", "dist", "static"].includes(item.name)) scan(p);
+      if (!["node_modules", ".git", "dist", "static"].includes(item.name))
+        scan(p);
     } else if (noDistribute.some((suffix) => item.name.endsWith(suffix))) {
       sample.push(p);
     }
@@ -76,6 +87,16 @@ const result = {
   failures: failed,
 };
 mkdirSync("national-qa-artifacts", { recursive: true });
-writeFileSync("national-qa-artifacts/assets.json", JSON.stringify(result, null, 2) + "\n");
-console.log(JSON.stringify({ status: result.status, checked: records.length, reviewInventory: sample.length, failures: failed }));
+writeFileSync(
+  "national-qa-artifacts/assets.json",
+  JSON.stringify(result, null, 2) + "\n",
+);
+console.log(
+  JSON.stringify({
+    status: result.status,
+    checked: records.length,
+    reviewInventory: sample.length,
+    failures: failed,
+  }),
+);
 if (failed.length) process.exitCode = 1;
