@@ -302,9 +302,9 @@ describe("NATIONAL levy transaction atomicity — D-008 / LEVY-01..07", () => {
     const replays = ledger.interceptAcceptedAttacks(spam);
     expect(replays.every((x) => x.application === "replay")).toBe(true);
     expect(replays.every((x) => x.intercepted === 0)).toBe(true);
-    expect(
-      replays.every((x) => x.remainingAttackingTroops === 2_000),
-    ).toBe(true);
+    expect(replays.every((x) => x.remainingAttackingTroops === 2_000)).toBe(
+      true,
+    );
     expect(bank.balance("C")).toBe(90_000);
     expect(adapter.commitCount).toBe(1);
     expect(

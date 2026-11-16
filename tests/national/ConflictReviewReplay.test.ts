@@ -45,26 +45,44 @@ class Balances {
       defenderId: "B",
       confirmedAccepted: true,
       attackingTroops: 20_000,
-      eligible: [{
-        source: this.donor,
-        troopCapacity: 100_000,
-        maximumFraction: 0.1,
-        protectedCapacityFraction: 0.3,
-      }],
+      eligible: [
+        {
+          source: this.donor,
+          troopCapacity: 100_000,
+          maximumFraction: 0.1,
+          protectedCapacityFraction: 0.3,
+        },
+      ],
     };
   }
 }
 
 class AlivePolitics implements PoliticsPort {
   alive = new Set(["A", "B"]);
-  empireOf(_id: string) { return null; }
-  emperorOf(_id: string) { return null; }
-  membersOf(_id: string): readonly string[] { return []; }
-  nationAlive(id: string) { return this.alive.has(id); }
-  empireExists(_id: string) { return false; }
-  mayDeclareNational(_id: string) { return false; }
-  maySettleNational(_id: string) { return false; }
-  treatyProtects(_a: string, _b: string) { return false; }
+  empireOf(_id: string) {
+    return null;
+  }
+  emperorOf(_id: string) {
+    return null;
+  }
+  membersOf(_id: string): readonly string[] {
+    return [];
+  }
+  nationAlive(id: string) {
+    return this.alive.has(id);
+  }
+  empireExists(_id: string) {
+    return false;
+  }
+  mayDeclareNational(_id: string) {
+    return false;
+  }
+  maySettleNational(_id: string) {
+    return false;
+  }
+  treatyProtects(_a: string, _b: string) {
+    return false;
+  }
 }
 
 describe("Conductor review: replay-safe two-sided combat and fail-closed neutrality", () => {

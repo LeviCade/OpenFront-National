@@ -337,9 +337,7 @@ describe("NATIONAL real defensive levies — D-008", () => {
     expect(r.reduce((s, x) => s + x.intercepted, 0)).toBe(10_000);
     expect(donor.balance).toBe(90_000);
     const replays = ledger.interceptAcceptedAttacks(attacks);
-    expect(replays.map((x) => x.application)).toEqual(
-      Array(20).fill("replay"),
-    );
+    expect(replays.map((x) => x.application)).toEqual(Array(20).fill("replay"));
     expect(replays.map((x) => x.intercepted)).toEqual(Array(20).fill(0));
     expect(replays.map((x) => x.remainingAttackingTroops)).toEqual(
       Array(20).fill(5_000),
