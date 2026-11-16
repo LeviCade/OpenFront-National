@@ -474,11 +474,21 @@ export class GameRunner {
         );
         // Advance and persist this authenticated human's sight at the
         // canonical tick boundary before delivery or a subsequent snapshot.
-        persistNationalHumanSight(
-          this.game,
-          this.nationalObserverId!,
-          this.nationalOutbound.snapshotSightMemory(),
-        );
+        const currentViewer = this.game.player(this.nationalObserverId!);
+        // E1's canonical snapshot writer admits only a living, spawned human.
+        // Pre-spawn packets and eliminated players must never throw or
+        // re-create a revoked human memory entry.
+        if (
+          currentViewer.type() === PlayerType.Human &&
+          currentViewer.hasSpawned() &&
+          currentViewer.isAlive()
+        ) {
+          persistNationalHumanSight(
+            this.game,
+            currentViewer.id(),
+            this.nationalOutbound.snapshotSightMemory(),
+          );
+        }
         this.callBack(projected);
       }
     } else {
