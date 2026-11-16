@@ -15,11 +15,12 @@ describe("NATIONAL Engineer 2 formatter diagnostic", () => {
       "packages/engine/src/national/conflict/WarLedger.ts",
       "packages/engine/src/national/conflict/DefenseLevy.ts",
       "tests/national/Conflict.test.ts",
+      "packages/engine/src/national/conflict/README.md",
     ];
     const dir = mkdtempSync(join(process.cwd(), ".e2-format-probe-"));
     try {
       sources.forEach((source, index) => {
-        const temporary = join(dir, `source-${index}.ts`);
+        const temporary = join(dir, `source-${index}.${source.endsWith(".md") ? "md" : "ts"}`);
         copyFileSync(source, temporary);
         const result = spawnSync("./node_modules/.bin/oxfmt", ["--write", temporary], {
           cwd: process.cwd(),
