@@ -1,7 +1,7 @@
 # 20 — Stage 3 Round Three: live-game integration ownership and delivery contract
 
 **Conductor publication:** November 15, 2026.
-**Baseline:** `9de2e923532c307c144375ff0172b7e6261750ed` on `stage3/integration-20261115` after merging E1 PR #17 at `ce37ee9` and E3 PR #12 at `9de2e923`.
+**Audited source baseline:** `9de2e923532c307c144375ff0172b7e6261750ed` on `stage3/integration-20261115` after merging E1 PR #17 at `ce37ee9` and E3 PR #12 at `9de2e923`. **Engineers must branch from the CURRENT integration HEAD that includes these handoff files, not from this pre-document source SHA; record the exact actual branch point.**
 **E2 PR #14:** deliberately held for two concrete replay/authorization repairs despite green isolated CI. See PR review.
 **Goal:** stop issuing isolated module assignments. Each engineer must prove a real-engine game behavior, with snapshots and legacy regression tests, on their branch.
 
@@ -21,7 +21,7 @@
 
 ## Interoperability and test order
 
-- All initial branches must be rooted at a specific verified integration SHA. E1/E3 can start at `9de2e923532c307c144375ff0172b7e6261750ed`; E2 first repairs PR #14, and must start the live-combat branch at the current integration SHA **after** its repair is merged. No guesswork about new SHA.
+- All initial branches must be rooted at a specific verified integration SHA. E1/E3 start from the current integration HEAD containing this handoff; E2 first repairs PR #14, and must start the live-combat branch at the current integration SHA **after** its repair is merged. No guesswork about new SHA.
 - Stage integration: (1) merge repaired E2 foundation; (2) merge E1 live-state changes + first game hook; (3) merge E2 live combat and run WAR/LEVY real-game tests; (4) merge E3 live observation/AI and test FOG/AI real packets and save/restore. Engineering can be parallel but merges are sequential.
 - PR must state exact HEAD, changed files, PASS/FAIL real scenario IDs, full GitHub CI URL on HEAD, snapshot/replay hashes, observed gameplay behavior, remaining disabled behavior, and legacy tests. A green isolated unit suite is never enough.
 - Accept **no** cross-branch changes to leased common files, no false `playable` claim and no feature enablement with unchecked authorization. Only the conductor manages branch merges and release gates.

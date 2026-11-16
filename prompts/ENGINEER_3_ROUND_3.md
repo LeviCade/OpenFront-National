@@ -1,7 +1,7 @@
 # 🧠🔐 OPENFRONT NATIONAL — ENGINEER #3, ROUND THREE: REAL AI AND OUTBOUND FOG
 
 **Repository:** `LeviCade/OpenFront-National`
-**Starting integration SHA:** `9de2e923532c307c144375ff0172b7e6261750ed`
+**Audited source baseline:** `9de2e923532c307c144375ff0172b7e6261750ed`\n**Branch starting SHA:** retrieve and record the CURRENT HEAD of `stage3/integration-20261115` AFTER `docs/20-stage3-round3-integration.md` is present; do not branch from the older source baseline.
 **Branch:** `stage3/e3-round3-live-observation-20261115`
 **PR target:** `stage3/integration-20261115`
 **Issue:** #11; contract: `docs/20-stage3-round3-integration.md`.
