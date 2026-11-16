@@ -56,6 +56,11 @@ import type {
   NationalConflictPoliticsPort,
 } from "../national/politics/PoliticalAuthorityAdapter";
 import type { LastSovereignResult } from "../national/politics/sovereignty";
+import type {
+  NationalWarAuthority,
+  NationalWarCommand,
+  NationalWarStateSnapshot,
+} from "../national/politics/NationalWarState";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { PathFinder } from "../pathfinding/types";
 import type { ExecRecord, SnapshotWriter } from "../snapshot/SnapshotContext";
@@ -591,6 +596,12 @@ export interface Game extends GameLike {
   > | null;
   nationalVictoryRoster(): LastSovereignResult | null;
   nationalUngovernableWarnings(): readonly NationalUngovernableWarning[];
+  /** Canonical E2 WarLedger-backed live query, never a mutable ledger. */
+  nationalWarAuthority(): Readonly<NationalWarAuthority> | null;
+  /** Durable WAR + LEVY snapshot for honest-client observation and replay. */
+  nationalWarState(): NationalWarStateSnapshot | null;
+  /** Internal trusted actor; E2 owns external schema and command validation. */
+  performNationalWarCommand(actor: Player, command: NationalWarCommand): void;
   nationalWinner(): PlayerID | null;
   performNationalCommand(actor: Player, command: NationalCommand): void;
   isPaused(): boolean;

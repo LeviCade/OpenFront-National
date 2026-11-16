@@ -81,6 +81,13 @@ import {
   type NationalConflictPoliticsPort,
 } from "../national/politics/PoliticalAuthorityAdapter";
 import type { LastSovereignResult } from "../national/politics/sovereignty";
+import {
+  NationalWarStateService,
+  NationalWarStateSnapshotSchema,
+  type NationalWarAuthority,
+  type NationalWarCommand,
+  type NationalWarStateSnapshot,
+} from "../national/politics/NationalWarState";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathFinder } from "../pathfinding/types";
@@ -186,6 +193,8 @@ export class GameImpl implements Game {
   private _isPaused: boolean = false;
   private _winner: Player | Team | null = null;
   private _national: NationalRuntime | null = null;
+  /** E2 WAR/LEVY is canonically stored here, never in a WeakMap or fork. */
+  private _nationalWar: NationalWarStateService | null = null;
   /** Cached query facade; the closure resolves the CURRENT runtime after restore. */
   private _nationalAuthority: PoliticalAuthorityAdapter | null = null;
   private _waterManager: WaterManager;
@@ -228,6 +237,9 @@ export class GameImpl implements Game {
       if (this._config.nationalMode()) {
         this._national = new NationalRuntime(
           this._playersBySmallID.map((p) => p.id()),
+        );
+        this._nationalWar = new NationalWarStateService(
+          this.nationalPoliticalAuthority()!,
         );
       }
     }
@@ -588,6 +600,32 @@ export class GameImpl implements Game {
     return this._nationalAuthority;
   }
 
+  /** E2 WAR legality is read from the one Game-owned, persisted ledger. */
+  nationalWarAuthority(): Readonly<NationalWarAuthority> | null {
+    return this._nationalWar?.authority ?? null;
+  }
+
+  /** Detached canonical WAR/LEVY state; cannot mutate active war records. */
+  nationalWarState(): NationalWarStateSnapshot | null {
+    return this._nationalWar?.snapshot() ?? null;
+  }
+
+  /** Trusted engine actor, not a spoofable PlayerID from the browser. */
+  performNationalWarCommand(actor: Player, command: NationalWarCommand): void {
+    if (this._nationalWar === null || this._national === null)
+      throw new Error("NATIONAL war: mode not enabled");
+    if (
+      this.inSpawnPhase() ||
+      this._players.get(actor.id()) !== actor ||
+      !actor.hasSpawned() ||
+      !actor.isAlive()
+    ) {
+      throw new Error("NATIONAL war: unauthenticated or inactive actor");
+    }
+    this.synchronizeNationalState();
+    this._nationalWar.perform(actor.id(), command, this._ticks);
+  }
+
   /** Complete NATIONAL victor roster; old game Winner schema stays unchanged. */
   nationalVictoryRoster(): LastSovereignResult | null {
     this.synchronizeNationalState();
@@ -845,6 +883,8 @@ export class GameImpl implements Game {
     // built would only show up through the trains that later run on them.
     hash += this._railNetwork.hash();
     if (this._national !== null) hash += this._national.stateHash();
+    if (this._nationalWar !== null)
+      hash += simpleHash(JSON.stringify(this._nationalWar.snapshot()));
     return hash;
   }
 
@@ -1792,6 +1832,7 @@ export class GameImpl implements Game {
       ),
       stats: w.versioned(StatsSnapshot, (this._stats as StatsImpl).snapshot()),
       national: this._national?.snapshot() ?? null,
+      nationalWar: this._nationalWar?.snapshot() ?? null,
     };
   }
 
@@ -1862,10 +1903,18 @@ export class GameImpl implements Game {
         this._playersBySmallID.map((p) => p.id()),
         this._ticks,
       );
+      this._nationalWar = new NationalWarStateService(
+        this.nationalPoliticalAuthority()!,
+      );
+      // v2 snapshot migration supplies null (no WAR/LEVY records yet).
+      if (s.nationalWar !== null) this._nationalWar.restore(s.nationalWar);
     } else {
       if (s.national !== null)
         throw new Error("NATIONAL data in legacy snapshot");
       this._national = null;
+      if (s.nationalWar !== null)
+        throw new Error("NATIONAL WAR state in legacy game snapshot");
+      this._nationalWar = null;
     }
   }
 
@@ -1955,11 +2004,15 @@ export class GameImpl implements Game {
 
 export const GameSnapshot = snapshotType({
   name: "Game",
-  version: 2,
+  version: 3,
   migrations: {
     1: (data: unknown) => ({
       ...(data as Record<string, unknown>),
       national: null,
+    }),
+    2: (data: unknown) => ({
+      ...(data as Record<string, unknown>),
+      nationalWar: null,
     }),
   },
   schema: z.object({
@@ -1996,6 +2049,7 @@ export const GameSnapshot = snapshotType({
     sharedWaterCache: VersionedSchema,
     stats: VersionedSchema,
     national: NationalRuntimeSnapshotSchema.nullable(),
+    nationalWar: NationalWarStateSnapshotSchema.nullable(),
   }),
 });
 export type GameState = z.infer<typeof GameSnapshot.schema>;
