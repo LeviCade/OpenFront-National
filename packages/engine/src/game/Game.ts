@@ -48,9 +48,20 @@ import {
 import { MotionPlanRecord } from "@openfront/engine-lib/game/MotionPlans";
 import type { EngineConfig } from "../configuration/EngineConfig";
 import type {
+  DefenseResult,
+  IncomingDefense,
+  TroopSource,
+} from "../national/conflict/DefenseLevy";
+import type {
   NationalCommand,
+  NationalPublicPoliticalView,
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
+import type {
+  NationalWarAuthority,
+  NationalWarCommand,
+  NationalWarStateSnapshot,
+} from "../national/politics/NationalWarState";
 import type {
   NationalPoliticalAuthority,
   NationalConflictPoliticsPort,
@@ -589,8 +600,22 @@ export interface Game extends GameLike {
   nationalPoliticalAuthority(): Readonly<
     NationalPoliticalAuthority & NationalConflictPoliticsPort
   > | null;
+  /** Enumerates public empire leaders/members and warning/victory facts only. */
+  nationalPublicPoliticalView(): NationalPublicPoliticalView | null;
   nationalVictoryRoster(): LastSovereignResult | null;
   nationalUngovernableWarnings(): readonly NationalUngovernableWarning[];
+  /** Canonical E2 WarLedger-backed live query, never a mutable ledger. */
+  nationalWarAuthority(): Readonly<NationalWarAuthority> | null;
+  /** Durable WAR + LEVY snapshot for honest-client observation and replay. */
+  nationalWarState(): NationalWarStateSnapshot | null;
+  /** Internal trusted actor; E2 owns external schema and command validation. */
+  performNationalWarCommand(actor: Player, command: NationalWarCommand): void;
+  /** Canonical read-only source from a real living Game Player. */
+  nationalLevySource(nationId: PlayerID): TroopSource | null;
+  /** Internal E2 accepted-attack hook; MDA, WAR and atomic debits verified. */
+  applyNationalDefenseLevy(
+    attacks: readonly IncomingDefense[],
+  ): readonly DefenseResult[];
   nationalWinner(): PlayerID | null;
   performNationalCommand(actor: Player, command: NationalCommand): void;
   isPaused(): boolean;
