@@ -21,6 +21,16 @@ import { assertNever, simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
 import {
+  initialNationalPlannerMemory,
+  planNationalInterest,
+  type NationalPlannerMemory,
+} from "../national/ai/NationalPlanner";
+import { collectLiveNationalObservation } from "../national/observation/LiveObservation";
+import {
+  advanceLastKnown,
+  type NationalSightMemory,
+} from "../national/observation/NationalObservation";
+import {
   NationSchema,
   nationData,
   newCell,
@@ -32,6 +42,7 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
+import { AttackExecution } from "./AttackExecution";
 import { NationAllianceBehavior } from "./nation/NationAllianceBehavior";
 import { NationAttackBehavior } from "./nation/NationAttackBehavior";
 import { NationEmojiBehavior } from "./nation/NationEmojiBehavior";
@@ -65,6 +76,11 @@ export class NationExecution implements Execution {
   private expandRatio: number;
 
   private embargoMalusApplied = new Set<PlayerID>();
+
+  // E3-owned execution snapshot state: no game-global WeakMap, no AI
+  // access to an unrestricted Game/Player observation.
+  private nationalPlannerMemory: NationalPlannerMemory | null = null;
+  private nationalSightMemory: NationalSightMemory | null = null;
 
   constructor(
     private gameID: GameID,
@@ -129,6 +145,22 @@ export class NationExecution implements Execution {
   }
 
   tick(ticks: number) {
+    // NATIONAL must never run legacy omniscient ship monitoring. Legacy
+    // behavior remains byte-for-byte equivalent with the flag absent.
+    if (this.mg.config().nationalMode() && !this.mg.inSpawnPhase()) {
+      if (this.player === null) return;
+      // An unspawned nation is NOT eliminated. The separate SpawnExecution
+      // may still be pending; marking this execution inactive before spawn
+      // would permanently disable all NATIONAL AI for that nation.
+      if (!this.player.hasSpawned()) return;
+      if (!this.player.isAlive()) {
+        this.active = false;
+        return;
+      }
+      this.tickNational(ticks);
+      return;
+    }
+
     // Ship tracking
     if (
       this.behaviorsInitialized &&
@@ -266,6 +298,66 @@ export class NationExecution implements Execution {
     this.attackBehavior.maybeAttack();
     this.warshipBehavior.counterWarshipInfestation();
     this.nukeBehavior.maybeSendNuke();
+  }
+
+  /**
+   * NATIONAL-only bounded strategy. The authoritative game reference is
+   * confined to the collector and to the final validated execution primitive;
+   * the decision itself observes only a whitelisted NationalObservation.
+   * Attacks on foreign-owned land are DISABLED until E2's persisted war
+   * authorization has been merged. Neutral expansion is legal in M0.
+   */
+  private tickNational(ticks: number): void {
+    const player = this.player;
+    if (player === null || !player.hasSpawned()) return;
+    if (
+      this.nationalPlannerMemory !== null &&
+      ticks < this.nationalPlannerMemory.nextPlanningTick
+    )
+      return;
+    const verified = collectLiveNationalObservation(this.mg, player.id());
+    const observation = verified.observation;
+    const remembered = advanceLastKnown(
+      observation,
+      this.nationalSightMemory,
+      60,
+    );
+    this.nationalSightMemory = remembered.memory;
+    const result = planNationalInterest(
+      observation,
+      this.nationalPlannerMemory ?? initialNationalPlannerMemory(player.id()),
+      30,
+    );
+    this.nationalPlannerMemory = result.memory;
+    if (
+      !result.planned ||
+      result.decision?.objective !== "expand" ||
+      result.decision.targetId !== null ||
+      observation.unownedFrontier !== true
+    )
+      return;
+
+    // The final legality gate reads only actual OWN troops and actual adjacent
+    // unowned terrain. It cannot select a hidden foreign target.
+    if (player.troops() < 20) return;
+    let adjacentNeutral = false;
+    for (const tile of player.borderTiles()) {
+      this.mg.forEachNeighbor(tile, (next) => {
+        if (
+          !adjacentNeutral &&
+          this.mg.isLand(next) &&
+          !this.mg.owner(next).isPlayer() &&
+          player.canAttack(next)
+        )
+          adjacentNeutral = true;
+      });
+      if (adjacentNeutral) break;
+    }
+    if (!adjacentNeutral) return;
+    const troops = Math.max(1, Math.floor(player.troops() / 5));
+    this.mg.addExecution(
+      new AttackExecution(troops, player, this.mg.terraNullius().id()),
+    );
   }
 
   private initializeBehaviors(): void {
@@ -449,6 +541,28 @@ export class NationExecution implements Execution {
       expandRatio: this.expandRatio,
       embargoMalusApplied: [...this.embargoMalusApplied],
       spawnExecAdded: this.spawnExecAdded,
+      nationalPlannerMemory:
+        this.nationalPlannerMemory === null
+          ? null
+          : {
+              ...this.nationalPlannerMemory,
+              reputation: this.nationalPlannerMemory.reputation.map(
+                (entry) => ({ ...entry }),
+              ),
+              lastProcessedEvent:
+                this.nationalPlannerMemory.lastProcessedEvent === null
+                  ? null
+                  : { ...this.nationalPlannerMemory.lastProcessedEvent },
+            },
+      nationalSightMemory:
+        this.nationalSightMemory === null
+          ? null
+          : {
+              observerId: this.nationalSightMemory.observerId,
+              assets: this.nationalSightMemory.assets.map((asset) => ({
+                ...asset,
+              })),
+            },
       behaviors: this.behaviorsInitialized
         ? {
             emoji: this.emojiBehavior.snapshot(w),
@@ -487,6 +601,8 @@ export class NationExecution implements Execution {
     this.expandRatio = s.expandRatio;
     this.embargoMalusApplied = new Set(s.embargoMalusApplied);
     this.spawnExecAdded = s.spawnExecAdded;
+    this.nationalPlannerMemory = s.nationalPlannerMemory;
+    this.nationalSightMemory = s.nationalSightMemory;
     this.behaviorsInitialized = s.behaviors !== null;
     const b = s.behaviors;
     const player = this.player;
@@ -542,6 +658,46 @@ const NationStateSchema = z.object({
   expandRatio: zNum(),
   embargoMalusApplied: z.array(z.string()),
   spawnExecAdded: z.boolean(),
+  nationalPlannerMemory: z
+    .object({
+      observerId: z.string(),
+      objective: z.enum(["defend", "expand", "consolidate"]),
+      targetId: z.string().nullable(),
+      nextPlanningTick: z.number().int().nonnegative(),
+      lastProcessedEvent: z
+        .object({ tick: z.number(), id: z.string() })
+        .nullable(),
+      reputation: z.array(
+        z.object({
+          nationId: z.string(),
+          credibility: z.number(),
+          lastObservedTick: z.number(),
+        }),
+      ),
+    })
+    .nullable(),
+  nationalSightMemory: z
+    .object({
+      observerId: z.string(),
+      assets: z.array(
+        z.object({
+          id: z.string(),
+          ownerId: z.string(),
+          kind: z.enum([
+            "army",
+            "structure",
+            "warship",
+            "transport",
+            "trade-ship",
+          ]),
+          x: z.number(),
+          y: z.number(),
+          lastSeenTick: z.number(),
+          sourceNationId: z.string().optional(),
+        }),
+      ),
+    })
+    .nullable(),
   behaviors: z
     .object({
       emoji: VersionedSchema,
@@ -558,7 +714,14 @@ type NationState = z.infer<typeof NationStateSchema>;
 
 export const NationExecutionSnapshot = execSnapshotType({
   name: "Nation",
-  version: 1,
+  version: 2,
+  migrations: {
+    1: (prior) => ({
+      ...prior,
+      nationalPlannerMemory: null,
+      nationalSightMemory: null,
+    }),
+  },
   schema: NationStateSchema,
   cls: () => NationExecution,
 });

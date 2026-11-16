@@ -208,6 +208,28 @@ export function planNationalInterest(
     };
   }
 
+  // Unowned land is a legitimate, immediately verified opportunity and
+  // requires no declaration of war. Prefer it over any foreign expansion,
+  // which remains unexecutable until the canonical E2 war ledger is wired.
+  if (observation.unownedFrontier === true) {
+    const decision: NationalDecision = {
+      objective: "expand",
+      targetId: null,
+      score: 40,
+      rationale: "reachable-opportunity",
+    };
+    return {
+      planned: true,
+      decision,
+      memory: {
+        ...memory,
+        objective: decision.objective,
+        targetId: null,
+        nextPlanningTick: observation.tick + cadenceTicks,
+      },
+    };
+  }
+
   const knownCredibility = new Map(
     memory.reputation.map((r) => [r.nationId, r.credibility]),
   );
