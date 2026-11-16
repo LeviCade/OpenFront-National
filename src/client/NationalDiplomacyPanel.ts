@@ -27,7 +27,12 @@ export class NationalDiplomacyPanel extends LitElement {
   @state() private pendingEmpireId: string | null = null;
   private pendingAttempt: NationalFoundingAttempt | null = null;
   private lastConfirmedEmpireId: string | null = null;
-  @state() private phase: "idle" | "pending" | "accepted" | "rejected" | "unknown" = "idle";
+  @state() private phase:
+    | "idle"
+    | "pending"
+    | "accepted"
+    | "rejected"
+    | "unknown" = "idle";
   @state() private message: string | null = null;
   @state() private error: string | null = null;
 
@@ -44,7 +49,10 @@ export class NationalDiplomacyPanel extends LitElement {
     const player = game?.myPlayer();
     const politics = game?.nationalPolitics() ?? null;
     const member = player ? empireForMember(politics, player.id()) : null;
-    if (this.lastConfirmedEmpireId && member?.id !== this.lastConfirmedEmpireId) {
+    if (
+      this.lastConfirmedEmpireId &&
+      member?.id !== this.lastConfirmedEmpireId
+    ) {
       this.lastConfirmedEmpireId = null;
       this.message = null;
       this.phase = "idle";
@@ -164,7 +172,8 @@ export class NationalDiplomacyPanel extends LitElement {
     this.lastConfirmedEmpireId = null;
     this.phase = "pending";
     this.error = null;
-    this.message = "Request sent to game. Awaiting its accepted or rejected result…";
+    this.message =
+      "Request sent to game. Awaiting its accepted or rejected result…";
     try {
       this.eventBus.emit(new SendNationalFoundEmpireIntentEvent(empireId));
     } catch {
@@ -206,8 +215,10 @@ export class NationalDiplomacyPanel extends LitElement {
     }
     const politics = game.nationalPolitics();
     const ownEmpire = this.memberEmpire;
-    const canFound = this.unavailableReason === null &&
-      politics !== null && !game.config().isReplay();
+    const canFound =
+      this.unavailableReason === null &&
+      politics !== null &&
+      !game.config().isReplay();
     const readonlyReplay = game.config().isReplay();
     return html`
       <section
@@ -281,14 +292,17 @@ export class NationalDiplomacyPanel extends LitElement {
                           Ungovernable warnings
                         </h2>
                         ${politics.warnings.map(
-                          (warning) => html`<p class="text-sm text-orange-100">
-                            Empire <strong>${warning.empireId}</strong>:
-                            ${Math.ceil(warning.remainingMs / 1000)} seconds
-                            to the recorded deadline.
-                            ${warning.blockedByAssetDisposition
-                              ? "Dissolution is deferred pending asset-disposition rules."
-                              : "Review imperial control and succession."}
-                          </p>`,
+                          (warning) =>
+                            html`<p class="text-sm text-orange-100">
+                              Empire <strong>${warning.empireId}</strong>:
+                              ${Math.ceil(warning.remainingMs / 1000)} seconds
+                              to the recorded deadline.
+                              ${
+                                warning.blockedByAssetDisposition
+                                  ? "Dissolution is deferred pending asset-disposition rules."
+                                  : "Review imperial control and succession."
+                              }
+                            </p>`,
                         )}
                       </div>`
                     : nothing
@@ -310,54 +324,57 @@ export class NationalDiplomacyPanel extends LitElement {
                           Replay is read-only. Empire founding is unavailable.
                         </p>`
                       : html`<form
-                        class="space-y-2"
-                        @submit=${this.submitFounding}
-                      >
-                        <label
-                          for="national-empire-id"
-                          class="block font-semibold"
+                          class="space-y-2"
+                          @submit=${this.submitFounding}
                         >
-                          Found an empire
-                        </label>
-                        <input
-                          id="national-empire-id"
-                          name="empireId"
-                          type="text"
-                          required
-                          minlength="1"
-                          maxlength="64"
-                          pattern="[A-Za-z0-9_-]+"
-                          autocomplete="off"
-                          autocapitalize="off"
-                          spellcheck="false"
-                          class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-white focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50"
-                          placeholder="e.g. Atlas_Empire"
-                          aria-describedby="national-id-help"
-                          .value=${this.draftEmpireId}
-                          @input=${(e: Event) =>
-                            (this.draftEmpireId = (
-                              e.target as HTMLInputElement
-                            ).value)}
-                          ?disabled=${!canFound}
-                        />
-                        <p id="national-id-help" class="text-xs text-slate-400">
-                          1–64 letters, digits, underscores or hyphens.
-                        </p>
-                        <button
-                          type="submit"
-                          class="rounded-lg bg-amber-400 px-4 py-2 font-bold text-slate-950 hover:bg-amber-300 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
-                          ?disabled=${!canFound || !this.eventBus}
-                        >
-                          ${this.pendingEmpireId ? "Awaiting game result…" : "Found Empire"}
-                        </button>
-                        ${
-                          this.unavailableReason
-                            ? html`<p class="text-xs text-slate-300">
-                                ${this.unavailableReason}
-                              </p>`
-                            : nothing
-                        }
-                      </form>`
+                          <label
+                            for="national-empire-id"
+                            class="block font-semibold"
+                          >
+                            Found an empire
+                          </label>
+                          <input
+                            id="national-empire-id"
+                            name="empireId"
+                            type="text"
+                            required
+                            minlength="1"
+                            maxlength="64"
+                            pattern="[A-Za-z0-9_-]+"
+                            autocomplete="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-white focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50"
+                            placeholder="e.g. Atlas_Empire"
+                            aria-describedby="national-id-help"
+                            .value=${this.draftEmpireId}
+                            @input=${(e: Event) =>
+                              (this.draftEmpireId = (
+                                e.target as HTMLInputElement
+                              ).value)}
+                            ?disabled=${!canFound}
+                          />
+                          <p
+                            id="national-id-help"
+                            class="text-xs text-slate-400"
+                          >
+                            1–64 letters, digits, underscores or hyphens.
+                          </p>
+                          <button
+                            type="submit"
+                            class="rounded-lg bg-amber-400 px-4 py-2 font-bold text-slate-950 hover:bg-amber-300 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
+                            ?disabled=${!canFound || !this.eventBus}
+                          >
+                            ${this.pendingEmpireId ? "Awaiting game result…" : "Found Empire"}
+                          </button>
+                          ${
+                            this.unavailableReason
+                              ? html`<p class="text-xs text-slate-300">
+                                  ${this.unavailableReason}
+                                </p>`
+                              : nothing
+                          }
+                        </form>`
                 }
 
                 <div
