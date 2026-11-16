@@ -261,4 +261,114 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     // The borrowed hostile port cannot invent a war or expose a mutable ledger.
     expect(game.nationalWarAuthority()?.authorizeOffensiveAction(A, B)).toBe(false);
   });
+
+  it("LEVY-01/04/06: real MDA troop debit is atomic, persisted and replay-safe", async () => {
+    const game = await live();
+    const attacker = game.player(A);
+    const defender = game.player(B);
+    const contributor = game.player(C);
+    contributor.setTroops(500_000);
+    game.performNationalCommand(defender, {
+      kind: "found-pact", pactId: "r4-mda", pactKind: "MDA", name: "Defense",
+      terms: { admission: "leader", expulsion: "forbidden" },
+    });
+    game.performNationalCommand(defender, {
+      kind: "invite-pact", pactId: "r4-mda", candidateId: C,
+    });
+    game.performNationalCommand(contributor, {
+      kind: "accept-pact", pactId: "r4-mda",
+    });
+    game.performNationalWarCommand(attacker, {
+      kind: "declare-national", warId: "r4-levy-war",
+      aggressorId: A, targetId: B,
+    });
+    const request = (g: Game) => ({
+      attackId: "r4-confirmed-attack",
+      confirmedAccepted: true as const,
+      campaignId: "r4-invasion-campaign",
+      attackerId: A, defenderId: B,
+      attackingTroops: 20_000,
+      eligible: [{
+        source: g.nationalLevySource(C)!,
+        troopCapacity: Math.floor(g.config().maxTroops(g.player(C))),
+        maximumFraction: 0.1,
+        protectedCapacityFraction: 0.3,
+      }],
+    });
+    const before = contributor.troops();
+    const [first] = game.applyNationalDefenseLevy([request(game)]);
+    expect(first).toMatchObject({
+      application: "applied",
+      intercepted: 20_000,
+      remainingAttackingTroops: 0,
+      contributions: [{ nationId: C, troopsDebited: 20_000 }],
+    });
+    expect(contributor.troops()).toBe(before - 20_000);
+    expect(game.nationalWarState()?.levy.processed).toHaveLength(1);
+    expect(game.nationalWarState()?.levy.allowances).toHaveLength(1);
+    const { restored, bytes, again } = await roundTrip(game, "plains");
+    expect([...again]).toEqual([...bytes]);
+    expect(restored.nationalWarState()).toEqual(game.nationalWarState());
+    expect(restored.player(C).troops()).toBe(before - 20_000);
+    for (const g of [game, restored]) {
+      const amount = g.player(C).troops();
+      const [replayed] = g.applyNationalDefenseLevy([request(g)]);
+      expect(replayed).toMatchObject({
+        application: "replay", intercepted: 0,
+        remainingAttackingTroops: 20_000, contributions: [],
+      });
+      expect(g.player(C).troops()).toBe(amount);
+    }
+    expect(restored.nationalWarState()).toEqual(game.nationalWarState());
+    expect(snapshotGameData(restored).game).toEqual(snapshotGameData(game).game);
+  });
+
+  it("LEVY-05/07: forged sources, missing MDA and absent formal war reject before ANY debit", async () => {
+    const game = await live();
+    const other = await live();
+    game.player(C).setTroops(500_000);
+    const request = (source: NonNullable<ReturnType<Game["nationalLevySource"]>>, id: string) => ({
+      attackId: id, confirmedAccepted: true as const,
+      campaignId: "r4-refusal",
+      attackerId: A, defenderId: B,
+      attackingTroops: 10_000,
+      eligible: [{
+        source,
+        troopCapacity: 100_000,
+        maximumFraction: 0.1,
+        protectedCapacityFraction: 0.3,
+      }],
+    });
+    const own = game.nationalLevySource(C)!;
+    const foreign = other.nationalLevySource(C)!;
+    const before = game.player(C).troops();
+    const empty = game.nationalWarState();
+    expect(() => game.applyNationalDefenseLevy([request(own, "without-war")]))
+      .toThrow(/not formally authorized/);
+    game.performNationalWarCommand(game.player(A), {
+      kind: "declare-national", warId: "r4-refusal-war",
+      aggressorId: A, targetId: B,
+    });
+    expect(() => game.applyNationalDefenseLevy([request(own, "without-MDA")]))
+      .toThrow(/MDA contributor/);
+    game.performNationalCommand(game.player(B), {
+      kind: "found-pact", pactId: "r4-mda-refusal", pactKind: "MDA",
+      name: "Safe treaty", terms: { admission: "leader", expulsion: "forbidden" },
+    });
+    game.performNationalCommand(game.player(B), {
+      kind: "invite-pact", pactId: "r4-mda-refusal", candidateId: C,
+    });
+    game.performNationalCommand(game.player(C), {
+      kind: "accept-pact", pactId: "r4-mda-refusal",
+    });
+    expect(() => game.applyNationalDefenseLevy([
+      request(own, "valid-in-batch"),
+      request(foreign, "foreign-in-batch"),
+    ])).toThrow(/MDA contributor/);
+    expect(game.player(C).troops()).toBe(before);
+    expect(game.nationalWarState()?.levy.processed).toEqual([]);
+    expect(game.nationalWarState()?.levy.allowances).toEqual([]);
+    expect(empty?.wars.layers).toEqual([]);
+    expect(game.nationalWarAuthority()?.atWar(A, B)).toBe(true);
+  });
 });
