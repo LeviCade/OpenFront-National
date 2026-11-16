@@ -789,6 +789,21 @@ export class GameImpl implements Game {
     return this._national.publicPoliticalView();
   }
 
+  /**
+   * E2 contributor authority. Read treaty membership from ONE runtime;
+   * validate every actual player is live and spawned before considering it.
+   */
+  nationalMdaAllies(defenderId: PlayerID): readonly PlayerID[] {
+    if (this._national === null || this._nationalWar === null) return [];
+    const defender = this._players.get(defenderId);
+    if (!defender || !defender.hasSpawned() || !defender.isAlive()) return [];
+    this.synchronizeNationalState();
+    return this._national.mdaAllies(defenderId).filter((id) => {
+      const player = this._players.get(id);
+      return player !== undefined && player.hasSpawned() && player.isAlive();
+    });
+  }
+
   /** Complete NATIONAL victor roster; old game Winner schema stays unchanged. */
   nationalVictoryRoster(): LastSovereignResult | null {
     this.synchronizeNationalState();

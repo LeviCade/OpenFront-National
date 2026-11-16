@@ -610,6 +610,8 @@ export interface Game extends GameLike {
   nationalWarState(): NationalWarStateSnapshot | null;
   /** Internal trusted actor; E2 owns external schema and command validation. */
   performNationalWarCommand(actor: Player, command: NationalWarCommand): void;
+  /** Canonical sorted, unique living/spawned MDA donors; E2 never chooses IDs. */
+  nationalMdaAllies(defenderId: PlayerID): readonly PlayerID[];
   /** Canonical read-only source from a real living Game Player. */
   nationalLevySource(nationId: PlayerID): TroopSource | null;
   /** Internal E2 accepted-attack hook; MDA, WAR and atomic debits verified. */
