@@ -15,10 +15,15 @@ import { NationExecution } from "@openfront/engine/execution/NationExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import {
+  deriveNationalWarSides,
   initialNationalPlannerMemory,
   planNationalInterest,
 } from "@openfront/engine/national/ai/NationalPlanner";
-import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
+import { WarLedger } from "@openfront/engine/national/conflict/WarLedger";
+import {
+  collectLiveNationalObservation,
+  type LiveWarAuthority,
+} from "@openfront/engine/national/observation/LiveObservation";
 import { advanceLastKnown } from "@openfront/engine/national/observation/NationalObservation";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
@@ -145,6 +150,50 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     expect(
       Array.from(replayPacket.packedTileUpdates).filter((_, i) => i % 2 === 0),
     ).not.toContain(hiddenTile);
+  });
+
+  it("WAR-01/04 projects only E2 canonical active war sides and drops settled layers", async () => {
+    const game = await activeGame(true);
+    game.endSpawnPhase();
+    const ledger = new WarLedger(game.nationalPoliticalAuthority()!);
+    const warId = "e3_verified_war";
+    ledger.declareNational(
+      warId,
+      viewer.id,
+      viewer.id,
+      secret.id,
+      game.ticks(),
+    );
+    const authoritative = game as typeof game & {
+      nationalWarAuthority?: () => LiveWarAuthority | null;
+    };
+    authoritative.nationalWarAuthority = () => ({
+      authorizeOffensiveAction: (actor, target) =>
+        ledger.authorizeOffensiveAction(actor, target),
+      snapshot: () => ({ wars: { layers: ledger.exportState().layers } }),
+    });
+    const during = collectLiveNationalObservation(game, viewer.id).observation;
+    expect(during.wars.map((w) => w.id)).toEqual([warId]);
+    expect(during.wars[0].first).toEqual({
+      kind: "nation",
+      stableId: viewer.id,
+      activeMemberIds: [viewer.id],
+    });
+    expect(during.wars[0].second.activeMemberIds).toEqual([secret.id]);
+    expect(
+      [...deriveNationalWarSides(during.wars, viewer.id).enemies],
+    ).toEqual([secret.id]);
+    expect(JSON.stringify(during.wars)).not.toContain("declaredBy");
+    expect(JSON.stringify(during.wars)).not.toContain("proposedBy");
+    expect(JSON.stringify(during.wars)).not.toContain("motions");
+
+    ledger.proposePeace("e3_motion", warId, viewer.id, game.ticks());
+    ledger.acceptPeace("e3_motion", secret.id, game.ticks());
+    const after = collectLiveNationalObservation(game, viewer.id).observation;
+    expect(after.wars).toEqual([]);
+    expect([...deriveNationalWarSides(after.wars, viewer.id).enemies]).toEqual(
+      [],
+    );
   });
 
   it("FOG-07 revokes cached recipient rights after live client identity transfer", async () => {
