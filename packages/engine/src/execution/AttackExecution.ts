@@ -24,6 +24,10 @@ import { assertNever } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { AttackLogicInput } from "../configuration/EngineConfig";
 import { Attack, Execution, Game, Player } from "../game/Game";
+import {
+  authorizeNationalAttack,
+  interceptNationalAttack,
+} from "./NationalWarExecution";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
 import type {
   ExecRecord,
@@ -96,6 +100,26 @@ export class AttackExecution implements Execution {
       return;
     }
 
+    // NATIONAL: all human/bot/engine-generated attacks MUST pass the same
+    // authoritative live war gate before embargoes, troop debit or damage.
+    // The null political authority is the exact old FFA path.
+    if (
+      mg.nationalPoliticalAuthority() !== null &&
+      (
+        !mg.hasPlayer(this._owner.id()) ||
+        mg.player(this._owner.id()) !== this._owner ||
+        !this._owner.isAlive() ||
+        !authorizeNationalAttack(
+          mg,
+          this._owner.id(),
+          this.target.isPlayer() ? this.target.id() : null,
+        )
+      )
+    ) {
+      this.active = false;
+      return;
+    }
+
     // ALLIANCE CHECK — block attacks on friendly (ally or same team)
     if (this.target.isPlayer()) {
       const targetPlayer = this.target as Player;
@@ -149,6 +173,63 @@ export class AttackExecution implements Execution {
       this.refreshToConquer();
     }
 
+    // NATIONAL: derive the eventual accepted attack strength WITHOUT
+    // mutating/canceling any preexisting attack yet. This enables failed
+    // second/final contributor CAS to preserve both armies and every prior
+    // attack exactly. Existing opposing attack cancellation below remains the
+    // authoritative way to apply the approved outcome.
+    let nationalInterception = 0;
+    if (mg.nationalPoliticalAuthority() !== null && this.target.isPlayer()) {
+      if (this.toConquer.size() === 0) {
+        this.retreat(); // A non-landing attack never incurs any levy.
+        return;
+      }
+      let projected = this.attack.troops();
+      let canceled = false;
+      for (const incoming of this._owner.incomingAttacks()) {
+        if (incoming.attacker() !== this.target) continue;
+        if (incoming.troops() > projected) {
+          canceled = true;
+          break;
+        }
+        projected -= incoming.troops();
+      }
+      if (!canceled) {
+        for (const outgoing of this._owner.outgoingAttacks()) {
+          if (
+            outgoing !== this.attack &&
+            outgoing.target() === this.attack.target() &&
+            this.attack.sourceTile() === null
+          ) projected += outgoing.troops();
+        }
+      }
+      // Opposing attack cancellation is not an accepted invasion. Zero
+      // strength never reaches interception or opens a campaign allowance.
+      if (!canceled && projected >= 1) {
+        try {
+          const receipt = interceptNationalAttack(
+            mg,
+            this.attack.id(),
+            this._owner.id(),
+            this.target.id(),
+            Math.floor(projected),
+          );
+          if (receipt?.application === "applied") {
+            nationalInterception = receipt.intercepted;
+          }
+        } catch (error) {
+          // The donor transaction failed before *any* balance change. No
+          // opposing/outgoing attacks have been modified at this point.
+          // Restore the attacker's EXACT real debit and abort this attack.
+          this.attack.delete();
+          if (this.removeTroops) this._owner.addTroops(this.startTroops ?? 0);
+          this.active = false;
+          console.warn("NATIONAL levy transaction rejected:", String(error));
+          return;
+        }
+      }
+    }
+
     // Record stats
     this.mg.stats().attack(this._owner, this.target, this.startTroops);
 
@@ -176,6 +257,14 @@ export class AttackExecution implements Execution {
         this.attack.setTroops(this.attack.troops() + outgoing.troops());
         outgoing.delete();
       }
+    }
+
+    // Only newly applied defensive levies destroy attacker strength. Replayed
+    // receipts have zero new charge and cannot cause a second casualty.
+    if (nationalInterception > 0 && this.attack.isActive()) {
+      this.attack.setTroops(
+        Math.max(0, this.attack.troops() - nationalInterception),
+      );
     }
 
     // Nothing next to the owner to conquer (no wilderness around them, or a
