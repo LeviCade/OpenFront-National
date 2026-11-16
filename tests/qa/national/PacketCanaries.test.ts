@@ -11,8 +11,8 @@ import {
 import { unpackUnitUpdates } from "@openfront/engine-lib/game/PackedUnitUpdates";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
-import { GameRunner } from "@openfront/engine/GameRunner";
 import type { Game } from "@openfront/engine/game/Game";
+import { GameRunner } from "@openfront/engine/GameRunner";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
 import { setup } from "../../util/Setup";
@@ -194,9 +194,11 @@ describe("NATIONAL QA — actual GameRunner and worker-facing packet canaries", 
       observer.clientID!,
     );
     expect(runner.isNationalIntentAuthorized(observer.clientID!)).toBe(true);
-    game.player(observer.id).setPlayerInfo(
-      new PlayerInfo(observer.name, PlayerType.Nation, null, observer.id),
-    );
+    game
+      .player(observer.id)
+      .setPlayerInfo(
+        new PlayerInfo(observer.name, PlayerType.Nation, null, observer.id),
+      );
     expect(runner.isNationalRequesterAuthorized(observer.id)).toBe(false);
     expect(runner.isNationalIntentAuthorized(observer.clientID!)).toBe(false);
     runner.addTurn({ turnNumber: game.ticks(), intents: [] });
