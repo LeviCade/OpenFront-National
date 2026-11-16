@@ -21,7 +21,7 @@ const files = [
 describe("temporary E4 pinned formatter diagnostic", () => {
   it("prints exact format replacements as UTF8 base64 with no tracked changes", () => {
     for (const file of files) {
-      const copy = file.replace(/\\.ts$/, ".formatter-probe.ts");
+      const copy = `${file.slice(0, -3)}.formatter-probe.ts`;
       try {
         writeFileSync(copy, readFileSync(file));
         execFileSync("./node_modules/.bin/oxfmt", ["--write", copy]);
