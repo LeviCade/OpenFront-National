@@ -464,9 +464,17 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
     const north = { id: N, alive: true, spawned: true, metrics: realMetrics };
     pending.synchronize([north, neverSpawned], 2, true, "forfeit-no-pending");
     expect(pending.victoryRoster()).toBeNull();
+    // Unknown pending-spawn information is NOT proof of forfeiture.
+    pending.synchronize(
+      [north, { ...neverSpawned, pendingSpawn: undefined }],
+      3,
+      true,
+      "forfeit-no-pending",
+    );
+    expect(pending.victoryRoster()).toBeNull();
     pending.synchronize(
       [north, { ...neverSpawned, pendingSpawn: false }],
-      3,
+      4,
       true,
       "forfeit-no-pending",
     );

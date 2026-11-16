@@ -236,7 +236,7 @@ export class NationalRuntime {
         const selectedForfeit =
           unspawnedPolicy === "forfeit-no-pending" &&
           !player.spawned &&
-          !player.pendingSpawn;
+          player.pendingSpawn === false;
         if ((eliminated || selectedForfeit) && prior?.alive) {
           next = eliminatePoliticalNation(next, player.id);
         }
