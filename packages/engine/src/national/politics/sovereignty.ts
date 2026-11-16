@@ -99,6 +99,13 @@ function sorted(items: string[]): string[] {
   return [...items].sort();
 }
 
+/** Internal immutable transition copy, also used for atomic live sync. */
+export function clonePoliticalProjection(
+  world: PoliticsProjection,
+): PoliticsProjection {
+  return copy(world);
+}
+
 function copy(world: PoliticsProjection): PoliticsProjection {
   return {
     nations: world.nations.map((n) => ({ ...n, metrics: { ...n.metrics } })),

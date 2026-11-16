@@ -13,6 +13,7 @@ import {
   acceptEmpireAccession,
   acceptPactInvitation,
   betrayPact,
+  clonePoliticalProjection,
   eliminatePoliticalNation,
   evaluateUngovernable,
   foundEmpire,
@@ -190,7 +191,10 @@ export class NationalRuntime {
     ) {
       throw new Error("NATIONAL: invalid unspawned policy");
     }
-    const known = new Set(this.politics.nations.map((n) => n.id));
+    // Assemble the complete next tick off-state. Invalid engine facts must
+    // never leave a partially updated sovereign registry.
+    let next = clonePoliticalProjection(this.politics);
+    const known = new Set(next.nations.map((n) => n.id));
     const live = new Map<PlayerID, NationalLivePlayer>();
     for (const player of players) {
       if (
@@ -213,36 +217,37 @@ export class NationalRuntime {
     // Some AI/tribe player identities appear after the constructor.
     for (const player of players) {
       if (!known.has(player.id)) {
-        this.politics.nations.push({
+        next.nations.push({
           id: player.id,
           alive: true,
           metrics: emptyMetrics(),
         });
       }
     }
-    for (const nation of this.politics.nations) {
+    for (const nation of next.nations) {
       const player = live.get(nation.id);
       if (!player) throw new Error("NATIONAL: missing real player identity");
       nation.metrics = { ...player.metrics };
     }
     if (spawnPhaseEnded) {
       for (const player of players) {
-        const prior = this.politics.nations.find((n) => n.id === player.id);
+        const prior = next.nations.find((n) => n.id === player.id);
         const eliminated = player.spawned && !player.alive;
         const selectedForfeit =
           unspawnedPolicy === "forfeit-no-pending" &&
           !player.spawned &&
           !player.pendingSpawn;
         if ((eliminated || selectedForfeit) && prior?.alive) {
-          this.politics = eliminatePoliticalNation(this.politics, player.id);
+          next = eliminatePoliticalNation(next, player.id);
         }
       }
     }
-    this.politics.simulationMs = tick * 100;
+    next.simulationMs = tick * 100;
     // Explicitly defer dissolution on expiration. Deadlines are durable and
     // visible, so the 10-second warning remains real and replay deterministic.
-    this.politics = evaluateUngovernable(this.politics, tick * 100, false).state;
-    validatePolitics(this.politics);
+    next = evaluateUngovernable(next, tick * 100, false).state;
+    validatePolitics(next);
+    this.politics = next;
     this.lastTick = tick;
   }
 
@@ -256,7 +261,7 @@ export class NationalRuntime {
         remainingMs: Math.max(0, e.crisisDeadlineMs! - this.politics.simulationMs),
         blockedByAssetDisposition: this.politics.simulationMs >= e.crisisDeadlineMs!,
       }))
-      .sort((a, b) => a.empireId.localeCompare(b.empireId, "en"));
+      .sort((a, b) => a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0);
   }
 
   /** Accept only the actor resolved from the real GameImpl player registry. */
