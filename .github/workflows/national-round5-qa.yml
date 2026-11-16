@@ -95,7 +95,7 @@ jobs:
           set -euo pipefail
           mkdir -p national-qa-artifacts
           git rev-parse HEAD | tee national-qa-artifacts/browser-head.txt
-          node scripts/national-qa/browser-gameplay.mjs ${{ matrix.viewport == 'mobile' && '--mobile' || '' }}             2>&1 | tee national-qa-artifacts/round5-browser-${{ matrix.viewport }}-${{ matrix.scenario }}.log
+          node scripts/national-qa/browser-gameplay.mjs ${{ matrix.viewport == 'mobile' && '--mobile' || '' }} ${{ matrix.scenario == 'legacy' && '--legacy' || '' }} 2>&1 | tee national-qa-artifacts/round5-browser-${{ matrix.viewport }}-${{ matrix.scenario }}.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
