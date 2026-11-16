@@ -217,8 +217,8 @@ export class NationalWarExecution implements Execution {
   private perform(actor: Player, command: NationalWarCommand, tick: number): void {
     if (!this.root || this.game === null) throw new Error("NATIONAL: no war root");
     const politics = this.game.nationalPoliticalAuthority();
+    if (politics === null) noPermission();
     if (
-      !politics ||
       !this.game.hasPlayer(actor.id()) ||
       this.game.player(actor.id()) !== actor ||
       !actor.hasSpawned() ||
