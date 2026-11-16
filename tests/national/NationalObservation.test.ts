@@ -88,6 +88,7 @@ describe("NATIONAL observation FOG-01 / FOG-02 / FOG-07", () => {
     const a = projectNationalObservation(w, "a");
     expect(b.visibleAssets.find((u) => u.id === "b-ship")?.source).toBe("own");
     expect(c.visibleAssets.find((u) => u.id === "d-fort")?.source).toBe("empire");
+    expect(c.visibleAssets.find((u) => u.id === "d-fort")?.sourceNationId).toBe("b");
     expect(b.visibleAssets.find((u) => u.id === "b-ship")?.strength).toBe(7777);
     expect(c.visibleAssets.find((u) => u.id === "b-ship")?.strength).toBeUndefined();
     expect(a.visibleAssets.map((u) => u.id)).toEqual(["a-ship"]);
@@ -122,6 +123,10 @@ describe("NATIONAL observation FOG-01 / FOG-02 / FOG-07", () => {
     expect(stale.stale.find((a) => a.id === "d-fort")?.lastSeenTick).toBe(10);
     const expired = advanceLastKnown({ ...moved, tick: 16 }, stale.memory, 5);
     expect(expired.stale.find((a) => a.id === "d-fort")).toBeUndefined();
+    const dissolved = advanceLastKnown({
+      ...moved, coalitions: moved.coalitions.filter((c) => c.id !== "empire-1"),
+    }, recorded.memory, 5);
+    expect(dissolved.stale.find((a) => a.id === "d-fort")).toBeUndefined();
     expect(() => advanceLastKnown(first, { observerId: "a", assets: [] }, 5)).toThrow();
   });
 });
