@@ -5,7 +5,9 @@ import { customElement, property, state } from "lit/decorators.js";
 import {
   empireForMember,
   foundingUnavailableReason,
+  reconcileNationalFounding,
   validEmpireId,
+  type NationalFoundingAttempt,
 } from "./NationalDiplomacyState";
 import { SendNationalFoundEmpireIntentEvent } from "./Transport";
 import type { GameView } from "./view";
@@ -23,6 +25,9 @@ export class NationalDiplomacyPanel extends LitElement {
   @state() private expanded = false;
   @state() private draftEmpireId = "";
   @state() private pendingEmpireId: string | null = null;
+  private pendingAttempt: NationalFoundingAttempt | null = null;
+  private lastConfirmedEmpireId: string | null = null;
+  @state() private phase: "idle" | "pending" | "accepted" | "rejected" | "unknown" = "idle";
   @state() private message: string | null = null;
   @state() private error: string | null = null;
 
@@ -30,29 +35,72 @@ export class NationalDiplomacyPanel extends LitElement {
     return this;
   }
 
-  /** Called by the live sidebar controller after the worker applies a tick. */
+  /**
+   * Only an accepted E1 journal result AND current E3 public roster can
+   * confirm this button click; a restored roster by itself proves membership.
+   */
   public refresh(): void {
-    const player = this.game?.myPlayer();
-    const politics = this.game?.nationalPolitics() ?? null;
-    const empire = player ? empireForMember(politics, player.id()) : null;
-    if (this.pendingEmpireId && empire) {
-      // Membership from the game packet, NOT an acknowledgement of enqueue.
-      this.pendingEmpireId = null;
-      this.message = `Confirmed by game: your nation belongs to ${empire.id}.`;
-      this.error = null;
-    } else if (this.pendingEmpireId && player) {
-      const outcome = this.game?.nationalFoundingOutcome();
-      if (
-        outcome?.actorId === player.id() &&
-        outcome.empireId === this.pendingEmpireId &&
-        outcome.accepted === false
-      ) {
+    const game = this.game;
+    const player = game?.myPlayer();
+    const politics = game?.nationalPolitics() ?? null;
+    const member = player ? empireForMember(politics, player.id()) : null;
+    if (this.lastConfirmedEmpireId && member?.id !== this.lastConfirmedEmpireId) {
+      this.lastConfirmedEmpireId = null;
+      this.message = null;
+      this.phase = "idle";
+    }
+
+    const attempt = this.pendingAttempt;
+    if (attempt && game && player) {
+      const tick = typeof game.ticks === "function" ? game.ticks() : 0;
+      const results =
+        typeof game.nationalFoundingResults === "function"
+          ? game.nationalFoundingResults()
+          : game.nationalFoundingOutcome()
+            ? [game.nationalFoundingOutcome()!]
+            : [];
+      const decision = reconcileNationalFounding(attempt, {
+        gameId: game.gameID?.() ?? "",
+        actorId: player.id(),
+        tick,
+        politics,
+        results,
+      });
+      if (decision.phase === "pending") {
+        this.pendingAttempt = {
+          ...attempt,
+          acceptedResultSeen: decision.acceptedResultSeen,
+        };
+      } else {
+        this.pendingAttempt = null;
         this.pendingEmpireId = null;
-        this.message = null;
-        this.error = outcome.reason ?? "The game rejected empire founding.";
+        this.phase = decision.phase;
+        if (decision.phase === "accepted") {
+          this.lastConfirmedEmpireId = attempt.empireId;
+          this.message = `Confirmed by game: your nation founded ${attempt.empireId}.`;
+          this.error = null;
+        } else if (decision.phase === "rejected") {
+          this.message = null;
+          this.error = decision.reason;
+        } else {
+          this.message = decision.reason;
+          this.error = null;
+        }
       }
     }
     if (this.expanded) this.requestUpdate();
+  }
+
+  /** A dropped or replaced session must never retain optimistic success. */
+  public connectionInterrupted(): void {
+    if (this.pendingAttempt === null) return;
+    this.pendingAttempt = null;
+    this.pendingEmpireId = null;
+    this.phase = "unknown";
+    this.message =
+      "Connection interrupted. Founding is unconfirmed; check the game roster after reconnecting.";
+    this.error = null;
+    this.requestUpdate();
   }
 
   private get memberEmpire() {
@@ -99,18 +147,32 @@ export class NationalDiplomacyPanel extends LitElement {
       return;
     }
 
-    // Set the latch BEFORE emitting so duplicate clicks/key activation cannot
-    // enqueue two commands in the same frame. Transport's normal sendIntent
-    // passes through the existing intent gate and stamped game pipeline.
+    const game = this.game;
+    const player = game?.myPlayer();
+    if (!game || !player) {
+      this.error = "There is no active player to authorize founding.";
+      return;
+    }
+    this.pendingAttempt = {
+      gameId: game.gameID?.() ?? "",
+      actorId: player.id(),
+      empireId,
+      issuedTick: typeof game.ticks === "function" ? game.ticks() : 0,
+      acceptedResultSeen: false,
+    };
     this.pendingEmpireId = empireId;
+    this.lastConfirmedEmpireId = null;
+    this.phase = "pending";
     this.error = null;
-    this.message = "Founding request sent. Awaiting authoritative game state…";
+    this.message = "Request sent to game. Awaiting its accepted or rejected result…";
     try {
       this.eventBus.emit(new SendNationalFoundEmpireIntentEvent(empireId));
     } catch {
       // Only a synchronous producer failure may clear the local latch.
       // An enqueued command is never equated with a successful execution.
+      this.pendingAttempt = null;
       this.pendingEmpireId = null;
+      this.phase = "unknown";
       this.message = null;
       this.error = "Could not send the founding command to the game.";
     }
