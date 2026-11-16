@@ -107,14 +107,25 @@ describe("E5 Round Five FOG: real GameRunner visibility / revoked empire / resto
     const spy = vi.spyOn(game, "nationalPoliticalAuthority");
     spy.mockImplementation(() => ({
       ...authority,
-      empireOf: (id: string) => id === viewer.id || id === ally.id ? null : authority.empireOf(id),
-      emperorOf: (id: string) => id === "r5_fog_empire" ? null : authority.emperorOf(id),
-      membersOf: (id: string) => id === "r5_fog_empire" ? [] : authority.membersOf(id),
+      empireOf: (id: string) =>
+        id === viewer.id || id === ally.id ? null : authority.empireOf(id),
+      emperorOf: (id: string) =>
+        id === "r5_fog_empire" ? null : authority.emperorOf(id),
+      membersOf: (id: string) =>
+        id === "r5_fog_empire" ? [] : authority.membersOf(id),
     }));
     try {
       const revoked = collectLiveNationalObservation(game, viewer.id);
-      expect(revoked.observation.visibleAssets.some((item) => item.id === String(hostileShip.id()))).toBe(false);
-      expect(advanceLastKnown(revoked.observation, saved, 60).stale.some((item) => item.id === String(hostileShip.id()))).toBe(false);
+      expect(
+        revoked.observation.visibleAssets.some(
+          (item) => item.id === String(hostileShip.id()),
+        ),
+      ).toBe(false);
+      expect(
+        advanceLastKnown(revoked.observation, saved, 60).stale.some(
+          (item) => item.id === String(hostileShip.id()),
+        ),
+      ).toBe(false);
       runner.addTurn({ turnNumber: game.ticks(), intents: [] });
       expect(runner.executeNextTick()).toBe(true);
       const packet = packets[packets.length - 1];
