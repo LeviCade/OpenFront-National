@@ -111,7 +111,6 @@ planner and dedicated tests/docs. No modifications to `NationExecution`,
 `GameImpl`, `GameUpdates`, `ExecutionManager`, schemas or snapshots. Real
 FOG enforcement and legal combat routing remain **not implemented** in PR #12.
 
-
 ## Round Three live adapter — scope, verified paths, and disabled gates
 
 **Branch point:** `ce123090c12344737922ed41249ba5a1dc1638b1`.

@@ -1,8 +1,4 @@
 import {
-  initialNationalPlannerMemory,
-  planNationalInterest,
-} from "@openfront/engine/national/ai/NationalPlanner";
-import {
   Cell,
   Nation,
   PlayerInfo,
@@ -14,16 +10,30 @@ import {
   type GameUpdateViewData,
 } from "@openfront/engine-api/game/GameUpdates";
 import { unpackUnitUpdates } from "@openfront/engine-lib/game/PackedUnitUpdates";
-import { GameRunner } from "@openfront/engine/GameRunner";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { NationExecution } from "@openfront/engine/execution/NationExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
+import { GameRunner } from "@openfront/engine/GameRunner";
+import {
+  initialNationalPlannerMemory,
+  planNationalInterest,
+} from "@openfront/engine/national/ai/NationalPlanner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
-import { roundTrip } from "../util/Snapshot";
 import { setup } from "../util/Setup";
+import { roundTrip } from "../util/Snapshot";
 
-const viewer = new PlayerInfo("Viewer", PlayerType.Human, "viewer-client", "viewer-id");
-const secret = new PlayerInfo("Hidden Enemy", PlayerType.Nation, null, "secret-id");
+const viewer = new PlayerInfo(
+  "Viewer",
+  PlayerType.Human,
+  "viewer-client",
+  "viewer-id",
+);
+const secret = new PlayerInfo(
+  "Hidden Enemy",
+  PlayerType.Nation,
+  null,
+  "secret-id",
+);
 
 async function activeGame(nationalMode: boolean) {
   const game = await setup("plains", { nationalMode }, [viewer, secret]);
@@ -87,9 +97,12 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     expect(first.packedAttackUpdates).toBeUndefined();
     expect(first.packedMotionPlans).toBeUndefined();
     expect(numericData(first)).not.toContain(secretTroops);
-    expect(unpackUnitUpdates(
-      first.packedUnitUpdates, first.packedMissileTimers,
-    ).some((unit) => unit.id === shipId)).toBe(false);
+    expect(
+      unpackUnitUpdates(
+        first.packedUnitUpdates,
+        first.packedMissileTimers,
+      ).some((unit) => unit.id === shipId),
+    ).toBe(false);
     const foreign = first.updates[GameUpdateType.Player].find(
       (p) => p.id === secret.id,
     );
@@ -100,17 +113,18 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
       expect("spawnTile" in foreign).toBe(false);
     }
     expect(
-      Array.from(first.packedTileUpdates).filter(
-        (_, i) => i % 2 === 0,
-      ),
+      Array.from(first.packedTileUpdates).filter((_, i) => i % 2 === 0),
     ).not.toContain(hiddenTile);
 
     // A second fresh resync must not recover the hidden exact values.
     const again = runPacket(game, viewer.clientID!);
     expect(numericData(again)).not.toContain(secretTroops);
-    expect(unpackUnitUpdates(
-      again.packedUnitUpdates, again.packedMissileTimers,
-    ).some((unit) => unit.id === shipId)).toBe(false);
+    expect(
+      unpackUnitUpdates(
+        again.packedUnitUpdates,
+        again.packedMissileTimers,
+      ).some((unit) => unit.id === shipId),
+    ).toBe(false);
     const unknown = runPacket(game, undefined);
     expect(unknown.packedUnitUpdates).toBeUndefined();
     expect(unknown.packedPlayerUpdates).toBeUndefined();
@@ -127,9 +141,9 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
         replayPacket.packedMissileTimers,
       ).some((unit) => unit.id === shipId),
     ).toBe(false);
-    expect(Array.from(replayPacket.packedTileUpdates).filter(
-      (_, i) => i % 2 === 0,
-    )).not.toContain(hiddenTile);
+    expect(
+      Array.from(replayPacket.packedTileUpdates).filter((_, i) => i % 2 === 0),
+    ).not.toContain(hiddenTile);
   });
 
   it("FOG-06 current own sight follows actual territory, not client assertions", async () => {
@@ -143,16 +157,29 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     expect(b.visibleTiles.has(game.ref(80, 80))).toBe(true);
     expect(b.visibleTiles.has(game.ref(10, 10))).toBe(false);
     expect(a.observation.nations.map((n) => n.id)).toContain(secret.id);
-    expect(a.observation.nations.find((n) => n.id === secret.id)).not.toHaveProperty("troops");
+    expect(
+      a.observation.nations.find((n) => n.id === secret.id),
+    ).not.toHaveProperty("troops");
     const legacy = await activeGame(false);
     expect(() => collectLiveNationalObservation(legacy, viewer.id)).toThrow();
   });
 
   it("AI-01/02/04 executes legal neutral expansion in NationExecution and survives snapshot", async () => {
-    const botInfo = new PlayerInfo("Independent AI", PlayerType.Nation, null, "ai-id");
+    const botInfo = new PlayerInfo(
+      "Independent AI",
+      PlayerType.Nation,
+      null,
+      "ai-id",
+    );
     const nation = new Nation(new Cell(45, 45), botInfo);
     const game = await setup(
-      "plains", { nationalMode: true }, [], undefined, undefined, true, [nation],
+      "plains",
+      { nationalMode: true },
+      [],
+      undefined,
+      undefined,
+      true,
+      [nation],
     );
     game.addExecution(
       new NationExecution("national-live-ai", nation),
@@ -163,7 +190,8 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     expect(bot.hasSpawned()).toBe(true);
     bot.setTroops(75_000);
     expect(
-      collectLiveNationalObservation(game, botInfo.id).observation.unownedFrontier,
+      collectLiveNationalObservation(game, botInfo.id).observation
+        .unownedFrontier,
     ).toBe(true);
     const firstLand = bot.numTilesOwned();
     const firstAttacks = bot.outgoingAttacks().length;
@@ -175,7 +203,9 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     expect(bot.outgoingAttacks().length + advanced).toBeGreaterThan(
       firstAttacks + firstLand,
     );
-    expect(game.executions().some((e) => e instanceof NationExecution)).toBe(true);
+    expect(game.executions().some((e) => e instanceof NationExecution)).toBe(
+      true,
+    );
     const { bytes, restored, again } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
     expect(restored.player(botInfo.id).numTilesOwned()).toBe(advanced);
@@ -184,24 +214,29 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
   it("LEGACY full runner packets retain existing enemy troop and ship fields", async () => {
     const game = await activeGame(false);
     game.player(secret.id).setTroops(8_765_432);
-    const ship = game.player(secret.id).buildUnit(
-      UnitType.TransportShip, game.ref(80, 80), { troops: 13_579 },
-    );
+    const ship = game
+      .player(secret.id)
+      .buildUnit(UnitType.TransportShip, game.ref(80, 80), { troops: 13_579 });
     const packet = runPacket(game, viewer.clientID!);
     expect(
-      unpackUnitUpdates(packet.packedUnitUpdates, packet.packedMissileTimers)
-        .some((u) => u.id === ship.id()),
+      unpackUnitUpdates(
+        packet.packedUnitUpdates,
+        packet.packedMissileTimers,
+      ).some((u) => u.id === ship.id()),
     ).toBe(true);
     expect(packet.packedPlayerUpdates?.length).toBeGreaterThan(0);
   });
 
   it("bounds actual GameRunner observation throughput with 120 nations", async () => {
-    const humans = Array.from({ length: 120 }, (_, i) =>
-      new PlayerInfo("n" + i, PlayerType.Nation, null, "n-" + i),
+    const humans = Array.from(
+      { length: 120 },
+      (_, i) => new PlayerInfo("n" + i, PlayerType.Nation, null, "n-" + i),
     );
     const game = await setup("plains", { nationalMode: true }, humans);
     const runner = new GameRunner(
-      game, new Executor(game, "perf-120", undefined), () => {},
+      game,
+      new Executor(game, "perf-120", undefined),
+      () => {},
     );
     const start = performance.now();
     for (let tick = 0; tick < 5; tick++) {
@@ -209,7 +244,10 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
       expect(runner.executeNextTick()).toBe(true);
     }
     const elapsed = performance.now() - start;
-    console.info("[NATIONAL live perf] 120 nations; 5 GameRunner ticks; elapsedMs=" + elapsed.toFixed(2));
+    console.info(
+      "[NATIONAL live perf] 120 nations; 5 GameRunner ticks; elapsedMs=" +
+        elapsed.toFixed(2),
+    );
     expect(elapsed).toBeLessThan(5000);
   });
 
@@ -219,18 +257,20 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     let sightedTile: number | null = null;
     for (const border of mine.borderTiles()) {
       game.forEachNeighbor(border, (tile) => {
-        if (sightedTile === null && game.isLand(tile) && !game.owner(tile).isPlayer()) {
+        if (
+          sightedTile === null &&
+          game.isLand(tile) &&
+          !game.owner(tile).isPlayer()
+        ) {
           sightedTile = tile;
         }
       });
       if (sightedTile !== null) break;
     }
     expect(sightedTile).not.toBeNull();
-    const ship = game.player(secret.id).buildUnit(
-      UnitType.TransportShip,
-      sightedTile!,
-      { troops: 2_345_678 },
-    );
+    const ship = game
+      .player(secret.id)
+      .buildUnit(UnitType.TransportShip, sightedTile!, { troops: 2_345_678 });
     const packets: GameUpdateViewData[] = [];
     const runner = new GameRunner(
       game,
@@ -244,7 +284,8 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     runner.addTurn({ turnNumber: 0, intents: [] });
     expect(runner.executeNextTick()).toBe(true);
     const appeared = unpackUnitUpdates(
-      packets[0].packedUnitUpdates, packets[0].packedMissileTimers,
+      packets[0].packedUnitUpdates,
+      packets[0].packedMissileTimers,
     ).find((u) => u.id === ship.id());
     expect(appeared?.pos).toBe(sightedTile);
     expect(appeared?.troops).toBe(0);
@@ -254,7 +295,8 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     runner.addTurn({ turnNumber: 1, intents: [] });
     expect(runner.executeNextTick()).toBe(true);
     const revoked = unpackUnitUpdates(
-      packets[1].packedUnitUpdates, packets[1].packedMissileTimers,
+      packets[1].packedUnitUpdates,
+      packets[1].packedMissileTimers,
     ).find((u) => u.id === ship.id());
     expect(revoked?.pos).toBe(sightedTile);
     expect(revoked?.pos).not.toBe(nowHidden);
@@ -266,17 +308,22 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     const game = await activeGame(true);
     const before = collectLiveNationalObservation(game, viewer.id).observation;
     const beforePlan = planNationalInterest(
-      before, initialNationalPlannerMemory(viewer.id), 30,
+      before,
+      initialNationalPlannerMemory(viewer.id),
+      30,
     );
-    game.player(viewer.id).setPlayerInfo(
-      new PlayerInfo("Viewer", PlayerType.Nation, viewer.clientID, viewer.id),
-    );
+    game
+      .player(viewer.id)
+      .setPlayerInfo(
+        new PlayerInfo("Viewer", PlayerType.Nation, viewer.clientID, viewer.id),
+      );
     const after = collectLiveNationalObservation(game, viewer.id).observation;
     const afterPlan = planNationalInterest(
-      after, initialNationalPlannerMemory(viewer.id), 30,
+      after,
+      initialNationalPlannerMemory(viewer.id),
+      30,
     );
     expect(after).toEqual(before);
     expect(afterPlan).toEqual(beforePlan);
   });
-
 });

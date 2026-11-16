@@ -1,3 +1,4 @@
+import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
 /**
  * NATIONAL per-recipient outbound packet projection.
  *
@@ -10,9 +11,16 @@
  * private view. Unknown clients receive public player identities only.
  * This does NOT make an authoritative in-browser game worker tamper-proof.
  */
-import { GameUpdateType, type GameUpdateViewData, type PlayerUpdate, type UnitUpdate } from "@openfront/engine-api/game/GameUpdates";
-import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
-import { packUnitUpdates, unpackUnitUpdates } from "@openfront/engine-lib/game/PackedUnitUpdates";
+import {
+  GameUpdateType,
+  type GameUpdateViewData,
+  type PlayerUpdate,
+  type UnitUpdate,
+} from "@openfront/engine-api/game/GameUpdates";
+import {
+  packUnitUpdates,
+  unpackUnitUpdates,
+} from "@openfront/engine-lib/game/PackedUnitUpdates";
 import type { Game } from "../../game/Game";
 import type { LiveNationalObservation } from "./LiveObservation";
 
@@ -61,9 +69,10 @@ export class NationalOutboundFilter {
 
   constructor(game: Game, observerId: string | null) {
     this.observerId = observerId;
-    this.ownSmallID = observerId !== null && game.hasPlayer(observerId)
-      ? game.player(observerId).smallID()
-      : null;
+    this.ownSmallID =
+      observerId !== null && game.hasPlayer(observerId)
+        ? game.player(observerId).smallID()
+        : null;
   }
 
   project(
@@ -74,13 +83,16 @@ export class NationalOutboundFilter {
     if (!game.config().nationalMode()) {
       throw new Error("NATIONAL packet projection used in legacy mode");
     }
-    if (verified?.observation.observerId !== this.observerId &&
-      verified !== null) {
+    if (
+      verified?.observation.observerId !== this.observerId &&
+      verified !== null
+    ) {
       throw new Error("NATIONAL outbound principal mismatch");
     }
     const visibleTiles = verified?.visibleTiles ?? new Set<number>();
     const visibleAssetIds = new Set(
-      verified?.observation.visibleAssets.map((asset) => Number(asset.id)) ?? [],
+      verified?.observation.visibleAssets.map((asset) => Number(asset.id)) ??
+        [],
     );
     const ownID = this.observerId;
     const rawPlayer = data.updates[GameUpdateType.Player] as PlayerUpdate[];
@@ -114,7 +126,8 @@ export class NationalOutboundFilter {
     for (const unit of [
       ...unpackUnitUpdates(data.packedUnitUpdates, data.packedMissileTimers),
       ...(data.updates[GameUpdateType.Unit] as UnitUpdate[]),
-    ]) rawUnits.set(unit.id, unit);
+    ])
+      rawUnits.set(unit.id, unit);
 
     const unitUpdates: UnitUpdate[] = [];
     const stillVisible = new Set<number>();
@@ -122,14 +135,13 @@ export class NationalOutboundFilter {
     for (const id of orderedVisible) {
       const unit = game.unit(id);
       if (!unit) continue;
-      const raw = rawUnits.get(id) ?? (
-        this.previousUnits.has(id) ? null : unit.toUpdate()
-      );
+      const raw =
+        rawUnits.get(id) ??
+        (this.previousUnits.has(id) ? null : unit.toUpdate());
       stillVisible.add(id);
       if (raw === null) continue;
-      const outgoing = unit.owner().id() === ownID
-        ? { ...raw }
-        : observedUnit(raw);
+      const outgoing =
+        unit.owner().id() === ownID ? { ...raw } : observedUnit(raw);
       unitUpdates.push(outgoing);
       this.previousUnits.set(id, outgoing);
     }
@@ -148,9 +160,7 @@ export class NationalOutboundFilter {
       });
       this.previousUnits.delete(id);
     }
-    const packed = unitUpdates.length > 0
-      ? packUnitUpdates(unitUpdates)
-      : null;
+    const packed = unitUpdates.length > 0 ? packUnitUpdates(unitUpdates) : null;
     const packedPlayer: number[] = [];
     if (this.ownSmallID !== null && data.packedPlayerUpdates) {
       const input = data.packedPlayerUpdates;
@@ -160,10 +170,10 @@ export class NationalOutboundFilter {
       }
     }
 
-    const playerNameViewData = ownID !== null &&
-      data.playerNameViewData?.[ownID] !== undefined
-      ? { [ownID]: data.playerNameViewData[ownID] }
-      : undefined;
+    const playerNameViewData =
+      ownID !== null && data.playerNameViewData?.[ownID] !== undefined
+        ? { [ownID]: data.playerNameViewData[ownID] }
+        : undefined;
 
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
@@ -171,9 +181,11 @@ export class NationalOutboundFilter {
       tick: data.tick,
       updates,
       packedTileUpdates: new Uint32Array(packedTile),
-      ...(packedPlayer.length ? {
-        packedPlayerUpdates: new Float64Array(packedPlayer),
-      } : {}),
+      ...(packedPlayer.length
+        ? {
+            packedPlayerUpdates: new Float64Array(packedPlayer),
+          }
+        : {}),
       ...(packed ? { packedUnitUpdates: packed.packedUnitUpdates } : {}),
       ...(packed && packed.packedMissileTimers.length
         ? { packedMissileTimers: packed.packedMissileTimers }

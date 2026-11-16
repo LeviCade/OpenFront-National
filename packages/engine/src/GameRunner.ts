@@ -176,8 +176,10 @@ export class GameRunner {
     if (game.config().nationalMode()) {
       // Principal is resolved from the actual game player registry, NEVER
       // from an observerId asserted by a client or packet body.
-      const player = this.viewerClientID === undefined
-        ? null : game.playerByClientID(this.viewerClientID);
+      const player =
+        this.viewerClientID === undefined
+          ? null
+          : game.playerByClientID(this.viewerClientID);
       this.nationalObserverId = player?.id() ?? null;
       this.nationalOutbound = new NationalOutboundFilter(
         game,
@@ -201,8 +203,7 @@ export class GameRunner {
   /** Signed/stamped turn intents must match the authentic NATIONAL player. */
   isNationalIntentAuthorized(clientID: ClientID): boolean {
     if (!this.game.config().nationalMode()) return true;
-    return this.nationalObserverId !== null &&
-      this.viewerClientID === clientID;
+    return this.nationalObserverId !== null && this.viewerClientID === clientID;
   }
 
   /**
@@ -366,14 +367,13 @@ export class GameRunner {
       pendingTurns: pendingTurns ?? 0,
     };
     if (this.nationalOutbound !== null) {
-      const verified = this.nationalObserverId !== null
-        ? collectLiveNationalObservation(this.game, this.nationalObserverId)
-        : null;
-      this.callBack(this.nationalOutbound.project(
-        this.game,
-        fullPacket,
-        verified,
-      ));
+      const verified =
+        this.nationalObserverId !== null
+          ? collectLiveNationalObservation(this.game, this.nationalObserverId)
+          : null;
+      this.callBack(
+        this.nationalOutbound.project(this.game, fullPacket, verified),
+      );
     } else {
       this.callBack(fullPacket);
     }

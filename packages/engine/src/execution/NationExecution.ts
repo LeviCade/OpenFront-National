@@ -20,15 +20,12 @@ import {
 import { assertNever, simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
-import { AttackExecution } from "./AttackExecution";
 import {
   initialNationalPlannerMemory,
   planNationalInterest,
   type NationalPlannerMemory,
 } from "../national/ai/NationalPlanner";
-import {
-  collectLiveNationalObservation,
-} from "../national/observation/LiveObservation";
+import { collectLiveNationalObservation } from "../national/observation/LiveObservation";
 import {
   advanceLastKnown,
   type NationalSightMemory,
@@ -45,6 +42,7 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
+import { AttackExecution } from "./AttackExecution";
 import { NationAllianceBehavior } from "./nation/NationAllianceBehavior";
 import { NationAttackBehavior } from "./nation/NationAttackBehavior";
 import { NationEmojiBehavior } from "./nation/NationEmojiBehavior";
@@ -315,7 +313,8 @@ export class NationExecution implements Execution {
     if (
       this.nationalPlannerMemory !== null &&
       ticks < this.nationalPlannerMemory.nextPlanningTick
-    ) return;
+    )
+      return;
     const verified = collectLiveNationalObservation(this.mg, player.id());
     const observation = verified.observation;
     const remembered = advanceLastKnown(
@@ -335,7 +334,8 @@ export class NationExecution implements Execution {
       result.decision?.objective !== "expand" ||
       result.decision.targetId !== null ||
       observation.unownedFrontier !== true
-    ) return;
+    )
+      return;
 
     // The final legality gate reads only actual OWN troops and actual adjacent
     // unowned terrain. It cannot select a hidden foreign target.
@@ -348,7 +348,8 @@ export class NationExecution implements Execution {
           this.mg.isLand(next) &&
           !this.mg.owner(next).isPlayer() &&
           player.canAttack(next)
-        ) adjacentNeutral = true;
+        )
+          adjacentNeutral = true;
       });
       if (adjacentNeutral) break;
     }
@@ -540,21 +541,28 @@ export class NationExecution implements Execution {
       expandRatio: this.expandRatio,
       embargoMalusApplied: [...this.embargoMalusApplied],
       spawnExecAdded: this.spawnExecAdded,
-      nationalPlannerMemory: this.nationalPlannerMemory === null
-        ? null
-        : {
-            ...this.nationalPlannerMemory,
-            reputation: this.nationalPlannerMemory.reputation.map((entry) => ({ ...entry })),
-            lastProcessedEvent: this.nationalPlannerMemory.lastProcessedEvent === null
-              ? null
-              : { ...this.nationalPlannerMemory.lastProcessedEvent },
-          },
-      nationalSightMemory: this.nationalSightMemory === null
-        ? null
-        : {
-            observerId: this.nationalSightMemory.observerId,
-            assets: this.nationalSightMemory.assets.map((asset) => ({ ...asset })),
-          },
+      nationalPlannerMemory:
+        this.nationalPlannerMemory === null
+          ? null
+          : {
+              ...this.nationalPlannerMemory,
+              reputation: this.nationalPlannerMemory.reputation.map(
+                (entry) => ({ ...entry }),
+              ),
+              lastProcessedEvent:
+                this.nationalPlannerMemory.lastProcessedEvent === null
+                  ? null
+                  : { ...this.nationalPlannerMemory.lastProcessedEvent },
+            },
+      nationalSightMemory:
+        this.nationalSightMemory === null
+          ? null
+          : {
+              observerId: this.nationalSightMemory.observerId,
+              assets: this.nationalSightMemory.assets.map((asset) => ({
+                ...asset,
+              })),
+            },
       behaviors: this.behaviorsInitialized
         ? {
             emoji: this.emojiBehavior.snapshot(w),
@@ -675,7 +683,13 @@ const NationStateSchema = z.object({
         z.object({
           id: z.string(),
           ownerId: z.string(),
-          kind: z.enum(["army", "structure", "warship", "transport", "trade-ship"]),
+          kind: z.enum([
+            "army",
+            "structure",
+            "warship",
+            "transport",
+            "trade-ship",
+          ]),
           x: z.number(),
           y: z.number(),
           lastSeenTick: z.number(),

@@ -1,3 +1,4 @@
+import type { TileRef } from "@openfront/engine-api/game/GameMap";
 /**
  * NATIONAL live observation adapter. Authoritative engine references enter
  * only here; the planner and packet consumers receive copied whitelisted data.
@@ -7,7 +8,6 @@
  * conservative, verifiable subset, not an invented 100/200-tile policy.
  */
 import { PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
-import type { TileRef } from "@openfront/engine-api/game/GameMap";
 import type { Game, Player } from "../../game/Game";
 import {
   projectNationalObservation,
@@ -35,9 +35,7 @@ export interface LiveNationalObservation {
 
 function getFacade(game: Game): PoliticalReadFacade | null {
   const candidate = (game as GameWithReadFacade).nationalPoliticalAuthority;
-  return typeof candidate === "function"
-    ? candidate.call(game)
-    : null;
+  return typeof candidate === "function" ? candidate.call(game) : null;
 }
 
 function kind(type: UnitType): AssetKind {
@@ -115,7 +113,9 @@ export function collectLiveNationalObservation(
         if (frontierKeys.has(key)) return;
         frontierKeys.add(key);
         frontiers.push({
-          observerId, targetId: owner.id(), access: "land",
+          observerId,
+          targetId: owner.id(),
+          access: "land",
         });
       });
     }
@@ -127,8 +127,7 @@ export function collectLiveNationalObservation(
     let status: SovereignStatus = "independent";
     if (!p.isAlive()) status = "eliminated";
     else if (empire !== null) {
-      status = authority?.emperorOf(empire) === p.id()
-        ? "imperial" : "member";
+      status = authority?.emperorOf(empire) === p.id() ? "imperial" : "member";
     }
     return {
       id: p.id(),
@@ -139,7 +138,8 @@ export function collectLiveNationalObservation(
           ? (100 * p.numTilesOwned()) / game.totalLandTiles()
           : 0,
       status,
-      controllerKind: p.type() === PlayerType.Human ? "human" as const : "ai" as const,
+      controllerKind:
+        p.type() === PlayerType.Human ? ("human" as const) : ("ai" as const),
       troops: p.troops(),
       treasury: Number(p.gold()),
     };
@@ -149,20 +149,21 @@ export function collectLiveNationalObservation(
   // No private pacts/terms may be inferred from legacy alliance structures.
   const coalitionIds = new Set<string>();
   const coalitions: NationalWorld["coalitions"][number][] = [];
-  if (authority) for (const player of players) {
-    const id = authority.empireOf(player.id());
-    if (id === null || coalitionIds.has(id)) continue;
-    coalitionIds.add(id);
-    const leader = authority.emperorOf(id);
-    if (leader === null) continue;
-    coalitions.push({
-      id,
-      kind: "empire",
-      leaderId: leader,
-      members: [...authority.membersOf(id)],
-      terms: {}, // No E1 permission to read treaty clauses.
-    });
-  }
+  if (authority)
+    for (const player of players) {
+      const id = authority.empireOf(player.id());
+      if (id === null || coalitionIds.has(id)) continue;
+      coalitionIds.add(id);
+      const leader = authority.emperorOf(id);
+      if (leader === null) continue;
+      coalitions.push({
+        id,
+        kind: "empire",
+        leaderId: leader,
+        members: [...authority.membersOf(id)],
+        terms: {}, // No E1 permission to read treaty clauses.
+      });
+    }
 
   const assets: NationalWorld["assets"][number][] = [];
   const sightGrants: NationalWorld["sightGrants"][number][] = [];
@@ -204,5 +205,8 @@ export function collectLiveNationalObservation(
     diplomaticEvents: [],
     unownedFrontier,
   };
-  return { observation: projectNationalObservation(world, observerId), visibleTiles };
+  return {
+    observation: projectNationalObservation(world, observerId),
+    visibleTiles,
+  };
 }
