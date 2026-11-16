@@ -96,6 +96,16 @@ export class WinCheckExecution implements Execution {
       return;
     }
 
+    // NATIONAL ends only when one sovereign nation/empire survives.
+    if (this.mg.config().nationalMode()) {
+      const winnerId = this.mg.nationalWinner();
+      if (winnerId !== null) {
+        this.mg.setWinner(this.mg.player(winnerId), this.mg.stats().stats());
+        this.active = false;
+      }
+      return;
+    }
+
     // Ranked 1v1 and FFA end when one connected human is left: everyone else
     // is dead or gone.
     const rankedType = this.mg.config().gameConfig().rankedType;

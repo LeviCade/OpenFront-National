@@ -46,7 +46,8 @@ export type Intent =
   | KickPlayerIntent
   | TogglePauseIntent
   | UpdateGameConfigIntent
-  | ToggleGameStartTimer;
+  | ToggleGameStartTimer
+  | NationalFoundEmpireIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -82,6 +83,10 @@ export type UpdateGameConfigIntent = z.infer<
 >;
 export type ToggleGameStartTimer = z.infer<
   typeof ToggleGameStartTimerIntentSchema
+>;
+
+export type NationalFoundEmpireIntent = z.infer<
+  typeof NationalFoundEmpireIntentSchema
 >;
 
 export type Turn = z.infer<typeof TurnSchema>;
@@ -258,6 +263,8 @@ export type PoolConfig = z.infer<typeof PoolConfigSchema>;
 export const GameConfigSchema = z.object({
   gameMap: z.enum(GameMapType),
   difficulty: z.enum(Difficulty),
+  // Explicit opt-in: absent/false always means legacy behavior.
+  nationalMode: z.boolean().optional(),
   donateGold: z.boolean(), // Configures donations to humans only
   donateTroops: z.boolean(), // Configures donations to humans only
   gameType: z.enum(GameType),
@@ -567,6 +574,12 @@ export const ToggleGameStartTimerIntentSchema = z.object({
   type: z.literal("toggle_game_start_timer"),
 });
 
+// Actor identity is resolved from the trusted stamped clientID.
+export const NationalFoundEmpireIntentSchema = z.object({
+  type: z.literal("national_found_empire"),
+  empireId: z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/),
+});
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -593,6 +606,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   TogglePauseIntentSchema,
   UpdateGameConfigIntentSchema,
   ToggleGameStartTimerIntentSchema,
+  NationalFoundEmpireIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

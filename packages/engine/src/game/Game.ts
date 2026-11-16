@@ -50,6 +50,7 @@ import type { EngineConfig } from "../configuration/EngineConfig";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { PathFinder } from "../pathfinding/types";
 import type { ExecRecord, SnapshotWriter } from "../snapshot/SnapshotContext";
+import type { NationalCommand } from "../national/NationalRuntime";
 import { RailNetwork } from "./RailNetwork";
 import { Stats } from "./Stats";
 
@@ -576,6 +577,8 @@ export interface Game extends GameLike {
   ): void;
   getWinner(): Player | Team | null;
   config(): EngineConfig;
+  nationalWinner(): PlayerID | null;
+  performNationalCommand(actor: Player, command: NationalCommand): void;
   isPaused(): boolean;
   setPaused(paused: boolean): void;
 

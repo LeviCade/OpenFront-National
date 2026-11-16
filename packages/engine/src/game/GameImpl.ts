@@ -106,6 +106,11 @@ import { Railroad } from "./Railroad";
 import { Stats } from "./Stats";
 import { StatsImpl, StatsSnapshot } from "./StatsImpl";
 import { WaterManager, WaterManagerSnapshot } from "./WaterManager";
+import {
+  NationalRuntime,
+  NationalRuntimeSnapshotSchema,
+  type NationalCommand,
+} from "../national/NationalRuntime";
 
 export function createGame(
   humans: PlayerInfo[],
@@ -173,6 +178,7 @@ export class GameImpl implements Game {
 
   private _isPaused: boolean = false;
   private _winner: Player | Team | null = null;
+  private _national: NationalRuntime | null = null;
   private _waterManager: WaterManager;
   private _sharedWaterCache: SharedWaterCache;
   private _teamGameSpawnAreas: TeamGameSpawnAreas | undefined;
@@ -210,6 +216,11 @@ export class GameImpl implements Game {
         this.populateTeams();
       }
       this.addPlayers();
+      if (this._config.nationalMode()) {
+        this._national = new NationalRuntime(
+          this._playersBySmallID.map((p) => p.id()),
+        );
+      }
     }
 
     console.log(
@@ -524,6 +535,35 @@ export class GameImpl implements Game {
     return this._config;
   }
 
+  /** Returns the actual victorious sovereign (no legacy-mode shortcut). */
+  nationalWinner(): PlayerID | null {
+    return this._national?.winner() ?? null;
+  }
+
+  /** Trusted player object from authenticated execution, never caller-supplied ID. */
+  performNationalCommand(actor: Player, command: NationalCommand): void {
+    if (this._national === null) throw new Error("NATIONAL is not enabled");
+    if (
+      this.inSpawnPhase() ||
+      this._players.get(actor.id()) !== actor ||
+      !actor.hasSpawned() ||
+      !actor.isAlive()
+    ) {
+      throw new Error("NATIONAL: unauthenticated or inactive actor");
+    }
+    this._national.synchronize(
+      this._playersBySmallID.map((p) => ({
+        id: p.id(),
+        alive: p.isAlive(),
+        spawned: p.hasSpawned(),
+        land: p.numTilesOwned(),
+      })),
+      this._ticks,
+      true,
+    );
+    this._national.perform(actor.id(), command);
+  }
+
   isPaused(): boolean {
     return this._isPaused;
   }
@@ -597,6 +637,16 @@ export class GameImpl implements Game {
   }
 
   executeNextTick(): GameUpdates {
+    this._national?.synchronize(
+      this._playersBySmallID.map((p) => ({
+        id: p.id(),
+        alive: p.isAlive(),
+        spawned: p.hasSpawned(),
+        land: p.numTilesOwned(),
+      })),
+      this._ticks,
+      !this.inSpawnPhase(),
+    );
     this.updates = createGameUpdatesMap();
     this.tileUpdatePairs.length = 0;
     if (this.viewResyncQueued) {
@@ -747,6 +797,7 @@ export class GameImpl implements Game {
     // Rails are not units, so without this a divergence in which rails got
     // built would only show up through the trains that later run on them.
     hash += this._railNetwork.hash();
+    if (this._national !== null) hash += this._national.stateHash();
     return hash;
   }
 
@@ -1693,6 +1744,7 @@ export class GameImpl implements Game {
         this._sharedWaterCache.snapshot(w),
       ),
       stats: w.versioned(StatsSnapshot, (this._stats as StatsImpl).snapshot()),
+      national: this._national?.snapshot() ?? null,
     };
   }
 
@@ -1755,6 +1807,17 @@ export class GameImpl implements Game {
     (this._stats as StatsImpl).restoreSnapshot(
       readVersioned(StatsSnapshot, s.stats),
     );
+    if (this._config.nationalMode()) {
+      if (s.national === null) throw new Error("NATIONAL snapshot state missing");
+      this._national = NationalRuntime.restore(
+        s.national,
+        this._playersBySmallID.map((p) => p.id()),
+        this._ticks,
+      );
+    } else {
+      if (s.national !== null) throw new Error("NATIONAL data in legacy snapshot");
+      this._national = null;
+    }
   }
 
   conquerPlayer(conqueror: Player, conquered: Player) {
@@ -1843,7 +1906,13 @@ export class GameImpl implements Game {
 
 export const GameSnapshot = snapshotType({
   name: "Game",
-  version: 1,
+  version: 2,
+  migrations: {
+    1: (data: unknown) => ({
+      ...(data as Record<string, unknown>),
+      national: null,
+    }),
+  },
   schema: z.object({
     ticks: zInt(),
     startTick: zInt().nullable(),
@@ -1877,6 +1946,7 @@ export const GameSnapshot = snapshotType({
     water: VersionedSchema,
     sharedWaterCache: VersionedSchema,
     stats: VersionedSchema,
+    national: NationalRuntimeSnapshotSchema.nullable(),
   }),
 });
 export type GameState = z.infer<typeof GameSnapshot.schema>;

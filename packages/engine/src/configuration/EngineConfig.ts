@@ -1,5 +1,6 @@
 import {
   Difficulty,
+  GameMode,
   GameType,
   Gold,
   PlayerInfo,
@@ -10,7 +11,7 @@ import {
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { PlayerLike } from "@openfront/engine-api/game/ReadViews";
-import { TeamCountConfig } from "@openfront/engine-api/Schemas";
+import { GameConfig, TeamCountConfig } from "@openfront/engine-api/Schemas";
 import { NukeType } from "@openfront/engine-api/StatsSchemas";
 import { Config } from "@openfront/engine-lib/configuration/Config";
 import { exp, log, pow2 } from "@openfront/engine-lib/DetMath";
@@ -124,6 +125,28 @@ function terrainAttackBase(terrain: TerrainType): {
  */
 export class EngineConfig extends Config {
   private engineUnitInfoCache = new Map<UnitType, EngineUnitInfo>();
+
+  constructor(
+    gameConfig: GameConfig,
+    isReplay: boolean,
+    listed: boolean = false,
+    spectator: boolean = false,
+  ) {
+    super(gameConfig, isReplay, listed, spectator);
+    if (
+      gameConfig.nationalMode === true &&
+      (gameConfig.gameType !== GameType.Singleplayer ||
+        gameConfig.gameMode !== GameMode.FFA ||
+        gameConfig.tutorial === true ||
+        gameConfig.rankedType !== undefined)
+    ) {
+      throw new Error("NATIONAL requires unranked Solo Free For All");
+    }
+  }
+
+  nationalMode(): boolean {
+    return this._gameConfig.nationalMode === true;
+  }
 
   traitorSpeedDebuff(): number {
     return 0.8;
