@@ -35,6 +35,12 @@ import { TerrainMapData } from "@openfront/engine-lib/game/TerrainMapLoader";
 import { TerraNulliusImpl } from "@openfront/engine-lib/game/TerraNulliusImpl";
 import { UnitGrid } from "@openfront/engine-lib/game/UnitGrid";
 import { PlayerCosmetics, WirePlayer } from "@openfront/shared/WireSchemas";
+import {
+  readNationalFoundingResults,
+  readNationalPolitics,
+  type NationalFoundingResult,
+  type NationalPublicPolitics,
+} from "../NationalDiplomacyState";
 import { computeAllianceClusters } from "../render/frame/derive/AllianceClusters";
 import { extractAttackRings } from "../render/frame/derive/AttackRings";
 import { extractNukeTelegraphs } from "../render/frame/derive/NukeTelegraphs";
@@ -46,12 +52,6 @@ import { SpiralTrails } from "../render/frame/SpiralTrails";
 import { TrailManager } from "../render/frame/TrailManager";
 import type { FrameData, NameEntry } from "../render/types";
 import { STRUCTURE_TYPES, TRAIL_TYPES } from "../render/types";
-import {
-  readNationalFoundingResults,
-  readNationalPolitics,
-  type NationalFoundingResult,
-  type NationalPublicPolitics,
-} from "../NationalDiplomacyState";
 import { UserSettings } from "../UserSettings";
 import { resolveTeamClanTag } from "../Utils";
 import { WorkerClient } from "../WorkerClient";
