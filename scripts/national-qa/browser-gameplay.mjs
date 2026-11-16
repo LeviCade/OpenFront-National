@@ -31,6 +31,8 @@ const childProcesses = [];
 const records = [];
 const errors = [];
 const observed = [];
+const browserConsole = [];
+const browserNetworkErrors = [];
 const start = performance.now();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let stage = "boot";
@@ -59,6 +61,8 @@ function persist() {
     events: records,
     errors,
     workerPackets: observed.slice(-240),
+    console: browserConsole.slice(-240),
+    networkErrors: browserNetworkErrors.slice(-120),
     elapsedMs: Math.round(performance.now() - start),
   };
   writeFileSync(
@@ -93,6 +97,22 @@ function cdp(webSocket) {
   let id = 0;
   webSocket.addEventListener("message", (event) => {
     const packet = JSON.parse(String(event.data));
+    if (packet.method === "Runtime.consoleAPICalled") {
+      browserConsole.push({
+        severity: packet.params?.type,
+        text: (packet.params?.args ?? []).map((arg) => arg.value ?? arg.description ?? "").join(" ").slice(0, 1200),
+      });
+    }
+    if (packet.method === "Runtime.exceptionThrown") {
+      browserConsole.push({ severity: "exception", text: String(packet.params?.exceptionDetails?.text ?? "").slice(0, 1200) });
+    }
+    if (packet.method === "Network.loadingFailed") {
+      browserNetworkErrors.push({
+        id: packet.params?.requestId,
+        error: packet.params?.errorText,
+        blockedReason: packet.params?.blockedReason,
+      });
+    }
     if (packet.id === undefined) return;
     const current = pending.get(packet.id);
     if (!current) return;
@@ -338,6 +358,7 @@ async function main() {
     await send("Page.enable");
     await send("Runtime.enable");
     await send("Network.enable");
+    await send("Log.enable");
     await send("Emulation.setDeviceMetricsOverride", {
       width: mobile ? 390 : 1280, height: mobile ? 844 : 800,
       deviceScaleFactor: 1, mobile,
@@ -440,9 +461,30 @@ async function main() {
       await capture("confirmed-empire");
     });
     await step("rejected-founding",async()=>{
-      const pkts=await worker();
-      const rejection=pkts.some((p)=>p.commandResults?.some((r)=>r.type==="national_found_empire"&&r.accepted===false));
-      if(!rejection) throw Error("No authenticated rejected founding result observed. UI-only input rejection is insufficient.");
+      // Duplicate founding is intentionally injected through the application's
+      // real EventBus and Transport, NOT by faking any game/worker state.
+      // The UI correctly hides its form after founding; the authenticated
+      // engine must still reject a malicious duplicate command.
+      const request = await evaluate(`(async () => {
+        const panel = window.__nationalQaFind('national-diplomacy-panel');
+        if (!panel?.eventBus) return 'missing live EventBus';
+        const transport = await import('/src/client/Transport.ts');
+        panel.eventBus.emit(new transport.SendNationalFoundEmpireIntentEvent('R5_Browser_QA'));
+        return 'existing authenticated transport emitted duplicate';
+      })()`);
+      if (request !== "existing authenticated transport emitted duplicate") {
+        throw Error("Could not trigger actual duplicate founding via live event bus: " + request);
+      }
+      const rejection = await poll(async()=>{
+        const pkts=await worker();
+        return pkts.some((p)=>p.commandResults?.some((r)=>
+          r.type==="national_found_empire" &&
+          r.empireId==="R5_Browser_QA" &&
+          r.accepted===false
+        ));
+      },"actual worker-scoped rejected duplicate founding",65,350);
+      if (!rejection) throw Error("Engine did not reject duplicate founded empire");
+      record("authoritative-duplicate-rejected");
       await capture("founding-rejected");
     });
     await step("save-restore",async()=>{
