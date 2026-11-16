@@ -224,6 +224,41 @@ describe("Round Five: real NATIONAL MDA defensive combat conservation", () => {
     expect(game.nationalWarState()).toEqual(warState);
   });
 
+  it("WAR-04/LEVY-07 accepted peace stops a real in-flight attack without refunding MDA losses", async () => {
+    const { game, attacker, defender, donors } = await scenario(2);
+    const initial = attacker.troops();
+    const beforeDonors = total(donors);
+    const beforeTiles = defender.numTilesOwned();
+    const beforeDefender = defender.troops();
+    const assault = new AttackExecution(100_000, attacker, defender.id());
+    assault.init(game, game.ticks());
+    expect(assault.isActive()).toBe(true);
+    const intercepted = game.nationalWarState()!.levy.processed[0].result.intercepted;
+    expect(intercepted).toBeGreaterThan(0);
+    const afterAcceptedDonors = total(donors);
+    expect(beforeDonors - afterAcceptedDonors).toBe(intercepted);
+    game.performNationalWarCommand(attacker, {
+      kind: "propose-peace",
+      warId: "round5-offensive",
+      motionId: "round5-peace",
+    });
+    game.performNationalWarCommand(defender, {
+      kind: "accept-peace",
+      motionId: "round5-peace",
+    });
+    expect(game.nationalWarAuthority()?.atWar(A, B)).toBe(false);
+    assault.tick(game.ticks()); // actual ongoing execution, before any tile damage
+    expect(assault.isActive()).toBe(false);
+    expect(attacker.outgoingAttacks()).toHaveLength(0);
+    expect(defender.numTilesOwned()).toBe(beforeTiles);
+    expect(defender.troops()).toBe(beforeDefender);
+    expect(total(donors)).toBe(afterAcceptedDonors); // P2: no donor refund invented
+    expect(attacker.troops()).toBe(initial - intercepted);
+    expect(
+      initial + beforeDonors - (attacker.troops() + total(donors)),
+    ).toBe(2 * intercepted);
+  });
+
   it("LEVY-06/07 snapshot restores original receipt and duplicate attack is a strict no-op", async () => {
     const { game, attacker, defender, donors } = await scenario(2);
     game.addExecution(new AttackExecution(100_000, attacker, defender.id()));
