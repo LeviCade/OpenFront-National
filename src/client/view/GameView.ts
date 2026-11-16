@@ -90,7 +90,7 @@ export class GameView implements GameLike {
     return this._nationalFoundingOutcome;
   }
 
-  /** Only results delivered by the CURRENT worker tick; no stale journal. */
+  /** Short-lived, recipient-bound results received in this live session. */
   public nationalFoundingResults(): readonly Readonly<NationalFoundingResult>[] {
     return this._nationalFoundingResults;
   }
@@ -294,6 +294,7 @@ export class GameView implements GameLike {
     });
     this.toDelete.clear();
 
+    const previousTick = this.lastUpdate?.tick ?? -1;
     this.lastUpdate = gu;
 
     // Legacy/replay test adapters can provide a partial Config without
@@ -314,16 +315,41 @@ export class GameView implements GameLike {
       this._nationalPoliticsTick =
         this._nationalPolitics === null ? null : gu.tick;
 
-      // Results are scoped to the exact incoming tick, not indefinitely
-      // cached across reconnects, replay seeks or another game. Never use
-      // another actor's command result as our own acknowledgement.
+      // E3 emits each journal result ONCE. HUD components may refresh slower
+      // than engine ticks; retain a bounded, principal-scoped receipt buffer
+      // until the panel sees it. Old request ticks cannot acknowledge a new
+      // click, and disconnect/replay rewind clears all buffered receipts.
       const myActorId = this._myPlayer?.id() ?? null;
-      this._nationalFoundingResults =
+      const received =
         myActorId === null
           ? []
           : readNationalFoundingResults(
               nationalPacket.nationalCommandResults,
-            ).filter((outcome) => outcome.actorId === myActorId);
+            ).filter(
+              (outcome) =>
+                outcome.actorId === myActorId &&
+                outcome.recipientId === myActorId &&
+                typeof outcome.tick === "number" &&
+                outcome.tick <= gu.tick,
+            );
+      const previous =
+        gu.tick < previousTick || this._nationalPolitics === null
+          ? []
+          : this._nationalFoundingResults;
+      const receipts = [...previous, ...received].filter(
+        (outcome) =>
+          typeof outcome.tick === "number" &&
+          outcome.tick >= gu.tick - 120,
+      );
+      // Prevent repeated packets from ever growing an unbounded local journal.
+      const deduplicated = new Map<string, NationalFoundingResult>();
+      for (const result of receipts) {
+        deduplicated.set(
+          `${result.actorId}:${result.empireId}:${result.tick}:${result.accepted}`,
+          result,
+        );
+      }
+      this._nationalFoundingResults = [...deduplicated.values()].slice(-32);
       this._nationalFoundingOutcome =
         this._nationalFoundingResults[
           this._nationalFoundingResults.length - 1
