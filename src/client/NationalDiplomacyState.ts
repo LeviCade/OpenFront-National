@@ -257,8 +257,8 @@ export function reconcileNationalFounding(
       acceptedResultSeen: attempt.acceptedResultSeen,
     };
   }
-  const acceptedResultSeen = attempt.acceptedResultSeen ||
-    outcome?.accepted === true;
+  const acceptedResultSeen =
+    attempt.acceptedResultSeen || outcome?.accepted === true;
   const member = empireForMember(view.politics, attempt.actorId);
   if (
     acceptedResultSeen &&
@@ -271,7 +271,8 @@ export function reconcileNationalFounding(
   if (view.tick - attempt.issuedTick >= 200) {
     return {
       phase: "unknown",
-      reason: "No final founding confirmation arrived. Check the verified empire roster before retrying.",
+      reason:
+        "No final founding confirmation arrived. Check the verified empire roster before retrying.",
       acceptedResultSeen,
     };
   }
