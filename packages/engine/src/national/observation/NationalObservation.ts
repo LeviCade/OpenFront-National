@@ -325,23 +325,21 @@ export function projectNationalObservation(
     coalitions: coalitionObservations.sort(byId),
     // Copy only M0-approved public fields. Never serialize raw war records.
     wars: world.wars
-      .map(
-        (w): NationalWarView => ({
-          id: w.id,
-          scope: w.scope,
-          first: {
-            kind: w.first.kind,
-            stableId: w.first.stableId,
-            activeMemberIds: [...w.first.activeMemberIds].sort(),
-          },
-          second: {
-            kind: w.second.kind,
-            stableId: w.second.stableId,
-            activeMemberIds: [...w.second.activeMemberIds].sort(),
-          },
-          startedTick: w.startedTick,
-        }),
-      )
+      .map((w): NationalWarView => ({
+        id: w.id,
+        scope: w.scope,
+        first: {
+          kind: w.first.kind,
+          stableId: w.first.stableId,
+          activeMemberIds: [...w.first.activeMemberIds].sort(),
+        },
+        second: {
+          kind: w.second.kind,
+          stableId: w.second.stableId,
+          activeMemberIds: [...w.second.activeMemberIds].sort(),
+        },
+        startedTick: w.startedTick,
+      }))
       .sort(byId),
     ownResources: { troops: own.troops, treasury: own.treasury },
     visibleAssets: visibleAssets.sort(byId),

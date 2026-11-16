@@ -182,8 +182,10 @@ export function planNationalInterest(
   }
 
   const publicNations = new Map(observation.nations.map((n) => [n.id, n]));
-  const { enemies: enemiesAtWar, allies: warAllies } =
-    deriveNationalWarSides(observation.wars, self.id);
+  const { enemies: enemiesAtWar, allies: warAllies } = deriveNationalWarSides(
+    observation.wars,
+    self.id,
+  );
   const closeThreat = observation.visibleAssets.some(
     (a) => a.ownerId !== self.id && enemiesAtWar.has(a.ownerId),
   );

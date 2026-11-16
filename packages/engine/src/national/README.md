@@ -28,7 +28,6 @@ Covered by `tests/national/`: FOG-01, FOG-02, FOG-07, preliminary FOG-04/05/06 o
 
 **Still required before accepted implementation:** M0 interface approval, authoritative geometry and sight invalidation, worker/client broadcast split, snapshot and replay serialization, route legality, integrated headless game, full regression CI and benchmark on realistic map sizes.
 
-
 ## Round Two — scoped war sides and precise M0 filtering adapter
 
 **Contract alignment:** `docs/19-stage3-m0-interface.md` (conductor draft)
@@ -45,7 +44,7 @@ the resulting active-war list; they do not execute game war/peace commands.
 ### Mandatory conductor-owned authoritative adapter
 
 1. **Mode, principal and political state.** Validate an opt-in NATIONAL flag
-   for `GameType.Singleplayer` + `GameMode.FFA` *before* constructing the
+   for `GameType.Singleplayer` + `GameMode.FFA` _before_ constructing the
    simulation. The absent flag preserves old behavior. Derive the observer's
    existing stable `PlayerID` from authenticated engine/session state, not a
    request parameter. `GameImpl` remains the sole mutable NATIONAL authority.
@@ -89,7 +88,7 @@ the resulting active-war list; they do not execute game war/peace commands.
    suppress/redact foreign exact gold, troops, earned income, secret clauses,
    structures, ships, unobserved transport destinations, concealed tile/unit
    changes, attack indexes/counts, name-position leaks and hidden event
-   messages. Handle *all* `packedPlayerUpdates`, `packedAttackUpdates`,
+   messages. Handle _all_ `packedPlayerUpdates`, `packedAttackUpdates`,
    `packedUnitUpdates`, `packedMotionPlans`, unit/tile/name/structure updates
    and initial full `PlayerUpdate` payloads. Scope diff caches and resync
    state per authenticated observer so changing visibility emits removals and
@@ -97,7 +96,7 @@ the resulting active-war list; they do not execute game war/peace commands.
 5. **Alternate exit paths.** Enforce the same whitelist for initial world
    state, join/rejoin, spectators, replay playback, export, snapshot downloads,
    reconnect/resync, admin/debug interfaces and worker messages. A game worker
-   that retains full hidden state *in the user's browser* is not a genuine
+   that retains full hidden state _in the user's browser_ is not a genuine
    adversarial confidentiality boundary, even if worker-to-main messages are
    filtered; tamper-resistant fog requires authoritative simulation on a
    trusted host or an explicitly limited UI-fairness-only threat model.

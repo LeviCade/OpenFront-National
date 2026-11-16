@@ -23,7 +23,11 @@ function war(
   return {
     id,
     scope,
-    first: { kind: firstKind, stableId: firstId, activeMemberIds: firstMembers },
+    first: {
+      kind: firstKind,
+      stableId: firstId,
+      activeMemberIds: firstMembers,
+    },
     second: {
       kind: secondKind,
       stableId: secondId,
@@ -62,7 +66,14 @@ function world(): NationalWorld {
     ],
     invitations: [],
     assets: [
-      { id: "b-army", kind: "army", ownerId: "b", x: 4, y: 4, strength: 100000 },
+      {
+        id: "b-army",
+        kind: "army",
+        ownerId: "b",
+        x: 4,
+        y: 4,
+        strength: 100000,
+      },
       { id: "c-army", kind: "army", ownerId: "c", x: 6, y: 6, strength: 50000 },
       {
         id: "x-secret",
@@ -303,18 +314,16 @@ describe("NATIONAL opposing war sides (WAR-03/07, AI-01, FOG-06/07)", () => {
     };
     const member = projectNationalObservation(connected, "a");
     const outsider = projectNationalObservation(connected, "c");
-    expect(
-      member.visibleAssets.find((a) => a.id === "x-secret")?.source,
-    ).toBe("empire");
-    expect(
-      member.diplomaticEvents.some((e) => e.id === "hidden-event"),
-    ).toBe(true);
-    expect(
-      outsider.visibleAssets.some((a) => a.id === "x-secret"),
-    ).toBe(false);
-    expect(
-      outsider.diplomaticEvents.some((e) => e.id === "hidden-event"),
-    ).toBe(false);
+    expect(member.visibleAssets.find((a) => a.id === "x-secret")?.source).toBe(
+      "empire",
+    );
+    expect(member.diplomaticEvents.some((e) => e.id === "hidden-event")).toBe(
+      true,
+    );
+    expect(outsider.visibleAssets.some((a) => a.id === "x-secret")).toBe(false);
+    expect(outsider.diplomaticEvents.some((e) => e.id === "hidden-event")).toBe(
+      false,
+    );
     expect(outsider.coalitions[0].terms).toBeUndefined();
     const serialized = JSON.stringify(outsider);
     expect(serialized).not.toContain("privateCode");
