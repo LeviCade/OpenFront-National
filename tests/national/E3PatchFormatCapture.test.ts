@@ -12,7 +12,7 @@ describe("Temporary E3 exact patch formatter capture", () => {
       "packages/engine/src/national/README.md"
 ];
     const root = resolve(".");
-    const tmp = mkdtempSync(join(tmpdir(), "e3-finalfmt-"));
+    const tmp = mkdtempSync(join(tmpdir(), "e3-lastfmt-"));
     try {
       copyFileSync(join(root, ".oxfmtrc.json"), join(tmp, ".oxfmtrc.json"));
       for (const file of files) {
