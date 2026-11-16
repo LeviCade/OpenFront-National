@@ -565,14 +565,16 @@ export class SinglePlayerModal extends BaseModal {
             <input
               type="checkbox"
               class="mt-1 accent-yellow-400"
+              aria-label="Enable NATIONAL sovereignty in Solo"
               .checked=${this.nationalMode}
               @change=${this.handleNationalModeChanged}
             />
             <span class="text-sm text-white">
-              <strong>👑 NATIONAL — Above Impossible (Experimental)</strong>
+              <strong>👑 NATIONAL — Sovereignty Mode (Experimental)</strong>
               <span class="block text-xs text-white/60 mt-1">
-                Solo Free For All only. Stage 3 sovereignty engine is active;
-                diplomacy, war and AI integration are still being built.
+                Solo Free For All at Impossible difficulty. Spawn, then open
+                the in-game NATIONAL Diplomacy panel to found an empire.
+                Other diplomacy actions unlock only when supported by the game.
               </span>
             </span>
           </label>
