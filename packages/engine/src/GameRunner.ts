@@ -171,13 +171,13 @@ export class GameRunner {
     public game: Game,
     private execManager: Executor,
     private callBack: (gu: GameUpdateViewData | ErrorUpdate) => void,
-    clientID?: ClientID,
+    private readonly viewerClientID?: ClientID,
   ) {
     if (game.config().nationalMode()) {
       // Principal is resolved from the actual game player registry, NEVER
       // from an observerId asserted by a client or packet body.
-      const player = clientID === undefined
-        ? null : game.playerByClientID(clientID);
+      const player = this.viewerClientID === undefined
+        ? null : game.playerByClientID(this.viewerClientID);
       this.nationalObserverId = player?.id() ?? null;
       this.nationalOutbound = new NationalOutboundFilter(
         game,
@@ -187,6 +187,22 @@ export class GameRunner {
       this.nationalObserverId = null;
       this.nationalOutbound = null;
     }
+  }
+
+  /** Only the authenticated game principal may use NATIONAL private RPCs. */
+  isNationalRequesterAuthorized(id: string | number): boolean {
+    if (!this.game.config().nationalMode()) return true;
+    if (this.nationalObserverId === null) return false;
+    return typeof id === "string"
+      ? id === this.nationalObserverId
+      : this.game.player(this.nationalObserverId).smallID() === id;
+  }
+
+  /** Signed/stamped turn intents must match the authentic NATIONAL player. */
+  isNationalIntentAuthorized(clientID: ClientID): boolean {
+    if (!this.game.config().nationalMode()) return true;
+    return this.nationalObserverId !== null &&
+      this.viewerClientID === clientID;
   }
 
   /**
