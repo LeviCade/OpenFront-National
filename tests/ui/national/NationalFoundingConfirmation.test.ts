@@ -44,6 +44,11 @@ describe("NATIONAL confirmed founding decisions from authoritative DTOs", () => 
       phase: "pending",
       acceptedResultSeen: false,
     });
+    expect(reconcileNationalFounding(attempt, {
+      ...view,
+      results: [{ ...accepted, tick: 10 }],
+      politics: roster,
+    }).phase).toBe("accepted");
     expect(reconcileNationalFounding(attempt, { ...view, results: [accepted] })).toEqual({
       phase: "pending",
       acceptedResultSeen: true,
@@ -60,7 +65,7 @@ describe("NATIONAL confirmed founding decisions from authoritative DTOs", () => 
 
   it("rejects a past journal entry, another empire, another actor, and wrong recipient", () => {
     const wrong = [
-      { ...accepted, tick: 10 },
+      { ...accepted, tick: 9 },
       { ...accepted, tick: 9 },
       { ...accepted, empireId: "Other" },
       { ...accepted, actorId: "nation-b" },
