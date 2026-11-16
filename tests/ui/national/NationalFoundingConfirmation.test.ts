@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   readNationalPolitics,
+  retainNationalFoundingReceipts,
   readNationalFoundingResults,
   reconcileNationalFounding,
   type NationalFoundingAttempt,
@@ -125,5 +126,30 @@ describe("NATIONAL Ungovernable public warning packets", () => {
   it("never synthesizes warnings from absent packets", () => {
     expect(readNationalPolitics(null)).toBeNull();
     expect(readNationalPolitics({ empires: [] })?.warnings).toEqual([]);
+  });
+});
+
+describe("E3 one-shot command-result buffering", () => {
+  it("survives an empty next tick until the slower HUD refresh, without duplicate receipts", () => {
+    const first = retainNationalFoundingReceipts([], [accepted], 11, false);
+    expect(first).toEqual([accepted]);
+    const next = retainNationalFoundingReceipts(first, [], 12, false);
+    expect(next).toEqual([accepted]);
+    expect(retainNationalFoundingReceipts(next, [accepted], 13, false)).toHaveLength(1);
+  });
+
+  it("drops an expired receipt, future result, and all old events on disconnect/rewind", () => {
+    expect(retainNationalFoundingReceipts([accepted], [], 252, false)).toEqual([]);
+    expect(retainNationalFoundingReceipts([accepted], [], 12, true)).toEqual([]);
+    expect(retainNationalFoundingReceipts([], [{ ...accepted, tick: 15 }], 12, false)).toEqual([]);
+  });
+
+  it("keeps a bounded journal when many events arrive", () => {
+    const events = Array.from({ length: 100 }, (_, i) => ({
+      ...accepted,
+      empireId: `Empire_${i}`,
+      tick: i + 1,
+    }));
+    expect(retainNationalFoundingReceipts([], events, 100, false)).toHaveLength(32);
   });
 });
