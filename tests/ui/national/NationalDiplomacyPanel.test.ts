@@ -183,4 +183,125 @@ describe("NATIONAL player-facing founding", () => {
     await element.updateComplete;
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
+  it("reports the engine rejection reason without claiming an empire", async () => {
+    const { element, optionsState } = await mount();
+    const input = element.querySelector<HTMLInputElement>("#national-empire-id")!;
+    input.value = "Atlas";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await element.updateComplete;
+    element.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    optionsState.tick = 11;
+    optionsState.results = [{
+      type: "national_found_empire",
+      recipientId: "nation-a",
+      actorId: "nation-a",
+      empireId: "Atlas",
+      accepted: false,
+      tick: 11,
+      reason: "actor-inactive",
+    }];
+    element.refresh();
+    await element.updateComplete;
+    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("rejected");
+    expect(element.querySelector('[role="alert"]')?.textContent).toContain("actor-inactive");
+    expect(element.textContent).not.toContain("Confirmed by game");
+    expect(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+  });
+
+  it("waits for roster after a real accepted result, even when journal entry is no longer on next tick", async () => {
+    const { element, optionsState } = await mount();
+    const input = element.querySelector<HTMLInputElement>("#national-empire-id")!;
+    input.value = "Atlas";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await element.updateComplete;
+    element.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    optionsState.tick = 11;
+    optionsState.results = [{
+      type: "national_found_empire",
+      recipientId: "nation-a",
+      actorId: "nation-a",
+      empireId: "Atlas",
+      accepted: true,
+      tick: 11,
+    }];
+    element.refresh();
+    await element.updateComplete;
+    expect(element.textContent).not.toContain("Confirmed by game");
+    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("pending");
+    optionsState.results = [];
+    optionsState.tick = 12;
+    optionsState.politics = {
+      empires: [{ id: "Atlas", leaderId: "nation-a", memberIds: ["nation-a"] }],
+      warnings: [],
+    };
+    element.refresh();
+    await element.updateComplete;
+    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("accepted");
+    expect(element.textContent).toContain("Confirmed by game");
+    expect(element.textContent).toContain("You are the emperor.");
+
+    // The next public packet loses that membership. Don't keep a success
+    // toast or stale empire when the GameRunner no longer reports it.
+    optionsState.politics = { empires: [], warnings: [] };
+    optionsState.tick = 13;
+    element.refresh();
+    await element.updateComplete;
+    expect(element.textContent).not.toContain("Confirmed by game");
+    expect(element.textContent).not.toContain("You are the emperor.");
+  });
+
+  it("shows actual Ungovernable warnings and allows unknown on lost connection", async () => {
+    const { element, optionsState } = await mount();
+    optionsState.politics = {
+      empires: [{ id: "Atlas", leaderId: "nation-b", memberIds: ["nation-b"] }],
+      warnings: [{ empireId: "Atlas", deadlineMs: 30000, remainingMs: 5000, blockedByAssetDisposition: true }],
+    };
+    element.refresh();
+    await element.updateComplete;
+    expect(element.textContent).toContain("Ungovernable warnings");
+    expect(element.textContent).toContain("5 seconds");
+    expect(element.textContent).toContain("Dissolution is deferred");
+
+    const input = element.querySelector<HTMLInputElement>("#national-empire-id")!;
+    input.value = "OtherEmpire";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await element.updateComplete;
+    element.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    element.connectionInterrupted();
+    await element.updateComplete;
+    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("unknown");
+    expect(element.textContent).toContain("Connection interrupted");
+    expect(element.textContent).not.toContain("Confirmed by game");
+  });
+
+  it("never treats a resumed member roster or old accepted result as this click's success", async () => {
+    const { element, optionsState } = await mount();
+    const input = element.querySelector<HTMLInputElement>("#national-empire-id")!;
+    input.value = "Atlas";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await element.updateComplete;
+    element.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    optionsState.politics = {
+      empires: [{ id: "Atlas", leaderId: "nation-a", memberIds: ["nation-a"] }],
+      warnings: [],
+    };
+    optionsState.tick = 11;
+    optionsState.results = [{
+      type: "national_found_empire",
+      recipientId: "nation-a",
+      actorId: "nation-a",
+      empireId: "Atlas",
+      accepted: true,
+      tick: 10,
+    }];
+    element.refresh();
+    await element.updateComplete;
+    expect(element.textContent).toContain("You are the emperor.");
+    expect(element.textContent).not.toContain("Confirmed by game");
+    optionsState.tick = 210;
+    element.refresh();
+    await element.updateComplete;
+    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("unknown");
+  });
+
 });
