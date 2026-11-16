@@ -11,7 +11,6 @@
  *   ... --mobile
  */
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   mkdirSync,
   mkdtempSync,
@@ -388,7 +387,7 @@ async function main() {
     });
     await step("sovereign-victory",async()=>{
       const pkts=await worker();
-      if(!pkts.some((p)=>p.publicPolitics?.victor || p.publicPolitics?.victors)) {
+      if(!pkts.some((p)=>p.publicPolitics?.victor ?? p.publicPolitics?.victors)) {
         throw Error("No authoritative sovereign-victory packet observed in actual Chromium game");
       }
       await capture("sovereign-victory");
