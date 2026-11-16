@@ -40,24 +40,41 @@ const view = {
 
 describe("NATIONAL confirmed founding decisions from authoritative DTOs", () => {
   it("requires BOTH fresh accepted journal and current exact leadership", () => {
-    expect(reconcileNationalFounding(attempt, { ...view, politics: roster })).toEqual({
+    expect(
+      reconcileNationalFounding(attempt, { ...view, politics: roster }),
+    ).toEqual({
       phase: "pending",
       acceptedResultSeen: false,
     });
-    expect(reconcileNationalFounding(attempt, {
-      ...view,
-      results: [{ ...accepted, tick: 10 }],
-      politics: roster,
-    }).phase).toBe("accepted");
-    expect(reconcileNationalFounding(attempt, { ...view, results: [accepted] })).toEqual({
+    expect(
+      reconcileNationalFounding(attempt, {
+        ...view,
+        results: [{ ...accepted, tick: 10 }],
+        politics: roster,
+      }).phase,
+    ).toBe("accepted");
+    expect(
+      reconcileNationalFounding(attempt, { ...view, results: [accepted] }),
+    ).toEqual({
       phase: "pending",
       acceptedResultSeen: true,
     });
-    expect(reconcileNationalFounding(attempt, { ...view, results: [accepted], politics: roster })).toEqual({
+    expect(
+      reconcileNationalFounding(attempt, {
+        ...view,
+        results: [accepted],
+        politics: roster,
+      }),
+    ).toEqual({
       phase: "accepted",
       acceptedResultSeen: true,
     });
-    expect(reconcileNationalFounding({ ...attempt, acceptedResultSeen: true }, { ...view, politics: roster })).toEqual({
+    expect(
+      reconcileNationalFounding(
+        { ...attempt, acceptedResultSeen: true },
+        { ...view, politics: roster },
+      ),
+    ).toEqual({
       phase: "accepted",
       acceptedResultSeen: true,
     });
@@ -66,15 +83,23 @@ describe("NATIONAL confirmed founding decisions from authoritative DTOs", () => 
   it("rejects a past journal entry, another empire, another actor, and wrong recipient", () => {
     const wrong = [
       { ...accepted, tick: 9 },
-      { ...accepted, tick: 9 },
+      { ...accepted, tick: 8 },
       { ...accepted, empireId: "Other" },
       { ...accepted, actorId: "nation-b" },
       { ...accepted, recipientId: "nation-b" },
     ];
     for (const result of wrong) {
-      expect(reconcileNationalFounding(attempt, { ...view, politics: roster, results: [result] }).phase).toBe("pending");
+      expect(
+        reconcileNationalFounding(attempt, {
+          ...view,
+          politics: roster,
+          results: [result],
+        }).phase,
+      ).toBe("pending");
     }
-    expect(readNationalFoundingResults([{ ...accepted, recipientId: "nation-b" }])).toEqual([]);
+    expect(
+      readNationalFoundingResults([{ ...accepted, recipientId: "nation-b" }]),
+    ).toEqual([]);
   });
 
   it("shows real rejection reason even if a stale roster suggests membership", () => {
@@ -83,7 +108,13 @@ describe("NATIONAL confirmed founding decisions from authoritative DTOs", () => 
       accepted: false,
       reason: "political-rule",
     };
-    expect(reconcileNationalFounding(attempt, { ...view, politics: roster, results: [result] })).toEqual({
+    expect(
+      reconcileNationalFounding(attempt, {
+        ...view,
+        politics: roster,
+        results: [result],
+      }),
+    ).toEqual({
       phase: "rejected",
       reason: "political-rule",
       acceptedResultSeen: false,
@@ -92,21 +123,42 @@ describe("NATIONAL confirmed founding decisions from authoritative DTOs", () => 
 
   it("does not confirm an empire belonging to another actor, or one with a different emperor", () => {
     const wrongLeader: NationalPublicPolitics = {
-      empires: [{ id: "Atlas", leaderId: "nation-b", memberIds: ["nation-b", "nation-a"] }],
+      empires: [
+        {
+          id: "Atlas",
+          leaderId: "nation-b",
+          memberIds: ["nation-b", "nation-a"],
+        },
+      ],
       warnings: [],
     };
-    expect(reconcileNationalFounding(attempt, {
-      ...view, politics: wrongLeader, results: [accepted],
-    }).phase).toBe("pending");
+    expect(
+      reconcileNationalFounding(attempt, {
+        ...view,
+        politics: wrongLeader,
+        results: [accepted],
+      }).phase,
+    ).toBe("pending");
   });
 
   it("fails safely for rewound game, changed session and missing results after a bounded tick horizon", () => {
-    expect(reconcileNationalFounding(attempt, { ...view, gameId: "new-game" }).phase).toBe("unknown");
-    expect(reconcileNationalFounding(attempt, { ...view, actorId: "new-actor" }).phase).toBe("unknown");
-    expect(reconcileNationalFounding(attempt, { ...view, tick: 9 }).phase).toBe("unknown");
-    expect(reconcileNationalFounding(attempt, {
-      ...view, tick: 210, results: [],
-    }).phase).toBe("unknown");
+    expect(
+      reconcileNationalFounding(attempt, { ...view, gameId: "new-game" }).phase,
+    ).toBe("unknown");
+    expect(
+      reconcileNationalFounding(attempt, { ...view, actorId: "new-actor" })
+        .phase,
+    ).toBe("unknown");
+    expect(reconcileNationalFounding(attempt, { ...view, tick: 9 }).phase).toBe(
+      "unknown",
+    );
+    expect(
+      reconcileNationalFounding(attempt, {
+        ...view,
+        tick: 210,
+        results: [],
+      }).phase,
+    ).toBe("unknown");
   });
 });
 
@@ -114,18 +166,35 @@ describe("NATIONAL Ungovernable public warning packets", () => {
   it("displays only real, valid warning details for a current empire", () => {
     const source = {
       empires: [{ id: "Atlas", leaderId: "nation-a", memberIds: ["nation-a"] }],
-      warnings: [{
-        empireId: "Atlas",
-        deadlineMs: 30000,
-        remainingMs: 5000,
-        blockedByAssetDisposition: true,
-      }],
+      warnings: [
+        {
+          empireId: "Atlas",
+          deadlineMs: 30000,
+          remainingMs: 5000,
+          blockedByAssetDisposition: true,
+        },
+      ],
       victory: null,
     };
     expect(readNationalPolitics(source)?.warnings).toEqual(source.warnings);
-    expect(readNationalPolitics({ ...source, warnings: [{ ...source.warnings[0], remainingMs: -1 }] })).toBeNull();
-    expect(readNationalPolitics({ ...source, warnings: [{ ...source.warnings[0], empireId: "Unknown" }] })).toBeNull();
-    expect(readNationalPolitics({ ...source, warnings: [source.warnings[0], source.warnings[0]] })).toBeNull();
+    expect(
+      readNationalPolitics({
+        ...source,
+        warnings: [{ ...source.warnings[0], remainingMs: -1 }],
+      }),
+    ).toBeNull();
+    expect(
+      readNationalPolitics({
+        ...source,
+        warnings: [{ ...source.warnings[0], empireId: "Unknown" }],
+      }),
+    ).toBeNull();
+    expect(
+      readNationalPolitics({
+        ...source,
+        warnings: [source.warnings[0], source.warnings[0]],
+      }),
+    ).toBeNull();
   });
 
   it("never synthesizes warnings from absent packets", () => {
@@ -140,13 +209,26 @@ describe("E3 one-shot command-result buffering", () => {
     expect(first).toEqual([accepted]);
     const next = retainNationalFoundingReceipts(first, [], 12, false);
     expect(next).toEqual([accepted]);
-    expect(retainNationalFoundingReceipts(next, [accepted], 13, false)).toHaveLength(1);
+    expect(
+      retainNationalFoundingReceipts(next, [accepted], 13, false),
+    ).toHaveLength(1);
   });
 
   it("drops an expired receipt, future result, and all old events on disconnect/rewind", () => {
-    expect(retainNationalFoundingReceipts([accepted], [], 252, false)).toEqual([]);
-    expect(retainNationalFoundingReceipts([accepted], [], 12, true)).toEqual([]);
-    expect(retainNationalFoundingReceipts([], [{ ...accepted, tick: 15 }], 12, false)).toEqual([]);
+    expect(retainNationalFoundingReceipts([accepted], [], 252, false)).toEqual(
+      [],
+    );
+    expect(retainNationalFoundingReceipts([accepted], [], 12, true)).toEqual(
+      [],
+    );
+    expect(
+      retainNationalFoundingReceipts(
+        [],
+        [{ ...accepted, tick: 15 }],
+        12,
+        false,
+      ),
+    ).toEqual([]);
   });
 
   it("keeps a bounded journal when many events arrive", () => {
@@ -155,6 +237,8 @@ describe("E3 one-shot command-result buffering", () => {
       empireId: `Empire_${i}`,
       tick: i + 1,
     }));
-    expect(retainNationalFoundingReceipts([], events, 100, false)).toHaveLength(32);
+    expect(retainNationalFoundingReceipts([], events, 100, false)).toHaveLength(
+      32,
+    );
   });
 });
