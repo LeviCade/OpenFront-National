@@ -1,4 +1,8 @@
 import {
+  initialNationalPlannerMemory,
+  planNationalInterest,
+} from "@openfront/engine/national/ai/NationalPlanner";
+import {
   Cell,
   Nation,
   PlayerInfo,
@@ -111,6 +115,21 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     expect(unknown.packedUnitUpdates).toBeUndefined();
     expect(unknown.packedPlayerUpdates).toBeUndefined();
     expect(unknown.packedTileUpdates).toHaveLength(0);
+
+    // Reconstruct an actual authoritative snapshot and resend the full view.
+    // Enemy canaries must not reappear through replay or initial resync.
+    const { restored } = await roundTrip(game, "plains");
+    const replayPacket = runPacket(restored, viewer.clientID!);
+    expect(numericData(replayPacket)).not.toContain(secretTroops);
+    expect(
+      unpackUnitUpdates(
+        replayPacket.packedUnitUpdates,
+        replayPacket.packedMissileTimers,
+      ).some((unit) => unit.id === shipId),
+    ).toBe(false);
+    expect(Array.from(replayPacket.packedTileUpdates).filter(
+      (_, i) => i % 2 === 0,
+    )).not.toContain(hiddenTile);
   });
 
   it("FOG-06 current own sight follows actual territory, not client assertions", async () => {
@@ -193,4 +212,71 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     console.info("[NATIONAL live perf] 120 nations; 5 GameRunner ticks; elapsedMs=" + elapsed.toFixed(2));
     expect(elapsed).toBeLessThan(5000);
   });
+
+  it("FOG-04 revokes actual live unit sight without exposing its hidden destination", async () => {
+    const game = await activeGame(true);
+    const mine = game.player(viewer.id);
+    let sightedTile: number | null = null;
+    for (const border of mine.borderTiles()) {
+      game.forEachNeighbor(border, (tile) => {
+        if (sightedTile === null && game.isLand(tile) && !game.owner(tile).isPlayer()) {
+          sightedTile = tile;
+        }
+      });
+      if (sightedTile !== null) break;
+    }
+    expect(sightedTile).not.toBeNull();
+    const ship = game.player(secret.id).buildUnit(
+      UnitType.TransportShip,
+      sightedTile!,
+      { troops: 2_345_678 },
+    );
+    const packets: GameUpdateViewData[] = [];
+    const runner = new GameRunner(
+      game,
+      new Executor(game, "revocation-test", viewer.clientID!),
+      (packet) => {
+        if ("updates" in packet) packets.push(packet);
+      },
+      viewer.clientID!,
+    );
+    game.queueViewResync();
+    runner.addTurn({ turnNumber: 0, intents: [] });
+    expect(runner.executeNextTick()).toBe(true);
+    const appeared = unpackUnitUpdates(
+      packets[0].packedUnitUpdates, packets[0].packedMissileTimers,
+    ).find((u) => u.id === ship.id());
+    expect(appeared?.pos).toBe(sightedTile);
+    expect(appeared?.troops).toBe(0);
+
+    const nowHidden = game.ref(80, 80);
+    ship.move(nowHidden);
+    runner.addTurn({ turnNumber: 1, intents: [] });
+    expect(runner.executeNextTick()).toBe(true);
+    const revoked = unpackUnitUpdates(
+      packets[1].packedUnitUpdates, packets[1].packedMissileTimers,
+    ).find((u) => u.id === ship.id());
+    expect(revoked?.pos).toBe(sightedTile);
+    expect(revoked?.pos).not.toBe(nowHidden);
+    expect(revoked?.markedForDeletion).not.toBe(false);
+    expect(revoked?.troops).toBe(0);
+  });
+
+  it("FOG-07 AI/human controller switches do not change live observations or strategy", async () => {
+    const game = await activeGame(true);
+    const before = collectLiveNationalObservation(game, viewer.id).observation;
+    const beforePlan = planNationalInterest(
+      before, initialNationalPlannerMemory(viewer.id), 30,
+    );
+    game.player(viewer.id).setPlayerInfo(
+      new PlayerInfo("Viewer", PlayerType.Nation, viewer.clientID, viewer.id),
+    );
+    const after = collectLiveNationalObservation(game, viewer.id).observation;
+    const afterPlan = planNationalInterest(
+      after, initialNationalPlannerMemory(viewer.id), 30,
+    );
+    expect(after).toEqual(before);
+    expect(afterPlan).toEqual(beforePlan);
+  });
+
 });
