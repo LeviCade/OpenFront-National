@@ -80,6 +80,7 @@ import {
   NationalRuntime,
   NationalRuntimeSnapshotSchema,
   type NationalCommand,
+  type NationalPublicPoliticalView,
   type NationalUngovernableWarning,
 } from "../national/NationalRuntime";
 import {
@@ -779,6 +780,13 @@ export class GameImpl implements Game {
       }
     }
     return this._nationalWar.interceptAcceptedAttacks(attacks);
+  }
+
+  /** Whitelisted engine-only public facts; E3 owns actual packet filtering. */
+  nationalPublicPoliticalView(): NationalPublicPoliticalView | null {
+    if (this._national === null) return null;
+    this.synchronizeNationalState();
+    return this._national.publicPoliticalView();
   }
 
   /** Complete NATIONAL victor roster; old game Winner schema stays unchanged. */

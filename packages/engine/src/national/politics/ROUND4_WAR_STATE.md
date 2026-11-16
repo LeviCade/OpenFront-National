@@ -111,6 +111,20 @@ Both ledgers validate and restore atomically into a candidate service.
 - Solo browser security is honest-client UX, not an adversarial browser
   confidentiality guarantee; trusted-host PvP remains a separate release gate.
 
+## E3/E4 public political read view
+
+`Game.nationalPublicPoliticalView(): NationalPublicPoliticalView | null`
+enumerates only sorted `empires:{id,leaderId,memberIds}[]`, the existing
+ten-second Ungovernable `warnings`, and the complete (nullable) `victory`
+roster, all derived from the same persisted `NationalRuntime`. A detached
+copy cannot mutate the Game. It expressly omits NAP/MDA terms, invitations,
+private governance votes, hidden unit positions or the raw WAR/LEVY ledger.
+`null` is returned in legacy games. E3 must whitelist and serialize these
+facts into authorized outgoing packets; E4 must use authoritative packet
+acknowledgements before treating a button click as successful. This E1
+Game-only service does NOT claim to implement E2's wire action schema or E3's
+worker output.
+
 ## Real-game acceptance
 
 \`tests/national/LiveWarPoliticalState.test.ts\` uses the actual \`GameImpl\`,

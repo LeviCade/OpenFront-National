@@ -54,6 +54,7 @@ import type {
 } from "../national/conflict/DefenseLevy";
 import type {
   NationalCommand,
+  NationalPublicPoliticalView,
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
 import type {
@@ -599,6 +600,8 @@ export interface Game extends GameLike {
   nationalPoliticalAuthority(): Readonly<
     NationalPoliticalAuthority & NationalConflictPoliticsPort
   > | null;
+  /** Enumerates public empire leaders/members and warning/victory facts only. */
+  nationalPublicPoliticalView(): NationalPublicPoliticalView | null;
   nationalVictoryRoster(): LastSovereignResult | null;
   nationalUngovernableWarnings(): readonly NationalUngovernableWarning[];
   /** Canonical E2 WarLedger-backed live query, never a mutable ledger. */

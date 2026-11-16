@@ -138,6 +138,20 @@ export interface NationalUngovernableWarning {
   blockedByAssetDisposition: boolean;
 }
 
+/**
+ * Whitelisted public political facts. No private pact terms, vote state,
+ * hidden-war ledger, unsighted units, or spoofable client command results.
+ */
+export interface NationalPublicPoliticalView {
+  readonly empires: readonly {
+    readonly id: string;
+    readonly leaderId: PlayerID;
+    readonly memberIds: readonly PlayerID[];
+  }[];
+  readonly warnings: readonly NationalUngovernableWarning[];
+  readonly victory: LastSovereignResult | null;
+}
+
 function requireCommandId(id: string): void {
   if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
     throw new Error("NATIONAL: invalid political command identifier");
@@ -268,6 +282,21 @@ export class NationalRuntime {
       .sort((a, b) =>
         a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0,
       );
+  }
+
+  /** Copy-only, opt-in NATIONAL public facts for E3/E4's trusted UI bridge. */
+  publicPoliticalView(): NationalPublicPoliticalView {
+    return {
+      empires: this.politics.empires
+        .map((e) => ({
+          id: e.id,
+          leaderId: e.leaderId,
+          memberIds: [...e.memberIds],
+        }))
+        .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+      warnings: this.ungovernableWarnings(),
+      victory: this.victoryRoster(),
+    };
   }
 
   /** Accept only the actor resolved from the real GameImpl player registry. */
