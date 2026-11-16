@@ -12,7 +12,7 @@ combined gameplay. A green standalone PR earns zero on its own.
 
 - E5 PR #26 independent QA is merged as infrastructure, not a full-browser
   gameplay acceptance.
-- E4 PR #27 guarded founding UI is merged. Founding *request* is clickable;
+- E4 PR #27 guarded founding UI is merged. Founding _request_ is clickable;
   a game-authoritative accepted/rejected result and political roster must
   still cross the worker boundary to prove full playability.
 - E1 PR #23 contains the canonical WAR/LEVY Game service and public view.
