@@ -39,6 +39,10 @@ import { createGame } from "./game/GameImpl";
 import { humanDisconnects, humanStatsSnapshot } from "./game/HumanStats";
 import { placeName, placeSpawnName } from "./game/NameBoxCalculator";
 import { createNationsForGame } from "./game/NationCreation";
+import {
+  persistNationalHumanSight,
+  restoreNationalHumanSight,
+} from "./national/observation/HumanSightPersistence";
 import { collectLiveNationalObservation } from "./national/observation/LiveObservation";
 import { NationalOutboundFilter } from "./national/observation/NationalOutbound";
 import {
@@ -185,6 +189,13 @@ export class GameRunner {
         game,
         this.nationalObserverId,
       );
+      if (this.nationalObserverId !== null) {
+        // Fresh reconnect/restore reads only the Game-owned E1 snapshot hook.
+        // Principal identity was resolved from the actual clientID registry.
+        this.nationalOutbound.restoreSightMemory(
+          restoreNationalHumanSight(game, this.nationalObserverId),
+        );
+      }
     } else {
       this.nationalObserverId = null;
       this.nationalOutbound = null;
@@ -435,9 +446,19 @@ export class GameRunner {
           this.game,
           this.nationalObserverId!,
         );
-        this.callBack(
-          this.nationalOutbound.project(this.game, fullPacket, verified),
+        const projected = this.nationalOutbound.project(
+          this.game,
+          fullPacket,
+          verified,
         );
+        // Advance and persist this authenticated human's sight at the
+        // canonical tick boundary before delivery or a subsequent snapshot.
+        persistNationalHumanSight(
+          this.game,
+          this.nationalObserverId!,
+          this.nationalOutbound.snapshotSightMemory(),
+        );
+        this.callBack(projected);
       }
     } else {
       this.callBack(fullPacket);
