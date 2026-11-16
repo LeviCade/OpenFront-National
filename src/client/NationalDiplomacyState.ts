@@ -30,6 +30,8 @@ export interface NationalPublicPolitics {
 export interface NationalFoundingResult {
   type: "national_found_empire";
   actorId: string;
+  /** E2 wire: recipient is bound to the authoritative viewer. */
+  recipientId: string;
   empireId: string;
   accepted: boolean;
   /** Deterministic engine tick; never inferred from UI dispatch. */
@@ -125,6 +127,8 @@ export function readNationalFoundingResults(
       !record(item) ||
       item.type !== "national_found_empire" ||
       typeof item.actorId !== "string" ||
+      typeof item.recipientId !== "string" ||
+      item.recipientId !== item.actorId ||
       typeof item.empireId !== "string" ||
       !validEmpireId(item.empireId) ||
       typeof item.accepted !== "boolean"
@@ -134,6 +138,7 @@ export function readNationalFoundingResults(
     results.push({
       type: "national_found_empire",
       actorId: item.actorId,
+      recipientId: item.recipientId,
       empireId: item.empireId,
       accepted: item.accepted,
       ...(typeof item.tick === "number" &&
@@ -238,6 +243,7 @@ export function reconcileNationalFounding(
   const outcome = view.results.find(
     (entry) =>
       entry.actorId === attempt.actorId &&
+      entry.recipientId === attempt.actorId &&
       entry.empireId === attempt.empireId &&
       typeof entry.tick === "number" &&
       entry.tick > attempt.issuedTick &&
