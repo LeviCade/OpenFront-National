@@ -77,7 +77,9 @@ import {
   NationalRuntime,
   NationalRuntimeSnapshotSchema,
   type NationalCommand,
+  type NationalUngovernableWarning,
 } from "../national/NationalRuntime";
+import type { LastSovereignResult } from "../national/politics/sovereignty";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathFinder } from "../pathfinding/types";
@@ -542,12 +544,25 @@ export class GameImpl implements Game {
   /** Sync the identity/territory picture after executions have changed it. */
   private synchronizeNationalState(): void {
     if (this._national === null) return;
+    // Read the eight live facts from real engine players after each tick.
+    const standingCount = (player: Player, type: UnitType): number =>
+      player.units(type).filter((unit) => unit.isActive() && !unit.isUnderConstruction())
+        .length;
     this._national.synchronize(
       this._playersBySmallID.map((p) => ({
         id: p.id(),
         alive: p.isAlive(),
         spawned: p.hasSpawned(),
-        land: p.numTilesOwned(),
+        metrics: {
+          land: p.numTilesOwned(),
+          maxPopulation: Math.floor(this._config.maxTroops(p)),
+          activePopulation: p.troops(),
+          cities: standingCount(p, UnitType.City),
+          factories: standingCount(p, UnitType.Factory),
+          ports: standingCount(p, UnitType.Port),
+          silos: standingCount(p, UnitType.MissileSilo),
+          warships: standingCount(p, UnitType.Warship),
+        },
       })),
       this._ticks,
       !this.inSpawnPhase(),
@@ -558,6 +573,18 @@ export class GameImpl implements Game {
   /** Never exposes the mutable PoliticsProjection to a caller. */
   nationalPoliticalAuthority(): Readonly<NationalPoliticalAuthority & NationalConflictPoliticsPort> | null {
     return this._national?.authority() ?? null;
+  }
+
+  /** Complete NATIONAL victor roster; old game Winner schema stays unchanged. */
+  nationalVictoryRoster(): LastSovereignResult | null {
+    this.synchronizeNationalState();
+    return this._national?.victoryRoster() ?? null;
+  }
+
+  /** Ten-second crisis deadlines in deterministic engine-time milliseconds. */
+  nationalUngovernableWarnings(): readonly NationalUngovernableWarning[] {
+    this.synchronizeNationalState();
+    return this._national?.ungovernableWarnings() ?? [];
   }
 
   nationalWinner(): PlayerID | null {

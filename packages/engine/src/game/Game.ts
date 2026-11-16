@@ -47,7 +47,11 @@ import {
 } from "@openfront/engine-api/Schemas";
 import { MotionPlanRecord } from "@openfront/engine-lib/game/MotionPlans";
 import type { EngineConfig } from "../configuration/EngineConfig";
-import type { NationalCommand } from "../national/NationalRuntime";
+import type {
+  NationalCommand,
+  NationalUngovernableWarning,
+} from "../national/NationalRuntime";
+import type { LastSovereignResult } from "../national/politics/sovereignty";
 import type {
   NationalPoliticalAuthority,
   NationalConflictPoliticsPort,
@@ -583,6 +587,8 @@ export interface Game extends GameLike {
   config(): EngineConfig;
   /** Single live NATIONAL political source for conflict/AI; null for legacy games. */
   nationalPoliticalAuthority(): Readonly<NationalPoliticalAuthority & NationalConflictPoliticsPort> | null;
+  nationalVictoryRoster(): LastSovereignResult | null;
+  nationalUngovernableWarnings(): readonly NationalUngovernableWarning[];
   nationalWinner(): PlayerID | null;
   performNationalCommand(actor: Player, command: NationalCommand): void;
   isPaused(): boolean;
