@@ -114,15 +114,17 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
       target: { kind: "nation", id: C },
     });
     const before = game.nationalWarState()!.wars.layers;
-    expect(game.nationalWarAuthority()?.atWar(A, C)).toBe(true);
-    expect(game.nationalWarAuthority()?.atWar(B, C)).toBe(false);
+    const capturedPort = game.nationalWarAuthority();
+    expect(capturedPort?.atWar(A, C)).toBe(true);
+    expect(capturedPort?.atWar(B, C)).toBe(false);
     game.performNationalCommand(game.player(B), {
       kind: "offer-empire", empireId: EMPIRE, candidateId: B,
     });
     game.performNationalCommand(game.player(A), {
       kind: "accept-empire", empireId: EMPIRE, candidateId: B,
     });
-    expect(game.nationalWarAuthority()?.atWar(B, C)).toBe(true);
+    expect(capturedPort?.atWar(B, C)).toBe(true);
+    expect(game.nationalWarAuthority()).toBe(capturedPort);
     expect(game.nationalWarState()!.wars.layers).toEqual(before);
     const { restored } = await roundTrip(game, "plains");
     expect(restored.nationalWarAuthority()?.atWar(B, C)).toBe(true);

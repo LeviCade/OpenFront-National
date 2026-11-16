@@ -202,6 +202,8 @@ export class GameImpl implements Game {
   private _national: NationalRuntime | null = null;
   /** E2 WAR/LEVY is canonically stored here, never in a WeakMap or fork. */
   private _nationalWar: NationalWarStateService | null = null;
+  /** Stable read port resolves the current Game-owned service after restore. */
+  private _nationalWarReadPort: Readonly<NationalWarAuthority> | null = null;
   /** Reusable detached read sources; only PlayerImpl owns real troop balances. */
   private readonly _nationalLevySources = new Map<PlayerID, TroopSource>();
   /** Cached query facade; the closure resolves the CURRENT runtime after restore. */
@@ -612,7 +614,20 @@ export class GameImpl implements Game {
 
   /** E2 WAR legality is read from the one Game-owned, persisted ledger. */
   nationalWarAuthority(): Readonly<NationalWarAuthority> | null {
-    return this._nationalWar?.authority ?? null;
+    if (this._nationalWar === null) return null;
+    this._nationalWarReadPort ??= Object.freeze({
+      authorizeOffensiveAction: (attackerId: string, targetId: string | null) =>
+        this._nationalWar?.authority.authorizeOffensiveAction(attackerId, targetId) ??
+        false,
+      atWar: (a: string, b: string) =>
+        this._nationalWar?.authority.atWar(a, b) ?? false,
+      snapshot: () => {
+        if (this._nationalWar === null)
+          throw new Error("NATIONAL war: mode not enabled");
+        return this._nationalWar.snapshot();
+      },
+    });
+    return this._nationalWarReadPort;
   }
 
   /** Detached canonical WAR/LEVY state; cannot mutate active war records. */
