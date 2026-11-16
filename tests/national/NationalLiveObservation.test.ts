@@ -19,6 +19,7 @@ import {
   planNationalInterest,
 } from "@openfront/engine/national/ai/NationalPlanner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
+import { advanceLastKnown } from "@openfront/engine/national/observation/NationalObservation";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
