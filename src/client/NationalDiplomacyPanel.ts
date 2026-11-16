@@ -200,14 +200,15 @@ export class NationalDiplomacyPanel extends LitElement {
     const game = this.game;
     if (
       game?.config().gameConfig().nationalMode !== true ||
-      game.config().gameConfig().gameType !== GameType.Singleplayer ||
-      game.config().isReplay()
+      game.config().gameConfig().gameType !== GameType.Singleplayer
     ) {
       return nothing;
     }
     const politics = game.nationalPolitics();
     const ownEmpire = this.memberEmpire;
-    const canFound = this.unavailableReason === null;
+    const canFound = this.unavailableReason === null &&
+      politics !== null && !game.config().isReplay();
+    const readonlyReplay = game.config().isReplay();
     return html`
       <section
         class="text-white w-[min(25rem,calc(100vw-1rem))] max-w-full rounded-xl border border-amber-400/50 bg-slate-950/95 shadow-xl backdrop-blur-sm overflow-hidden"
@@ -270,6 +271,28 @@ export class NationalDiplomacyPanel extends LitElement {
                       </p>`
                 }
                 ${
+                  politics?.warnings.length
+                    ? html`<div
+                        class="rounded-lg border border-orange-400/60 bg-orange-900/30 p-3 space-y-2"
+                        role="alert"
+                      >
+                        <h2 class="font-semibold text-orange-200">
+                          Ungovernable warnings
+                        </h2>
+                        ${politics.warnings.map(
+                          (warning) => html`<p class="text-sm text-orange-100">
+                            Empire <strong>${warning.empireId}</strong>:
+                            ${Math.ceil(warning.remainingMs / 1000)} seconds
+                            to the recorded deadline.
+                            ${warning.blockedByAssetDisposition
+                              ? "Dissolution is deferred pending asset-disposition rules."
+                              : "Review imperial control and succession."}
+                          </p>`,
+                        )}
+                      </div>`
+                    : nothing
+                }
+                ${
                   ownEmpire
                     ? html`<p
                         class="rounded-lg bg-emerald-900/35 p-3 text-emerald-200"
@@ -281,7 +304,11 @@ export class NationalDiplomacyPanel extends LitElement {
                             : `Emperor: ${this.playerName(ownEmpire.leaderId)}.`
                         }
                       </p>`
-                    : html`<form
+                    : readonlyReplay
+                      ? html`<p class="text-xs text-slate-300" role="status">
+                          Replay is read-only. Empire founding is unavailable.
+                        </p>`
+                      : html`<form
                         class="space-y-2"
                         @submit=${this.submitFounding}
                       >
@@ -320,7 +347,7 @@ export class NationalDiplomacyPanel extends LitElement {
                           class="rounded-lg bg-amber-400 px-4 py-2 font-bold text-slate-950 hover:bg-amber-300 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
                           ?disabled=${!canFound || !this.eventBus}
                         >
-                          ${this.pendingEmpireId ? "Founding requested…" : "Found Empire"}
+                          ${this.pendingEmpireId ? "Awaiting game result…" : "Found Empire"}
                         </button>
                         ${
                           this.unavailableReason
