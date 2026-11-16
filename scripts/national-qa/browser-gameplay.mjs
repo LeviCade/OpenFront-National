@@ -96,11 +96,20 @@ function cdp(webSocket) {
     if (packet.method === "Runtime.consoleAPICalled") {
       browserConsole.push({
         severity: packet.params?.type,
-        text: (packet.params?.args ?? []).map((arg) => arg.value ?? arg.description ?? "").join(" ").slice(0, 1200),
+        text: (packet.params?.args ?? [])
+          .map((arg) => arg.value ?? arg.description ?? "")
+          .join(" ")
+          .slice(0, 1200),
       });
     }
     if (packet.method === "Runtime.exceptionThrown") {
-      browserConsole.push({ severity: "exception", text: String(packet.params?.exceptionDetails?.text ?? "").slice(0, 1200) });
+      browserConsole.push({
+        severity: "exception",
+        text: String(packet.params?.exceptionDetails?.text ?? "").slice(
+          0,
+          1200,
+        ),
+      });
     }
     if (packet.method === "Network.loadingFailed") {
       browserNetworkErrors.push({
@@ -535,30 +544,47 @@ async function main() {
           return rect ? {x:rect.x+rect.width*${u},y:rect.y+rect.height*${v}}:null;
         })()`);
         if (!canvas) throw Error("Playable canvas not found");
-        await hit(canvas.x,canvas.y);
+        await hit(canvas.x, canvas.y);
         await sleep(750);
       }
-      await poll(() => locate("^Found Empire$", "national-diplomacy-panel"), "authenticated player spawned and Found Empire enabled", 55, 350);
+      await poll(
+        () => locate("^Found Empire$", "national-diplomacy-panel"),
+        "authenticated player spawned and Found Empire enabled",
+        55,
+        350,
+      );
       await capture("player-spawned");
     });
-    await step("found-empire",async()=>{
-      const empireId="R5_Browser_QA";
-      await fill("#national-empire-id",empireId);
-      await click("^Found Empire$", "national-diplomacy-panel",40);
+    await step("found-empire", async () => {
+      const empireId = "R5_Browser_QA";
+      await fill("#national-empire-id", empireId);
+      await click("^Found Empire$", "national-diplomacy-panel", 40);
       await capture("founding-request");
-      const result = await poll(async()=>{
-        const text=await evaluate("window.__nationalQaFind('national-diplomacy-panel')?.innerText ?? ''");
-        const pkts=await worker();
-        const truth = pkts.some((p)=>
-          p.publicPolitics?.empires?.some((e)=>e.id===empireId) &&
-          p.commandResults?.some((e)=>e.empireId===empireId && e.accepted===true)
-        );
-        return truth && text.includes("Confirmed by game") ? {text:text.slice(0,300)}:null;
-      },"E1-authoritative accepted result AND worker public roster AND UI confirmation",65,350);
-      record("authoritative-empire-accepted",result);
+      const result = await poll(
+        async () => {
+          const text = await evaluate(
+            "window.__nationalQaFind('national-diplomacy-panel')?.innerText ?? ''",
+          );
+          const pkts = await worker();
+          const truth = pkts.some(
+            (p) =>
+              p.publicPolitics?.empires?.some((e) => e.id === empireId) &&
+              p.commandResults?.some(
+                (e) => e.empireId === empireId && e.accepted === true,
+              ),
+          );
+          return truth && text.includes("Confirmed by game")
+            ? { text: text.slice(0, 300) }
+            : null;
+        },
+        "E1-authoritative accepted result AND worker public roster AND UI confirmation",
+        65,
+        350,
+      );
+      record("authoritative-empire-accepted", result);
       await capture("confirmed-empire");
     });
-    await step("rejected-founding",async()=>{
+    await step("rejected-founding", async () => {
       // Duplicate founding is intentionally injected through the application's
       // real EventBus and Transport, NOT by faking any game/worker state.
       // The UI correctly hides its form after founding; the authenticated
@@ -571,65 +597,121 @@ async function main() {
         return 'existing authenticated transport emitted duplicate';
       })()`);
       if (request !== "existing authenticated transport emitted duplicate") {
-        throw Error("Could not trigger actual duplicate founding via live event bus: " + request);
+        throw Error(
+          "Could not trigger actual duplicate founding via live event bus: " +
+            request,
+        );
       }
-      const rejection = await poll(async()=>{
-        const pkts=await worker();
-        return pkts.some((p)=>p.commandResults?.some((r)=>
-          r.type==="national_found_empire" &&
-          r.empireId==="R5_Browser_QA" &&
-          r.accepted===false
-        ));
-      },"actual worker-scoped rejected duplicate founding",65,350);
-      if (!rejection) throw Error("Engine did not reject duplicate founded empire");
+      const rejection = await poll(
+        async () => {
+          const pkts = await worker();
+          return pkts.some((p) =>
+            p.commandResults?.some(
+              (r) =>
+                r.type === "national_found_empire" &&
+                r.empireId === "R5_Browser_QA" &&
+                r.accepted === false,
+            ),
+          );
+        },
+        "actual worker-scoped rejected duplicate founding",
+        65,
+        350,
+      );
+      if (!rejection)
+        throw Error("Engine did not reject duplicate founded empire");
       record("authoritative-duplicate-rejected");
       await capture("founding-rejected");
     });
-    await step("save-restore",async()=>{
+    await step("save-restore", async () => {
       const rosterPackets = await worker();
-      const lastRoster = [...rosterPackets].reverse().find((p)=>p.publicPolitics?.empires)?.publicPolitics;
-      if(!lastRoster?.empires?.some((e)=>e.id==="R5_Browser_QA")) {
-        throw Error("Cannot save without authoritative public political roster");
+      const lastRoster = [...rosterPackets]
+        .reverse()
+        .find((p) => p.publicPolitics?.empires)?.publicPolitics;
+      if (!lastRoster?.empires?.some((e) => e.id === "R5_Browser_QA")) {
+        throw Error(
+          "Cannot save without authoritative public political roster",
+        );
       }
       await clickSelector('img[alt="settings"]');
       // The live game may permit saving only for a signed-in user. A
       // deliberately denied raw NATIONAL worker snapshot MUST remain denied.
-      if (!await evaluate("!!window.__nationalQaFind('[data-save-game]')")) {
-        throw Error("No authenticated trusted-host save path available for NATIONAL Solo");
+      if (!(await evaluate("!!window.__nationalQaFind('[data-save-game]')"))) {
+        throw Error(
+          "No authenticated trusted-host save path available for NATIONAL Solo",
+        );
       }
-      await clickSelector('[data-save-game]');
-      await poll(async()=>{
-        const status=await evaluate("window.__nationalQaFind('[data-save-status]')?.innerText ?? ''");
-        return /saved|success/i.test(status) && !/failed|error|unavailable/i.test(status);
-      },"verified saved game acknowledgement",65);
+      await clickSelector("[data-save-game]");
+      await poll(
+        async () => {
+          const status = await evaluate(
+            "window.__nationalQaFind('[data-save-status]')?.innerText ?? ''",
+          );
+          return (
+            /saved|success/i.test(status) &&
+            !/failed|error|unavailable/i.test(status)
+          );
+        },
+        "verified saved game acknowledgement",
+        65,
+      );
       await capture("saved-confirmed");
-      await send("Page.navigate",{url:base});
-      await poll(()=>locate("^solo$"),"returned home for save restore",95);
+      await send("Page.navigate", { url: base });
+      await poll(() => locate("^solo$"), "returned home for save restore", 95);
       await click("^solo$");
-      await clickSelector('[data-saved-games-toggle]');
-      await poll(()=>evaluate("!!window.__nationalQaFind('[data-save-id] [data-action=play]')"),"trusted-host saved game row",70);
-      const savedId=await evaluate("window.__nationalQaFind('[data-save-id]')?.getAttribute('data-save-id')");
-      await clickSelector('[data-save-id] [data-action=play]');
-      const restored = await poll(async()=>{
-        const packets=await worker();
-        const publicView=[...packets].reverse().find((p)=>p.publicPolitics?.empires)?.publicPolitics;
-        return publicView?.empires?.some((e)=>e.id==="R5_Browser_QA")?publicView:null;
-      },"restored authoritative political roster",100,300);
-      if (JSON.stringify(restored.empires) !== JSON.stringify(lastRoster.empires)) {
-        throw Error("NATIONAL restored authoritative roster differs from saved roster");
+      await clickSelector("[data-saved-games-toggle]");
+      await poll(
+        () =>
+          evaluate(
+            "!!window.__nationalQaFind('[data-save-id] [data-action=play]')",
+          ),
+        "trusted-host saved game row",
+        70,
+      );
+      const savedId = await evaluate(
+        "window.__nationalQaFind('[data-save-id]')?.getAttribute('data-save-id')",
+      );
+      await clickSelector("[data-save-id] [data-action=play]");
+      const restored = await poll(
+        async () => {
+          const packets = await worker();
+          const publicView = [...packets]
+            .reverse()
+            .find((p) => p.publicPolitics?.empires)?.publicPolitics;
+          return publicView?.empires?.some((e) => e.id === "R5_Browser_QA")
+            ? publicView
+            : null;
+        },
+        "restored authoritative political roster",
+        100,
+        300,
+      );
+      if (
+        JSON.stringify(restored.empires) !== JSON.stringify(lastRoster.empires)
+      ) {
+        throw Error(
+          "NATIONAL restored authoritative roster differs from saved roster",
+        );
       }
-      record("trusted-host-save-restore-passed",{savedId,empires:restored.empires.length});
+      record("trusted-host-save-restore-passed", {
+        savedId,
+        empires: restored.empires.length,
+      });
       await capture("restored-roster");
     });
-    await step("sovereign-victory",async()=>{
-      const pkts=await worker();
-      if(!pkts.some((p)=>p.publicPolitics?.victor ?? p.publicPolitics?.victors)) {
-        throw Error("No authoritative sovereign-victory packet observed in actual Chromium game");
+    await step("sovereign-victory", async () => {
+      const pkts = await worker();
+      if (
+        !pkts.some((p) => p.publicPolitics?.victor ?? p.publicPolitics?.victors)
+      ) {
+        throw Error(
+          "No authoritative sovereign-victory packet observed in actual Chromium game",
+        );
       }
       await capture("sovereign-victory");
     });
   } finally {
-    await worker().catch(()=>{});
+    await worker().catch(() => {});
     persist();
     ws.close();
   }
