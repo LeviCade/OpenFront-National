@@ -112,8 +112,9 @@ export class GameRightSidebar extends LitElement implements Controller {
 
     this.eventBus.on(NationalTransportStatusEvent, (e) => {
       if (!e.ready && e.gameID === this.game.gameID()) {
-        this.nationalPanel?.connectionInterrupted();
         this.game.invalidateNationalPoliticalView?.();
+        this.nationalPanel?.connectionInterrupted();
+        this.nationalPanel?.refresh();
       }
     });
 
