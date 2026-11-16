@@ -136,7 +136,7 @@ describe("NATIONAL player-facing founding", () => {
     element.refresh();
     await element.updateComplete;
     expect(element.textContent).toContain("You are the emperor.");
-    expect(element.textContent).toContain("Leader: A Nation");
+    expect(element.textContent).toMatch(/Leader:\s+A Nation/);
     expect(element.querySelector('button[type="submit"]')).toBeNull();
   });
 
