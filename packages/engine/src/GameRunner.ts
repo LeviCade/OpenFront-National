@@ -395,7 +395,13 @@ export class GameRunner {
       updates[GameUpdateType.Unit] = [];
     }
 
+    // E1's detached public political view is the sole source for NATIONAL
+    // roster, crisis and victory UI. A queued intent is never an acceptance.
+    const nationalPolitics = this.game.config().nationalMode()
+      ? this.game.nationalPublicPoliticalView()
+      : null;
     const fullPacket: GameUpdateViewData = {
+      ...(nationalPolitics === null ? {} : { nationalPolitics }),
       tick: this.game.ticks(),
       packedTileUpdates,
       ...(packedMotionPlans ? { packedMotionPlans } : {}),
