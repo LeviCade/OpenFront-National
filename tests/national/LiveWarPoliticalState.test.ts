@@ -103,6 +103,32 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     expect(game.nationalWarState()!.wars.layers).toHaveLength(2);
   });
 
+  it("COAL-06/WAR-03: live accession expands an existing imperial war but never rewrites stable layer IDs", async () => {
+    const game = await live();
+    game.performNationalCommand(game.player(A), {
+      kind: "found-empire", empireId: EMPIRE,
+    });
+    game.performNationalWarCommand(game.player(A), {
+      kind: "declare-imperial", warId: "r4-before-accession",
+      aggressor: { kind: "empire", id: EMPIRE },
+      target: { kind: "nation", id: C },
+    });
+    const before = game.nationalWarState()!.wars.layers;
+    expect(game.nationalWarAuthority()?.atWar(A, C)).toBe(true);
+    expect(game.nationalWarAuthority()?.atWar(B, C)).toBe(false);
+    game.performNationalCommand(game.player(B), {
+      kind: "offer-empire", empireId: EMPIRE, candidateId: B,
+    });
+    game.performNationalCommand(game.player(A), {
+      kind: "accept-empire", empireId: EMPIRE, candidateId: B,
+    });
+    expect(game.nationalWarAuthority()?.atWar(B, C)).toBe(true);
+    expect(game.nationalWarState()!.wars.layers).toEqual(before);
+    const { restored } = await roundTrip(game, "plains");
+    expect(restored.nationalWarAuthority()?.atWar(B, C)).toBe(true);
+    expect(restored.nationalWarState()).toEqual(game.nationalWarState());
+  });
+
   it("WAR-04/07: crown transfer updates authority immediately; imperial peace leaves national war intact", async () => {
     const game = await live();
     joined(game);

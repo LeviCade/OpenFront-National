@@ -2028,7 +2028,11 @@ export class GameImpl implements Game {
         this.nationalTroopDebits(),
       );
       // v2 snapshot migration supplies null (no WAR/LEVY records yet).
-      if (s.nationalWar !== null) this._nationalWar.restore(s.nationalWar);
+      if (s.nationalWar !== null) {
+        if (s.nationalWar.wars.lastTick > this._ticks)
+          throw new Error("NATIONAL WAR: future conflict snapshot");
+        this._nationalWar.restore(s.nationalWar);
+      }
     } else {
       if (s.national !== null)
         throw new Error("NATIONAL data in legacy snapshot");
