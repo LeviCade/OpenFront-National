@@ -6,7 +6,7 @@
  * already owned plus one cardinal tile from a real border. This is a
  * conservative, verifiable subset, not an invented 100/200-tile policy.
  */
-import { UnitType } from "@openfront/engine-api/game/GameTypes";
+import { PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import type { TileRef } from "@openfront/engine-api/game/GameMap";
 import type { Game, Player } from "../../game/Game";
 import {
@@ -139,7 +139,7 @@ export function collectLiveNationalObservation(
           ? (100 * p.numTilesOwned()) / game.totalLandTiles()
           : 0,
       status,
-      controllerKind: p.type() === "human" ? "human" as const : "ai" as const,
+      controllerKind: p.type() === PlayerType.Human ? "human" as const : "ai" as const,
       troops: p.troops(),
       treasury: Number(p.gold()),
     };
