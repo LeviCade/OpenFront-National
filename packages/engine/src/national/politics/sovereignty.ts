@@ -633,9 +633,7 @@ export function evaluateUngovernable(
       target.crisisDeadlineMs = null;
       continue;
     }
-    if (target.crisisDeadlineMs === null) {
-      target.crisisDeadlineMs = simulationMs + IMPERIAL_CRISIS_MS;
-    }
+    target.crisisDeadlineMs ??= simulationMs + IMPERIAL_CRISIS_MS;
     if (simulationMs >= target.crisisDeadlineMs) {
       collapsed.push(e);
       dissolve(next, e);
