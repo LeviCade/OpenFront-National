@@ -12,7 +12,7 @@ is explicit and serializable. Callers must use the conductor's M0 adapter to
 commit a returned transition atomically into the game and replay stream.
 The engine MUST NOT invoke this code in legacy modes.
 
-- **D-003/004, SOV-01..07:** last living independent *or* empire, never a
+- **D-003/004, SOV-01..07:** last living independent _or_ empire, never a
   percentage/timeout check; no false win for NAP/MDA; no requirement to own
   unclaimed land; typed Imperial/Empire/Sovereign prizes.
 - **D-006/007, COAL-01..05/07:** ordinary multi-membership,

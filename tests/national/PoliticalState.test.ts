@@ -28,10 +28,15 @@ import {
 } from "../../packages/engine/src/national/politics/sovereignty";
 
 const leaderTerms: PactTerms = { admission: "leader", expulsion: "forbidden" };
-const unanimousTerms: PactTerms = { admission: "unanimous", expulsion: "unanimous" };
+const unanimousTerms: PactTerms = {
+  admission: "unanimous",
+  expulsion: "unanimous",
+};
 
 function metrics(value: number): PoliticsMetrics {
-  return Object.fromEntries(METRIC_KEYS.map((key) => [key, value])) as PoliticsMetrics;
+  return Object.fromEntries(
+    METRIC_KEYS.map((key) => [key, value]),
+  ) as PoliticsMetrics;
 }
 
 function nation(id: string, value = 10): PoliticsNation {
@@ -42,7 +47,12 @@ function world(...ids: string[]): PoliticsProjection {
   return initialPolitics(ids.map((id) => nation(id)));
 }
 
-function pactWith(worldState: PoliticsProjection, pactId: string, kind: "NAP" | "MDA", members: string[]) {
+function pactWith(
+  worldState: PoliticsProjection,
+  pactId: string,
+  kind: "NAP" | "MDA",
+  members: string[],
+) {
   let state = foundPact(worldState, {
     id: pactId,
     name: "Treaty " + pactId,
@@ -57,7 +67,12 @@ function pactWith(worldState: PoliticsProjection, pactId: string, kind: "NAP" | 
   return state;
 }
 
-function empireWith(worldState: PoliticsProjection, empireId: string, leader: string, members: string[]) {
+function empireWith(
+  worldState: PoliticsProjection,
+  empireId: string,
+  leader: string,
+  members: string[],
+) {
   let state = foundEmpire(worldState, empireId, leader);
   for (const candidate of members) {
     state = proposeEmpireAccession(state, empireId, leader, candidate);
@@ -68,7 +83,11 @@ function empireWith(worldState: PoliticsProjection, empireId: string, leader: st
 
 describe("NATIONAL sovereignty victory (D-003, D-004)", () => {
   it("SOV-01: 99% empire cannot win against one-tile independent island", () => {
-    let s = initialPolitics([nation("emperor", 9900), nation("vassal", 900), nation("island", 1)]);
+    let s = initialPolitics([
+      nation("emperor", 9900),
+      nation("vassal", 900),
+      nation("island", 1),
+    ]);
     s = empireWith(s, "empire", "emperor", ["vassal"]);
     expect(lastSovereignVictory(s)).toEqual({
       sovereignPowerCount: 2,
@@ -99,7 +118,9 @@ describe("NATIONAL sovereignty victory (D-003, D-004)", () => {
       nationId: "king",
       empireId: "e",
     });
-    expect(victory.prizes.slice(1).map((p) => p.nationId)).toEqual([...members].sort());
+    expect(victory.prizes.slice(1).map((p) => p.nationId)).toEqual(
+      [...members].sort(),
+    );
   });
 
   it("SOV-04: leadership transfer before victory changes supreme winner, not membership", () => {
@@ -127,7 +148,12 @@ describe("NATIONAL sovereignty victory (D-003, D-004)", () => {
   });
 
   it("SOV-05: one tie in any metric blocks crisis; recovery clears existing warning", () => {
-    let s = empireWith(initialPolitics([nation("weak", 1), nation("strong", 2)]), "e", "weak", ["strong"]);
+    let s = empireWith(
+      initialPolitics([nation("weak", 1), nation("strong", 2)]),
+      "e",
+      "weak",
+      ["strong"],
+    );
     s.nations[0].metrics.cities = 2;
     expect(evaluateUngovernable(s, 1000).warnings).toEqual([]);
     s.nations[0].metrics.cities = 1;
@@ -139,9 +165,16 @@ describe("NATIONAL sovereignty victory (D-003, D-004)", () => {
   });
 
   it("SOV-05: transfer before deadline resolves crisis and expired transfer is rejected", () => {
-    let s = empireWith(initialPolitics([nation("weak", 1), nation("strong", 2)]), "e", "weak", ["strong"]);
+    let s = empireWith(
+      initialPolitics([nation("weak", 1), nation("strong", 2)]),
+      "e",
+      "weak",
+      ["strong"],
+    );
     s = evaluateUngovernable(s, 0).state;
-    expect(() => transferCrown(s, "e", "weak", "strong", 10000)).toThrow(/deadline/);
+    expect(() => transferCrown(s, "e", "weak", "strong", 10000)).toThrow(
+      /deadline/,
+    );
     const transferred = transferCrown(s, "e", "weak", "strong", 9999);
     expect(transferred.empires[0].leaderId).toBe("strong");
     expect(evaluateUngovernable(transferred, 10000).collapsed).toEqual([]);
@@ -157,7 +190,10 @@ describe("NATIONAL sovereignty victory (D-003, D-004)", () => {
   });
 
   it("SOV-07: one independent nation wins despite unclaimed territory", () => {
-    const s = initialPolitics([nation("survivor", 1), { ...nation("gone"), alive: false }]);
+    const s = initialPolitics([
+      nation("survivor", 1),
+      { ...nation("gone"), alive: false },
+    ]);
     expect(lastSovereignVictory(s)).toEqual({
       sovereignPowerCount: 1,
       resolved: true,
@@ -195,7 +231,9 @@ describe("NATIONAL constitutional coalitions (D-006, D-007, D-009, D-013)", () =
     expect(viewPact(s, "nap", "a").terms).toEqual(leaderTerms);
     s = inviteToPact(s, "nap", "a", "b");
     expect(viewPact(s, "nap", "b").terms).toEqual(leaderTerms);
-    expect(JSON.stringify(viewPact(s, "nap", "outsider"))).not.toContain("expulsion");
+    expect(JSON.stringify(viewPact(s, "nap", "outsider"))).not.toContain(
+      "expulsion",
+    );
   });
 
   it("COAL-03: leader can admit, only unanimous consent can amend, compliant members cannot be expelled", () => {
@@ -206,7 +244,10 @@ describe("NATIONAL constitutional coalitions (D-006, D-007, D-009, D-013)", () =
     s = acceptPactInvitation(s, "nap", "c");
     expect(s.pacts[0].memberIds).toEqual(["a", "b", "c"]);
     expect(() =>
-      amendPact(s, "nap", { terms: unanimousTerms, administratorId: "a" }, ["a", "b"]),
+      amendPact(s, "nap", { terms: unanimousTerms, administratorId: "a" }, [
+        "a",
+        "b",
+      ]),
     ).toThrow(/unanimous/);
     expect(s.pacts[0].terms).toEqual(leaderTerms);
   });
@@ -242,20 +283,26 @@ describe("NATIONAL constitutional coalitions (D-006, D-007, D-009, D-013)", () =
     expect(joined.pacts).toEqual([]); // remaining one-party contracts cease to exist
     expect(joined.accessionOffers).toEqual([]);
     expect(s.pacts).toHaveLength(2);
-    expect(() => foundPact(joined, {
-      id: "illegal",
-      name: "Illegal",
-      kind: "NAP",
-      founderId: "a",
-      terms: leaderTerms,
-    })).toThrow(/exclusive/);
-    expect(() => proposeEmpireAccession(joined, "e", "emperor", "a")).toThrow(/exclusive/);
+    expect(() =>
+      foundPact(joined, {
+        id: "illegal",
+        name: "Illegal",
+        kind: "NAP",
+        founderId: "a",
+        terms: leaderTerms,
+      }),
+    ).toThrow(/exclusive/);
+    expect(() => proposeEmpireAccession(joined, "e", "emperor", "a")).toThrow(
+      /exclusive/,
+    );
   });
 
   it("COAL-06: emperor invitation requires candidate acceptance, not emperor self-acceptance", () => {
     let s = foundEmpire(world("e", "a"), "imperium", "e");
     s = proposeEmpireAccession(s, "imperium", "e", "a");
-    expect(() => acceptEmpireAccession(s, "imperium", "e", "a")).toThrow(/consent/);
+    expect(() => acceptEmpireAccession(s, "imperium", "e", "a")).toThrow(
+      /consent/,
+    );
     const joined = acceptEmpireAccession(s, "imperium", "a", "a");
     expect(joined.empires[0].memberIds).toEqual(["a", "e"]);
   });
@@ -263,7 +310,10 @@ describe("NATIONAL constitutional coalitions (D-006, D-007, D-009, D-013)", () =
   it("COAL-07: one veto leaves constitutional text untouched", () => {
     const s = pactWith(world("a", "b", "c"), "mda", "MDA", ["a", "b", "c"]);
     expect(() =>
-      amendPact(s, "mda", { terms: unanimousTerms, administratorId: "b" }, ["a", "c"]),
+      amendPact(s, "mda", { terms: unanimousTerms, administratorId: "b" }, [
+        "a",
+        "c",
+      ]),
     ).toThrow(/unanimous/);
     expect(s.pacts[0].administratorId).toBe("a");
     expect(s.pacts[0].terms).toEqual(leaderTerms);
@@ -279,11 +329,18 @@ describe("NATIONAL constitutional coalitions (D-006, D-007, D-009, D-013)", () =
 
   it("unanimous admission waits for every existing member approval", () => {
     let s = pactWith(world("a", "b", "c"), "mda", "MDA", ["a", "b"]);
-    s = amendPact(s, "mda", { terms: unanimousTerms, administratorId: "a" }, ["a", "b"]);
+    s = amendPact(s, "mda", { terms: unanimousTerms, administratorId: "a" }, [
+      "a",
+      "b",
+    ]);
     s = inviteToPact(s, "mda", "a", "c");
     expect(() => acceptPactInvitation(s, "mda", "c")).toThrow(/approvals/);
     s = approvePactInvitation(s, "mda", "b", "c");
-    expect(acceptPactInvitation(s, "mda", "c").pacts[0].memberIds).toEqual(["a", "b", "c"]);
+    expect(acceptPactInvitation(s, "mda", "c").pacts[0].memberIds).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
   });
 
   it("imperial members cannot secede; only incumbent emperor can dissolve or transfer", () => {
@@ -311,14 +368,21 @@ describe("determinism, invariants, replay and command boundaries", () => {
       return { state: s, victory: lastSovereignVictory(s) };
     }
     expect(JSON.stringify(simulate())).toBe(JSON.stringify(simulate()));
-    const roundTrip = JSON.parse(JSON.stringify(simulate().state)) as PoliticsProjection;
+    const roundTrip = JSON.parse(
+      JSON.stringify(simulate().state),
+    ) as PoliticsProjection;
     expect(lastSovereignVictory(roundTrip)).toEqual(simulate().victory);
   });
 
   it("invalid snapshot double-membership and leaderless empire are rejected", () => {
     const s = empireWith(world("a", "b"), "e", "a", ["b"]);
     const bad = structuredClone(s);
-    bad.empires.push({ id: "e2", leaderId: "b", memberIds: ["b"], crisisDeadlineMs: null });
+    bad.empires.push({
+      id: "e2",
+      leaderId: "b",
+      memberIds: ["b"],
+      crisisDeadlineMs: null,
+    });
     expect(() => validatePolitics(bad)).toThrow(/multiple empires/);
     const leaderless = structuredClone(s);
     leaderless.empires[0].leaderId = "outsider";
@@ -326,7 +390,12 @@ describe("determinism, invariants, replay and command boundaries", () => {
   });
 
   it("simulation clock is monotonic; repeated evaluation is idempotent", () => {
-    let s = empireWith(initialPolitics([nation("a", 1), nation("b", 2)]), "e", "a", ["b"]);
+    let s = empireWith(
+      initialPolitics([nation("a", 1), nation("b", 2)]),
+      "e",
+      "a",
+      ["b"],
+    );
     s = evaluateUngovernable(s, 700).state;
     expect(evaluateUngovernable(s, 700).state).toEqual(s);
     expect(() => evaluateUngovernable(s, 699)).toThrow(/monotonic/);
