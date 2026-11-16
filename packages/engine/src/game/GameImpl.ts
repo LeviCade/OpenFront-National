@@ -69,18 +69,6 @@ import {
 import { NationExecution } from "../execution/NationExecution";
 import { SpawnTimerExecution } from "../execution/SpawnTimerExecution";
 import { TribeExecution } from "../execution/TribeExecution";
-import {
-  NationalRuntime,
-  NationalRuntimeSnapshotSchema,
-  type NationalCommand,
-  type NationalUngovernableWarning,
-} from "../national/NationalRuntime";
-import {
-  PoliticalAuthorityAdapter,
-  type NationalPoliticalAuthority,
-  type NationalConflictPoliticsPort,
-} from "../national/politics/PoliticalAuthorityAdapter";
-import type { LastSovereignResult } from "../national/politics/sovereignty";
 import type {
   DefenseResult,
   IncomingDefense,
@@ -89,12 +77,24 @@ import type {
   TroopSource,
 } from "../national/conflict/DefenseLevy";
 import {
+  NationalRuntime,
+  NationalRuntimeSnapshotSchema,
+  type NationalCommand,
+  type NationalUngovernableWarning,
+} from "../national/NationalRuntime";
+import {
   NationalWarStateService,
   NationalWarStateSnapshotSchema,
   type NationalWarAuthority,
   type NationalWarCommand,
   type NationalWarStateSnapshot,
 } from "../national/politics/NationalWarState";
+import {
+  PoliticalAuthorityAdapter,
+  type NationalPoliticalAuthority,
+  type NationalConflictPoliticsPort,
+} from "../national/politics/PoliticalAuthorityAdapter";
+import type { LastSovereignResult } from "../national/politics/sovereignty";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathFinder } from "../pathfinding/types";
@@ -617,8 +617,10 @@ export class GameImpl implements Game {
     if (this._nationalWar === null) return null;
     this._nationalWarReadPort ??= Object.freeze({
       authorizeOffensiveAction: (attackerId: string, targetId: string | null) =>
-        this._nationalWar?.authority.authorizeOffensiveAction(attackerId, targetId) ??
-        false,
+        this._nationalWar?.authority.authorizeOffensiveAction(
+          attackerId,
+          targetId,
+        ) ?? false,
       atWar: (a: string, b: string) =>
         this._nationalWar?.authority.atWar(a, b) ?? false,
       snapshot: () => {
@@ -699,12 +701,19 @@ export class GameImpl implements Game {
             throw new Error("NATIONAL levy: invalid or stale real troop debit");
           }
           ids.add(id);
-          return { id, p, expected: d.expectedBalance, next: d.resultingBalance, debit: d.debit };
+          return {
+            id,
+            p,
+            expected: d.expectedBalance,
+            next: d.resultingBalance,
+            debit: d.debit,
+          };
         });
         let finalized = false;
         return {
           approved: staged.map((d) => ({
-            nationId: d.id, troopsDebited: d.debit,
+            nationId: d.id,
+            troopsDebited: d.debit,
           })),
           commit: () => {
             if (finalized) throw new Error("NATIONAL levy: already finalized");
@@ -746,7 +755,8 @@ export class GameImpl implements Game {
       if (alreadyProcessed.has(attack.attackId)) continue;
       if (
         !this._nationalWar.authority.authorizeOffensiveAction(
-          attack.attackerId, attack.defenderId,
+          attack.attackerId,
+          attack.defenderId,
         )
       ) {
         throw new Error("NATIONAL levy: attack not formally authorized");
@@ -762,7 +772,9 @@ export class GameImpl implements Game {
               p.memberIds.includes(id),
           )
         ) {
-          throw new Error("NATIONAL levy: not an authoritative MDA contributor");
+          throw new Error(
+            "NATIONAL levy: not an authoritative MDA contributor",
+          );
         }
       }
     }

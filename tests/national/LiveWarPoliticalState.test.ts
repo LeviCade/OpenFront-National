@@ -21,7 +21,11 @@ const EMPIRE = "r4-empire";
 
 async function live(count = 3, nationalMode = true): Promise<Game> {
   const game = await setup("plains", { nationalMode }, players.slice(0, count));
-  const tiles = [game.map().ref(30, 30), game.map().ref(70, 70), game.map().ref(30, 70)];
+  const tiles = [
+    game.map().ref(30, 30),
+    game.map().ref(70, 70),
+    game.map().ref(30, 70),
+  ];
   for (let i = 0; i < count; i++) {
     game.addExecution(new SpawnExecution("r4-bridge", players[i], tiles[i]));
   }
@@ -34,22 +38,31 @@ async function live(count = 3, nationalMode = true): Promise<Game> {
 
 function joined(game: Game): void {
   game.performNationalCommand(game.player(A), {
-    kind: "found-empire", empireId: EMPIRE,
+    kind: "found-empire",
+    empireId: EMPIRE,
   });
   game.performNationalCommand(game.player(A), {
-    kind: "offer-empire", empireId: EMPIRE, candidateId: B,
+    kind: "offer-empire",
+    empireId: EMPIRE,
+    candidateId: B,
   });
   game.performNationalCommand(game.player(B), {
-    kind: "accept-empire", empireId: EMPIRE, candidateId: B,
+    kind: "accept-empire",
+    empireId: EMPIRE,
+    candidateId: B,
   });
 }
 
 function declareBoth(game: Game): void {
   game.performNationalWarCommand(game.player(A), {
-    kind: "declare-national", warId: "r4-national", aggressorId: B, targetId: C,
+    kind: "declare-national",
+    warId: "r4-national",
+    aggressorId: B,
+    targetId: C,
   });
   game.performNationalWarCommand(game.player(A), {
-    kind: "declare-imperial", warId: "r4-imperial",
+    kind: "declare-imperial",
+    warId: "r4-imperial",
     aggressor: { kind: "empire", id: EMPIRE },
     target: { kind: "nation", id: C },
   });
@@ -67,9 +80,14 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     const legacy = await live(2, false);
     expect(legacy.nationalWarAuthority()).toBeNull();
     expect(legacy.nationalWarState()).toBeNull();
-    expect(() => legacy.performNationalWarCommand(legacy.player(A), {
-      kind: "declare-national", warId: "forbidden", aggressorId: A, targetId: B,
-    })).toThrow(/not enabled/);
+    expect(() =>
+      legacy.performNationalWarCommand(legacy.player(A), {
+        kind: "declare-national",
+        warId: "forbidden",
+        aggressorId: A,
+        targetId: B,
+      }),
+    ).toThrow(/not enabled/);
     const port = national.nationalWarAuthority();
     expect(port?.authorizeOffensiveAction(A, B)).toBe(false);
     expect(port?.authorizeOffensiveAction(A, null)).toBe(true);
@@ -106,10 +124,12 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
   it("COAL-06/WAR-03: live accession expands an existing imperial war but never rewrites stable layer IDs", async () => {
     const game = await live();
     game.performNationalCommand(game.player(A), {
-      kind: "found-empire", empireId: EMPIRE,
+      kind: "found-empire",
+      empireId: EMPIRE,
     });
     game.performNationalWarCommand(game.player(A), {
-      kind: "declare-imperial", warId: "r4-before-accession",
+      kind: "declare-imperial",
+      warId: "r4-before-accession",
       aggressor: { kind: "empire", id: EMPIRE },
       target: { kind: "nation", id: C },
     });
@@ -118,10 +138,14 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     expect(capturedPort?.atWar(A, C)).toBe(true);
     expect(capturedPort?.atWar(B, C)).toBe(false);
     game.performNationalCommand(game.player(B), {
-      kind: "offer-empire", empireId: EMPIRE, candidateId: B,
+      kind: "offer-empire",
+      empireId: EMPIRE,
+      candidateId: B,
     });
     game.performNationalCommand(game.player(A), {
-      kind: "accept-empire", empireId: EMPIRE, candidateId: B,
+      kind: "accept-empire",
+      empireId: EMPIRE,
+      candidateId: B,
     });
     expect(capturedPort?.atWar(B, C)).toBe(true);
     expect(game.nationalWarAuthority()).toBe(capturedPort);
@@ -136,34 +160,53 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     joined(game);
     declareBoth(game);
     game.performNationalWarCommand(game.player(A), {
-      kind: "propose-peace", motionId: "r4-peace-imperial", warId: "r4-imperial",
+      kind: "propose-peace",
+      motionId: "r4-peace-imperial",
+      warId: "r4-imperial",
     });
     game.performNationalCommand(game.player(A), {
-      kind: "transfer-crown", empireId: EMPIRE, successorId: B,
+      kind: "transfer-crown",
+      empireId: EMPIRE,
+      successorId: B,
     });
     expect(game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(B);
-    expect(() => game.performNationalWarCommand(game.player(A), {
-      kind: "declare-imperial", warId: "rejected-old-crown",
-      aggressor: { kind: "empire", id: EMPIRE },
-      target: { kind: "nation", id: C },
-    })).toThrow(/not authorized/);
-    expect(() => game.performNationalWarCommand(game.player(A), {
-      kind: "propose-peace", motionId: "rejected-peace", warId: "r4-national",
-    })).toThrow(/not authorized/);
+    expect(() =>
+      game.performNationalWarCommand(game.player(A), {
+        kind: "declare-imperial",
+        warId: "rejected-old-crown",
+        aggressor: { kind: "empire", id: EMPIRE },
+        target: { kind: "nation", id: C },
+      }),
+    ).toThrow(/not authorized/);
+    expect(() =>
+      game.performNationalWarCommand(game.player(A), {
+        kind: "propose-peace",
+        motionId: "rejected-peace",
+        warId: "r4-national",
+      }),
+    ).toThrow(/not authorized/);
     game.performNationalWarCommand(game.player(C), {
-      kind: "accept-peace", motionId: "r4-peace-imperial",
+      kind: "accept-peace",
+      motionId: "r4-peace-imperial",
     });
-    expect(game.nationalWarState()!.wars.layers.find((l) => l.id === "r4-imperial")!.endedTick)
-      .toBe(game.ticks());
-    expect(game.nationalWarState()!.wars.layers.find((l) => l.id === "r4-national")!.endedTick)
-      .toBeNull();
+    expect(
+      game.nationalWarState()!.wars.layers.find((l) => l.id === "r4-imperial")!
+        .endedTick,
+    ).toBe(game.ticks());
+    expect(
+      game.nationalWarState()!.wars.layers.find((l) => l.id === "r4-national")!
+        .endedTick,
+    ).toBeNull();
     expect(game.nationalWarAuthority()?.atWar(A, C)).toBe(false);
     expect(game.nationalWarAuthority()?.atWar(B, C)).toBe(true);
     game.performNationalWarCommand(game.player(B), {
-      kind: "propose-peace", motionId: "r4-peace-national", warId: "r4-national",
+      kind: "propose-peace",
+      motionId: "r4-peace-national",
+      warId: "r4-national",
     });
     game.performNationalWarCommand(game.player(C), {
-      kind: "accept-peace", motionId: "r4-peace-national",
+      kind: "accept-peace",
+      motionId: "r4-peace-national",
     });
     expect(game.nationalWarAuthority()?.atWar(B, C)).toBe(false);
   });
@@ -173,7 +216,9 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     joined(original);
     declareBoth(original);
     original.performNationalWarCommand(original.player(A), {
-      kind: "propose-peace", motionId: "r4-motion", warId: "r4-imperial",
+      kind: "propose-peace",
+      motionId: "r4-motion",
+      warId: "r4-imperial",
     });
     const { bytes, again, restored } = await roundTrip(original, "plains");
     expect([...again]).toEqual([...bytes]);
@@ -184,14 +229,19 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     expect(restored.nationalWarState()).toEqual(original.nationalWarState());
     for (const game of [original, restored]) {
       game.performNationalCommand(game.player(A), {
-        kind: "transfer-crown", empireId: EMPIRE, successorId: B,
+        kind: "transfer-crown",
+        empireId: EMPIRE,
+        successorId: B,
       });
       game.performNationalWarCommand(game.player(C), {
-        kind: "accept-peace", motionId: "r4-motion",
+        kind: "accept-peace",
+        motionId: "r4-motion",
       });
     }
     expect(restored.nationalWarState()).toEqual(original.nationalWarState());
-    expect(snapshotGameData(restored).game).toEqual(snapshotGameData(original).game);
+    expect(snapshotGameData(restored).game).toEqual(
+      snapshotGameData(original).game,
+    );
     const hash = (g: Game) => (g as unknown as { hash(): number }).hash();
     expect(hash(restored)).toBe(hash(original));
     const { bytes: after, again: double } = await roundTrip(original, "plains");
@@ -201,29 +251,48 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
   it("COAL-05: a live protected NAP blocks declaration until authenticated Betray", async () => {
     const game = await live(2);
     game.performNationalCommand(game.player(A), {
-      kind: "found-pact", pactId: "r4-nap", pactKind: "NAP", name: "Truce",
+      kind: "found-pact",
+      pactId: "r4-nap",
+      pactKind: "NAP",
+      name: "Truce",
       terms: { admission: "leader", expulsion: "forbidden" },
     });
     game.performNationalCommand(game.player(A), {
-      kind: "invite-pact", pactId: "r4-nap", candidateId: B,
+      kind: "invite-pact",
+      pactId: "r4-nap",
+      candidateId: B,
     });
     game.performNationalCommand(game.player(B), {
-      kind: "accept-pact", pactId: "r4-nap",
+      kind: "accept-pact",
+      pactId: "r4-nap",
     });
     expect(game.nationalPoliticalAuthority()?.treatyProtects(A, B)).toBe(true);
-    expect(() => game.performNationalWarCommand(game.player(A), {
-      kind: "declare-national", warId: "blocked-by-nap", aggressorId: A, targetId: B,
-    })).toThrow(/betray protected treaty/);
+    expect(() =>
+      game.performNationalWarCommand(game.player(A), {
+        kind: "declare-national",
+        warId: "blocked-by-nap",
+        aggressorId: A,
+        targetId: B,
+      }),
+    ).toThrow(/betray protected treaty/);
     expect(game.nationalWarState()?.wars.layers).toEqual([]);
     game.performNationalCommand(game.player(A), {
-      kind: "betray-pact", pactId: "r4-nap",
+      kind: "betray-pact",
+      pactId: "r4-nap",
     });
     game.performNationalWarCommand(game.player(A), {
-      kind: "declare-national", warId: "after-betrayal", aggressorId: A, targetId: B,
+      kind: "declare-national",
+      warId: "after-betrayal",
+      aggressorId: A,
+      targetId: B,
     });
-    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(A, B)).toBe(true);
+    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(A, B)).toBe(
+      true,
+    );
     const { restored } = await roundTrip(game, "plains");
-    expect(restored.nationalWarAuthority()?.authorizeOffensiveAction(A, B)).toBe(true);
+    expect(
+      restored.nationalWarAuthority()?.authorizeOffensiveAction(A, B),
+    ).toBe(true);
   });
 
   it("SOV-06: eliminated emperor dissolves polity without erasing original imperial or national war records", async () => {
@@ -234,11 +303,15 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     eliminate(game, A);
     expect(game.nationalPoliticalAuthority()?.empireOf(B)).toBeNull();
     expect(game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBeNull();
-    expect(game.nationalWarState()?.wars.layers).toEqual(ledgerBefore.wars.layers);
+    expect(game.nationalWarState()?.wars.layers).toEqual(
+      ledgerBefore.wars.layers,
+    );
     expect(game.nationalWarAuthority()?.atWar(A, C)).toBe(false);
     expect(game.nationalWarAuthority()?.atWar(B, C)).toBe(true);
-    expect(game.nationalWarState()?.wars.layers.find((l) => l.id === "r4-imperial")?.endedTick)
-      .toBeNull();
+    expect(
+      game.nationalWarState()?.wars.layers.find((l) => l.id === "r4-imperial")
+        ?.endedTick,
+    ).toBeNull();
     const { restored } = await roundTrip(game, "plains");
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
     expect(restored.nationalWarAuthority()?.atWar(B, C)).toBe(true);
@@ -247,7 +320,9 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     expect(game.nationalVictoryRoster()?.prizes).toEqual([
       { kind: "SovereignVictor", nationId: B },
     ]);
-    expect(restored.nationalVictoryRoster()).toEqual(game.nationalVictoryRoster());
+    expect(restored.nationalVictoryRoster()).toEqual(
+      game.nationalVictoryRoster(),
+    );
     const check = new WinCheckExecution();
     check.init(game, game.ticks());
     check.checkWinnerFFA();
@@ -265,7 +340,9 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     const legacy = await live(2, false);
     const old = readVersioned(GameSnapshot, snapshotGameData(legacy).game);
     const v1 = Object.fromEntries(
-      Object.entries(old).filter(([key]) => key !== "national" && key !== "nationalWar"),
+      Object.entries(old).filter(
+        ([key]) => key !== "national" && key !== "nationalWar",
+      ),
     );
     const migrated = readVersioned(GameSnapshot, { v: 1, d: v1 });
     expect(migrated.national).toBeNull();
@@ -281,15 +358,21 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     const before = game.nationalWarState();
     const cmd = {
       kind: "declare-national" as const,
-      warId: "forgery", aggressorId: A, targetId: B,
+      warId: "forgery",
+      aggressorId: A,
+      targetId: B,
     };
-    expect(() => game.performNationalWarCommand(unrelated.player(A), cmd))
-      .toThrow(/unauthenticated/);
-    expect(() => game.performNationalWarCommand(game.player(B), cmd))
-      .toThrow(/national authority denied/);
+    expect(() =>
+      game.performNationalWarCommand(unrelated.player(A), cmd),
+    ).toThrow(/unauthenticated/);
+    expect(() => game.performNationalWarCommand(game.player(B), cmd)).toThrow(
+      /national authority denied/,
+    );
     expect(game.nationalWarState()).toEqual(before);
     // The borrowed hostile port cannot invent a war or expose a mutable ledger.
-    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(A, B)).toBe(false);
+    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(A, B)).toBe(
+      false,
+    );
   });
 
   it("LEVY-01/04/06: real MDA troop debit is atomic, persisted and replay-safe", async () => {
@@ -299,31 +382,42 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     const contributor = game.player(C);
     contributor.setTroops(500_000);
     game.performNationalCommand(defender, {
-      kind: "found-pact", pactId: "r4-mda", pactKind: "MDA", name: "Defense",
+      kind: "found-pact",
+      pactId: "r4-mda",
+      pactKind: "MDA",
+      name: "Defense",
       terms: { admission: "leader", expulsion: "forbidden" },
     });
     game.performNationalCommand(defender, {
-      kind: "invite-pact", pactId: "r4-mda", candidateId: C,
+      kind: "invite-pact",
+      pactId: "r4-mda",
+      candidateId: C,
     });
     game.performNationalCommand(contributor, {
-      kind: "accept-pact", pactId: "r4-mda",
+      kind: "accept-pact",
+      pactId: "r4-mda",
     });
     game.performNationalWarCommand(attacker, {
-      kind: "declare-national", warId: "r4-levy-war",
-      aggressorId: A, targetId: B,
+      kind: "declare-national",
+      warId: "r4-levy-war",
+      aggressorId: A,
+      targetId: B,
     });
     const request = (g: Game) => ({
       attackId: "r4-confirmed-attack",
       confirmedAccepted: true as const,
       campaignId: "r4-invasion-campaign",
-      attackerId: A, defenderId: B,
+      attackerId: A,
+      defenderId: B,
       attackingTroops: 20_000,
-      eligible: [{
-        source: g.nationalLevySource(C)!,
-        troopCapacity: Math.floor(g.config().maxTroops(g.player(C))),
-        maximumFraction: 0.1,
-        protectedCapacityFraction: 0.3,
-      }],
+      eligible: [
+        {
+          source: g.nationalLevySource(C)!,
+          troopCapacity: Math.floor(g.config().maxTroops(g.player(C))),
+          maximumFraction: 0.1,
+          protectedCapacityFraction: 0.3,
+        },
+      ],
     });
     const before = contributor.troops();
     const [first] = game.applyNationalDefenseLevy([request(game)]);
@@ -344,14 +438,17 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
       const amount = g.player(C).troops();
       const [replayed] = g.applyNationalDefenseLevy([request(g)]);
       expect(replayed).toMatchObject({
-        application: "replay", intercepted: 0,
-        remainingAttackingTroops: 20_000, contributions: [],
+        application: "replay",
+        intercepted: 0,
+        remainingAttackingTroops: 20_000,
+        contributions: [],
       });
       expect(g.player(C).troops()).toBe(amount);
       // Treaty membership may change after acceptance. An exact duplicate
       // must still be a no-op, not reopen a campaign or debit troops again.
       g.performNationalCommand(g.player(C), {
-        kind: "betray-pact", pactId: "r4-mda",
+        kind: "betray-pact",
+        pactId: "r4-mda",
       });
       const [oldReplay] = g.applyNationalDefenseLevy([request(g)]);
       expect(oldReplay.application).toBe("replay");
@@ -359,51 +456,72 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
       expect(g.player(C).troops()).toBe(amount);
     }
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
-    expect(snapshotGameData(restored).game).toEqual(snapshotGameData(game).game);
+    expect(snapshotGameData(restored).game).toEqual(
+      snapshotGameData(game).game,
+    );
   });
 
   it("LEVY-05/07: forged sources, missing MDA and absent formal war reject before ANY debit", async () => {
     const game = await live();
     const other = await live();
     game.player(C).setTroops(500_000);
-    const request = (source: NonNullable<ReturnType<Game["nationalLevySource"]>>, id: string) => ({
-      attackId: id, confirmedAccepted: true as const,
+    const request = (
+      source: NonNullable<ReturnType<Game["nationalLevySource"]>>,
+      id: string,
+    ) => ({
+      attackId: id,
+      confirmedAccepted: true as const,
       campaignId: "r4-refusal",
-      attackerId: A, defenderId: B,
+      attackerId: A,
+      defenderId: B,
       attackingTroops: 10_000,
-      eligible: [{
-        source,
-        troopCapacity: 100_000,
-        maximumFraction: 0.1,
-        protectedCapacityFraction: 0.3,
-      }],
+      eligible: [
+        {
+          source,
+          troopCapacity: 100_000,
+          maximumFraction: 0.1,
+          protectedCapacityFraction: 0.3,
+        },
+      ],
     });
     const own = game.nationalLevySource(C)!;
     const foreign = other.nationalLevySource(C)!;
     const before = game.player(C).troops();
     const empty = game.nationalWarState();
-    expect(() => game.applyNationalDefenseLevy([request(own, "without-war")]))
-      .toThrow(/not formally authorized/);
+    expect(() =>
+      game.applyNationalDefenseLevy([request(own, "without-war")]),
+    ).toThrow(/not formally authorized/);
     game.performNationalWarCommand(game.player(A), {
-      kind: "declare-national", warId: "r4-refusal-war",
-      aggressorId: A, targetId: B,
+      kind: "declare-national",
+      warId: "r4-refusal-war",
+      aggressorId: A,
+      targetId: B,
     });
-    expect(() => game.applyNationalDefenseLevy([request(own, "without-MDA")]))
-      .toThrow(/MDA contributor/);
+    expect(() =>
+      game.applyNationalDefenseLevy([request(own, "without-MDA")]),
+    ).toThrow(/MDA contributor/);
     game.performNationalCommand(game.player(B), {
-      kind: "found-pact", pactId: "r4-mda-refusal", pactKind: "MDA",
-      name: "Safe treaty", terms: { admission: "leader", expulsion: "forbidden" },
+      kind: "found-pact",
+      pactId: "r4-mda-refusal",
+      pactKind: "MDA",
+      name: "Safe treaty",
+      terms: { admission: "leader", expulsion: "forbidden" },
     });
     game.performNationalCommand(game.player(B), {
-      kind: "invite-pact", pactId: "r4-mda-refusal", candidateId: C,
+      kind: "invite-pact",
+      pactId: "r4-mda-refusal",
+      candidateId: C,
     });
     game.performNationalCommand(game.player(C), {
-      kind: "accept-pact", pactId: "r4-mda-refusal",
+      kind: "accept-pact",
+      pactId: "r4-mda-refusal",
     });
-    expect(() => game.applyNationalDefenseLevy([
-      request(own, "valid-in-batch"),
-      request(foreign, "foreign-in-batch"),
-    ])).toThrow(/MDA contributor/);
+    expect(() =>
+      game.applyNationalDefenseLevy([
+        request(own, "valid-in-batch"),
+        request(foreign, "foreign-in-batch"),
+      ]),
+    ).toThrow(/MDA contributor/);
     expect(game.player(C).troops()).toBe(before);
     expect(game.nationalWarState()?.levy.processed).toEqual([]);
     expect(game.nationalWarState()?.levy.allowances).toEqual([]);

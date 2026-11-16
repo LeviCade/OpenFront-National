@@ -48,24 +48,24 @@ import {
 import { MotionPlanRecord } from "@openfront/engine-lib/game/MotionPlans";
 import type { EngineConfig } from "../configuration/EngineConfig";
 import type {
-  NationalCommand,
-  NationalUngovernableWarning,
-} from "../national/NationalRuntime";
-import type {
-  NationalPoliticalAuthority,
-  NationalConflictPoliticsPort,
-} from "../national/politics/PoliticalAuthorityAdapter";
-import type { LastSovereignResult } from "../national/politics/sovereignty";
-import type {
   DefenseResult,
   IncomingDefense,
   TroopSource,
 } from "../national/conflict/DefenseLevy";
 import type {
+  NationalCommand,
+  NationalUngovernableWarning,
+} from "../national/NationalRuntime";
+import type {
   NationalWarAuthority,
   NationalWarCommand,
   NationalWarStateSnapshot,
 } from "../national/politics/NationalWarState";
+import type {
+  NationalPoliticalAuthority,
+  NationalConflictPoliticsPort,
+} from "../national/politics/PoliticalAuthorityAdapter";
+import type { LastSovereignResult } from "../national/politics/sovereignty";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { PathFinder } from "../pathfinding/types";
 import type { ExecRecord, SnapshotWriter } from "../snapshot/SnapshotContext";

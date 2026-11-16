@@ -21,19 +21,30 @@ const id = z.string().min(1).max(256);
 const tick = z.number().int().nonnegative();
 const party = z.object({ kind: z.enum(["nation", "empire"]), id });
 const warLayer = z.object({
-  id, scope: z.enum(["national", "imperial"]),
-  first: party, second: party, declaredBy: id,
-  startedTick: tick, endedTick: tick.nullable(),
+  id,
+  scope: z.enum(["national", "imperial"]),
+  first: party,
+  second: party,
+  declaredBy: id,
+  startedTick: tick,
+  endedTick: tick.nullable(),
 });
 const peaceMotion = z.object({
-  id, layerId: id, proposedBy: id,
+  id,
+  layerId: id,
+  proposedBy: id,
   proposingSide: z.union([z.literal(0), z.literal(1)]),
-  proposedTick: tick, acceptedTick: tick.nullable(), acceptedBy: id.nullable(),
+  proposedTick: tick,
+  acceptedTick: tick.nullable(),
+  acceptedBy: id.nullable(),
 });
 const levyResult = z.object({
   application: z.enum(["applied", "replay"]),
-  attackId: id, campaignId: id, attackTroopsBefore: tick,
-  intercepted: tick, remainingAttackingTroops: tick,
+  attackId: id,
+  campaignId: id,
+  attackTroopsBefore: tick,
+  intercepted: tick,
+  remainingAttackingTroops: tick,
   contributions: z.array(z.object({ nationId: id, troopsDebited: tick })),
 });
 export const NationalWarStateSnapshotSchema = z.object({
@@ -46,19 +57,37 @@ export const NationalWarStateSnapshotSchema = z.object({
   }),
   levy: z.object({
     version: z.literal(1),
-    allowances: z.array(z.object({
-      key: z.string().min(1), contributorId: id, limit: tick, spent: tick,
-    })),
-    processed: z.array(z.object({
-      attackId: id, campaignId: id, attackerId: id, defenderId: id,
-      attackTroopsBefore: tick, result: levyResult,
-    })),
+    allowances: z.array(
+      z.object({
+        key: z.string().min(1),
+        contributorId: id,
+        limit: tick,
+        spent: tick,
+      }),
+    ),
+    processed: z.array(
+      z.object({
+        attackId: id,
+        campaignId: id,
+        attackerId: id,
+        defenderId: id,
+        attackTroopsBefore: tick,
+        result: levyResult,
+      }),
+    ),
   }),
 });
-export type NationalWarStateSnapshot = z.infer<typeof NationalWarStateSnapshotSchema>;
+export type NationalWarStateSnapshot = z.infer<
+  typeof NationalWarStateSnapshotSchema
+>;
 
 export type NationalWarCommand =
-  | { kind: "declare-national"; warId: string; aggressorId: string; targetId: string }
+  | {
+      kind: "declare-national";
+      warId: string;
+      aggressorId: string;
+      targetId: string;
+    }
   | {
       kind: "declare-imperial";
       warId: string;
@@ -70,7 +99,10 @@ export type NationalWarCommand =
 
 /** Read-only port for E2 attack acceptance and E3 authorized observation. */
 export interface NationalWarAuthority {
-  authorizeOffensiveAction(attackerId: string, targetId: string | null): boolean;
+  authorizeOffensiveAction(
+    attackerId: string,
+    targetId: string | null,
+  ): boolean;
   atWar(a: string, b: string): boolean;
   snapshot(): NationalWarStateSnapshot;
 }
@@ -134,12 +166,20 @@ export class NationalWarStateService {
     switch (command.kind) {
       case "declare-national":
         this.wars.declareNational(
-          command.warId, actorId, command.aggressorId, command.targetId, tick,
+          command.warId,
+          actorId,
+          command.aggressorId,
+          command.targetId,
+          tick,
         );
         break;
       case "declare-imperial":
         this.wars.declareImperial(
-          command.warId, actorId, command.aggressor, command.target, tick,
+          command.warId,
+          actorId,
+          command.aggressor,
+          command.target,
+          tick,
         );
         break;
       case "propose-peace":

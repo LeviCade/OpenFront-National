@@ -13,19 +13,19 @@
 \`\`\`ts
 // Available on every Game, but null outside opt-in NATIONAL Solo games:
 game.nationalWarAuthority(): Readonly<NationalWarAuthority> | null
-//   .authorizeOffensiveAction(attackerId, targetId | null): boolean
-//   .atWar(a, b): boolean
-//   .snapshot(): NationalWarStateSnapshot
+// .authorizeOffensiveAction(attackerId, targetId | null): boolean
+// .atWar(a, b): boolean
+// .snapshot(): NationalWarStateSnapshot
 game.nationalWarState(): NationalWarStateSnapshot | null
-//   version: 1
-//   wars: ConflictLedgerState       // version 1, stable layer IDs/scope
-//   levy: LevyLedgerState           // version 1, stable receipts/caps
+// version: 1
+// wars: ConflictLedgerState // version 1, stable layer IDs/scope
+// levy: LevyLedgerState // version 1, stable receipts/caps
 
 // Internal authenticated execution; E2 owns public intent schema and router:
 game.performNationalWarCommand(actor: Player, command: NationalWarCommand): void
 // declares national/imperial, proposes or accepts scoped peace
 
-// Internal E2 *already accepted* AttackExecution interception bridge:
+// Internal E2 _already accepted_ AttackExecution interception bridge:
 game.nationalLevySource(nationId: PlayerID): TroopSource | null
 game.applyNationalDefenseLevy(attacks: readonly IncomingDefense[]): readonly DefenseResult[]
 \`\`\`
@@ -49,7 +49,7 @@ debits with actual \`Player.setTroops()\`. E2's
 per-campaign caps and processed attack receipts. On replay, it returns zero
 new interception, never double-deducting.
 
-**Trust boundary:** The game method is an *internal execution interface*, not
+**Trust boundary:** The game method is an _internal execution interface_, not
 a client RPC. \`confirmedAccepted\` is a declaration by the E2-owned execution
 after it verifies a stable accepted attack and performs final troop deduction;
 it is NOT independently verified by a signed server or a public packet. E2
