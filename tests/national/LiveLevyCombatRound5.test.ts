@@ -1,18 +1,14 @@
 /**
- * E2 real Game / AttackExecution levy acceptance. Before E1's separately owned
- * donor method merges, the test-only adapter reads the SAME real E1 political
- * snapshot. Production NEVER uses this fallback: missing MDA roster fails
- * closed in NationalWarExecution.interceptNationalAttack().
+ * E2 real Game / AttackExecution levy acceptance. Requires the actual E1
+ * Game.nationalMdaAllies() authority: NEVER install a test-only donor
+ * reader that could hide the production fail-closed guarantee.
  */
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
-import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { interceptNationalAttack } from "@openfront/engine/execution/NationalWarExecution";
 import type { Game, Player } from "@openfront/engine/game/Game";
-import { GameSnapshot } from "@openfront/engine/game/GameImpl";
 import { PlayerImpl } from "@openfront/engine/game/PlayerImpl";
-import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
@@ -65,28 +61,12 @@ function joinMda(game: Game, ids: readonly string[]) {
   }
 }
 
-/** TEST-ONLY bridge when E1's donor API is still on an unmerged branch. */
-function attachCanonicalDonorReader(game: Game): void {
-  const withPort = game as Game & {
+/** Require E1's actual live authoritative Game port; no mocked donors. */
+function requireCanonicalDonorReader(game: Game): void {
+  const port = game as Game & {
     nationalMdaAllies?: (defenderId: string) => readonly string[];
   };
-  if (typeof withPort.nationalMdaAllies === "function") return;
-  withPort.nationalMdaAllies = (defenderId) => {
-    const political = readVersioned(
-      GameSnapshot, snapshotGameData(game).game,
-    ).national?.politics;
-    if (!political?.nations.some((n) => n.id === defenderId && n.alive))
-      return [];
-    const living = new Set(political.nations.filter((n) => n.alive).map((n) => n.id));
-    return [...new Set(
-      political.pacts
-        .filter((p) => p.kind === "MDA" && p.memberIds.includes(defenderId))
-        .flatMap((p) => p.memberIds)
-        .filter((id) => id !== defenderId && living.has(id)),
-    )]
-      .filter((id) => game.hasPlayer(id) && game.player(id).isAlive() && game.player(id).hasSpawned())
-      .sort();
-  };
+  expect(typeof port.nationalMdaAllies).toBe("function");
 }
 
 function declareWar(game: Game) {
@@ -108,7 +88,7 @@ function connectBorder(game: Game) {
 
 async function scenario(count: 2 | 3, connect = true) {
   const game = await gameWithPlayers();
-  attachCanonicalDonorReader(game);
+  requireCanonicalDonorReader(game);
   if (connect) connectBorder(game);
   const donors = donorIds.slice(0, count).map((id) => game.player(id));
   joinMda(game, donorIds.slice(0, count));
@@ -267,7 +247,7 @@ describe("Round Five: real NATIONAL MDA defensive combat conservation", () => {
     expect(first).toBeDefined();
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
-    attachCanonicalDonorReader(restored);
+    requireCanonicalDonorReader(restored);
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
     const sources = donors.map((p) => p.id());
     const before = total(sources.map((id) => restored.player(id)));
