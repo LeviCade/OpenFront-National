@@ -335,15 +335,20 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     const legacy = await live(2, false);
     expect(legacy.nationalPublicPoliticalView()).toBeNull();
     game.performNationalCommand(game.player(B), {
-      kind: "found-pact", pactId: "r4-private-nap",
-      name: "Not client public", pactKind: "NAP",
+      kind: "found-pact",
+      pactId: "r4-private-nap",
+      name: "Not client public",
+      pactKind: "NAP",
       terms: { admission: "leader", expulsion: "forbidden" },
     });
     game.performNationalCommand(game.player(B), {
-      kind: "invite-pact", pactId: "r4-private-nap", candidateId: C,
+      kind: "invite-pact",
+      pactId: "r4-private-nap",
+      candidateId: C,
     });
     game.performNationalCommand(game.player(C), {
-      kind: "accept-pact", pactId: "r4-private-nap",
+      kind: "accept-pact",
+      pactId: "r4-private-nap",
     });
     const preAccession = game.nationalPublicPoliticalView()!;
     expect(preAccession.empires).toEqual([]);
@@ -351,7 +356,11 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     expect(JSON.stringify(preAccession)).not.toContain("r4-private-nap");
     joined(game);
     const view = game.nationalPublicPoliticalView()!;
-    expect(Object.keys(view).sort()).toEqual(["empires", "victory", "warnings"]);
+    expect(Object.keys(view).sort()).toEqual([
+      "empires",
+      "victory",
+      "warnings",
+    ]);
     expect(view.empires).toEqual([
       { id: EMPIRE, leaderId: A, memberIds: [A, B] },
     ]);
@@ -361,13 +370,20 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     expect(view.victory).toBeNull();
     // Neither nested public arrays nor the captured view owns mutable truth.
     (view.empires[0].memberIds as string[]).push("forged");
-    expect(game.nationalPublicPoliticalView()?.empires[0].memberIds).toEqual([A, B]);
+    expect(game.nationalPublicPoliticalView()?.empires[0].memberIds).toEqual([
+      A,
+      B,
+    ]);
     game.performNationalCommand(game.player(A), {
-      kind: "transfer-crown", empireId: EMPIRE, successorId: B,
+      kind: "transfer-crown",
+      empireId: EMPIRE,
+      successorId: B,
     });
     expect(game.nationalPublicPoliticalView()?.empires[0].leaderId).toBe(B);
     const { restored } = await roundTrip(game, "plains");
-    expect(restored.nationalPublicPoliticalView()).toEqual(game.nationalPublicPoliticalView());
+    expect(restored.nationalPublicPoliticalView()).toEqual(
+      game.nationalPublicPoliticalView(),
+    );
   });
 
   it("snapshot migration v2→v3 initializes absent conflict state, while v1 legacy migration remains valid", async () => {
