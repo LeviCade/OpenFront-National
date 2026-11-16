@@ -56,8 +56,18 @@ type State = z.infer<typeof stateSchema>;
 
 type WarParty = { kind: "nation" | "empire"; id: string };
 type CanonicalWarCommand =
-  | { kind: "declare-national"; warId: string; aggressorId: string; targetId: string }
-  | { kind: "declare-imperial"; warId: string; aggressor: WarParty; target: WarParty }
+  | {
+      kind: "declare-national";
+      warId: string;
+      aggressorId: string;
+      targetId: string;
+    }
+  | {
+      kind: "declare-imperial";
+      warId: string;
+      aggressor: WarParty;
+      target: WarParty;
+    }
   | { kind: "propose-peace"; motionId: string; warId: string }
   | { kind: "accept-peace"; motionId: string };
 
@@ -67,7 +77,10 @@ type CanonicalWarCommand =
  */
 interface WarGamePort {
   nationalWarAuthority(): {
-    authorizeOffensiveAction(attackerId: string, targetId: string | null): boolean;
+    authorizeOffensiveAction(
+      attackerId: string,
+      targetId: string | null,
+    ): boolean;
     atWar(a: string, b: string): boolean;
   } | null;
   nationalWarState(): {
@@ -78,7 +91,9 @@ interface WarGamePort {
   } | null;
   performNationalWarCommand(actor: Player, command: CanonicalWarCommand): void;
   nationalLevySource(nationId: string): TroopSource | null;
-  applyNationalDefenseLevy(attacks: readonly IncomingDefense[]): readonly DefenseResult[];
+  applyNationalDefenseLevy(
+    attacks: readonly IncomingDefense[],
+  ): readonly DefenseResult[];
   /** Pending E1 read-only bridge; absent = no fabricated MDA contributors. */
   nationalMdaAllies?(defenderId: string): readonly string[];
 }
@@ -117,9 +132,12 @@ export function interceptNationalAttack(
   if (politics === null) return null;
   const port = canonicalWarPort(game);
   if (
-    !port.nationalWarAuthority?.()?.authorizeOffensiveAction(attackerId, defenderId) ||
+    !port
+      .nationalWarAuthority?.()
+      ?.authorizeOffensiveAction(attackerId, defenderId) ||
     typeof port.applyNationalDefenseLevy !== "function"
-  ) throw new Error("NATIONAL: missing authorized canonical war/levy service");
+  )
+    throw new Error("NATIONAL: missing authorized canonical war/levy service");
 
   const candidateIds = [...new Set(port.nationalMdaAllies?.(defenderId) ?? [])]
     .sort()
@@ -134,12 +152,14 @@ export function interceptNationalAttack(
   const eligible = candidateIds.flatMap((id) => {
     const source = port.nationalLevySource?.(id);
     if (!source) return [];
-    return [{
-      source,
-      troopCapacity: Math.floor(game.config().maxTroops(game.player(id))),
-      maximumFraction: 0.1,
-      protectedCapacityFraction: 0.3,
-    }];
+    return [
+      {
+        source,
+        troopCapacity: Math.floor(game.config().maxTroops(game.player(id))),
+        maximumFraction: 0.1,
+        protectedCapacityFraction: 0.3,
+      },
+    ];
   });
   const request: IncomingDefense = {
     attackId,
@@ -165,8 +185,12 @@ export class NationalWarExecution implements Execution {
     private command: NationalWarCommand,
   ) {}
 
-  isActive(): boolean { return this.active; }
-  activeDuringSpawnPhase(): boolean { return false; }
+  isActive(): boolean {
+    return this.active;
+  }
+  activeDuringSpawnPhase(): boolean {
+    return false;
+  }
 
   init(game: Game): void {
     this.game = game;
@@ -184,7 +208,8 @@ export class NationalWarExecution implements Execution {
       game.player(this.actor.id()) !== this.actor ||
       !this.actor.hasSpawned() ||
       !this.actor.isAlive()
-    ) return;
+    )
+      return;
 
     const political = game.nationalPoliticalAuthority()!;
     if (!port.nationalWarState?.()) return;
@@ -217,7 +242,11 @@ export class NationalWarExecution implements Execution {
         break;
       }
       case "propose-peace":
-        command = { kind: "propose-peace", motionId: id, warId: this.command.warId };
+        command = {
+          kind: "propose-peace",
+          motionId: id,
+          warId: this.command.warId,
+        };
         break;
       case "accept-peace":
         command = { kind: "accept-peace", motionId: this.command.motionId };

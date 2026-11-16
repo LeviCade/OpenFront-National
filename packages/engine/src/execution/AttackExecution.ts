@@ -24,16 +24,16 @@ import { assertNever } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { AttackLogicInput } from "../configuration/EngineConfig";
 import { Attack, Execution, Game, Player } from "../game/Game";
-import {
-  authorizeNationalAttack,
-  interceptNationalAttack,
-} from "./NationalWarExecution";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
 import type {
   ExecRecord,
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
+import {
+  authorizeNationalAttack,
+  interceptNationalAttack,
+} from "./NationalWarExecution";
 import { FlatBinaryHeap } from "./utils/FlatBinaryHeap"; // adjust path if needed
 
 const malusForRetreat = 25;
@@ -105,16 +105,14 @@ export class AttackExecution implements Execution {
     // The null political authority is the exact old FFA path.
     if (
       mg.nationalPoliticalAuthority() !== null &&
-      (
-        !mg.hasPlayer(this._owner.id()) ||
+      (!mg.hasPlayer(this._owner.id()) ||
         mg.player(this._owner.id()) !== this._owner ||
         !this._owner.isAlive() ||
         !authorizeNationalAttack(
           mg,
           this._owner.id(),
           this.target.isPlayer() ? this.target.id() : null,
-        )
-      )
+        ))
     ) {
       this.active = false;
       return;
@@ -203,7 +201,8 @@ export class AttackExecution implements Execution {
             outgoing !== this.attack &&
             outgoing.target() === this.attack.target() &&
             this.attack.sourceTile() === null
-          ) projected += outgoing.troops();
+          )
+            projected += outgoing.troops();
         }
       }
       // Opposing attack cancellation is not an accepted invasion. Zero

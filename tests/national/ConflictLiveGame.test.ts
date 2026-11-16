@@ -1,7 +1,4 @@
-import {
-  PlayerInfo,
-  PlayerType,
-} from "@openfront/engine-api/game/GameTypes";
+import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import {
   NationalAcceptPeaceIntentSchema,
   NationalDeclareWarIntentSchema,
@@ -9,10 +6,10 @@ import {
 } from "@openfront/engine-api/Schemas";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
+import { authorizeNationalAttack } from "@openfront/engine/execution/NationalWarExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game, Player } from "@openfront/engine/game/Game";
 import { PlayerImpl } from "@openfront/engine/game/PlayerImpl";
-import { authorizeNationalAttack } from "@openfront/engine/execution/NationalWarExecution";
 import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
@@ -24,7 +21,13 @@ const info = [
   new PlayerInfo("West", PlayerType.Human, "west-client", "west-id"),
   new PlayerInfo("Central", PlayerType.Human, "center-client", "center-id"),
 ];
-const coords = [[20, 20], [70, 20], [20, 70], [70, 70], [50, 50]];
+const coords = [
+  [20, 20],
+  [70, 20],
+  [20, 70],
+  [70, 70],
+  [50, 50],
+];
 
 async function spawned(nationalMode = true): Promise<Game> {
   const game = await setup("plains", { nationalMode }, info);
@@ -88,13 +91,19 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
     north.setTroops(40_000);
     expect(authorizeNationalAttack(game, north.id(), null)).toBe(true);
     expect(authorizeNationalAttack(game, "missing-id", null)).toBe(false);
-    game.addExecution(new AttackExecution(10_000, north, game.terraNullius().id()));
+    game.addExecution(
+      new AttackExecution(10_000, north, game.terraNullius().id()),
+    );
     game.executeNextTick();
     expect(north.troops()).toBeLessThan(40_000);
     const other = await spawned();
     const forged = other.player("north-id");
     forged.setTroops(40_000);
-    const attempt = new AttackExecution(10_000, forged, game.terraNullius().id());
+    const attempt = new AttackExecution(
+      10_000,
+      forged,
+      game.terraNullius().id(),
+    );
     game.addExecution(attempt);
     game.executeNextTick();
     expect(attempt.isActive()).toBe(false);
@@ -142,23 +151,30 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
 
   it("LEVY-01 actual PlayerImpl balances commit once with exact BigInt conservation", async () => {
     const game = await spawned();
-    const donors = ["east-id", "west-id", "center-id"].map((id) => game.player(id));
+    const donors = ["east-id", "west-id", "center-id"].map((id) =>
+      game.player(id),
+    );
     for (const donor of donors) donor.setTroops(100_000);
     const rows = preparePlayerDebits(donors);
     PlayerImpl.commitNationalTroopDebits(rows);
     for (const donor of donors) expect(donor.troops()).toBe(90_000);
-    expect(donors.reduce((sum, donor) => sum + donor.troops(), 0)).toBe(270_000);
+    expect(donors.reduce((sum, donor) => sum + donor.troops(), 0)).toBe(
+      270_000,
+    );
   });
 
   for (const failingContributor of [1, 2]) {
     it(`LEVY-05 atomic failure at real contributor ${failingContributor} leaves every PlayerImpl balance unchanged`, async () => {
       const game = await spawned();
-      const donors = ["east-id", "west-id", "center-id"].map((id) => game.player(id));
+      const donors = ["east-id", "west-id", "center-id"].map((id) =>
+        game.player(id),
+      );
       for (const donor of donors) donor.setTroops(100_000);
       const rows = preparePlayerDebits(donors);
       expect(() =>
         PlayerImpl.commitNationalTroopDebits(rows, (index) => {
-          if (index === failingContributor) throw new Error("injected debit failure");
+          if (index === failingContributor)
+            throw new Error("injected debit failure");
         }),
       ).toThrow("injected debit failure");
       for (const donor of donors) expect(donor.troops()).toBe(100_000);
@@ -170,7 +186,9 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
 
   it("LEVY-06 malformed, stale and duplicate account changes are rejected before any debit", async () => {
     const game = await spawned();
-    const donors = ["east-id", "west-id", "center-id"].map((id) => game.player(id));
+    const donors = ["east-id", "west-id", "center-id"].map((id) =>
+      game.player(id),
+    );
     for (const donor of donors) donor.setTroops(100_000);
     const rows = preparePlayerDebits(donors);
     for (const corrupt of [
