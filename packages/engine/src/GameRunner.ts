@@ -201,27 +201,30 @@ export class GameRunner {
   /** Only the authenticated game principal may use NATIONAL private RPCs. */
   isNationalRequesterAuthorized(id: string | number): boolean {
     if (!this.game.config().nationalMode()) return true;
-    if (!this.isCurrentNationalViewer()) return false;
+    const principal = this.nationalObserverId;
+    if (principal === null || !this.isCurrentNationalViewer()) return false;
     return typeof id === "string"
-      ? id === this.nationalObserverId
-      : this.game.player(this.nationalObserverId).smallID() === id;
+      ? id === principal
+      : this.game.player(principal).smallID() === id;
   }
 
   /** Fail closed on target tiles outside the authenticated observer's sight. */
   isNationalTileVisible(tile: TileRef): boolean {
     if (!this.game.config().nationalMode()) return true;
-    return this.isCurrentNationalViewer() &&
+    const principal = this.nationalObserverId;
+    return principal !== null && this.isCurrentNationalViewer() &&
       Number.isSafeInteger(tile) && tile >= 0 && tile < this.game.width() * this.game.height() &&
       collectLiveNationalObservation(
         this.game,
-        this.nationalObserverId,
+        principal,
       ).visibleTiles.has(tile);
   }
 
   /** A coordinate query may not probe another nation's unseen territory. */
   isNationalCoordinateVisible(x?: number, y?: number): boolean {
     if (!this.game.config().nationalMode()) return true;
-    if (!this.isCurrentNationalViewer()) return false;
+    const principal = this.nationalObserverId;
+    if (principal === null || !this.isCurrentNationalViewer()) return false;
     if (x === undefined && y === undefined) return true;
     if (
       x === undefined ||
@@ -232,7 +235,7 @@ export class GameRunner {
     ) return false;
     return collectLiveNationalObservation(
       this.game,
-      this.nationalObserverId,
+      principal,
     ).visibleTiles.has(this.game.ref(x, y));
   }
 
