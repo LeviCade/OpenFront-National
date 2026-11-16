@@ -146,6 +146,40 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     ).not.toContain(hiddenTile);
   });
 
+  it("FOG-07 revokes cached recipient rights after live client identity transfer", async () => {
+    const game = await activeGame(true);
+    const packets: GameUpdateViewData[] = [];
+    const runner = new GameRunner(
+      game,
+      new Executor(game, "session-revocation", viewer.clientID!),
+      (packet) => {
+        if ("updates" in packet) packets.push(packet);
+      },
+      viewer.clientID!,
+    );
+    expect(runner.isNationalRequesterAuthorized(viewer.id)).toBe(true);
+    game.player(viewer.id).setPlayerInfo(
+      new PlayerInfo("Viewer", PlayerType.Nation, null, viewer.id),
+    );
+    expect(runner.isNationalRequesterAuthorized(viewer.id)).toBe(false);
+    expect(runner.isNationalIntentAuthorized(viewer.clientID!)).toBe(false);
+    expect(runner.isNationalCoordinateVisible(10, 10)).toBe(false);
+    runner.addTurn({ turnNumber: game.ticks(), intents: [] });
+    expect(runner.executeNextTick()).toBe(true);
+    expect(packets).toHaveLength(1);
+    expect(packets[0].packedPlayerUpdates).toBeUndefined();
+    expect(packets[0].packedUnitUpdates).toBeUndefined();
+    expect(packets[0].packedTileUpdates).toHaveLength(0);
+    const oldOwner = packets[0].updates[GameUpdateType.Player].find(
+      (p) => p.id === viewer.id,
+    );
+    if (oldOwner) {
+      expect(oldOwner.gold).toBeUndefined();
+      expect(oldOwner.troops).toBeUndefined();
+      expect(oldOwner.incomingAttacks).toBeUndefined();
+    }
+  });
+
   it("FOG-03 rejects hidden-location RPC probes by the correct player", async () => {
     const game = await activeGame(true);
     const runner = new GameRunner(
