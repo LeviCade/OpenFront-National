@@ -69,9 +69,10 @@ import {
 import { NationExecution } from "../execution/NationExecution";
 import { SpawnTimerExecution } from "../execution/SpawnTimerExecution";
 import { TribeExecution } from "../execution/TribeExecution";
-import type {
-  NationalPoliticalAuthority,
-  NationalConflictPoliticsPort,
+import {
+  PoliticalAuthorityAdapter,
+  type NationalPoliticalAuthority,
+  type NationalConflictPoliticsPort,
 } from "../national/politics/PoliticalAuthorityAdapter";
 import {
   NationalRuntime,
@@ -185,6 +186,8 @@ export class GameImpl implements Game {
   private _isPaused: boolean = false;
   private _winner: Player | Team | null = null;
   private _national: NationalRuntime | null = null;
+  /** Cached query facade; the closure resolves the CURRENT runtime after restore. */
+  private _nationalAuthority: PoliticalAuthorityAdapter | null = null;
   private _waterManager: WaterManager;
   private _sharedWaterCache: SharedWaterCache;
   private _teamGameSpawnAreas: TeamGameSpawnAreas | undefined;
@@ -572,7 +575,14 @@ export class GameImpl implements Game {
   /** Returns the actual victorious sovereign (no legacy-mode shortcut). */
   /** Never exposes the mutable PoliticsProjection to a caller. */
   nationalPoliticalAuthority(): Readonly<NationalPoliticalAuthority & NationalConflictPoliticsPort> | null {
-    return this._national?.authority() ?? null;
+    if (this._national === null) return null;
+    this._nationalAuthority ??= new PoliticalAuthorityAdapter(() => {
+      if (this._national === null) throw new Error("NATIONAL is not enabled");
+      // A defensive, validated snapshot; never give another subsystem the
+      // mutable PoliticsProjection. The callback follows restoreState().
+      return this._national.snapshot().politics;
+    });
+    return this._nationalAuthority;
   }
 
   /** Complete NATIONAL victor roster; old game Winner schema stays unchanged. */
