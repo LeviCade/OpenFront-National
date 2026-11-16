@@ -23,6 +23,7 @@ import {
 } from "@openfront/engine-lib/game/PackedUnitUpdates";
 import type { Game } from "../../game/Game";
 import type { LiveNationalObservation } from "./LiveObservation";
+import type { OutboundFounderResult } from "./NationalPoliticalPacket";
 import {
   advanceLastKnown,
   type NationalSightMemory,
@@ -229,9 +230,28 @@ export class NationalOutboundFilter {
         ? { [ownID]: data.playerNameViewData[ownID] }
         : undefined;
 
+    const proposedResults = (
+      data as GameUpdateViewData & {
+        nationalCommandResults?: readonly OutboundFounderResult[];
+      }
+    ).nationalCommandResults;
+    // A second independent scope check prevents an accidental caller from
+    // attaching the E1 journal for another actor to this viewer's packet.
+    const recipientResults =
+      this.observerId === null
+        ? []
+        : (proposedResults ?? []).filter(
+            (item) =>
+              item.recipientId === this.observerId &&
+              item.actorId === this.observerId,
+          );
+
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
     return {
+      ...(recipientResults.length
+        ? { nationalCommandResults: recipientResults }
+        : {}),
       // E1's public detached DTO is allowed to every honest-client NATIONAL
       // viewer, including reconnect. It must never be synthesized from
       // outbound private PlayerUpdate fields.
