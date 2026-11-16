@@ -132,7 +132,9 @@ describe("NATIONAL player-facing founding", () => {
     await element.updateComplete;
 
     expect(sent).toEqual(["Atlas_Empire"]);
-    expect(element.textContent).toContain("Awaiting its accepted or rejected result");
+    expect(element.textContent).toContain(
+      "Awaiting its accepted or rejected result",
+    );
     expect(element.textContent).not.toContain("Confirmed by game");
     expect(
       element.querySelector<HTMLButtonElement>('button[type="submit"]')!
@@ -185,49 +187,70 @@ describe("NATIONAL player-facing founding", () => {
   });
   it("reports the engine rejection reason without claiming an empire", async () => {
     const { element, optionsState } = await mount();
-    const input = element.querySelector<HTMLInputElement>("#national-empire-id")!;
+    const input = element.querySelector<HTMLInputElement>(
+      "#national-empire-id",
+    )!;
     input.value = "Atlas";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await element.updateComplete;
     element.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
     optionsState.tick = 11;
-    optionsState.results = [{
-      type: "national_found_empire",
-      recipientId: "nation-a",
-      actorId: "nation-a",
-      empireId: "Atlas",
-      accepted: false,
-      tick: 11,
-      reason: "actor-inactive",
-    }];
+    optionsState.results = [
+      {
+        type: "national_found_empire",
+        recipientId: "nation-a",
+        actorId: "nation-a",
+        empireId: "Atlas",
+        accepted: false,
+        tick: 11,
+        reason: "actor-inactive",
+      },
+    ];
     element.refresh();
     await element.updateComplete;
-    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("rejected");
-    expect(element.querySelector('[role="alert"]')?.textContent).toContain("actor-inactive");
+    expect(
+      element
+        .querySelector("[data-national-phase]")
+        ?.getAttribute("data-national-phase"),
+    ).toBe("rejected");
+    expect(element.querySelector('[role="alert"]')?.textContent).toContain(
+      "actor-inactive",
+    );
     expect(element.textContent).not.toContain("Confirmed by game");
-    expect(element.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+    expect(
+      element.querySelector<HTMLButtonElement>('button[type="submit"]')
+        ?.disabled,
+    ).toBe(false);
   });
 
   it("waits for roster after a real accepted result, even when journal entry is no longer on next tick", async () => {
     const { element, optionsState } = await mount();
-    const input = element.querySelector<HTMLInputElement>("#national-empire-id")!;
+    const input = element.querySelector<HTMLInputElement>(
+      "#national-empire-id",
+    )!;
     input.value = "Atlas";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await element.updateComplete;
     element.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
     optionsState.tick = 11;
-    optionsState.results = [{
-      type: "national_found_empire",
-      recipientId: "nation-a",
-      actorId: "nation-a",
-      empireId: "Atlas",
-      accepted: true,
-      tick: 11,
-    }];
+    optionsState.results = [
+      {
+        type: "national_found_empire",
+        recipientId: "nation-a",
+        actorId: "nation-a",
+        empireId: "Atlas",
+        accepted: true,
+        tick: 11,
+      },
+    ];
     element.refresh();
     await element.updateComplete;
     expect(element.textContent).not.toContain("Confirmed by game");
-    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("pending");
+    expect(
+      element
+        .querySelector("[data-national-phase]")
+        ?.getAttribute("data-national-phase"),
+    ).toBe("pending");
     optionsState.results = [];
     optionsState.tick = 12;
     optionsState.politics = {
@@ -236,7 +259,11 @@ describe("NATIONAL player-facing founding", () => {
     };
     element.refresh();
     await element.updateComplete;
-    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("accepted");
+    expect(
+      element
+        .querySelector("[data-national-phase]")
+        ?.getAttribute("data-national-phase"),
+    ).toBe("accepted");
     expect(element.textContent).toContain("Confirmed by game");
     expect(element.textContent).toContain("You are the emperor.");
 
@@ -254,7 +281,14 @@ describe("NATIONAL player-facing founding", () => {
     const { element, optionsState } = await mount();
     optionsState.politics = {
       empires: [{ id: "Atlas", leaderId: "nation-b", memberIds: ["nation-b"] }],
-      warnings: [{ empireId: "Atlas", deadlineMs: 30000, remainingMs: 5000, blockedByAssetDisposition: true }],
+      warnings: [
+        {
+          empireId: "Atlas",
+          deadlineMs: 30000,
+          remainingMs: 5000,
+          blockedByAssetDisposition: true,
+        },
+      ],
     };
     element.refresh();
     await element.updateComplete;
@@ -262,21 +296,29 @@ describe("NATIONAL player-facing founding", () => {
     expect(element.textContent).toContain("5 seconds");
     expect(element.textContent).toContain("Dissolution is deferred");
 
-    const input = element.querySelector<HTMLInputElement>("#national-empire-id")!;
+    const input = element.querySelector<HTMLInputElement>(
+      "#national-empire-id",
+    )!;
     input.value = "OtherEmpire";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await element.updateComplete;
     element.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
     element.connectionInterrupted();
     await element.updateComplete;
-    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("unknown");
+    expect(
+      element
+        .querySelector("[data-national-phase]")
+        ?.getAttribute("data-national-phase"),
+    ).toBe("unknown");
     expect(element.textContent).toContain("Connection interrupted");
     expect(element.textContent).not.toContain("Confirmed by game");
   });
 
   it("never treats a resumed member roster or old accepted result as this click's success", async () => {
     const { element, optionsState } = await mount();
-    const input = element.querySelector<HTMLInputElement>("#national-empire-id")!;
+    const input = element.querySelector<HTMLInputElement>(
+      "#national-empire-id",
+    )!;
     input.value = "Atlas";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await element.updateComplete;
@@ -286,14 +328,16 @@ describe("NATIONAL player-facing founding", () => {
       warnings: [],
     };
     optionsState.tick = 11;
-    optionsState.results = [{
-      type: "national_found_empire",
-      recipientId: "nation-a",
-      actorId: "nation-a",
-      empireId: "Atlas",
-      accepted: true,
-      tick: 9,
-    }];
+    optionsState.results = [
+      {
+        type: "national_found_empire",
+        recipientId: "nation-a",
+        actorId: "nation-a",
+        empireId: "Atlas",
+        accepted: true,
+        tick: 9,
+      },
+    ];
     element.refresh();
     await element.updateComplete;
     expect(element.textContent).toContain("You are the emperor.");
@@ -301,7 +345,10 @@ describe("NATIONAL player-facing founding", () => {
     optionsState.tick = 210;
     element.refresh();
     await element.updateComplete;
-    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("unknown");
+    expect(
+      element
+        .querySelector("[data-national-phase]")
+        ?.getAttribute("data-national-phase"),
+    ).toBe("unknown");
   });
-
 });
