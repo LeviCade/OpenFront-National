@@ -1,0 +1,41 @@
+name: Stage 3 E1 R4 Independent Exact-Head Acceptance
+on:
+  push:
+    branches:
+      - stage3/integration-20261115
+    paths:
+      - .github/workflows/stage3-e1-r4-accept.yml
+permissions:
+  contents: read
+jobs:
+  accept:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stage3/e1-round4-political-state-bridge-20261116
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact reviewed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "b55de3bdf53b0aa96cb60473b65e056694a19bfc"
+          test ! -f tests/national/TemporaryFormatProbe.test.ts
+          echo "Verified E1 source b55de3bdf53b0aa96cb60473b65e056694a19bfc"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Typecheck
+        run: npm run typecheck
+      - name: All tests
+        run: npm test
+      - name: Lint
+        run: npm run lint
+      - name: Format
+        run: npm run format:check
+      - name: Production build
+        run: npm run build-prod
