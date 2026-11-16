@@ -85,7 +85,7 @@ async function main() {
   if (!/<html/i.test(html)) throw new Error("Homepage is not HTML");
 
   processChild(
-    process.env.CHROME_BIN || "google-chrome",
+    process.env.CHROME_BIN ?? "google-chrome",
     [
       "--headless=new",
       "--no-sandbox",
