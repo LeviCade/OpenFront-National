@@ -276,7 +276,12 @@ export class GameView implements GameLike {
 
     this.lastUpdate = gu;
 
-    if (this._config.gameConfig().nationalMode === true) {
+    // Legacy/replay test adapters can provide a partial Config without
+    // gameConfig(). Keep ordinary FFA view updates entirely unchanged.
+    if (
+      typeof this._config.gameConfig === "function" &&
+      this._config.gameConfig().nationalMode === true
+    ) {
       // Contract supplied by E1/E3: a complete public projection per tick and
       // a per-principal result. Missing/invalid projections NEVER mean success.
       const nationalPacket = gu as GameUpdateViewData & {
