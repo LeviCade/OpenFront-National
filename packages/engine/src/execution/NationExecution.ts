@@ -21,11 +21,15 @@ import { assertNever, simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
 import {
+  deriveNationalWarSides,
   initialNationalPlannerMemory,
   planNationalInterest,
   type NationalPlannerMemory,
 } from "../national/ai/NationalPlanner";
-import { collectLiveNationalObservation } from "../national/observation/LiveObservation";
+import {
+  collectLiveNationalObservation,
+  liveNationalWarAuthority,
+} from "../national/observation/LiveObservation";
 import {
   advanceLastKnown,
   type NationalSightMemory,
@@ -304,8 +308,9 @@ export class NationExecution implements Execution {
    * NATIONAL-only bounded strategy. The authoritative game reference is
    * confined to the collector and to the final validated execution primitive;
    * the decision itself observes only a whitelisted NationalObservation.
-   * Attacks on foreign-owned land are DISABLED until E2's persisted war
-   * authorization has been merged. Neutral expansion is legal in M0.
+   * Foreign attacks require E2's actual opposing-war-side authority and
+   * a reachable observed border. Missing war plumbing fails closed.
+   * Neutral expansion remains legal in M0.
    */
   private tickNational(ticks: number): void {
     const player = this.player;
@@ -329,34 +334,103 @@ export class NationExecution implements Execution {
       30,
     );
     this.nationalPlannerMemory = result.memory;
+    if (!result.planned || result.decision?.objective !== "expand") return;
+    const targetId = result.decision.targetId;
+
+    // The planner knows only verified frontier IDs. Confirm adjacency again
+    // at execution time; neither hidden armies nor off-map enemies are probed.
+    const reachable = (id: string | null): boolean => {
+      for (const border of player.borderTiles()) {
+        let found = false;
+        this.mg.forEachNeighbor(border, (tile) => {
+          if (
+            !found &&
+            this.mg.isLand(tile) &&
+            player.canAttack(tile) &&
+            (id === null
+              ? !this.mg.owner(tile).isPlayer()
+              : this.mg.owner(tile).id() === id)
+          ) {
+            found = true;
+          }
+        });
+        if (found) return true;
+      }
+      return false;
+    };
+
+    if (targetId === null) {
+      if (
+        observation.unownedFrontier !== true ||
+        player.troops() < 20 ||
+        !reachable(null)
+      )
+        return;
+      this.mg.addExecution(
+        new AttackExecution(
+          Math.max(1, Math.floor(player.troops() / 5)),
+          player,
+          this.mg.terraNullius().id(),
+        ),
+      );
+      return;
+    }
+
+    const war = liveNationalWarAuthority(this.mg);
     if (
-      !result.planned ||
-      result.decision?.objective !== "expand" ||
-      result.decision.targetId !== null ||
-      observation.unownedFrontier !== true
+      war === null ||
+      player.troops() < 1000 ||
+      !this.mg.hasPlayer(targetId) ||
+      !this.mg.player(targetId).isAlive() ||
+      !player.canAttackPlayer(this.mg.player(targetId)) ||
+      !observation.frontiers.some((f) => f.targetId === targetId) ||
+      !reachable(targetId)
     )
       return;
 
-    // The final legality gate reads only actual OWN troops and actual adjacent
-    // unowned terrain. It cannot select a hidden foreign target.
-    if (player.troops() < 20) return;
-    let adjacentNeutral = false;
-    for (const tile of player.borderTiles()) {
-      this.mg.forEachNeighbor(tile, (next) => {
-        if (
-          !adjacentNeutral &&
-          this.mg.isLand(next) &&
-          !this.mg.owner(next).isPlayer() &&
-          player.canAttack(next)
-        )
-          adjacentNeutral = true;
-      });
-      if (adjacentNeutral) break;
+    const sides = deriveNationalWarSides(observation.wars, player.id());
+    if (sides.allies.has(targetId)) return;
+    if (!sides.enemies.has(targetId)) {
+      // An independent AI may begin a scoped national war against a real,
+      // observed neighboring nation. The Game-owned E2 ledger has the FINAL
+      // say on treaties, empire authority, living actors and duplicate wars.
+      // No invented diplomacy or raw WarLedger mutation is permitted.
+      const commandPort = this.mg as Game & {
+        performNationalWarCommand?: (
+          actor: Player,
+          command: {
+            kind: "declare-national";
+            warId: string;
+            aggressorId: string;
+            targetId: string;
+          },
+        ) => void;
+      };
+      if (
+        typeof commandPort.performNationalWarCommand !== "function" ||
+        this.mg.nationalPoliticalAuthority()?.empireOf(player.id()) !== null
+      )
+        return;
+      try {
+        commandPort.performNationalWarCommand(player, {
+          kind: "declare-national",
+          warId: "ai_" + simpleHash(player.id() + ":" + targetId + ":" + ticks),
+          aggressorId: player.id(),
+          targetId,
+        });
+      } catch {
+        // Protected pact, immutable war rules, or an opponent who just died.
+        // Fail closed; never bypass the canonical command validator.
+        return;
+      }
     }
-    if (!adjacentNeutral) return;
-    const troops = Math.max(1, Math.floor(player.troops() / 5));
+    if (!war.authorizeOffensiveAction(player.id(), targetId)) return;
     this.mg.addExecution(
-      new AttackExecution(troops, player, this.mg.terraNullius().id()),
+      new AttackExecution(
+        Math.max(1, Math.floor(player.troops() / 5)),
+        player,
+        targetId,
+      ),
     );
   }
 
