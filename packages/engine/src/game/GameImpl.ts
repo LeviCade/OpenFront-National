@@ -734,9 +734,17 @@ export class GameImpl implements Game {
       throw new Error("NATIONAL levy: mode not enabled");
     this.synchronizeNationalState();
     const political = this._national.snapshot().politics;
+    const alreadyProcessed = new Set(
+      this._nationalWar.snapshot().levy.processed.map((p) => p.attackId),
+    );
     for (const attack of attacks) {
+      if (attack.confirmedAccepted !== true)
+        throw new Error("NATIONAL levy: attack not formally accepted");
+      // E2's ledger verifies the immutable replay fingerprint. Historical
+      // accepted attacks remain idempotent after peace, MDA Betray or death:
+      // no new authorization or contribution is possible on a replay.
+      if (alreadyProcessed.has(attack.attackId)) continue;
       if (
-        attack.confirmedAccepted !== true ||
         !this._nationalWar.authority.authorizeOffensiveAction(
           attack.attackerId, attack.defenderId,
         )

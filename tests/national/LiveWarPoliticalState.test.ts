@@ -192,6 +192,8 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     }
     expect(restored.nationalWarState()).toEqual(original.nationalWarState());
     expect(snapshotGameData(restored).game).toEqual(snapshotGameData(original).game);
+    const hash = (g: Game) => (g as unknown as { hash(): number }).hash();
+    expect(hash(restored)).toBe(hash(original));
     const { bytes: after, again: double } = await roundTrip(original, "plains");
     expect([...double]).toEqual([...after]);
   });
@@ -345,6 +347,15 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
         application: "replay", intercepted: 0,
         remainingAttackingTroops: 20_000, contributions: [],
       });
+      expect(g.player(C).troops()).toBe(amount);
+      // Treaty membership may change after acceptance. An exact duplicate
+      // must still be a no-op, not reopen a campaign or debit troops again.
+      g.performNationalCommand(g.player(C), {
+        kind: "betray-pact", pactId: "r4-mda",
+      });
+      const [oldReplay] = g.applyNationalDefenseLevy([request(g)]);
+      expect(oldReplay.application).toBe("replay");
+      expect(oldReplay.intercepted).toBe(0);
       expect(g.player(C).troops()).toBe(amount);
     }
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
