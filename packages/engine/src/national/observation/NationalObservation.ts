@@ -116,6 +116,8 @@ export interface NationalWorld {
   readonly assets: readonly NationalAsset[];
   readonly sightGrants: readonly NationalSightGrant[];
   readonly frontiers: readonly NationalFrontier[];
+  /** Trusted observation of immediate unowned land, not a foreign-war claim. */
+  readonly unownedFrontier?: boolean;
   readonly diplomaticEvents: readonly NationalDiplomaticEvent[];
 }
 
@@ -162,6 +164,7 @@ export interface NationalObservation {
     readonly access: "land" | "naval";
   }[];
   readonly diplomaticEvents: readonly NationalDiplomaticEvent[];
+  readonly unownedFrontier?: boolean;
 }
 
 export interface LastKnownAsset {
@@ -344,6 +347,7 @@ export function projectNationalObservation(
     ownResources: { troops: own.troops, treasury: own.treasury },
     visibleAssets: visibleAssets.sort(byId),
     frontiers,
+    unownedFrontier: world.unownedFrontier === true,
     diplomaticEvents: world.diplomaticEvents
       .filter(
         (e) =>
