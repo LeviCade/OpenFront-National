@@ -67,11 +67,12 @@ jobs:
           retention-days: 30
 
   strict-real-chromium:
-    name: "Strict browser: ${{ matrix.viewport }}"
+    name: "Strict browser: ${{ matrix.viewport }} ${{ matrix.scenario }}"
     strategy:
       fail-fast: false
       matrix:
         viewport: [desktop, mobile]
+        scenario: [national, legacy]
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -94,10 +95,10 @@ jobs:
           set -euo pipefail
           mkdir -p national-qa-artifacts
           git rev-parse HEAD | tee national-qa-artifacts/browser-head.txt
-          node scripts/national-qa/browser-gameplay.mjs ${{ matrix.viewport == 'mobile' && '--mobile' || '' }}             2>&1 | tee national-qa-artifacts/round5-browser-${{ matrix.viewport }}.log
+          node scripts/national-qa/browser-gameplay.mjs ${{ matrix.viewport == 'mobile' && '--mobile' || '' }}             2>&1 | tee national-qa-artifacts/round5-browser-${{ matrix.viewport }}-${{ matrix.scenario }}.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: national-r5-chromium-${{ matrix.viewport }}-${{ github.sha }}
+          name: national-r5-chromium-${{ matrix.viewport }}-${{ matrix.scenario }}-${{ github.sha }}
           path: national-qa-artifacts/
           retention-days: 30
