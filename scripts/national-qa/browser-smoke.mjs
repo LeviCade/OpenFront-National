@@ -245,5 +245,15 @@ try {
 } finally {
   clearTimeout(watchdog);
   for (const child of children) child.kill("SIGTERM");
-  rmSync(profile, { recursive: true, force: true });
+  await sleep(500);
+  try {
+    rmSync(profile, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 200,
+    });
+  } catch (error) {
+    console.warn("QA_BROWSER_TEMP_PROFILE_LEFT", String(error));
+  }
 }
