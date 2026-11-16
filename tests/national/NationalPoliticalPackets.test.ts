@@ -1,19 +1,28 @@
-import {
-  PlayerInfo,
-  PlayerType,
-} from "@openfront/engine-api/game/GameTypes";
+import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
-import { GameRunner } from "@openfront/engine/GameRunner";
 import type { Game } from "@openfront/engine/game/Game";
+import { GameRunner } from "@openfront/engine/GameRunner";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
-const north = new PlayerInfo("North", PlayerType.Human, "north-client", "north-id");
-const south = new PlayerInfo("South", PlayerType.Human, "south-client", "south-id");
+const north = new PlayerInfo(
+  "North",
+  PlayerType.Human,
+  "north-client",
+  "north-id",
+);
+const south = new PlayerInfo(
+  "South",
+  PlayerType.Human,
+  "south-client",
+  "south-id",
+);
 type PoliticalPacket = GameUpdateViewData & {
-  nationalPolitics?: NonNullable<ReturnType<Game["nationalPublicPoliticalView"]>>;
+  nationalPolitics?: NonNullable<
+    ReturnType<Game["nationalPublicPoliticalView"]>
+  >;
 };
 async function populated(nationalMode = true) {
   const game = await setup("plains", { nationalMode }, [north, south]);
@@ -31,7 +40,9 @@ function runnerFor(game: Game, clientId: string | undefined) {
   const runner = new GameRunner(
     game,
     new Executor(game, "e3-r5-politics", clientId),
-    (packet) => { if ("updates" in packet) packets.push(packet); },
+    (packet) => {
+      if ("updates" in packet) packets.push(packet);
+    },
     clientId,
   );
   const next = () => {
@@ -57,20 +68,28 @@ describe("Round Five real GameRunner public NATIONAL political packets", () => {
     expect(queued.nationalPolitics?.empires).toEqual([]);
     expect(queued).not.toHaveProperty("nationalCommandResults");
     const executed = northRunner.next();
-    if (typeof (game as Game & {
-      nationalCommandResults?: (actor: ReturnType<Game["player"]>) => readonly unknown[];
-    }).nationalCommandResults === "function") {
+    if (
+      typeof (
+        game as Game & {
+          nationalCommandResults?: (
+            actor: ReturnType<Game["player"]>,
+          ) => readonly unknown[];
+        }
+      ).nationalCommandResults === "function"
+    ) {
       expect(executed).toHaveProperty("nationalCommandResults");
-      const accepted = (executed as PoliticalPacket & {
-        nationalCommandResults?: readonly {
-          recipientId: string;
-          actorId: string;
-          accepted: boolean;
-          empireId?: string;
-          type: string;
-          reason?: string;
-        }[];
-      }).nationalCommandResults;
+      const accepted = (
+        executed as PoliticalPacket & {
+          nationalCommandResults?: readonly {
+            recipientId: string;
+            actorId: string;
+            accepted: boolean;
+            empireId?: string;
+            type: string;
+            reason?: string;
+          }[];
+        }
+      ).nationalCommandResults;
       expect(accepted).toEqual([
         expect.objectContaining({
           recipientId: north.id,
@@ -90,12 +109,16 @@ describe("Round Five real GameRunner public NATIONAL political packets", () => {
         "nationalCommandResults",
       );
     }
-    expect(executed.nationalPolitics?.empires).toEqual([{
-      id: "north_kingdom",
-      leaderId: north.id,
-      memberIds: [north.id],
-    }]);
-    expect(executed.nationalPolitics).toEqual(game.nationalPublicPoliticalView());
+    expect(executed.nationalPolitics?.empires).toEqual([
+      {
+        id: "north_kingdom",
+        leaderId: north.id,
+        memberIds: [north.id],
+      },
+    ]);
+    expect(executed.nationalPolitics).toEqual(
+      game.nationalPublicPoliticalView(),
+    );
     expect(JSON.stringify(executed.nationalPolitics)).not.toContain("treasury");
     expect(JSON.stringify(executed.nationalPolitics)).not.toContain("troops");
     expect(JSON.stringify(executed.nationalPolitics)).not.toContain("terms");
@@ -106,15 +129,20 @@ describe("Round Five real GameRunner public NATIONAL political packets", () => {
     const stream = runnerFor(game, north.clientID!);
     const executor = new Executor(game, "e3-r5-politics", north.clientID!);
     // Actor-bound Game journal is optional only until E1 R5 merges.
-    const supportsJournal = typeof (game as Game & {
-      nationalCommandResults?: unknown;
-    }).nationalCommandResults === "function";
+    const supportsJournal =
+      typeof (
+        game as Game & {
+          nationalCommandResults?: unknown;
+        }
+      ).nationalCommandResults === "function";
     for (let attempt = 0; attempt < 2; attempt++) {
-      game.addExecution(executor.createExec({
-        type: "national_found_empire",
-        empireId: "duplicate_kingdom",
-        clientID: north.clientID!,
-      }));
+      game.addExecution(
+        executor.createExec({
+          type: "national_found_empire",
+          empireId: "duplicate_kingdom",
+          clientID: north.clientID!,
+        }),
+      );
       const pending = stream.next();
       expect(pending).not.toHaveProperty("nationalCommandResults");
       const processed = stream.next() as PoliticalPacket & {
@@ -154,12 +182,16 @@ describe("Round Five real GameRunner public NATIONAL political packets", () => {
     for (const packet of [northPacket, southPacket, spectator]) {
       expect(packet.nationalPolitics?.empires[0].id).toBe("persisted_kingdom");
       expect(JSON.stringify(packet.nationalPolitics)).not.toContain("8765432");
-      expect(JSON.stringify(packet.nationalPolitics)).not.toContain("123456789");
+      expect(JSON.stringify(packet.nationalPolitics)).not.toContain(
+        "123456789",
+      );
     }
     expect(JSON.stringify(northPacket)).not.toContain("123456789");
     const { restored } = await roundTrip(game, "plains");
     const resumed = runnerFor(restored, north.clientID!).next();
-    expect(resumed.nationalPolitics?.empires).toEqual(northPacket.nationalPolitics?.empires);
+    expect(resumed.nationalPolitics?.empires).toEqual(
+      northPacket.nationalPolitics?.empires,
+    );
   });
 
   it("legacy GameRunner output never gains NATIONAL political fields", async () => {

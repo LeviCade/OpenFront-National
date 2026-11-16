@@ -23,11 +23,11 @@ import {
 } from "@openfront/engine-lib/game/PackedUnitUpdates";
 import type { Game } from "../../game/Game";
 import type { LiveNationalObservation } from "./LiveObservation";
-import type { OutboundFounderResult } from "./NationalPoliticalPacket";
 import {
   advanceLastKnown,
   type NationalSightMemory,
 } from "./NationalObservation";
+import type { OutboundFounderResult } from "./NationalPoliticalPacket";
 
 function publicPlayer(u: PlayerUpdate): PlayerUpdate {
   // Enumerate allowed fields explicitly. The full internal PlayerUpdate
