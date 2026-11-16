@@ -38,6 +38,7 @@ import { PlayerCosmetics, WirePlayer } from "@openfront/shared/WireSchemas";
 import {
   readNationalFoundingResults,
   readNationalPolitics,
+  retainNationalFoundingReceipts,
   type NationalFoundingResult,
   type NationalPublicPolitics,
 } from "../NationalDiplomacyState";
@@ -332,24 +333,12 @@ export class GameView implements GameLike {
                 typeof outcome.tick === "number" &&
                 outcome.tick <= gu.tick,
             );
-      const previous =
-        gu.tick < previousTick || this._nationalPolitics === null
-          ? []
-          : this._nationalFoundingResults;
-      const receipts = [...previous, ...received].filter(
-        (outcome) =>
-          typeof outcome.tick === "number" &&
-          outcome.tick >= gu.tick - 120,
+      this._nationalFoundingResults = retainNationalFoundingReceipts(
+        this._nationalFoundingResults,
+        received,
+        gu.tick,
+        gu.tick < previousTick || this._nationalPolitics === null,
       );
-      // Prevent repeated packets from ever growing an unbounded local journal.
-      const deduplicated = new Map<string, NationalFoundingResult>();
-      for (const result of receipts) {
-        deduplicated.set(
-          `${result.actorId}:${result.empireId}:${result.tick}:${result.accepted}`,
-          result,
-        );
-      }
-      this._nationalFoundingResults = [...deduplicated.values()].slice(-32);
       this._nationalFoundingOutcome =
         this._nationalFoundingResults[
           this._nationalFoundingResults.length - 1
