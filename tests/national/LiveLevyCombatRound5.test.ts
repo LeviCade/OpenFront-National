@@ -7,6 +7,7 @@
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
+import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { interceptNationalAttack } from "@openfront/engine/execution/NationalWarExecution";
 import type { Game, Player } from "@openfront/engine/game/Game";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
@@ -32,9 +33,7 @@ async function gameWithPlayers(): Promise<Game> {
   for (let i = 0; i < records.length; i++) {
     const [x, y] = coords[i];
     game.addExecution(
-      new (await import("@openfront/engine/execution/SpawnExecution")).SpawnExecution(
-        "round5-mda", records[i], game.map().ref(x, y),
-      ),
+      new SpawnExecution("round5-mda", records[i], game.map().ref(x, y)),
     );
   }
   game.executeNextTick();
