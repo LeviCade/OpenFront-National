@@ -22,6 +22,7 @@ import { EmbargoExecution } from "./EmbargoExecution";
 import { EmojiExecution } from "./EmojiExecution";
 import { MarkDisconnectedExecution } from "./MarkDisconnectedExecution";
 import { MoveWarshipExecution } from "./MoveWarshipExecution";
+import { NationalFoundEmpireExecution } from "./NationalFoundEmpireExecution";
 import { NationExecution } from "./NationExecution";
 import { NoOpExecution } from "./NoOpExecution";
 import { PauseExecution } from "./PauseExecution";
@@ -74,6 +75,8 @@ export class Executor {
           null,
         );
       }
+      case "national_found_empire":
+        return new NationalFoundEmpireExecution(player, intent.empireId);
       case "cancel_attack":
         return new RetreatExecution(player, intent.attackID);
       case "cancel_boat":
