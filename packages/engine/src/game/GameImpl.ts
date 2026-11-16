@@ -69,6 +69,10 @@ import {
 import { NationExecution } from "../execution/NationExecution";
 import { SpawnTimerExecution } from "../execution/SpawnTimerExecution";
 import { TribeExecution } from "../execution/TribeExecution";
+import type {
+  NationalPoliticalAuthority,
+  NationalConflictPoliticsPort,
+} from "../national/politics/PoliticalAuthorityAdapter";
 import {
   NationalRuntime,
   NationalRuntimeSnapshotSchema,
@@ -551,6 +555,11 @@ export class GameImpl implements Game {
   }
 
   /** Returns the actual victorious sovereign (no legacy-mode shortcut). */
+  /** Never exposes the mutable PoliticsProjection to a caller. */
+  nationalPoliticalAuthority(): Readonly<NationalPoliticalAuthority & NationalConflictPoliticsPort> | null {
+    return this._national?.authority() ?? null;
+  }
+
   nationalWinner(): PlayerID | null {
     this.synchronizeNationalState();
     return this._national?.winner() ?? null;

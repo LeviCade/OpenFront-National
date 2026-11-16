@@ -8,6 +8,7 @@
 import type { PlayerID } from "@openfront/engine-api/game/GameTypes";
 import { simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
+import { PoliticalAuthorityAdapter } from "./politics/PoliticalAuthorityAdapter";
 import {
   eliminatePoliticalNation,
   foundEmpire,
@@ -109,6 +110,11 @@ function emptyMetrics(): PoliticsMetrics {
 export class NationalRuntime {
   private politics: PoliticsProjection;
   private lastTick = 0;
+
+  /** Read the same authoritative projection after every command or restore. */
+  authority(): PoliticalAuthorityAdapter {
+    return new PoliticalAuthorityAdapter(() => this.politics);
+  }
 
   constructor(ids: readonly PlayerID[]) {
     this.politics = initialPolitics(
