@@ -392,7 +392,8 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
     const warning = game.nationalUngovernableWarnings();
     expect(warning).toHaveLength(1);
     const deadline = warning[0].deadlineMs;
-    expect(warning[0].remainingMs).toBe(10_000);
+    // The warning began on the preceding 100 ms simulation tick.
+    expect(warning[0].remainingMs).toBe(9_900);
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
     expect(restored.nationalUngovernableWarnings()).toEqual(warning);
