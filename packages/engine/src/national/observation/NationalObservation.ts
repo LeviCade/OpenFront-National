@@ -9,8 +9,17 @@
  */
 export type NationId = string;
 export type CoalitionKind = "nap" | "mda" | "empire";
-export type SovereignStatus = "independent" | "imperial" | "member" | "eliminated";
-export type AssetKind = "army" | "structure" | "warship" | "transport" | "trade-ship";
+export type SovereignStatus =
+  | "independent"
+  | "imperial"
+  | "member"
+  | "eliminated";
+export type AssetKind =
+  | "army"
+  | "structure"
+  | "warship"
+  | "transport"
+  | "trade-ship";
 export type SightSource = "border" | "coast" | "warship" | "recon";
 
 export interface NationalNation {
@@ -136,7 +145,10 @@ export interface NationalObservation {
   readonly wars: readonly NationalWar[];
   readonly ownResources: { readonly troops: number; readonly treasury: number };
   readonly visibleAssets: readonly VisibleAsset[];
-  readonly frontiers: readonly { readonly targetId: NationId; readonly access: "land" | "naval" }[];
+  readonly frontiers: readonly {
+    readonly targetId: NationId;
+    readonly access: "land" | "naval";
+  }[];
   readonly diplomaticEvents: readonly NationalDiplomaticEvent[];
 }
 
@@ -155,12 +167,18 @@ export interface NationalSightMemory {
   readonly assets: readonly LastKnownAsset[];
 }
 
-const byId = (a: { readonly id: string }, b: { readonly id: string }): number =>
-  a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+const byId = (
+  a: { readonly id: string },
+  b: { readonly id: string },
+): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 const byTarget = (
   a: { readonly targetId: string; readonly access: string },
   b: { readonly targetId: string; readonly access: string },
-): number => byId({ id: a.targetId + "/" + a.access }, { id: b.targetId + "/" + b.access });
+): number =>
+  byId(
+    { id: a.targetId + "/" + a.access },
+    { id: b.targetId + "/" + b.access },
+  );
 
 /**
  * Pure projection. Grant lists and treaty invitations MUST be built/validated
@@ -187,36 +205,40 @@ export function projectNationalObservation(
       .filter((inv) => inv.recipientId === observerId)
       .map((inv) => inv.coalitionId),
   );
-  const coalitionObservations = world.coalitions.map((c): CoalitionObservation => {
-    const admitted = c.members.includes(observerId);
-    const invited = !admitted && invitedTo.has(c.id);
-    const base: CoalitionObservation = {
-      id: c.id,
-      kind: c.kind,
-      leaderId: c.leaderId,
-      members: [...c.members].sort(),
-    };
-    if (!admitted && !invited) return base;
-    return {
-      ...base,
-      terms: { ...c.terms },
-      ...(invited ? { invited: true as const } : {}),
-    };
-  });
+  const coalitionObservations = world.coalitions.map(
+    (c): CoalitionObservation => {
+      const admitted = c.members.includes(observerId);
+      const invited = !admitted && invitedTo.has(c.id);
+      const base: CoalitionObservation = {
+        id: c.id,
+        kind: c.kind,
+        leaderId: c.leaderId,
+        members: [...c.members].sort(),
+      };
+      if (!admitted && !invited) return base;
+      return {
+        ...base,
+        terms: { ...c.terms },
+        ...(invited ? { invited: true as const } : {}),
+      };
+    },
+  );
 
   // Grants are the sole foreign visibility path. They expire or are revoked
   // by the authoritative observation producer when line of sight is lost.
   const validGrant = new Map<string, NationalSightGrant>();
   for (const grant of world.sightGrants) {
     if (!intelligencePrincipals.has(grant.observerId)) continue;
-    if (grant.observedAtTick > world.tick || grant.expiresAtTick < world.tick) continue;
+    if (grant.observedAtTick > world.tick || grant.expiresAtTick < world.tick)
+      continue;
     const previous = validGrant.get(grant.assetId);
     if (
       !previous ||
       grant.observedAtTick > previous.observedAtTick ||
       (grant.observedAtTick === previous.observedAtTick &&
         (grant.observerId < previous.observerId ||
-          (grant.observerId === previous.observerId && grant.source < previous.source)))
+          (grant.observerId === previous.observerId &&
+            grant.source < previous.source)))
     ) {
       validGrant.set(grant.assetId, grant);
     }
@@ -245,33 +267,55 @@ export function projectNationalObservation(
       x: asset.x,
       y: asset.y,
       source: grant.observerId === observerId ? grant.source : "empire",
-      ...(grant.observerId === observerId ? {} : { sourceNationId: grant.observerId }),
+      ...(grant.observerId === observerId
+        ? {}
+        : { sourceNationId: grant.observerId }),
     });
   }
 
   const frontiers = world.frontiers
-    .filter((f) => f.observerId === observerId && present.has(f.targetId) && f.targetId !== observerId)
+    .filter(
+      (f) =>
+        f.observerId === observerId &&
+        present.has(f.targetId) &&
+        f.targetId !== observerId,
+    )
     .map((f) => ({ targetId: f.targetId, access: f.access }))
     .sort(byTarget);
 
   return {
     observerId,
     tick: world.tick,
-    nations: world.nations.map((n) => ({
-      id: n.id,
-      name: n.name,
-      landPercent: n.landPercent,
-      status: n.status,
-      alive: n.alive,
-    })).sort(byId),
+    nations: world.nations
+      .map((n) => ({
+        id: n.id,
+        name: n.name,
+        landPercent: n.landPercent,
+        status: n.status,
+        alive: n.alive,
+      }))
+      .sort(byId),
     coalitions: coalitionObservations.sort(byId),
-    wars: world.wars.map((w) => ({ id: w.id, participants: [...w.participants].sort() })).sort(byId),
+    wars: world.wars
+      .map((w) => ({ id: w.id, participants: [...w.participants].sort() }))
+      .sort(byId),
     ownResources: { troops: own.troops, treasury: own.treasury },
     visibleAssets: visibleAssets.sort(byId),
     frontiers,
     diplomaticEvents: world.diplomaticEvents
-      .filter((e) => e.tick <= world.tick && (e.public || e.visibleTo?.some((id) => intelligencePrincipals.has(id))))
-      .map((e) => ({ id: e.id, tick: e.tick, actorId: e.actorId, kind: e.kind, public: e.public }))
+      .filter(
+        (e) =>
+          e.tick <= world.tick &&
+          (e.public ||
+            e.visibleTo?.some((id) => intelligencePrincipals.has(id))),
+      )
+      .map((e) => ({
+        id: e.id,
+        tick: e.tick,
+        actorId: e.actorId,
+        kind: e.kind,
+        public: e.public,
+      }))
       .sort((a, b) => a.tick - b.tick || byId(a, b)),
   };
 }
@@ -305,16 +349,23 @@ export function advanceLastKnown(
           c.members.includes(observation.observerId) &&
           c.members.includes(entry.sourceNationId!),
       )
-    ) continue;
+    )
+      continue;
     if (observation.tick - entry.lastSeenTick <= retentionTicks) {
       remembered.set(entry.id, { ...entry });
     }
   }
   for (const unit of observation.visibleAssets) {
     remembered.set(unit.id, {
-      id: unit.id, ownerId: unit.ownerId, kind: unit.kind,
-      x: unit.x, y: unit.y, lastSeenTick: observation.tick,
-      ...(unit.sourceNationId === undefined ? {} : { sourceNationId: unit.sourceNationId }),
+      id: unit.id,
+      ownerId: unit.ownerId,
+      kind: unit.kind,
+      x: unit.x,
+      y: unit.y,
+      lastSeenTick: observation.tick,
+      ...(unit.sourceNationId === undefined
+        ? {}
+        : { sourceNationId: unit.sourceNationId }),
     });
   }
   const entries = [...remembered.values()].sort(byId);

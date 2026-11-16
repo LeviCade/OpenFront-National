@@ -14,7 +14,7 @@ This folder deliberately contains no authoritative game-loop, wire, routing, pol
 
 ## Proposed integration rule
 
-The trusted game system constructs `NationalWorld`, including *only authenticated* sight grants, public diplomatic events, membership and invitations. `projectNationalObservation(world, nationId)` is the single projection for AI planning and human client payloads. Consumers must never receive the raw world, a `Game` reference or a `Player` reference. The observer has no ability to assert `observerId`, `sightGrants`, alliance membership, or recipient rights across the trust boundary.
+The trusted game system constructs `NationalWorld`, including _only authenticated_ sight grants, public diplomatic events, membership and invitations. `projectNationalObservation(world, nationId)` is the single projection for AI planning and human client payloads. Consumers must never receive the raw world, a `Game` reference or a `Player` reference. The observer has no ability to assert `observerId`, `sightGrants`, alliance membership, or recipient rights across the trust boundary.
 
 Outputs are deliberately whitelisted and copied. Public rosters and wars remain visible, private treaty terms appear only for members or pending invitees, and empire membership unions legitimate sightings. Unseen assets and all transport landing destinations are absent. Losing sight revokes current visibility; `advanceLastKnown` can retain the last legitimately seen coordinate with an explicit tick and caller-defined expiry, never hidden live coordinates.
 

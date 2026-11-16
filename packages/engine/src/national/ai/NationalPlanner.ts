@@ -21,14 +21,20 @@ export interface NationalPlannerMemory {
   readonly objective: NationalObjective;
   readonly targetId: NationId | null;
   readonly nextPlanningTick: number;
-  readonly lastProcessedEvent: { readonly tick: number; readonly id: string } | null;
+  readonly lastProcessedEvent: {
+    readonly tick: number;
+    readonly id: string;
+  } | null;
   readonly reputation: readonly DiplomaticReputation[];
 }
 export interface NationalDecision {
   readonly objective: NationalObjective;
   readonly targetId: NationId | null;
   readonly score: number;
-  readonly rationale: "active-defense" | "reachable-opportunity" | "preserve-options";
+  readonly rationale:
+    | "active-defense"
+    | "reachable-opportunity"
+    | "preserve-options";
 }
 export interface NationalPlanResult {
   readonly planned: boolean;
@@ -36,7 +42,7 @@ export interface NationalPlanResult {
   readonly memory: NationalPlannerMemory;
 }
 
-const cmp = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
+const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const REPUTATION_LIMIT = 128;
 const clamp = (n: number): number => Math.max(-10, Math.min(10, n));
 const weight: Record<PublicDiplomaticEventKind, number> = {
@@ -46,7 +52,9 @@ const weight: Record<PublicDiplomaticEventKind, number> = {
   "bluff-exposed": -3,
 };
 
-export function initialNationalPlannerMemory(observerId: NationId): NationalPlannerMemory {
+export function initialNationalPlannerMemory(
+  observerId: NationId,
+): NationalPlannerMemory {
   return {
     observerId,
     objective: "consolidate",
@@ -72,22 +80,35 @@ export function updateNationalDiplomaticMemory(
   // histories idempotent without unbounded event-ID storage.
   for (const e of observation.diplomaticEvents) {
     if (e.tick > observation.tick) continue;
-    if (cursor && (e.tick < cursor.tick || (e.tick === cursor.tick && e.id <= cursor.id))) continue;
+    if (
+      cursor &&
+      (e.tick < cursor.tick || (e.tick === cursor.tick && e.id <= cursor.id))
+    )
+      continue;
     cursor = { tick: e.tick, id: e.id };
     sawNewEvent = true;
     reputation.set(e.actorId, {
       nationId: e.actorId,
-      credibility: clamp((reputation.get(e.actorId)?.credibility ?? 0) + weight[e.kind]),
+      credibility: clamp(
+        (reputation.get(e.actorId)?.credibility ?? 0) + weight[e.kind],
+      ),
       lastObservedTick: e.tick,
     });
   }
   const sortedReputation = [...reputation.values()]
-    .sort((a, b) => b.lastObservedTick - a.lastObservedTick || cmp(a.nationId, b.nationId))
+    .sort(
+      (a, b) =>
+        b.lastObservedTick - a.lastObservedTick || cmp(a.nationId, b.nationId),
+    )
     .slice(0, REPUTATION_LIMIT)
     .sort((a, b) => cmp(a.nationId, b.nationId));
   return {
     sawNewEvent,
-    memory: { ...memory, lastProcessedEvent: cursor, reputation: sortedReputation },
+    memory: {
+      ...memory,
+      lastProcessedEvent: cursor,
+      reputation: sortedReputation,
+    },
   };
 }
 
@@ -111,8 +132,21 @@ export function planNationalInterest(
   }
   const self = observation.nations.find((n) => n.id === observation.observerId);
   if (!self || !self.alive) {
-    return { planned: true, decision: { objective: "consolidate", targetId: null, score: 0, rationale: "preserve-options" },
-      memory: { ...memory, objective: "consolidate", targetId: null, nextPlanningTick: observation.tick + cadenceTicks } };
+    return {
+      planned: true,
+      decision: {
+        objective: "consolidate",
+        targetId: null,
+        score: 0,
+        rationale: "preserve-options",
+      },
+      memory: {
+        ...memory,
+        objective: "consolidate",
+        targetId: null,
+        nextPlanningTick: observation.tick + cadenceTicks,
+      },
+    };
   }
 
   const publicNations = new Map(observation.nations.map((n) => [n.id, n]));
@@ -125,14 +159,27 @@ export function planNationalInterest(
     (a) => a.ownerId !== self.id && enemiesAtWar.has(a.ownerId),
   );
   if (closeThreat && self.landPercent <= 3) {
-    const decision: NationalDecision = { objective: "defend", targetId: null, score: 100, rationale: "active-defense" };
+    const decision: NationalDecision = {
+      objective: "defend",
+      targetId: null,
+      score: 100,
+      rationale: "active-defense",
+    };
     return {
-      planned: true, decision,
-      memory: { ...memory, objective: decision.objective, targetId: null, nextPlanningTick: observation.tick + cadenceTicks },
+      planned: true,
+      decision,
+      memory: {
+        ...memory,
+        objective: decision.objective,
+        targetId: null,
+        nextPlanningTick: observation.tick + cadenceTicks,
+      },
     };
   }
 
-  const knownCredibility = new Map(memory.reputation.map((r) => [r.nationId, r.credibility]));
+  const knownCredibility = new Map(
+    memory.reputation.map((r) => [r.nationId, r.credibility]),
+  );
   const visibleMilitary = new Set(
     observation.visibleAssets
       .filter((a) => a.kind === "army" || a.kind === "warship")
@@ -140,7 +187,8 @@ export function planNationalInterest(
   );
   const protectedPartners = new Set<string>();
   for (const c of observation.coalitions) {
-    if (c.members.includes(self.id)) for (const id of c.members) protectedPartners.add(id);
+    if (c.members.includes(self.id))
+      for (const id of c.members) protectedPartners.add(id);
   }
 
   let bestId: string | null = null;
@@ -160,16 +208,31 @@ export function planNationalInterest(
       Math.min(20, target.landPercent * 0.7) -
       (seenMilitary ? 9 : 0) -
       Math.max(0, credibility);
-    if (score > bestScore || (score === bestScore && (bestId === null || cmp(target.id, bestId) < 0))) {
+    if (
+      score > bestScore ||
+      (score === bestScore && (bestId === null || cmp(target.id, bestId) < 0))
+    ) {
       bestId = target.id;
       bestScore = score;
     }
   }
-  const decision: NationalDecision = bestId !== null && bestScore > 9
-    ? { objective: "expand", targetId: bestId, score: Math.round(bestScore * 100) / 100, rationale: "reachable-opportunity" }
-    : { objective: "consolidate", targetId: null, score: 0, rationale: "preserve-options" };
+  const decision: NationalDecision =
+    bestId !== null && bestScore > 9
+      ? {
+          objective: "expand",
+          targetId: bestId,
+          score: Math.round(bestScore * 100) / 100,
+          rationale: "reachable-opportunity",
+        }
+      : {
+          objective: "consolidate",
+          targetId: null,
+          score: 0,
+          rationale: "preserve-options",
+        };
   return {
-    planned: true, decision,
+    planned: true,
+    decision,
     memory: {
       ...memory,
       objective: decision.objective,
