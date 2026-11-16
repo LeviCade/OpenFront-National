@@ -22,7 +22,6 @@ import {
 import { WarLedger } from "@openfront/engine/national/conflict/WarLedger";
 import {
   collectLiveNationalObservation,
-  type LiveWarAuthority,
 } from "@openfront/engine/national/observation/LiveObservation";
 import { advanceLastKnown } from "@openfront/engine/national/observation/NationalObservation";
 import { setup } from "../util/Setup";
@@ -164,13 +163,15 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
       secret.id,
       game.ticks(),
     );
-    const authoritative = game as typeof game & {
-      nationalWarAuthority?: () => LiveWarAuthority | null;
-    };
-    authoritative.nationalWarAuthority = () => ({
-      authorizeOffensiveAction: (actor, target) =>
-        ledger.authorizeOffensiveAction(actor, target),
-      snapshot: () => ({ wars: { layers: ledger.exportState().layers } }),
+    // This E3 test injects a real E2 WarLedger read-only adapter, without
+    // taking ownership of E1's GameImpl or WAR snapshot schema.
+    Object.defineProperty(game, "nationalWarAuthority", {
+      configurable: true,
+      value: () => ({
+        authorizeOffensiveAction: (actor: string, target: string | null) =>
+          ledger.authorizeOffensiveAction(actor, target),
+        snapshot: () => ({ wars: { layers: ledger.exportState().layers } }),
+      }),
     });
     const during = collectLiveNationalObservation(game, viewer.id).observation;
     expect(during.wars.map((w) => w.id)).toEqual([warId]);
