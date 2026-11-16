@@ -59,10 +59,17 @@ jobs:
         run: node scripts/national-qa/asset-audit.mjs
       - name: Typecheck QA with entire source
         run: npm run typecheck
-      - name: Lint and formatting
+      - name: Lint and formatting (with owned-file diff on failure)
+        shell: bash
         run: |
+          set -euo pipefail
           npm run lint
-          npm run format:check
+          if ! npm run format:check; then
+            echo "::error::Formatting validation failed; reporting exact QA-only formatter diff"
+            npx --no-install oxfmt --write tests/e2e/national/IntegratedAcceptance.test.ts tests/qa/national/PacketCanaries.test.ts scripts/national-qa/audit-summary.mjs scripts/national-qa/asset-audit.mjs scripts/national-qa/browser-smoke.mjs docs/release/NATIONAL_RELEASE_GATE.md .github/workflows/national-release-qa.yml
+            git diff -- tests/e2e/national tests/qa/national scripts/national-qa docs/release .github/workflows/national-release-qa.yml
+            exit 1
+          fi
       - name: Inherited vulnerability audit (record, do not auto-fix)
         if: always()
         shell: bash
