@@ -182,7 +182,6 @@ export function weightedLevyAllocation(
   return result;
 }
 
-
 type LedgerMaps = {
   allowances: Map<string, Allowance>;
   processed: Map<string, Processed>;
@@ -320,7 +319,9 @@ export class DefenseLevyLedger {
 
     const initialBalances = new Map<string, number>();
     const virtualBalances = new Map<string, number>();
-    for (const [id, source] of [...liveSources].sort(([a], [b]) => compare(a, b))) {
+    for (const [id, source] of [...liveSources].sort(([a], [b]) =>
+      compare(a, b),
+    )) {
       const balance = source.troops();
       assertNonnegative(balance, "actual contributor troops");
       initialBalances.set(id, balance);
@@ -436,10 +437,7 @@ export class DefenseLevyLedger {
         candidates.set(id, {
           source: e.source,
           troopCapacity: e.troopCapacity,
-          maximumFraction: Math.min(
-            prior.maximumFraction,
-            e.maximumFraction,
-          ),
+          maximumFraction: Math.min(prior.maximumFraction, e.maximumFraction),
           protectedCapacityFraction: Math.max(
             prior.protectedCapacityFraction,
             e.protectedCapacityFraction,
@@ -457,9 +455,7 @@ export class DefenseLevyLedger {
     }[] = [];
     for (const [id, e] of [...candidates].sort(([a], [b]) => compare(a, b))) {
       const current = balances.get(id)!;
-      const reserve = Math.ceil(
-        e.troopCapacity * e.protectedCapacityFraction,
-      );
+      const reserve = Math.ceil(e.troopCapacity * e.protectedCapacityFraction);
       const key = this.allowanceKey(r, id);
       const existing = maps.allowances.get(key);
       const cap =
@@ -477,10 +473,7 @@ export class DefenseLevyLedger {
       };
       allocations.push({
         id,
-        cap: Math.max(
-          0,
-          Math.min(cap - allowance.spent, current - reserve),
-        ),
+        cap: Math.max(0, Math.min(cap - allowance.spent, current - reserve)),
         weight: current,
         key,
         allowance,

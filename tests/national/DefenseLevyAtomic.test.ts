@@ -113,7 +113,9 @@ class AtomicBankAdapter implements TroopDebitTransactionAdapter {
         // One synchronous, nonthrowing publication of ALL account changes.
         this.bank.swap(next);
       },
-      discard: () => { this.discardCount++; },
+      discard: () => {
+        this.discardCount++;
+      },
     };
   }
 }
@@ -172,18 +174,16 @@ describe("NATIONAL levy transaction atomicity — D-008 / LEVY-01..07", () => {
 
   it("final contributor PREPARE failure does not debit earlier contributors", () => {
     const bank = new TroopBank();
-    const donors = ["C", "D", "E", "F"].map((id) =>
-      bank.add(id, 100_000),
-    );
+    const donors = ["C", "D", "E", "F"].map((id) => bank.add(id, 100_000));
     const adapter = new AtomicBankAdapter(bank);
     const ledger = new DefenseLevyLedger(adapter);
     adapter.prepareFailAt = 3;
     expect(() =>
       ledger.interceptAcceptedAttacks([assault("a", "c", 40_000, donors)]),
     ).toThrow("prepare failure at contributor 3");
-    expect(bank.snapshot()).toEqual(new Map(
-      ["C", "D", "E", "F"].map((id) => [id, 100_000]),
-    ));
+    expect(bank.snapshot()).toEqual(
+      new Map(["C", "D", "E", "F"].map((id) => [id, 100_000])),
+    );
     expect(ledger.exportState().processed).toEqual([]);
     expect(adapter.commitCount).toBe(0);
   });
@@ -198,24 +198,27 @@ describe("NATIONAL levy transaction atomicity — D-008 / LEVY-01..07", () => {
       const accountsBefore = bank.snapshot();
       adapter.commitFailAt = failureIndex;
       expect(() =>
-        ledger.interceptAcceptedAttacks([
-          assault("a", "c", 30_000, donors),
-        ]),
+        ledger.interceptAcceptedAttacks([assault("a", "c", 30_000, donors)]),
       ).toThrow(`commit failure at contributor ${failureIndex}`);
       expect(bank.snapshot()).toEqual(accountsBefore);
       expect(ledger.exportState()).toEqual(stateBefore);
       expect(adapter.discardCount).toBe(1);
       adapter.commitFailAt = null;
       expect(
-        ledger.interceptAcceptedAttacks([
-          assault("a", "c", 30_000, donors),
-        ])[0].intercepted,
+        ledger.interceptAcceptedAttacks([assault("a", "c", 30_000, donors)])[0]
+          .intercepted,
       ).toBe(30_000);
     });
   }
 
   for (const response of [
-    "short", "under", "over", "negative", "fraction", "wrong-id", "reordered",
+    "short",
+    "under",
+    "over",
+    "negative",
+    "fraction",
+    "wrong-id",
+    "reordered",
   ] as const) {
     it(`refuses ${response} approval BEFORE any debit`, () => {
       const bank = new TroopBank();
@@ -224,12 +227,13 @@ describe("NATIONAL levy transaction atomicity — D-008 / LEVY-01..07", () => {
       const ledger = new DefenseLevyLedger(adapter);
       adapter.approvalMode = response;
       expect(() =>
-        ledger.interceptAcceptedAttacks([
-          assault("a", "c", 20_000, donors),
-        ]),
+        ledger.interceptAcceptedAttacks([assault("a", "c", 20_000, donors)]),
       ).toThrow();
       expect(bank.snapshot()).toEqual(
-        new Map([["C", 100_000], ["D", 100_000]]),
+        new Map([
+          ["C", 100_000],
+          ["D", 100_000],
+        ]),
       );
       expect(ledger.exportState().processed).toEqual([]);
       expect(adapter.commitCount).toBe(0);
@@ -248,9 +252,14 @@ describe("NATIONAL levy transaction atomicity — D-008 / LEVY-01..07", () => {
       const results = ledger.interceptAcceptedAttacks(
         reverse ? [second, first] : [first, second],
       );
-      return { results, balance: bank.balance("C"), commits: adapter.commitCount };
+      return {
+        results,
+        balance: bank.balance("C"),
+        commits: adapter.commitCount,
+      };
     };
-    const a = run(false), b = run(true);
+    const a = run(false),
+      b = run(true);
     expect(a).toEqual(b);
     expect(a.results.map((x) => x.intercepted)).toEqual([10_000, 9_000]);
     expect(a.balance).toBe(81_000);
@@ -259,7 +268,8 @@ describe("NATIONAL levy transaction atomicity — D-008 / LEVY-01..07", () => {
 
   it("a failure in the final donor of a multi-attack batch rolls back the entire batch", () => {
     const bank = new TroopBank();
-    const c = bank.add("C", 100_000), d = bank.add("D", 100_000);
+    const c = bank.add("C", 100_000),
+      d = bank.add("D", 100_000);
     const adapter = new AtomicBankAdapter(bank);
     const ledger = new DefenseLevyLedger(adapter);
     adapter.commitFailAt = 1;
@@ -281,7 +291,9 @@ describe("NATIONAL levy transaction atomicity — D-008 / LEVY-01..07", () => {
     const adapter = new AtomicBankAdapter(bank);
     const ledger = new DefenseLevyLedger(adapter);
     const spam = Array.from({ length: 20 }, (_, i) =>
-      assault(`micro-${String(i).padStart(2, "0")}`, "one-campaign", 2_000, [donor]),
+      assault(`micro-${String(i).padStart(2, "0")}`, "one-campaign", 2_000, [
+        donor,
+      ]),
     );
     const original = ledger.interceptAcceptedAttacks(spam);
     expect(original.reduce((n, x) => n + x.intercepted, 0)).toBe(10_000);
@@ -349,9 +361,11 @@ describe("NATIONAL levy transaction atomicity — D-008 / LEVY-01..07", () => {
     expect(clone.interceptAcceptedAttacks([first])).toEqual([result]);
     expect(adapter.commitCount).toBe(countBefore);
     expect(bank.balance("C")).toBe(restoredBalance);
-    expect(clone.interceptAcceptedAttacks([
-      assault("b", "campaign", 20_000, [donor]),
-    ])[0].intercepted).toBe(7_000);
+    expect(
+      clone.interceptAcceptedAttacks([
+        assault("b", "campaign", 20_000, [donor]),
+      ])[0].intercepted,
+    ).toBe(7_000);
     expect(bank.balance("C")).toBe(90_000);
     expect(clone.exportState().allowances[0].spent).toBe(10_000);
   });
@@ -371,9 +385,7 @@ describe("NATIONAL levy transaction atomicity — D-008 / LEVY-01..07", () => {
       },
     };
     expect(() =>
-      ledger.interceptAcceptedAttacks([
-        assault("a", "c", 10_000, [stale]),
-      ]),
+      ledger.interceptAcceptedAttacks([assault("a", "c", 10_000, [stale])]),
     ).toThrow();
     expect(bank.balance("C")).toBe(100_000);
     expect(ledger.exportState().processed).toEqual([]);

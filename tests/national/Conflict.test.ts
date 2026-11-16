@@ -75,7 +75,14 @@ class Troops implements TroopSource {
 class AtomicTestAdapter implements TroopDebitTransactionAdapter {
   failPrepareAt: number | null = null;
   failCommitAt: number | null = null;
-  reply: "exact" | "short" | "under" | "over" | "negative" | "wrong-id" | "reordered" = "exact";
+  reply:
+    | "exact"
+    | "short"
+    | "under"
+    | "over"
+    | "negative"
+    | "wrong-id"
+    | "reordered" = "exact";
   prepareCalls = 0;
   commitCalls = 0;
   discardCalls = 0;
@@ -124,14 +131,19 @@ class AtomicTestAdapter implements TroopDebitTransactionAdapter {
             throw new Error("CAS balance mismatch");
           if (debit.resultingBalance !== debit.expectedBalance - debit.debit)
             throw new Error("invalid resulting balance");
-          return { owner: debit.source as Troops, balance: debit.resultingBalance };
+          return {
+            owner: debit.source as Troops,
+            balance: debit.resultingBalance,
+          };
         });
         for (const update of updates) {
           update.owner.balance = update.balance;
           update.owner.calls++;
         }
       },
-      discard: () => { this.discardCalls++; },
+      discard: () => {
+        this.discardCalls++;
+      },
     };
   }
 }
@@ -289,7 +301,9 @@ describe("NATIONAL real defensive levies — D-008", () => {
   });
   it("LEVY-02 fully shields an incoming attack before territorial combat", () => {
     const donors = [new Troops("C", 450_000)];
-    const r = new DefenseLevyLedger(new AtomicTestAdapter()).interceptAcceptedAttacks([
+    const r = new DefenseLevyLedger(
+      new AtomicTestAdapter(),
+    ).interceptAcceptedAttacks([
       {
         ...levy("a", "c", 30_000, donors),
         eligible: [
@@ -333,8 +347,12 @@ describe("NATIONAL real defensive levies — D-008", () => {
       d2 = new Troops("C", 100_000);
     const a = levy("a", "campaign-1", 20_000, [d1], "A", "B");
     const b = levy("b", "campaign-2", 20_000, [d1], "X", "Y");
-    const r1 = new DefenseLevyLedger(new AtomicTestAdapter()).interceptAcceptedAttacks([b, a]);
-    const r2 = new DefenseLevyLedger(new AtomicTestAdapter()).interceptAcceptedAttacks(
+    const r1 = new DefenseLevyLedger(
+      new AtomicTestAdapter(),
+    ).interceptAcceptedAttacks([b, a]);
+    const r2 = new DefenseLevyLedger(
+      new AtomicTestAdapter(),
+    ).interceptAcceptedAttacks(
       [a, b].map((x) => ({
         ...x,
         eligible: x.eligible.map((e) => ({ ...e, source: d2 })),
@@ -347,16 +365,18 @@ describe("NATIONAL real defensive levies — D-008", () => {
   });
   it("LEVY-06 protected reserve prevents excessive levy despite high campaign cap", () => {
     const donor = new Troops("C", 32_000);
-    const r = new DefenseLevyLedger(new AtomicTestAdapter()).interceptAcceptedAttacks([
-      levy("a", "c", 20_000, [donor]),
-    ])[0];
+    const r = new DefenseLevyLedger(
+      new AtomicTestAdapter(),
+    ).interceptAcceptedAttacks([levy("a", "c", 20_000, [donor])])[0];
     expect(r.intercepted).toBe(2_000);
     expect(donor.balance).toBe(30_000);
   });
   it("LEVY-07 multiple treaty memberships count one nation once", () => {
     const donor = new Troops("C", 100_000);
     const request = levy("a", "c", 40_000, [donor]);
-    const r = new DefenseLevyLedger(new AtomicTestAdapter()).interceptAcceptedAttacks([
+    const r = new DefenseLevyLedger(
+      new AtomicTestAdapter(),
+    ).interceptAcceptedAttacks([
       { ...request, eligible: [...request.eligible, ...request.eligible] },
     ])[0];
     expect(r.intercepted).toBe(10_000);
@@ -403,6 +423,8 @@ describe("NATIONAL real defensive levies — D-008", () => {
     ledger.interceptAcceptedAttacks([levy("a", "c", 10_000, [donor])]);
     const state = JSON.parse(JSON.stringify(ledger.exportState()));
     state.processed[0].result.intercepted = 20_000;
-    expect(() => new DefenseLevyLedger(new AtomicTestAdapter()).restoreState(state)).toThrow();
+    expect(() =>
+      new DefenseLevyLedger(new AtomicTestAdapter()).restoreState(state),
+    ).toThrow();
   });
 });
