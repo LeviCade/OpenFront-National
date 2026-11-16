@@ -213,3 +213,14 @@ human player supplied their own `playerID`. Invalid, incomplete and
 off-map coordinates are rejected. This blocks a concealed-unit/territory
 oracle through apparently legitimate action previews; it does not
 authorize host-side combat or replace E2 war restrictions.
+
+### Per-tick principal revocation
+
+The runner's observer identity is not sufficient merely because it was valid
+during initialization. Each NATIONAL tick and privileged RPC rechecks the
+current authoritative `game.playerByClientID(clientID)` mapping against
+the original `PlayerID`. After transfer/disconnect, the runner emits a
+public-only packet, drops private packed statistics and current-unit deltas,
+and rejects privileged RPCs and stamped intents. Previously delivered
+information cannot be erased from an untrusted browser; prevent future
+delivery and require a fresh authenticated runner for a new principal.
