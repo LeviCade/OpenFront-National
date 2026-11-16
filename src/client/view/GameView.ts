@@ -79,6 +79,8 @@ export class GameView implements GameLike {
   // sovereignty from local intents or speculative client player data.
   private _nationalPolitics: NationalPublicPolitics | null = null;
   private _nationalFoundingOutcome: NationalFoundingResult | null = null;
+  private _nationalFoundingResults: readonly NationalFoundingResult[] = [];
+  private _nationalPoliticsTick: number | null = null;
 
   public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
     return this._nationalPolitics;
@@ -86,6 +88,16 @@ export class GameView implements GameLike {
 
   public nationalFoundingOutcome(): Readonly<NationalFoundingResult> | null {
     return this._nationalFoundingOutcome;
+  }
+
+  /** Only results delivered by the CURRENT worker tick; no stale journal. */
+  public nationalFoundingResults(): readonly Readonly<NationalFoundingResult>[] {
+    return this._nationalFoundingResults;
+  }
+
+  /** Null means the worker has not delivered a valid public roster. */
+  public nationalPoliticsTick(): number | null {
+    return this._nationalPoliticsTick;
   }
   private startTick: Tick | null = null;
   private smallIDToID = new Map<number, PlayerID>();
@@ -291,14 +303,21 @@ export class GameView implements GameLike {
       this._nationalPolitics = readNationalPolitics(
         nationalPacket.nationalPolitics,
       );
-      const outcomes = readNationalFoundingResults(
-        nationalPacket.nationalCommandResults,
-      );
-      for (const outcome of outcomes) {
-        if (outcome.actorId === this._myPlayer?.id()) {
-          this._nationalFoundingOutcome = outcome;
-        }
-      }
+      this._nationalPoliticsTick =
+        this._nationalPolitics === null ? null : gu.tick;
+
+      // Results are scoped to the exact incoming tick, not indefinitely
+      // cached across reconnects, replay seeks or another game. Never use
+      // another actor's command result as our own acknowledgement.
+      const myActorId = this._myPlayer?.id() ?? null;
+      this._nationalFoundingResults =
+        myActorId === null
+          ? []
+          : readNationalFoundingResults(
+              nationalPacket.nationalCommandResults,
+            ).filter((outcome) => outcome.actorId === myActorId);
+      this._nationalFoundingOutcome =
+        this._nationalFoundingResults.at(-1) ?? null;
     }
 
     this.updatedTiles = [];
