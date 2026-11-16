@@ -164,6 +164,27 @@ describe("Stage 3 M0: authoritative NATIONAL vertical slice", () => {
     ).toThrow(/not enabled/);
   });
 
+  it("restores a queued authenticated founding execution before it runs", async () => {
+    const game = await spawned(true);
+    game.addExecution(
+      new Executor(game, "national-m0", undefined).createExec({
+        type: "national_found_empire",
+        empireId: "queued-empire",
+        clientID: "north-client",
+      }),
+    );
+    // The command is queued but not initialized or executed at this boundary.
+    const { restored } = await roundTrip(game, "plains");
+    for (let i = 0; i < 2; i++) {
+      game.executeNextTick();
+      restored.executeNextTick();
+    }
+    expect(state(restored)).toEqual(state(game));
+    expect(state(restored)?.politics.empires.map((e) => e.id)).toEqual([
+      "queued-empire",
+    ]);
+  });
+
   it("restores politics through a version-2 GameSnapshot with exact bytes", async () => {
     const game = await spawned(true);
     game.performNationalCommand(game.player("north-id"), {
