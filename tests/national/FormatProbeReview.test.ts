@@ -10,6 +10,7 @@ describe("national review formatter diagnostic", () => {
     const sources = [
       "packages/engine/src/national/conflict/DefenseLevy.ts",
       "packages/engine/src/national/conflict/WarLedger.ts",
+      "packages/engine/src/national/conflict/README.md",
       "tests/national/Conflict.test.ts",
       "tests/national/DefenseLevyAtomic.test.ts",
       "tests/national/ConflictReviewReplay.test.ts",
@@ -17,7 +18,7 @@ describe("national review formatter diagnostic", () => {
     const dir = mkdtempSync(join(process.cwd(), ".national-review-probe-"));
     try {
       sources.forEach((source, index) => {
-        const temp = join(dir, `source-${index}.ts`);
+        const temp = join(dir, `source-${index}.${source.endsWith(".md") ? "md" : "ts"}`);
         copyFileSync(source, temp);
         const result = spawnSync("./node_modules/.bin/oxfmt", ["--write", temp], {
           cwd: process.cwd(),
