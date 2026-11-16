@@ -11,19 +11,15 @@
  *   ... --mobile
  */
 import { spawn } from "node:child_process";
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const mobile = process.argv.includes("--mobile");
 const legacy = process.argv.includes("--legacy");
 const base = "http://127.0.0.1:9000/";
-const reportDir = "national-qa-artifacts/browser-" + (mobile ? "mobile" : "desktop");
+const reportDir =
+  "national-qa-artifacts/browser-" + (mobile ? "mobile" : "desktop");
 mkdirSync(reportDir, { recursive: true });
 const profile = mkdtempSync(join(tmpdir(), "national-r5-"));
 const port = 13000 + (process.pid % 10000);
@@ -206,14 +202,18 @@ const probe = `(() => {
 
 async function main() {
   stage = "boot";
-  spawnChild(process.execPath, ["node_modules/tsx/dist/cli.mjs", "src/server/Server.ts"], {
-    GAME_ENV: "dev",
-    TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
-    API_KEY: "WARNING_DEV_API_KEY_DO_NOT_USE_IN_PRODUCTION",
-    ADMIN_BOT_API_KEY: "WARNING_DEV_ADMIN_BOT_KEY_DO_NOT_USE_IN_PRODUCTION",
-    DOMAIN: "localhost",
-    GIT_COMMIT: "DEV",
-  });
+  spawnChild(
+    process.execPath,
+    ["node_modules/tsx/dist/cli.mjs", "src/server/Server.ts"],
+    {
+      GAME_ENV: "dev",
+      TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
+      API_KEY: "WARNING_DEV_API_KEY_DO_NOT_USE_IN_PRODUCTION",
+      ADMIN_BOT_API_KEY: "WARNING_DEV_ADMIN_BOT_KEY_DO_NOT_USE_IN_PRODUCTION",
+      DOMAIN: "localhost",
+      GIT_COMMIT: "DEV",
+    },
+  );
   const vite = spawnChild(
     process.execPath,
     ["node_modules/vite/bin/vite.js", "--host", "127.0.0.1"],
@@ -227,12 +227,20 @@ async function main() {
   record("vite-http-ready");
 
   spawnChild(process.env.CHROME_BIN ?? "google-chrome", [
-    "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
-    "--enable-webgl", "--ignore-gpu-blocklist", "--use-gl=angle",
-    "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
-    "--no-first-run", "--no-default-browser-check",
-    "--remote-allow-origins=*", "--user-data-dir=" + profile,
-    "--remote-debugging-port=" + port, "about:blank",
+    "--headless=new",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--enable-webgl",
+    "--ignore-gpu-blocklist",
+    "--use-gl=angle",
+    "--use-angle=swiftshader",
+    "--enable-unsafe-swiftshader",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--remote-allow-origins=*",
+    "--user-data-dir=" + profile,
+    "--remote-debugging-port=" + port,
+    "about:blank",
   ]);
   const pages = await poll(async () => {
     const res = await fetch("http://127.0.0.1:" + port + "/json/list", {
@@ -250,21 +258,29 @@ async function main() {
   const send = cdp(ws);
   const evaluate = async (expression) => {
     const res = await send("Runtime.evaluate", {
-      expression, returnByValue: true, awaitPromise: true,
+      expression,
+      returnByValue: true,
+      awaitPromise: true,
     });
     if (res.exceptionDetails) {
-      throw new Error("Browser Runtime exception " + JSON.stringify(res.exceptionDetails));
+      throw new Error(
+        "Browser Runtime exception " + JSON.stringify(res.exceptionDetails),
+      );
     }
     return res.result?.value;
   };
   const screenshot = async (label) => {
     const data = await send("Page.captureScreenshot", { format: "png" });
-    writeFileSync(join(reportDir, label + ".png"), Buffer.from(data.data, "base64"));
+    writeFileSync(
+      join(reportDir, label + ".png"),
+      Buffer.from(data.data, "base64"),
+    );
   };
   const worker = async () => {
     const evidence = await evaluate("window.__nationalQaWorkerEvidence || []");
     if (Array.isArray(evidence)) {
-      for (const packet of evidence.slice(observed.length)) observed.push(packet);
+      for (const packet of evidence.slice(observed.length))
+        observed.push(packet);
     }
     return observed;
   };
@@ -306,52 +322,92 @@ async function main() {
       walk(root);
       return found.sort((a,b) => a.text.length-b.text.length)[0] ?? null;
     })()`);
-  const hit = async (x,y) => {
-    await send("Input.dispatchMouseEvent", {type:"mouseMoved", x,y});
-    await send("Input.dispatchMouseEvent", {type:"mousePressed",x,y,button:"left",clickCount:1});
-    await send("Input.dispatchMouseEvent", {type:"mouseReleased",x,y,button:"left",clickCount:1});
+  const hit = async (x, y) => {
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+    await send("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x,
+      y,
+      button: "left",
+      clickCount: 1,
+    });
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x,
+      y,
+      button: "left",
+      clickCount: 1,
+    });
   };
   const click = async (label, scope = "", attempts = 90) => {
     const target = await poll(() => locate(label, scope), label, attempts);
-    await hit(target.x,target.y);
+    await hit(target.x, target.y);
     record("clicked", { label, text: target.text });
     return target;
   };
   const clickSelector = async (selector) => {
-    const target = await poll(() => evaluate(`(() => {
+    const target = await poll(
+      () =>
+        evaluate(`(() => {
       const node = window.__nationalQaFind(${JSON.stringify(selector)});
       if (!node || node.disabled) return null;
       const bounds = node.getBoundingClientRect();
       return bounds.width && bounds.height
         ? { x: bounds.x + bounds.width/2, y: bounds.y + bounds.height/2 }
         : null;
-    })()`), selector);
-    await hit(target.x,target.y);
-    record("clicked-selector",{selector});
+    })()`),
+      selector,
+    );
+    await hit(target.x, target.y);
+    record("clicked-selector", { selector });
   };
-  const fill = async (selector,value) => {
-    const target = await poll(() => evaluate(`(() => {
+  const fill = async (selector, value) => {
+    const target = await poll(
+      () =>
+        evaluate(`(() => {
       const element = window.__nationalQaFind(${JSON.stringify(selector)});
       if (!element || element.disabled) return null;
       const rect=element.getBoundingClientRect();
       return rect.width && rect.height ? { x:rect.x+rect.width/2, y:rect.y+rect.height/2 } : null;
-    })()`), selector);
-    await hit(target.x,target.y);
-    await send("Input.dispatchKeyEvent", {type:"keyDown",key:"a",code:"KeyA",modifiers:2});
-    await send("Input.dispatchKeyEvent", {type:"keyUp",key:"a",code:"KeyA",modifiers:2});
-    await send("Input.insertText", {text:value});
-    record("typed", {selector, chars:value.length});
+    })()`),
+      selector,
+    );
+    await hit(target.x, target.y);
+    await send("Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "a",
+      code: "KeyA",
+      modifiers: 2,
+    });
+    await send("Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: "a",
+      code: "KeyA",
+      modifiers: 2,
+    });
+    await send("Input.insertText", { text: value });
+    record("typed", { selector, chars: value.length });
   };
   const capture = async (name) => {
     await worker();
     await screenshot(name);
-    record("screenshot", {name, packetCount:observed.length});
+    record("screenshot", { name, packetCount: observed.length });
     persist();
   };
-  const step = async (name,fn) => {
-    stage=name;
-    try {await fn();record("stage-complete",{stage:name});}
-    catch(err){errors.push({stage:name,error:String(err),observed:await description().catch(()=>null)});await capture("failure-"+name).catch(()=>{});throw err;}
+  const step = async (name, fn) => {
+    stage = name;
+    try {
+      await fn();
+      record("stage-complete", { stage: name });
+    } catch (err) {
+      errors.push({
+        stage: name,
+        error: String(err),
+        observed: await description().catch(() => null),
+      });
+      await capture("failure-" + name).catch(() => {});
+      throw err;
+    }
   };
 
   try {
@@ -397,16 +453,26 @@ async function main() {
       return;
     }
     await step("national-mode", async () => {
-      const checkbox = await locate("Enable NATIONAL sovereignty in Solo", "single-player-modal");
+      const checkbox = await locate(
+        "Enable NATIONAL sovereignty in Solo",
+        "single-player-modal",
+      );
       if (!checkbox) throw Error("NATIONAL opt-in control missing");
-      if (!checkbox.checked) await hit(checkbox.x,checkbox.y);
-      await poll(() => evaluate("document.querySelector('single-player-modal input[aria-label=\"Enable NATIONAL sovereignty in Solo\"]')?.checked === true"), "NATIONAL selected");
+      if (!checkbox.checked) await hit(checkbox.x, checkbox.y);
+      await poll(
+        () =>
+          evaluate(
+            "document.querySelector('single-player-modal input[aria-label=\"Enable NATIONAL sovereignty in Solo\"]')?.checked === true",
+          ),
+        "NATIONAL selected",
+      );
       await capture("national-enabled");
     });
     await step("start", async () => {
       await click("start|play", "single-player-modal", 65);
       const launch = await poll(
-        () => evaluate(`(() => {
+        () =>
+          evaluate(`(() => {
           const gate = window.__nationalQaFind('webgl-gate');
           if (gate) return { blocked: true, status: gate.status };
           const panel = window.__nationalQaFind('national-diplomacy-panel');
@@ -414,22 +480,40 @@ async function main() {
             ? { running: true } : null;
         })()`),
         "actual started match or explicit WebGL hard blocker",
-        100, 350,
+        100,
+        350,
       );
       if (launch.blocked) {
-        throw new Error("REAL_CHROMIUM_GPU_REQUIRED: WebGL gate blocked game startup (" + launch.status + "). Hosted Ubuntu software GL is not a playable-game acceptance environment.");
+        throw new Error(
+          "REAL_CHROMIUM_GPU_REQUIRED: WebGL gate blocked game startup (" +
+            launch.status +
+            "). Hosted Ubuntu software GL is not a playable-game acceptance environment.",
+        );
       }
       await capture("game-hud");
     });
     await step("spawn", async () => {
       await click("NATIONAL.*Diplomacy", "national-diplomacy-panel", 75);
       await capture("diplomacy-before-spawn");
-      const msg = await evaluate("window.__nationalQaFind('national-diplomacy-panel')?.innerText ?? ''");
-      if (!/spawn before founding/i.test(msg)) record("spawn-precondition-not-observed",{text:msg.slice(0,150)});
+      const msg = await evaluate(
+        "window.__nationalQaFind('national-diplomacy-panel')?.innerText ?? ''",
+      );
+      if (!/spawn before founding/i.test(msg))
+        record("spawn-precondition-not-observed", { text: msg.slice(0, 150) });
       // Human map interaction: try coordinates and stop immediately once the
       // real game HUD enables Found Empire. Never mutate Game state from JS.
-      for (const [u,v] of [[0.55,0.55],[0.4,0.4],[0.6,0.42],[0.3,0.55],[0.7,0.6],[0.2,0.4]]) {
-        const enabled = await locate("^Found Empire$", "national-diplomacy-panel");
+      for (const [u, v] of [
+        [0.55, 0.55],
+        [0.4, 0.4],
+        [0.6, 0.42],
+        [0.3, 0.55],
+        [0.7, 0.6],
+        [0.2, 0.4],
+      ]) {
+        const enabled = await locate(
+          "^Found Empire$",
+          "national-diplomacy-panel",
+        );
         if (enabled) break;
         const canvas = await evaluate(`(() => {
           const canvases=[...document.querySelectorAll('canvas')].filter((e)=>e.getBoundingClientRect().width>150);
@@ -541,14 +625,21 @@ try {
   await main();
 } catch (error) {
   console.error("QA_R5_BROWSER_FAILURE " + String(error));
-  errors.push({stage,error:String(error)});
-  process.exitCode=1;
+  errors.push({ stage, error: String(error) });
+  process.exitCode = 1;
 } finally {
   clearTimeout(watchdog);
   persist();
-  for(const child of childProcesses) child.kill("SIGTERM");
+  for (const child of childProcesses) child.kill("SIGTERM");
   await sleep(500);
   try {
-    rmSync(profile,{recursive:true,force:true,maxRetries:10,retryDelay:200});
-  }catch(error){console.warn("QA_R5_TEMP_PROFILE_LEFT",String(error));}
+    rmSync(profile, {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 200,
+    });
+  } catch (error) {
+    console.warn("QA_R5_TEMP_PROFILE_LEFT", String(error));
+  }
 }
