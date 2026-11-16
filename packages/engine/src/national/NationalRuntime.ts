@@ -10,12 +10,23 @@ import { simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { PoliticalAuthorityAdapter } from "./politics/PoliticalAuthorityAdapter";
 import {
+  acceptEmpireAccession,
+  acceptPactInvitation,
+  betrayPact,
   eliminatePoliticalNation,
+  evaluateUngovernable,
   foundEmpire,
+  foundPact,
   initialPolitics,
+  inviteToPact,
   lastSovereignVictory,
   METRIC_KEYS,
+  proposeEmpireAccession,
+  transferCrown,
   validatePolitics,
+  type LastSovereignResult,
+  type PactKind,
+  type PactTerms,
   type PoliticsMetrics,
   type PoliticsProjection,
 } from "./politics/sovereignty";
@@ -87,16 +98,49 @@ export type NationalRuntimeSnapshot = z.infer<
   typeof NationalRuntimeSnapshotSchema
 >;
 
-export type NationalCommand = {
-  kind: "found-empire";
-  empireId: string;
-};
+/** These actions are authorized by the live GameImpl actor check. */
+export type NationalCommand =
+  | { kind: "found-empire"; empireId: string }
+  | { kind: "offer-empire"; empireId: string; candidateId: PlayerID }
+  | { kind: "accept-empire"; empireId: string; candidateId: PlayerID }
+  | { kind: "transfer-crown"; empireId: string; successorId: PlayerID }
+  | {
+      kind: "found-pact";
+      pactId: string;
+      name: string;
+      pactKind: PactKind;
+      terms: PactTerms;
+    }
+  | { kind: "invite-pact"; pactId: string; candidateId: PlayerID }
+  | { kind: "accept-pact"; pactId: string }
+  | { kind: "betray-pact"; pactId: string };
 
 export interface NationalLivePlayer {
   readonly id: PlayerID;
   readonly alive: boolean;
   readonly spawned: boolean;
-  readonly land: number;
+  /** All eight readings come from an actual engine Player this tick. */
+  readonly metrics: PoliticsMetrics;
+  /** Explicitly resolved by the engine; not guessed from wall-clock delay. */
+  readonly pendingSpawn?: boolean;
+}
+
+/**
+ * Pending is the default while P5 (unspawned forfeit) is unratified.
+ * The second policy is opt-in for deterministic scenario tests only.
+ */
+export type UnspawnedPolicy = "preserve-pending" | "forfeit-no-pending";
+export interface NationalUngovernableWarning {
+  empireId: string;
+  deadlineMs: number;
+  remainingMs: number;
+  blockedByAssetDisposition: boolean;
+}
+
+function requireCommandId(id: string): void {
+  if (typeof id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
+    throw new Error("NATIONAL: invalid political command identifier");
+  }
 }
 
 function emptyMetrics(): PoliticsMetrics {
@@ -123,16 +167,15 @@ export class NationalRuntime {
   }
 
   /**
-   * Derive live identity and elimination at an engine tick boundary.
-   * Unspawned identities remain pending, not spuriously eliminated: the
-   * full AFK/unspawned resolution rule is a separate open design decision.
-   * Only the land metric is connected here; other metrics remain zero until
-   * the politics adapter supplies authoritative values in the next slice.
+   * Reconcile actual GameImpl players at the deterministic post-execution tick
+   * boundary. No automatic Ungovernable collapse until treasury/army
+   * redistribution is approved. The warning deadline stays in snapshots.
    */
   synchronize(
     players: readonly NationalLivePlayer[],
     tick: number,
     spawnPhaseEnded: boolean,
+    unspawnedPolicy: UnspawnedPolicy = "preserve-pending",
   ): void {
     if (
       !Number.isSafeInteger(tick) ||
@@ -141,20 +184,33 @@ export class NationalRuntime {
     ) {
       throw new Error("NATIONAL: invalid or nonmonotonic simulation tick");
     }
+    if (
+      unspawnedPolicy !== "preserve-pending" &&
+      unspawnedPolicy !== "forfeit-no-pending"
+    ) {
+      throw new Error("NATIONAL: invalid unspawned policy");
+    }
     const known = new Set(this.politics.nations.map((n) => n.id));
     const live = new Map<PlayerID, NationalLivePlayer>();
     for (const player of players) {
       if (
         live.has(player.id) ||
-        !player.id ||
-        !Number.isSafeInteger(player.land) ||
-        player.land < 0
+        typeof player.id !== "string" ||
+        player.id.length === 0
       ) {
-        throw new Error("NATIONAL: invalid live player identity/land");
+        throw new Error("NATIONAL: invalid or duplicate player identity");
+      }
+      for (const key of METRIC_KEYS) {
+        if (
+          !Number.isSafeInteger(player.metrics[key]) ||
+          player.metrics[key] < 0
+        ) {
+          throw new Error("NATIONAL: invalid live metric: " + key);
+        }
       }
       live.set(player.id, player);
     }
-    // The base engine can create bot/tribe players after game construction.
+    // Some AI/tribe player identities appear after the constructor.
     for (const player of players) {
       if (!known.has(player.id)) {
         this.politics.nations.push({
@@ -164,43 +220,124 @@ export class NationalRuntime {
         });
       }
     }
-    for (const n of this.politics.nations) {
-      const player = live.get(n.id);
+    for (const nation of this.politics.nations) {
+      const player = live.get(nation.id);
       if (!player) throw new Error("NATIONAL: missing real player identity");
-      n.metrics.land = player.land;
+      nation.metrics = { ...player.metrics };
     }
     if (spawnPhaseEnded) {
       for (const player of players) {
         const prior = this.politics.nations.find((n) => n.id === player.id);
-        if (player.spawned && !player.alive && prior?.alive) {
+        const eliminated = player.spawned && !player.alive;
+        const selectedForfeit =
+          unspawnedPolicy === "forfeit-no-pending" &&
+          !player.spawned &&
+          !player.pendingSpawn;
+        if ((eliminated || selectedForfeit) && prior?.alive) {
           this.politics = eliminatePoliticalNation(this.politics, player.id);
         }
       }
     }
-    this.politics.simulationMs = tick * 100; // existing engine: ten ticks/second
+    this.politics.simulationMs = tick * 100;
+    // Explicitly defer dissolution on expiration. Deadlines are durable and
+    // visible, so the 10-second warning remains real and replay deterministic.
+    this.politics = evaluateUngovernable(this.politics, tick * 100, false).state;
     validatePolitics(this.politics);
     this.lastTick = tick;
   }
 
-  /** One real authenticated, live nation may found an empire. No side effects on failure. */
-  perform(actorId: PlayerID, command: NationalCommand): void {
-    if (
-      command.kind !== "found-empire" ||
-      typeof command.empireId !== "string" ||
-      !/^[A-Za-z0-9_-]{1,64}$/.test(command.empireId)
-    ) {
-      throw new Error("NATIONAL: invalid authenticated political command");
-    }
-    // E1 transition validates independent status, liveness and empire uniqueness.
-    this.politics = foundEmpire(this.politics, command.empireId, actorId);
+  /** Re-evaluated on demand; copy-only result, not mutable political state. */
+  ungovernableWarnings(): NationalUngovernableWarning[] {
+    return this.politics.empires
+      .filter((e) => e.crisisDeadlineMs !== null)
+      .map((e) => ({
+        empireId: e.id,
+        deadlineMs: e.crisisDeadlineMs!,
+        remainingMs: Math.max(0, e.crisisDeadlineMs! - this.politics.simulationMs),
+        blockedByAssetDisposition: this.politics.simulationMs >= e.crisisDeadlineMs!,
+      }))
+      .sort((a, b) => a.empireId.localeCompare(b.empireId, "en"));
   }
 
-  /** Winner chosen by real engine from E1's last-sovereign evaluation. */
-  winner(): PlayerID | null {
+  /** Accept only the actor resolved from the real GameImpl player registry. */
+  perform(actorId: PlayerID, command: NationalCommand): void {
+    if (!this.politics.nations.some((n) => n.id === actorId && n.alive)) {
+      throw new Error("NATIONAL: dead or unrecognized actor");
+    }
+    let next: PoliticsProjection;
+    switch (command.kind) {
+      case "found-empire":
+        requireCommandId(command.empireId);
+        next = foundEmpire(this.politics, command.empireId, actorId);
+        break;
+      case "offer-empire":
+        requireCommandId(command.empireId);
+        next = proposeEmpireAccession(
+          this.politics,
+          command.empireId,
+          actorId,
+          command.candidateId,
+        );
+        break;
+      case "accept-empire":
+        requireCommandId(command.empireId);
+        next = acceptEmpireAccession(
+          this.politics,
+          command.empireId,
+          actorId,
+          command.candidateId,
+        );
+        break;
+      case "transfer-crown":
+        requireCommandId(command.empireId);
+        next = transferCrown(
+          this.politics,
+          command.empireId,
+          actorId,
+          command.successorId,
+        );
+        break;
+      case "found-pact":
+        requireCommandId(command.pactId);
+        next = foundPact(this.politics, {
+          id: command.pactId,
+          name: command.name,
+          kind: command.pactKind,
+          founderId: actorId,
+          terms: command.terms,
+        });
+        break;
+      case "invite-pact":
+        requireCommandId(command.pactId);
+        next = inviteToPact(
+          this.politics,
+          command.pactId,
+          actorId,
+          command.candidateId,
+        );
+        break;
+      case "accept-pact":
+        requireCommandId(command.pactId);
+        next = acceptPactInvitation(this.politics, command.pactId, actorId);
+        break;
+      case "betray-pact":
+        requireCommandId(command.pactId);
+        next = betrayPact(this.politics, command.pactId, actorId);
+        break;
+      default:
+        throw new Error("NATIONAL: unsupported political command");
+    }
+    this.politics = next;
+  }
+
+  /** Full, deterministic NATIONAL winner roster, including imperial members. */
+  victoryRoster(): LastSovereignResult | null {
     const result = lastSovereignVictory(this.politics);
-    if (!result.resolved) return null;
-    const victor = result.prizes[0];
-    return victor?.nationId ?? null;
+    return result.resolved ? result : null;
+  }
+
+  winner(): PlayerID | null {
+    return this.victoryRoster()?.prizes[0]?.nationId ?? null;
   }
 
   snapshot(): NationalRuntimeSnapshot {
