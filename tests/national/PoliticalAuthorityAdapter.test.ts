@@ -35,7 +35,9 @@ const metrics = (value: number): PoliticsMetrics =>
   Object.fromEntries(METRIC_KEYS.map((key) => [key, value])) as PoliticsMetrics;
 
 function states(...ids: PlayerID[]): PoliticsProjection {
-  return initialPolitics(ids.map((id) => ({ id, alive: true, metrics: metrics(4) })));
+  return initialPolitics(
+    ids.map((id) => ({ id, alive: true, metrics: metrics(4) })),
+  );
 }
 
 function addEmpireMember(
@@ -45,9 +47,10 @@ function addEmpireMember(
   proposer: PlayerID,
 ): PoliticsProjection {
   const offered = proposeEmpireAccession(state, empireId, proposer, applicant);
-  const recipient = proposer === applicant
-    ? offered.empires.find((e) => e.id === empireId)!.leaderId
-    : applicant;
+  const recipient =
+    proposer === applicant
+      ? offered.empires.find((e) => e.id === empireId)!.leaderId
+      : applicant;
   return acceptEmpireAccession(offered, empireId, recipient, applicant);
 }
 
@@ -111,7 +114,9 @@ describe("Round Two M0 politics authority (D-003, D-009, D-010)", () => {
     expect(a.membersOf("empire-1")).toEqual([alpha]);
     const offer = proposeEmpireAccession(state, "empire-1", beta, beta);
     expect(a.empireOf(beta)).toBeNull();
-    expect(() => acceptEmpireAccession(offer, "empire-1", beta, beta)).toThrow();
+    expect(() =>
+      acceptEmpireAccession(offer, "empire-1", beta, beta),
+    ).toThrow();
     state = acceptEmpireAccession(offer, "empire-1", alpha, beta);
     expect(a.empireOf(beta)).toBe("empire-1");
     expect(a.emperorOf("empire-1")).toBe(alpha);
@@ -237,7 +242,10 @@ describe("Round Two treaty and war permission queries (D-007, D-010)", () => {
 
   it("WAR-07: only the emperor has imperial war authority, regardless of national delegation", () => {
     const state = setupEmpire();
-    const a = authority(() => state, () => true);
+    const a = authority(
+      () => state,
+      () => true,
+    );
     expect(a.emperorOf("empire-1")).toBe(alpha);
     expect(a.emperorOf("empire-1") === beta).toBe(false);
     expect(a.authorizedNationalWarActor(beta, beta, "declare")).toBe(true);
@@ -278,7 +286,9 @@ describe("Round Two treaty and war permission queries (D-007, D-010)", () => {
     const b = authority(() => rehydrated);
     expect(a.membersOf("empire-1")).toEqual(b.membersOf("empire-1"));
     expect(a.emperorOf("empire-1")).toBe(b.emperorOf("empire-1"));
-    expect(a.checkLastSovereignVictory()).toEqual(b.checkLastSovereignVictory());
+    expect(a.checkLastSovereignVictory()).toEqual(
+      b.checkLastSovereignVictory(),
+    );
     expect(JSON.stringify(play())).toBe(JSON.stringify(state));
     expect(lastSovereignVictory(state).sovereignPowerCount).toBe(2);
   });

@@ -51,7 +51,10 @@ export interface NationalConflictPoliticsPort {
   treatyProtects(attackerId: PlayerID, targetId: PlayerID): boolean;
 }
 
-function knownLiving(state: Readonly<PoliticsProjection>, id: PlayerID): boolean {
+function knownLiving(
+  state: Readonly<PoliticsProjection>,
+  id: PlayerID,
+): boolean {
   return (
     typeof id === "string" &&
     id.length > 0 &&
