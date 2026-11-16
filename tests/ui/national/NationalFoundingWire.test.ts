@@ -25,12 +25,9 @@ vi.mock("../../../src/client/InGameModal", () => ({
 }));
 
 import "../../../src/client/NationalDiplomacyPanel";
-import type { NationalDiplomacyPanel } from "../../../src/client/NationalDiplomacyPanel";
-import {
-  SetIntentGateEvent,
-  Transport,
-} from "../../../src/client/Transport";
 import type { LobbyConfig } from "../../../src/client/ClientGameRunner";
+import type { NationalDiplomacyPanel } from "../../../src/client/NationalDiplomacyPanel";
+import { SetIntentGateEvent, Transport } from "../../../src/client/Transport";
 import type { GameView } from "../../../src/client/view";
 
 const mounted: HTMLElement[] = [];
@@ -46,7 +43,10 @@ async function setup() {
   } as LobbyConfig;
   const transport = new Transport(lobby, bus);
   transports.push(transport);
-  transport.connect(() => {}, () => {});
+  transport.connect(
+    () => {},
+    () => {},
+  );
 
   const me = {
     id: () => "nation-a",
@@ -55,7 +55,9 @@ async function setup() {
     numTilesOwned: () => 12,
   };
   const state = {
-    politics: { empires: [] as { id: string; leaderId: string; memberIds: string[] }[] },
+    politics: {
+      empires: [] as { id: string; leaderId: string; memberIds: string[] }[],
+    },
   };
   const game = {
     config: () => ({
@@ -81,9 +83,11 @@ async function setup() {
   document.body.append(panel);
   mounted.push(panel);
   await panel.updateComplete;
-  panel.querySelector<HTMLButtonElement>(
-    'button[aria-controls="national-diplomacy-content"]',
-  )!.click();
+  panel
+    .querySelector<HTMLButtonElement>(
+      'button[aria-controls="national-diplomacy-content"]',
+    )!
+    .click();
   await panel.updateComplete;
   return { panel, state, bus };
 }
@@ -120,7 +124,9 @@ describe("NATIONAL UI → normal local server command", () => {
         },
       },
     ]);
-    expect(NationalFoundEmpireIntentSchema.safeParse(intents[0].intent).success).toBe(true);
+    expect(
+      NationalFoundEmpireIntentSchema.safeParse(intents[0].intent).success,
+    ).toBe(true);
     expect(panel.textContent).not.toContain("Confirmed by game");
 
     // Only the authoritative game packet changes what the player sees.
@@ -137,10 +143,16 @@ describe("NATIONAL UI → normal local server command", () => {
 
   it("respects the existing transport intent gate; never bypasses the normal producer", async () => {
     const { panel, bus } = await setup();
-    bus.emit(new SetIntentGateEvent((intent) => intent.type !== "national_found_empire"));
+    bus.emit(
+      new SetIntentGateEvent(
+        (intent) => intent.type !== "national_found_empire",
+      ),
+    );
     await clickFounding(panel, "Atlas");
     expect(
-      local.onMessage.mock.calls.filter(([message]) => message?.type === "intent"),
+      local.onMessage.mock.calls.filter(
+        ([message]) => message?.type === "intent",
+      ),
     ).toHaveLength(0);
     expect(panel.textContent).not.toContain("Confirmed by game");
   });
