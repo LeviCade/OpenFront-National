@@ -224,3 +224,12 @@ public-only packet, drops private packed statistics and current-unit deltas,
 and rejects privileged RPCs and stamped intents. Previously delivered
 information cannot be erased from an untrusted browser; prevent future
 delivery and require a fresh authenticated runner for a new principal.
+
+### Conductor's exact-head verification requirement
+
+The Round Three patch is not accepted on a formatter-only check. Its final
+commit must pass typecheck, the complete repository tests, lint, formatting
+and the production build in one GitHub Actions run. The source PR can be
+merged only as an **experimental Solo local-worker feature**. Hostile-browser
+confidentiality, trusted-host multiplayer and cross-principal security remain
+release blockers until the simulation runs on an independent trusted host.
