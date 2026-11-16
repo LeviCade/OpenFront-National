@@ -572,9 +572,9 @@ export class SinglePlayerModal extends BaseModal {
             <span class="text-sm text-white">
               <strong>👑 NATIONAL — Sovereignty Mode (Experimental)</strong>
               <span class="block text-xs text-white/60 mt-1">
-                Solo Free For All at Impossible difficulty. Spawn, then open
-                the in-game NATIONAL Diplomacy panel to found an empire.
-                Other diplomacy actions unlock only when supported by the game.
+                Solo Free For All at Impossible difficulty. Spawn, then open the
+                in-game NATIONAL Diplomacy panel to found an empire. Other
+                diplomacy actions unlock only when supported by the game.
               </span>
             </span>
           </label>
