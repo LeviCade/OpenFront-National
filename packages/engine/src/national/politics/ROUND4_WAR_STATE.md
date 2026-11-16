@@ -132,3 +132,13 @@ worker output.
 authoritative WAR/LEVY ledgers, WarLedger formal war, and
 \`snapshotGameData\` / \`roundTrip\` save/restore. Legacy FFA and prior
 Round One–Three E1 suites remain unchanged. See PR #23 for exact-head CI.
+
+## Conductor Round Five integration review
+
+This PR supplies canonical war state and a public political view.
+
+- E2 owns external combat and troop debit execution.
+- E3 owns filtered worker/public game packets.
+- E4 owns UI consumption and user feedback.
+- E1 owns authoritative MDA contributor enumeration.
+- Missing MDA enumeration must never imply an approved levy.
