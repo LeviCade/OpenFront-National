@@ -17,7 +17,7 @@ only when alive/spawned/authorized, sends the **existing**
 `national_found_empire` stamped intent through the normal command
 producer, displays real state/leader roster/accepted-or-rejected
 feedback (never a fake local success). Provide a usable nation/empire
-diplomacy panel scaffold that consumes *public authoritative* states.
+diplomacy panel scaffold that consumes _public authoritative_ states.
 NAP/MDA/peace actions that lack E2 schemas must be explicitly disabled,
 not silently simulated.
 

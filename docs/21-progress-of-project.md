@@ -6,26 +6,26 @@ not isolated code, PR totals or documentation.
 
 ## Permanent weighted scorecard
 
-| Milestone | Available | Verified |
-| --- | ---: | ---: |
-| M0 — Solo opt-in, authoritative identity, snapshot, command foundation | 10 | 10 |
-| M1 — actual sovereign metrics, victory, Ungovernable lifecycle | 10 | 9 |
-| M2 — real coalition/pact/accession/crown consent | 10 | 2 |
-| M3 — actual layered war/peace enforcement | 12 | 0 |
-| M4 — actual conserved troop interception | 12 | 0 |
-| M5 — imperial treasury/governance/collapse | 10 | 0 |
-| M6 — coercion, sanctions, naval warfare | 10 | 0 |
-| M7 — trusted per-principal fog across real outbound and AI | 10 | 0 |
-| M8 — national-interest AI taking legal real actions | 8 | 0 |
-| M9 — player experience, release quality, security, licensing | 8 | 0 |
-| **TOTAL** | **100** | **21** |
+| Milestone                                                              | Available | Verified |
+| ---------------------------------------------------------------------- | --------: | -------: |
+| M0 — Solo opt-in, authoritative identity, snapshot, command foundation |        10 |       10 |
+| M1 — actual sovereign metrics, victory, Ungovernable lifecycle         |        10 |        9 |
+| M2 — real coalition/pact/accession/crown consent                       |        10 |        2 |
+| M3 — actual layered war/peace enforcement                              |        12 |        0 |
+| M4 — actual conserved troop interception                               |        12 |        0 |
+| M5 — imperial treasury/governance/collapse                             |        10 |        0 |
+| M6 — coercion, sanctions, naval warfare                                |        10 |        0 |
+| M7 — trusted per-principal fog across real outbound and AI             |        10 |        0 |
+| M8 — national-interest AI taking legal real actions                    |         8 |        0 |
+| M9 — player experience, release quality, security, licensing           |         8 |        0 |
+| **TOTAL**                                                              |   **100** |   **21** |
 
 ## Historical scoreboard
 
-| Review | Previous | Earned | Verified | Evidence |
-| --- | ---: | ---: | ---: | --- |
-| Manager baseline before Round Four | — | — | 16% | Adopted management baseline: M0=10, M1=6, others 0 |
-| Round Four — E1 political gameplay | 16% | +5 | **21%** | E1 [PR #18](https://github.com/LeviCade/OpenFront-National/pull/18), merge `90259d78670161dee4b58bbfd83ec63bbbb67c55`, [combined full CI #43878979429](https://github.com/LeviCade/OpenFront-National/actions/runs/43878979429) SUCCESS |
+| Review                             | Previous | Earned | Verified | Evidence                                                                                                                                                                                                                                |
+| ---------------------------------- | -------: | -----: | -------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Manager baseline before Round Four |        — |      — |      16% | Adopted management baseline: M0=10, M1=6, others 0                                                                                                                                                                                      |
+| Round Four — E1 political gameplay |      16% |     +5 |  **21%** | E1 [PR #18](https://github.com/LeviCade/OpenFront-National/pull/18), merge `90259d78670161dee4b58bbfd83ec63bbbb67c55`, [combined full CI #43878979429](https://github.com/LeviCade/OpenFront-National/actions/runs/43878979429) SUCCESS |
 
 **Newly earned:** M1 +3 for actual eight player metrics, real winner
 roster and persisted deterministic 10-second warnings; M2 +2 for
