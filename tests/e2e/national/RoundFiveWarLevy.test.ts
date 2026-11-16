@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { authorizeNationalAttack } from "@openfront/engine/execution/NationalWarExecution";
@@ -6,6 +5,7 @@ import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { PlayerImpl } from "@openfront/engine/game/PlayerImpl";
 import { snapshotGame } from "@openfront/engine/snapshot/GameSnapshot";
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { setup } from "../../util/Setup";
 import { roundTrip } from "../../util/Snapshot";
@@ -20,12 +20,19 @@ const [A, B, C] = roster.map((p) => p.id);
 async function live(nationalMode = true): Promise<Game> {
   const game = await setup("plains", { nationalMode }, roster);
   for (const [i, info] of roster.entries()) {
-    const [x, y] = [[20, 20], [80, 80], [20, 80]][i];
-    game.addExecution(new SpawnExecution("r5-independent-war", info, game.ref(x, y)));
+    const [x, y] = [
+      [20, 20],
+      [80, 80],
+      [20, 80],
+    ][i];
+    game.addExecution(
+      new SpawnExecution("r5-independent-war", info, game.ref(x, y)),
+    );
   }
   game.executeNextTick();
   game.executeNextTick();
-  for (const info of roster) expect(game.player(info.id).hasSpawned()).toBe(true);
+  for (const info of roster)
+    expect(game.player(info.id).hasSpawned()).toBe(true);
   return game;
 }
 
@@ -70,12 +77,16 @@ function digest(game: Game): string {
 }
 
 function assertResources(
-  game: Game, before: readonly number[], expectedDeductions: readonly number[],
+  game: Game,
+  before: readonly number[],
+  expectedDeductions: readonly number[],
 ): void {
   const now = [A, B, C].map((id) => game.player(id).troops());
   for (let i = 0; i < 3; i++) {
     if (now[i] !== before[i] - expectedDeductions[i]) {
-      throw new Error(`NATIONAL resource conservation failure for ${[A,B,C][i]}: ${before[i]} -> ${now[i]}; expected debit ${expectedDeductions[i]}`);
+      throw new Error(
+        `NATIONAL resource conservation failure for ${[A, B, C][i]}: ${before[i]} -> ${now[i]}; expected debit ${expectedDeductions[i]}`,
+      );
     }
   }
 }
@@ -148,7 +159,9 @@ describe("E5 Round Five independent real-game WAR + MDA acceptance", () => {
     mda(game);
     war(game, "r5-war-defense");
     game.player(C).setTroops(500_000);
-    const port = game as Game & { nationalMdaAllies?: (id: string) => readonly string[] };
+    const port = game as Game & {
+      nationalMdaAllies?: (id: string) => readonly string[];
+    };
     // A missing canonical discovery port is a hard failed acceptance; never
     // pass by constructing a fake donor roster in E5.
     expect(typeof port.nationalMdaAllies).toBe("function");
@@ -161,19 +174,23 @@ describe("E5 Round Five independent real-game WAR + MDA acceptance", () => {
       attackerId: A,
       defenderId: B,
       attackingTroops: 20_000,
-      eligible: [{
-        source: g.nationalLevySource(C)!,
-        troopCapacity: Math.floor(g.config().maxTroops(g.player(C))),
-        maximumFraction: 0.1,
-        protectedCapacityFraction: 0.3,
-      }],
+      eligible: [
+        {
+          source: g.nationalLevySource(C)!,
+          troopCapacity: Math.floor(g.config().maxTroops(g.player(C))),
+          maximumFraction: 0.1,
+          protectedCapacityFraction: 0.3,
+        },
+      ],
     });
     expect(source.nationId).toBe(C);
     const before = [A, B, C].map((id) => game.player(id).troops());
     const [receipt] = game.applyNationalDefenseLevy([request(game)]);
     expect(receipt.application).toBe("applied");
     expect(receipt.intercepted).toBe(20_000);
-    expect(receipt.contributions).toEqual([{ nationId: C, troopsDebited: 20_000 }]);
+    expect(receipt.contributions).toEqual([
+      { nationId: C, troopsDebited: 20_000 },
+    ]);
     expect(receipt.remainingAttackingTroops + receipt.intercepted).toBe(20_000);
     assertResources(game, before, [0, 0, 20_000]);
 
@@ -184,7 +201,11 @@ describe("E5 Round Five independent real-game WAR + MDA acceptance", () => {
     for (const g of [game, restored]) {
       const conserved = [A, B, C].map((id) => g.player(id).troops());
       const [replay] = g.applyNationalDefenseLevy([request(g)]);
-      expect(replay).toMatchObject({ application: "replay", intercepted: 0, contributions: [] });
+      expect(replay).toMatchObject({
+        application: "replay",
+        intercepted: 0,
+        contributions: [],
+      });
       assertResources(g, conserved, [0, 0, 0]);
     }
     expect(digest(restored)).toBe(digest(game));
@@ -257,16 +278,29 @@ describe("E5 Round Five independent real-game WAR + MDA acceptance", () => {
     });
     war(game, "r5-national-war");
     game.performNationalWarCommand(game.player(A), {
-      kind: "propose-peace", motionId: "r5-peace", warId: "r5-imperial-war",
+      kind: "propose-peace",
+      motionId: "r5-peace",
+      warId: "r5-imperial-war",
     });
     const baseline = digest(game);
     const { restored } = await roundTrip(game, "plains");
     expect(digest(restored)).toBe(baseline);
     for (const g of [game, restored]) {
-      g.performNationalWarCommand(g.player(B), { kind: "accept-peace", motionId: "r5-peace" });
+      g.performNationalWarCommand(g.player(B), {
+        kind: "accept-peace",
+        motionId: "r5-peace",
+      });
       expect(g.nationalWarAuthority()?.atWar(A, B)).toBe(true);
-      expect(g.nationalWarState()?.wars.layers.find((l) => l.id === "r5-imperial-war")?.endedTick).not.toBeNull();
-      expect(g.nationalWarState()?.wars.layers.find((l) => l.id === "r5-national-war")?.endedTick).toBeNull();
+      expect(
+        g
+          .nationalWarState()
+          ?.wars.layers.find((l) => l.id === "r5-imperial-war")?.endedTick,
+      ).not.toBeNull();
+      expect(
+        g
+          .nationalWarState()
+          ?.wars.layers.find((l) => l.id === "r5-national-war")?.endedTick,
+      ).toBeNull();
     }
     expect(digest(restored)).toBe(digest(game));
   });
