@@ -127,7 +127,11 @@ describe("NATIONAL QA — actual GameRunner and worker-facing packet canaries", 
         type: GameUpdateType.DisplayChatEvent,
         message: SECRET_TREATY,
       });
-      (updates[GameUpdateType.Player] as PlayerUpdate[]).push(foe.toUpdate());
+      (updates[GameUpdateType.Player] as PlayerUpdate[]).push({
+        type: GameUpdateType.Player,
+        id: hidden.id,
+        troops: SECRET_TROOPS,
+      });
       return updates;
     };
 
