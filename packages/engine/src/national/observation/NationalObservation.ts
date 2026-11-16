@@ -123,6 +123,8 @@ export interface VisibleAsset {
   readonly x: number;
   readonly y: number;
   readonly source: SightSource | "own" | "empire";
+  /** Origin of inherited empire sight, for revocation after dissolution. */
+  readonly sourceNationId?: NationId;
   readonly strength?: number;
 }
 
@@ -145,6 +147,7 @@ export interface LastKnownAsset {
   readonly x: number;
   readonly y: number;
   readonly lastSeenTick: number;
+  readonly sourceNationId?: NationId;
 }
 
 export interface NationalSightMemory {
@@ -242,6 +245,7 @@ export function projectNationalObservation(
       x: asset.x,
       y: asset.y,
       source: grant.observerId === observerId ? grant.source : "empire",
+      ...(grant.observerId === observerId ? {} : { sourceNationId: grant.observerId }),
     });
   }
 
@@ -292,6 +296,16 @@ export function advanceLastKnown(
   const remembered = new Map<string, LastKnownAsset>();
   for (const entry of previous?.assets ?? []) {
     if (entry.lastSeenTick > observation.tick) continue;
+    // Shared intelligence rights end when the relevant empire dissolves.
+    if (
+      entry.sourceNationId !== undefined &&
+      !observation.coalitions.some(
+        (c) =>
+          c.kind === "empire" &&
+          c.members.includes(observation.observerId) &&
+          c.members.includes(entry.sourceNationId!),
+      )
+    ) continue;
     if (observation.tick - entry.lastSeenTick <= retentionTicks) {
       remembered.set(entry.id, { ...entry });
     }
@@ -300,6 +314,7 @@ export function advanceLastKnown(
     remembered.set(unit.id, {
       id: unit.id, ownerId: unit.ownerId, kind: unit.kind,
       x: unit.x, y: unit.y, lastSeenTick: observation.tick,
+      ...(unit.sourceNationId === undefined ? {} : { sourceNationId: unit.sourceNationId }),
     });
   }
   const entries = [...remembered.values()].sort(byId);
