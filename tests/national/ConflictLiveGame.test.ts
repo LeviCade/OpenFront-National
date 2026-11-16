@@ -6,7 +6,10 @@ import {
 } from "@openfront/engine-api/Schemas";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
-import { authorizeNationalAttack } from "@openfront/engine/execution/NationalWarExecution";
+import {
+  authorizeNationalAttack,
+  interceptNationalAttack,
+} from "@openfront/engine/execution/NationalWarExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game, Player } from "@openfront/engine/game/Game";
 import { PlayerImpl } from "@openfront/engine/game/PlayerImpl";
@@ -201,6 +204,34 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
       expect(() => PlayerImpl.commitNationalTroopDebits(corrupt)).toThrow();
       for (const donor of donors) expect(donor.troops()).toBe(100_000);
     }
+  });
+
+  it("LEVY-07 fails closed when the canonical MDA roster is absent", async () => {
+    const game = await spawned();
+    const north = game.player("north-id");
+    const south = game.player("south-id");
+    north.setTroops(50_000);
+    south.setTroops(50_000);
+    Object.assign(game, {
+      nationalWarAuthority: () => ({
+        authorizeOffensiveAction: () => true,
+        atWar: () => true,
+      }),
+      applyNationalDefenseLevy: () => {
+        throw new Error("must never debit without the MDA roster");
+      },
+    });
+    expect(() =>
+      interceptNationalAttack(
+        game,
+        "accepted-attack",
+        north.id(),
+        south.id(),
+        10_000,
+      ),
+    ).toThrow("missing authoritative MDA contributors");
+    expect(north.troops()).toBe(50_000);
+    expect(south.troops()).toBe(50_000);
   });
 
   it("snapshot round-trips queued real war execution without forging war authority", async () => {

@@ -139,7 +139,11 @@ export function interceptNationalAttack(
   )
     throw new Error("NATIONAL: missing authorized canonical war/levy service");
 
-  const candidateIds = [...new Set(port.nationalMdaAllies?.(defenderId) ?? [])]
+  // A canonical war cannot silently bypass the defender's MDA obligations.
+  // Until E1 installs its authenticated donor roster, fail CLOSED.
+  if (typeof port.nationalMdaAllies !== "function")
+    throw new Error("NATIONAL: missing authoritative MDA contributors");
+  const candidateIds = [...new Set(port.nationalMdaAllies(defenderId))]
     .sort()
     .filter(
       (id) =>
