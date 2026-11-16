@@ -55,6 +55,8 @@ jobs:
             2>&1 | tee national-qa-artifacts/acceptance.log
           end="$(date +%s%3N)"
           echo "acceptance_elapsed_ms=$((end - begin))" | tee national-qa-artifacts/durations.txt
+      - name: Verify known licensed-shell assets and record hashes
+        run: node scripts/national-qa/asset-audit.mjs
       - name: Typecheck QA with entire source
         run: npm run typecheck
       - name: Lint and formatting
