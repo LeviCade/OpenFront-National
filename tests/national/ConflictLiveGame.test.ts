@@ -72,8 +72,9 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
     const southBefore = south.troops();
     expect(authorizeNationalAttack(game, north.id(), south.id())).toBe(false);
     const attack = new AttackExecution(30_000, north, south.id());
-    game.addExecution(attack);
-    game.executeNextTick(); // actual engine initializes attack
+    // Invoke the real AttackExecution against the real Game without advancing
+    // PlayerExecution's independent per-tick 479-troop regeneration.
+    attack.init(game, game.ticks());
     expect(attack.isActive()).toBe(false);
     expect(north.troops()).toBe(before);
     expect(south.troops()).toBe(southBefore);
