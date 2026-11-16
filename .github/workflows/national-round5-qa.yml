@@ -40,7 +40,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --no-install vitest run --project node             tests/e2e/national/IntegratedAcceptance.test.ts             tests/qa/national/PacketCanaries.test.ts             tests/e2e/national/RoundFiveWarLevy.test.ts             2>&1 | tee national-qa-artifacts/round5-war-levy.log
+          npx --no-install vitest run --project node             tests/e2e/national/IntegratedAcceptance.test.ts             tests/qa/national/PacketCanaries.test.ts             tests/e2e/national/RoundFiveWarLevy.test.ts \\
+            tests/qa/national/RoundFiveFogRevocation.test.ts 2>&1 | tee national-qa-artifacts/round5-war-levy.log
       - name: Typecheck
         if: always()
         run: npm run typecheck
@@ -52,7 +53,7 @@ jobs:
           npm run lint
           if ! npm run format:check; then
             echo "::error::QA file formatting mismatch"
-            npx --no-install oxfmt --write tests/e2e/national/RoundFiveWarLevy.test.ts scripts/national-qa/browser-gameplay.mjs .github/workflows/national-round5-qa.yml
+            npx --no-install oxfmt --write tests/e2e/national/RoundFiveWarLevy.test.ts tests/qa/national/RoundFiveFogRevocation.test.ts scripts/national-qa/browser-gameplay.mjs docs/release/NATIONAL_ROUND5_ACCEPTANCE.md .github/workflows/national-round5-qa.yml
             git diff -- tests/e2e/national/RoundFiveWarLevy.test.ts scripts/national-qa/browser-gameplay.mjs .github/workflows/national-round5-qa.yml
             exit 1
           fi
