@@ -123,10 +123,30 @@ export class NationalOutboundFilter {
     // Human observers use the SAME verified sight history as AI, including
     // sourceNationId for instant expulsion/split revocation. The record is
     // deliberately private to this recipient until E1 snapshots it in Game.
-    this.sightMemory =
-      verified === null
-        ? null
-        : advanceLastKnown(verified.observation, this.sightMemory, 60).memory;
+    if (verified === null) {
+      this.sightMemory = null;
+    } else {
+      const advanced = advanceLastKnown(
+        verified.observation,
+        this.sightMemory,
+        60,
+      ).memory;
+      // E1's canonical GameSnapshot limits one principal to 4096 last-known
+      // assets. Favor fresh observations, then stable IDs; never allow a large
+      // empire or bot world to crash worker delivery with an oversized write.
+      const retained = [...advanced.assets]
+        .sort(
+          (a, b) =>
+            b.lastSeenTick - a.lastSeenTick ||
+            (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+        )
+        .slice(0, 4096)
+        .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      this.sightMemory = {
+        observerId: advanced.observerId,
+        assets: retained,
+      };
+    }
     const visibleTiles = verified?.visibleTiles ?? new Set<number>();
     const visibleAssets = new Map(
       (verified?.observation.visibleAssets ?? []).map((asset) => [
