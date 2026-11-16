@@ -7,7 +7,6 @@ import {
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { NationExecution } from "@openfront/engine/execution/NationExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
-import type { Game } from "@openfront/engine/game/Game";
 import {
   deriveNationalWarSides,
   initialNationalPlannerMemory,
