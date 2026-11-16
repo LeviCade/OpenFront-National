@@ -110,3 +110,95 @@ the resulting active-war list; they do not execute game war/peace commands.
 planner and dedicated tests/docs. No modifications to `NationExecution`,
 `GameImpl`, `GameUpdates`, `ExecutionManager`, schemas or snapshots. Real
 FOG enforcement and legal combat routing remain **not implemented** in PR #12.
+
+
+## Round Three live adapter — scope, verified paths, and disabled gates
+
+**Branch point:** `ce123090c12344737922ed41249ba5a1dc1638b1`.
+**Ownership contract:** `docs/20-stage3-round3-integration.md`.
+**Delivery branch:** `stage3/e3-round3-live-observation-20261115`.
+
+### Connected real paths
+
+- `national/observation/LiveObservation.ts` takes real `Game` at tick
+  boundaries. Owned `player.tiles()` and `player.borderTiles()` are
+  authoritative roots for conservative sight. Neighbors come from
+  `game.forEachNeighbor`; live unit IDs/positions from `game.units()`.
+  No client receives a `Game` reference or supplies a sight grant. The
+  political read-only facade is consumed when E1 publishes
+  `Game.nationalPoliticalAuthority()`; missing facade returns **no
+  invented empire access**. Closed/unmerged E2 war ledgers yield **no wars**,
+  not fictional diplomacy.
+- `NationExecution.tick` bypasses legacy nation behaviors for NATIONAL.
+  It collects the live whitelist, calls `planNationalInterest`, and
+  schedules a real `AttackExecution` **only against an actually adjacent,
+  verified unowned tile**, with engine legality rechecked. Foreign attacks,
+  mandatory anti-human wars, naval hostility and automatic pacts are
+  disabled until E2 supplies authoritative scoped war legality. The
+  untouched non-NATIONAL path retains existing legacy behavior.
+- `NationExecutionSnapshot` is version **2**, with an explicit v1->v2
+  migration, storing the bot's deterministic planner cadence, diplomatic
+  reputation and last-known sight memory. No WeakMap is used for AI memory.
+- `GameRunner.executeNextTick` applies
+  `NationalOutboundFilter.project()` **before** delivering callbacks to
+  the worker's `game_update_batch` or `run_turns_result` channels.
+  This removes non-observed foreign unit updates from the real packed
+  buffers, strips enemy numeric player stats and all packed attack deltas,
+  restricts tile changes to verified current sight, and allowlists public
+  `PlayerUpdate` fields. It also suppresses unapproved motion plans,
+  missile timer details, hidden diplomacy and name-position overlays.
+  Visible foreign unit identity/position is deliberately emitted with
+  **masked** strength and targeting metadata. A disappeared previously
+  seen unit emits a tombstone at its **last authorized coordinate**, never
+  a newly hidden position.
+- The worker blocks cross-principal NATIONAL profile/actions/buildables/
+  front lines/border queries and forged stamped-turn identities, and
+  fails closed on raw authoritative `snapshot` / `extract_snapshot`
+  downloads. Legacy worker RPCs are unchanged.
+
+### NOT yet a production confidentiality guarantee
+
+1. **P4 geographic policy OPEN.** Only owned land and immediate cardinal
+   border neighbors grant current sight. The proposed 100-land/200-naval
+   radii are **not** invented or activated. Naval and purchased
+   reconnaissance sight are disabled. Performance, diagonals, map scaling
+   and visibility of ship/projectile classes need conductor approval.
+2. **E1 political facade dependency.** Integration HEAD as of branch
+   creation lacks E1's `nationalPoliticalAuthority()` facade; E1's
+   Round Three branch contains a compatible read-only API. Until it lands,
+   the live observer cannot assert empire membership or private pacts.
+   Once merged, the adapter uses only that facade, not cached politics.
+3. **E2 scoped wars absent.** WAR diplomacy, legal foreign attacks,
+   treaties and imperial war sharing are **disabled**, not imitated from
+   legacy `allies()` or a mutable second registry.
+4. **Human last-known snapshot hook absent.** E3-owned bot execution memory
+   persists and migrates. The human `GameRunner`'s ephemeral per-client
+   unit-delta/tombstone history intentionally resets when reconstructing
+   the runner; it is not persisted to `GameImpl.snapshotState`, which
+   belongs to E1. Human historical intelligence needs an E1-approved
+   persisted observer hook or E2-registered execution. Do not claim
+   FOG-04 full persistence yet.
+5. **Browser-worker threat model.** `GameRunner`'s outbound callback is
+   filtered, and worker RPC bypasses are blocked, but an adversarial
+   browser that runs the **authoritative game itself** can inspect its
+   internal memory. True protection from a malicious client requires a
+   trusted server-hosted simulation, per-session authentication and
+   filtered network transmission. The present integration is only
+   **output-channel minimization / honest-client UI fairness**. The
+   client-side init `clientID` is not a server-authenticated credential.
+6. **Security review / spectator coverage.** Unknown observers get public
+   roster fields only. Authenticating independent observers and preserving
+   game exports without exposing raw hidden state requires a server
+   contract. Replays emit redacted GameRunner packets; raw snapshot export
+   is denied by the worker until a safe server capability exists.
+
+### Required conductor follow-up
+
+Merge E1's read-only political facade and agreed observer persistence
+hook, then E2's actual scoped `WarLedger` read interface, in the stated
+integration order. Only then extend current observations with real
+empire/war rights, approved P4 geographic grants and privileged treaties.
+Run an actual multiplayer/trusted-host serialized-byte audit before
+marketing FOG-01..07 as enforced. No E3 changes were made to `GameImpl`,
+`Game.ts`, engine API schemas, `ExecutionManager`, `AttackExecution`,
+`PlayerImpl` or the shared snapshot/registry owner files.
