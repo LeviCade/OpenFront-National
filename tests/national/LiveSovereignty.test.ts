@@ -282,14 +282,22 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
       pactId: "nap-r3",
     });
     expect(authority?.treatyProtects(S, W)).toBe(false);
+    // A two-member NAP ceases to exist on betrayal. Form a new treaty.
+    game.performNationalCommand(s, {
+      kind: "found-pact",
+      pactId: "nap-r3b",
+      name: "Renewed treaty",
+      pactKind: "NAP",
+      terms: pactTerms,
+    });
     game.performNationalCommand(s, {
       kind: "invite-pact",
-      pactId: "nap-r3",
+      pactId: "nap-r3b",
       candidateId: W,
     });
     game.performNationalCommand(game.player(W), {
       kind: "accept-pact",
-      pactId: "nap-r3",
+      pactId: "nap-r3b",
     });
     expect(authority?.treatyProtects(S, W)).toBe(true);
     game.performNationalCommand(n, {
