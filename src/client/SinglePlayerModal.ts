@@ -206,7 +206,7 @@ export class SinglePlayerModal extends BaseModal {
   @state() private selectedMap: GameMapType = DEFAULT_OPTIONS.selectedMap;
   @state() private selectedDifficulty: Difficulty =
     DEFAULT_OPTIONS.selectedDifficulty;
-  @state() private nationalMode = DEFAULT_OPTIONS.nationalMode;
+  @state() private nationalMode: boolean = DEFAULT_OPTIONS.nationalMode;
   @state() private nations: number = 0;
   @state() private defaultNationCount: number = 0;
   @state() private bots: number = DEFAULT_OPTIONS.bots;

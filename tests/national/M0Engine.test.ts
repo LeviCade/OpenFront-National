@@ -182,7 +182,8 @@ describe("Stage 3 M0: authoritative NATIONAL vertical slice", () => {
       check.init(game, game.ticks());
       check.checkWinnerFFA();
     }
-    expect(national.getWinner()?.id()).toBe("north-id");
+    const winner = national.getWinner();
+    expect(typeof winner === "string" ? winner : winner?.id()).toBe("north-id");
     expect(legacy.getWinner()).toBeNull();
   });
 });
