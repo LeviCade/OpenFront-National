@@ -21,6 +21,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const mobile = process.argv.includes("--mobile");
+const legacy = process.argv.includes("--legacy");
 const base = "http://127.0.0.1:9000/";
 const reportDir = "national-qa-artifacts/browser-" + (mobile ? "mobile" : "desktop");
 mkdirSync(reportDir, { recursive: true });
@@ -164,6 +165,20 @@ const probe = `(() => {
       },
     });
   }
+  const findDeep = (root, selector) => {
+    const direct = root.querySelector(selector);
+    if (direct) return direct;
+    for (const element of root.querySelectorAll('*')) {
+      if (element.shadowRoot) {
+        const nested = findDeep(element.shadowRoot, selector);
+        if (nested) return nested;
+      }
+    }
+    return null;
+  };
+  Object.defineProperty(window, '__nationalQaFind', {
+    value: (selector) => findDeep(document, selector),
+  });
   Object.defineProperty(window, '__nationalQaWorkerEvidence', {
     value: packets, configurable: false, writable: false,
   });
@@ -171,6 +186,14 @@ const probe = `(() => {
 
 async function main() {
   stage = "boot";
+  spawnChild(process.execPath, ["node_modules/tsx/dist/cli.mjs", "src/server/Server.ts"], {
+    GAME_ENV: "dev",
+    TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
+    API_KEY: "WARNING_DEV_API_KEY_DO_NOT_USE_IN_PRODUCTION",
+    ADMIN_BOT_API_KEY: "WARNING_DEV_ADMIN_BOT_KEY_DO_NOT_USE_IN_PRODUCTION",
+    DOMAIN: "localhost",
+    GIT_COMMIT: "DEV",
+  });
   const vite = spawnChild(
     process.execPath,
     ["node_modules/vite/bin/vite.js", "--host", "127.0.0.1"],
@@ -185,7 +208,9 @@ async function main() {
 
   spawnChild(process.env.CHROME_BIN ?? "google-chrome", [
     "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
-    "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+    "--enable-webgl", "--ignore-gpu-blocklist", "--use-gl=angle",
+    "--use-angle=swiftshader", "--enable-unsafe-swiftshader",
+    "--no-first-run", "--no-default-browser-check",
     "--remote-allow-origins=*", "--user-data-dir=" + profile,
     "--remote-debugging-port=" + port, "about:blank",
   ]);
@@ -242,7 +267,7 @@ async function main() {
   const locate = async (label, scope = "", requireEnabled = true) =>
     evaluate(`(() => {
       const reg = new RegExp(${JSON.stringify(label)}, 'i');
-      const root = ${scope ? `document.querySelector(${JSON.stringify(scope)})` : "document"};
+      const root = ${scope ? `window.__nationalQaFind(${JSON.stringify(scope)})` : "document"};
       if (!root) return null;
       const found = [];
       const walk = (root) => {
@@ -274,7 +299,7 @@ async function main() {
   };
   const fill = async (selector,value) => {
     const target = await poll(() => evaluate(`(() => {
-      const element = document.querySelector(${JSON.stringify(selector)});
+      const element = window.__nationalQaFind(${JSON.stringify(selector)});
       if (!element || element.disabled) return null;
       const rect=element.getBoundingClientRect();
       return rect.width && rect.height ? { x:rect.x+rect.width/2, y:rect.y+rect.height/2 } : null;
@@ -325,13 +350,13 @@ async function main() {
     });
     await step("start", async () => {
       await click("start|play", "single-player-modal", 65);
-      await poll(() => evaluate("!!document.querySelector('game-right-sidebar, national-diplomacy-panel')"), "real game HUD", 100, 350);
+      await poll(() => evaluate("!!window.__nationalQaFind('national-diplomacy-panel') && !document.body.innerText.includes('Game is starting')"), "real started game with NATIONAL diplomacy panel", 100, 350);
       await capture("game-hud");
     });
     await step("spawn", async () => {
       await click("NATIONAL.*Diplomacy", "national-diplomacy-panel", 75);
       await capture("diplomacy-before-spawn");
-      const msg = await evaluate("document.querySelector('national-diplomacy-panel')?.innerText || ''");
+      const msg = await evaluate("window.__nationalQaFind('national-diplomacy-panel')?.innerText ?? ''");
       if (!/spawn before founding/i.test(msg)) record("spawn-precondition-not-observed",{text:msg.slice(0,150)});
       // Human map interaction: try coordinates and stop immediately once the
       // real game HUD enables Found Empire. Never mutate Game state from JS.
@@ -356,7 +381,7 @@ async function main() {
       await click("^Found Empire$", "national-diplomacy-panel",40);
       await capture("founding-request");
       const result = await poll(async()=>{
-        const text=await evaluate("document.querySelector('national-diplomacy-panel')?.innerText || ''");
+        const text=await evaluate("window.__nationalQaFind('national-diplomacy-panel')?.innerText ?? ''");
         const pkts=await worker();
         const truth = pkts.some((p)=>
           p.publicPolitics?.empires?.some((e)=>e.id===empireId) &&
