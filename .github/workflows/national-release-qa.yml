@@ -1,0 +1,111 @@
+name: NATIONAL - Independent Release QA
+
+on:
+  pull_request:
+    branches: [stage3/integration-20261115, main]
+    paths:
+      - "tests/e2e/national/**"
+      - "tests/qa/national/**"
+      - "scripts/national-qa/**"
+      - "docs/release/**"
+      - ".github/workflows/national-*qa*.yml"
+      - "packages/engine/**"
+      - "packages/engine-api/**"
+      - "src/client/**"
+  push:
+    branches: [stage3/integration-20261115]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  national-qa:
+    name: Live GameRunner / Replay / Hostile Packets
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact head without proprietary submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Pin Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Pin npm
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Install pinned lockfile
+        run: npm run inst
+      - name: Create report directory and record source identity
+        shell: bash
+        run: |
+          mkdir -p national-qa-artifacts
+          git rev-parse HEAD | tee national-qa-artifacts/head.txt
+          node --version | tee national-qa-artifacts/node.txt
+          npm --version | tee national-qa-artifacts/npm.txt
+      - name: Run real NATIONAL acceptance and packet canaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          begin="$(date +%s%3N)"
+          npx --no-install vitest run --project node \
+            tests/e2e/national/IntegratedAcceptance.test.ts \
+            tests/qa/national/PacketCanaries.test.ts \
+            2>&1 | tee national-qa-artifacts/acceptance.log
+          end="$(date +%s%3N)"
+          echo "acceptance_elapsed_ms=$((end - begin))" | tee national-qa-artifacts/durations.txt
+      - name: Typecheck QA with entire source
+        run: npm run typecheck
+      - name: Lint and formatting
+        run: |
+          npm run lint
+          npm run format:check
+      - name: Inherited vulnerability audit (record, do not auto-fix)
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p national-qa-artifacts
+          npm audit --json > national-qa-artifacts/audit-all.json || true
+          npm audit --omit=dev --json > national-qa-artifacts/audit-prod.json || true
+          node scripts/national-qa/audit-summary.mjs \
+            national-qa-artifacts/audit-all.json \
+            national-qa-artifacts/audit-prod.json \
+            > national-qa-artifacts/audit-summary.txt
+          cat national-qa-artifacts/audit-summary.txt
+      - name: Upload auditable evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-qa-${{ github.sha }}
+          path: national-qa-artifacts/
+          retention-days: 30
+          if-no-files-found: warn
+
+  browser-release-smoke:
+    name: Browser release smoke (manual, requires UI integration)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Launch Chromium and exercise NATIONAL interface
+        env:
+          SKIP_BROWSER_OPEN: "true"
+          CHROME_BIN: /usr/bin/google-chrome
+        run: node scripts/national-qa/browser-smoke.mjs --national
+      - name: Upload browser failure/success evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-qa-browser-${{ github.sha }}
+          path: national-qa-artifacts/
+          retention-days: 30
+          if-no-files-found: warn
