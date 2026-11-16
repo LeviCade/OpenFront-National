@@ -3,6 +3,9 @@ import {
   DefenseLevyLedger,
   weightedLevyAllocation,
   type TroopSource,
+  type TroopDebitTransactionAdapter,
+  type TroopDebit,
+  type PreparedTroopDebits,
   type IncomingDefense,
 } from "../../packages/engine/src/national/conflict/DefenseLevy";
 import {
@@ -57,11 +60,79 @@ class Troops implements TroopSource {
   troops() {
     return this.balance;
   }
-  removeTroops(amount: number) {
-    this.calls++;
-    const taken = Math.min(this.balance, Math.floor(amount));
-    this.balance -= taken;
-    return taken;
+  /** Deliberately forbidden: the levy module must not call one-off debits. */
+  removeTroops(_amount: number): never {
+    throw new Error("non-transactional removeTroops is forbidden");
+  }
+}
+
+/**
+ * Test-only adapter: all validation and injected failures occur before the
+ * first balance write. The commit write phase uses plain numeric fields with
+ * no user callbacks. The production adapter must supply an atomic engine
+ * balance swap/CAS; direct sequential Player.removeTroops is NOT acceptable.
+ */
+class AtomicTestAdapter implements TroopDebitTransactionAdapter {
+  failPrepareAt: number | null = null;
+  failCommitAt: number | null = null;
+  reply: "exact" | "short" | "under" | "over" | "negative" | "wrong-id" | "reordered" = "exact";
+  prepareCalls = 0;
+  commitCalls = 0;
+  discardCalls = 0;
+
+  prepare(debits: readonly TroopDebit[]): PreparedTroopDebits {
+    this.prepareCalls++;
+    const rows = debits.map((d, index) => {
+      if (this.failPrepareAt === index)
+        throw new Error(`prepare failed at contributor ${index}`);
+      if (d.source.troops() !== d.expectedBalance)
+        throw new Error("stale expected balance");
+      return { nationId: d.source.nationId, troopsDebited: d.debit };
+    });
+    const approved = rows.map((x) => ({ ...x }));
+    switch (this.reply) {
+      case "short":
+        approved.pop();
+        break;
+      case "under":
+        approved[approved.length - 1].troopsDebited--;
+        break;
+      case "over":
+        approved[approved.length - 1].troopsDebited++;
+        break;
+      case "negative":
+        approved[approved.length - 1].troopsDebited = -1;
+        break;
+      case "wrong-id":
+        approved[approved.length - 1].nationId = "not-the-contributor";
+        break;
+      case "reordered":
+        approved.reverse();
+        break;
+    }
+
+    return {
+      approved,
+      commit: () => {
+        this.commitCalls++;
+        // Precommit checks and failure injection compute every destination
+        // before any write; a throw leaves all accounts unchanged.
+        const updates = debits.map((debit, index) => {
+          if (this.failCommitAt === index)
+            throw new Error(`atomic commit failed at contributor ${index}`);
+          if (debit.source.troops() !== debit.expectedBalance)
+            throw new Error("CAS balance mismatch");
+          if (debit.resultingBalance !== debit.expectedBalance - debit.debit)
+            throw new Error("invalid resulting balance");
+          return { owner: debit.source as Troops, balance: debit.resultingBalance };
+        });
+        for (const update of updates) {
+          update.owner.balance = update.balance;
+          update.owner.calls++;
+        }
+      },
+      discard: () => { this.discardCalls++; },
+    };
   }
 }
 
@@ -75,6 +146,7 @@ function levy(
 ): IncomingDefense {
   return {
     attackId,
+    confirmedAccepted: true,
     campaignId,
     attackerId,
     defenderId,
@@ -196,7 +268,7 @@ describe("NATIONAL layered conflict — D-010/D-014", () => {
 describe("NATIONAL real defensive levies — D-008", () => {
   it("LEVY-01 50K push intercepts exactly 45K, no phantom troops", () => {
     const donors = [new Troops("C", 450_000)];
-    const ledger = new DefenseLevyLedger();
+    const ledger = new DefenseLevyLedger(new AtomicTestAdapter());
     const r = ledger.interceptAcceptedAttacks([
       {
         ...levy("attack", "campaign", 50_000, donors),
@@ -217,7 +289,7 @@ describe("NATIONAL real defensive levies — D-008", () => {
   });
   it("LEVY-02 fully shields an incoming attack before territorial combat", () => {
     const donors = [new Troops("C", 450_000)];
-    const r = new DefenseLevyLedger().interceptAcceptedAttacks([
+    const r = new DefenseLevyLedger(new AtomicTestAdapter()).interceptAcceptedAttacks([
       {
         ...levy("a", "c", 30_000, donors),
         eligible: [
@@ -235,14 +307,14 @@ describe("NATIONAL real defensive levies — D-008", () => {
   });
   it("LEVY-03 rejected/cancelled attack is never charged because no event reaches ledger", () => {
     const donor = new Troops("C", 100_000),
-      ledger = new DefenseLevyLedger();
+      ledger = new DefenseLevyLedger(new AtomicTestAdapter());
     expect(ledger.interceptAcceptedAttacks([])).toEqual([]);
     expect(donor.balance).toBe(100_000);
     expect(donor.calls).toBe(0);
   });
   it("LEVY-04 twenty microattacks share one finite campaign cap", () => {
     const donor = new Troops("C", 100_000),
-      ledger = new DefenseLevyLedger();
+      ledger = new DefenseLevyLedger(new AtomicTestAdapter());
     const attacks = Array.from({ length: 20 }, (_, i) =>
       levy(`a-${String(i).padStart(2, "0")}`, "same-campaign", 5_000, [donor]),
     );
@@ -260,8 +332,8 @@ describe("NATIONAL real defensive levies — D-008", () => {
       d2 = new Troops("C", 100_000);
     const a = levy("a", "campaign-1", 20_000, [d1], "A", "B");
     const b = levy("b", "campaign-2", 20_000, [d1], "X", "Y");
-    const r1 = new DefenseLevyLedger().interceptAcceptedAttacks([b, a]);
-    const r2 = new DefenseLevyLedger().interceptAcceptedAttacks(
+    const r1 = new DefenseLevyLedger(new AtomicTestAdapter()).interceptAcceptedAttacks([b, a]);
+    const r2 = new DefenseLevyLedger(new AtomicTestAdapter()).interceptAcceptedAttacks(
       [a, b].map((x) => ({
         ...x,
         eligible: x.eligible.map((e) => ({ ...e, source: d2 })),
@@ -274,7 +346,7 @@ describe("NATIONAL real defensive levies — D-008", () => {
   });
   it("LEVY-06 protected reserve prevents excessive levy despite high campaign cap", () => {
     const donor = new Troops("C", 32_000);
-    const r = new DefenseLevyLedger().interceptAcceptedAttacks([
+    const r = new DefenseLevyLedger(new AtomicTestAdapter()).interceptAcceptedAttacks([
       levy("a", "c", 20_000, [donor]),
     ])[0];
     expect(r.intercepted).toBe(2_000);
@@ -283,7 +355,7 @@ describe("NATIONAL real defensive levies — D-008", () => {
   it("LEVY-07 multiple treaty memberships count one nation once", () => {
     const donor = new Troops("C", 100_000);
     const request = levy("a", "c", 40_000, [donor]);
-    const r = new DefenseLevyLedger().interceptAcceptedAttacks([
+    const r = new DefenseLevyLedger(new AtomicTestAdapter()).interceptAcceptedAttacks([
       { ...request, eligible: [...request.eligible, ...request.eligible] },
     ])[0];
     expect(r.intercepted).toBe(10_000);
@@ -306,12 +378,12 @@ describe("NATIONAL real defensive levies — D-008", () => {
   });
   it("restore retains campaign spend and prevents replay levy duplication", () => {
     const donor = new Troops("C", 100_000),
-      ledger = new DefenseLevyLedger();
+      ledger = new DefenseLevyLedger(new AtomicTestAdapter());
     const r = ledger.interceptAcceptedAttacks([
       levy("a", "campaign", 5_000, [donor]),
     ])[0];
     const state = ledger.exportState();
-    const clone = new DefenseLevyLedger();
+    const clone = new DefenseLevyLedger(new AtomicTestAdapter());
     clone.restoreState(state);
     expect(clone.exportState()).toEqual(state);
     expect(
@@ -326,10 +398,10 @@ describe("NATIONAL real defensive levies — D-008", () => {
   });
   it("tampered snapshot claiming interception without deductions is rejected", () => {
     const donor = new Troops("C", 100_000),
-      ledger = new DefenseLevyLedger();
+      ledger = new DefenseLevyLedger(new AtomicTestAdapter());
     ledger.interceptAcceptedAttacks([levy("a", "c", 10_000, [donor])]);
     const state = JSON.parse(JSON.stringify(ledger.exportState()));
     state.processed[0].result.intercepted = 20_000;
-    expect(() => new DefenseLevyLedger().restoreState(state)).toThrow();
+    expect(() => new DefenseLevyLedger(new AtomicTestAdapter()).restoreState(state)).toThrow();
   });
 });
