@@ -90,10 +90,13 @@ export class NationalOutboundFilter {
       throw new Error("NATIONAL outbound principal mismatch");
     }
     const visibleTiles = verified?.visibleTiles ?? new Set<number>();
-    const visibleAssetIds = new Set(
-      verified?.observation.visibleAssets.map((asset) => Number(asset.id)) ??
-        [],
+    const visibleAssets = new Map(
+      (verified?.observation.visibleAssets ?? []).map((asset) => [
+        Number(asset.id),
+        asset,
+      ]),
     );
+    const visibleAssetIds = new Set(visibleAssets.keys());
     const ownID = this.observerId;
     const rawPlayer = data.updates[GameUpdateType.Player] as PlayerUpdate[];
     const players = rawPlayer.map((u) =>
@@ -140,8 +143,19 @@ export class NationalOutboundFilter {
         (this.previousUnits.has(id) ? null : unit.toUpdate());
       stillVisible.add(id);
       if (raw === null) continue;
+      const allied = visibleAssets.get(id);
+      // Empire partners may share observed troop strength, but NOT private
+      // transport destinations, missile queues or operational targets.
       const outgoing =
-        unit.owner().id() === ownID ? { ...raw } : observedUnit(raw);
+        unit.owner().id() === ownID
+          ? { ...raw }
+          : {
+              ...observedUnit(raw),
+              ...(allied?.source === "empire" &&
+              allied.strength !== undefined
+                ? { troops: allied.strength }
+                : {}),
+            };
       unitUpdates.push(outgoing);
       this.previousUnits.set(id, outgoing);
     }
@@ -152,7 +166,9 @@ export class NationalOutboundFilter {
     for (const [id, prior] of this.previousUnits) {
       if (stillVisible.has(id)) continue;
       unitUpdates.push({
-        ...prior,
+        ...observedUnit(prior),
+        // Revocation must not replay formerly allied troops or private
+        // routing fields. Only the recipient's last visible tile survives.
         isActive: false,
         targetable: false,
         markedForDeletion: data.tick,
