@@ -5,6 +5,7 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
+import { NationalFoundEmpireExecution, NationalFoundEmpireExecutionSnapshot } from "@openfront/engine/execution/NationalFoundEmpireExecution";
 import { WinCheckExecution } from "@openfront/engine/execution/WinCheckExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
@@ -178,6 +179,64 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
     check.checkWinnerFFA();
     const resolved = game.getWinner();
     expect(typeof resolved === "string" ? resolved : resolved?.id()).toBe(S);
+  });
+
+  it("M0-EXEC: queued real accession/crown execution survives snapshot and v1 migration", async () => {
+    const game = await realGame(3);
+    game.addExecution(
+      new NationalFoundEmpireExecution(game.player(N), "queued-imperium"),
+    );
+    game.executeNextTick(); // initialize a registered actual execution
+    game.executeNextTick(); // execute founding
+    expect(game.nationalPoliticalAuthority()?.emperorOf("queued-imperium")).toBe(N);
+    game.addExecution(
+      new NationalFoundEmpireExecution(game.player(N), "", {
+        kind: "offer-empire",
+        empireId: "queued-imperium",
+        candidateId: S,
+      }),
+    );
+    const { restored } = await roundTrip(game, "plains");
+    for (let i = 0; i < 2; i++) {
+      game.executeNextTick();
+      restored.executeNextTick();
+    }
+    expect(snapshot(restored)).toEqual(snapshot(game));
+    for (const g of [game, restored]) {
+      g.addExecution(
+        new NationalFoundEmpireExecution(g.player(S), "", {
+          kind: "accept-empire",
+          empireId: "queued-imperium",
+          candidateId: S,
+        }),
+      );
+      g.executeNextTick();
+      g.executeNextTick();
+      expect(g.nationalPoliticalAuthority()?.membersOf("queued-imperium")).toEqual([N, S]);
+      g.addExecution(
+        new NationalFoundEmpireExecution(g.player(N), "", {
+          kind: "transfer-crown",
+          empireId: "queued-imperium",
+          successorId: S,
+        }),
+      );
+      g.executeNextTick();
+      g.executeNextTick();
+      expect(g.nationalPoliticalAuthority()?.emperorOf("queued-imperium")).toBe(S);
+    }
+    expect(snapshot(restored)).toEqual(snapshot(game));
+    // Previous v1 pending founding records still restore under the new
+    // registered v2 execution descriptor (no silent snapshot invalidation).
+    const migrated = readVersioned(NationalFoundEmpireExecutionSnapshot, {
+      v: 1,
+      d: {
+        active: true,
+        initialized: false,
+        actor: 1,
+        empireId: "old-founding",
+      },
+    });
+    expect(migrated.politicalCommand).toBeNull();
   });
 
   it("SOV-06: eliminated emperor dissolves membership before selecting survivor", async () => {
