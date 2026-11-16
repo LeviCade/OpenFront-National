@@ -127,22 +127,27 @@ export function planNationalInterest(
     };
   }
 
+  const knownCredibility = new Map(memory.reputation.map((r) => [r.nationId, r.credibility]));
+  const visibleMilitary = new Set(
+    observation.visibleAssets
+      .filter((a) => a.kind === "army" || a.kind === "warship")
+      .map((a) => a.ownerId),
+  );
+  const protectedPartners = new Set<string>();
+  for (const c of observation.coalitions) {
+    if (c.members.includes(self.id)) for (const id of c.members) protectedPartners.add(id);
+  }
+
   let bestId: string | null = null;
   let bestScore = -Infinity;
   // One linear pass. No access to type/control or secret enemy resources.
   for (const frontier of observation.frontiers) {
     const target = publicNations.get(frontier.targetId);
     if (!target || !target.alive || target.status === "eliminated") continue;
-    if (target.status === "member" && self.status === "member") {
-      const sameEmpire = observation.coalitions.some(
-        (c) => c.kind === "empire" && c.members.includes(self.id) && c.members.includes(target.id),
-      );
-      if (sameEmpire) continue;
-    }
-    const credibility = memory.reputation.find((r) => r.nationId === target.id)?.credibility ?? 0;
-    const seenMilitary = observation.visibleAssets.some(
-      (a) => a.ownerId === target.id && (a.kind === "army" || a.kind === "warship"),
-    );
+    // Existing coalitions cannot become ordinary offensive targets.
+    if (protectedPartners.has(target.id)) continue;
+    const credibility = knownCredibility.get(target.id) ?? 0;
+    const seenMilitary = visibleMilitary.has(target.id);
     const score =
       22 +
       (frontier.access === "land" ? 8 : 0) +
