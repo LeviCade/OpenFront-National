@@ -151,7 +151,7 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
     const beforeB = game.player(B).troops();
     const beforeC = game.player(C).troops();
     expect(() => game.applyNationalDefenseLevy([request([])]))
-      .toThrow(/missing or forged MDA donor roster/);
+      .toThrow(/missing or forged MDA contributor roster/);
     expect(game.player(B).troops()).toBe(beforeB);
     expect(game.player(C).troops()).toBe(beforeC);
     expect(game.nationalWarState()?.levy.processed).toEqual([]);

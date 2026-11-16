@@ -786,7 +786,7 @@ export class GameImpl implements Game {
         new Set(suppliedDonors).size !== suppliedDonors.length ||
         expectedDonors.some((id) => !suppliedDonors.includes(id))
       ) {
-        throw new Error("NATIONAL levy: missing or forged MDA donor roster");
+        throw new Error("NATIONAL levy: missing or forged MDA contributor roster");
       }
       for (const entry of attack.eligible) {
         const id = entry.source.nationId;
