@@ -57,6 +57,39 @@ describe("Round Five real GameRunner public NATIONAL political packets", () => {
     expect(queued.nationalPolitics?.empires).toEqual([]);
     expect(queued).not.toHaveProperty("nationalCommandResults");
     const executed = northRunner.next();
+    if (typeof (game as Game & {
+      nationalCommandResults?: (actor: ReturnType<Game["player"]>) => readonly unknown[];
+    }).nationalCommandResults === "function") {
+      expect(executed).toHaveProperty("nationalCommandResults");
+      const accepted = (executed as PoliticalPacket & {
+        nationalCommandResults?: readonly {
+          recipientId: string;
+          actorId: string;
+          accepted: boolean;
+          empireId?: string;
+          type: string;
+          reason?: string;
+        }[];
+      }).nationalCommandResults;
+      expect(accepted).toEqual([
+        expect.objectContaining({
+          recipientId: north.id,
+          actorId: north.id,
+          type: "national_found_empire",
+          empireId: "north_kingdom",
+          accepted: true,
+          reason: "accepted",
+        }),
+      ]);
+      const southPacket = runnerFor(game, south.clientID!).next();
+      const spectatorPacket = runnerFor(game, undefined).next();
+      expect(southPacket).not.toHaveProperty("nationalCommandResults");
+      expect(spectatorPacket).not.toHaveProperty("nationalCommandResults");
+      // A fresh runner sees the roster, never a stale accepted toast.
+      expect(runnerFor(game, north.clientID!).next()).not.toHaveProperty(
+        "nationalCommandResults",
+      );
+    }
     expect(executed.nationalPolitics?.empires).toEqual([{
       id: "north_kingdom",
       leaderId: north.id,
@@ -66,6 +99,45 @@ describe("Round Five real GameRunner public NATIONAL political packets", () => {
     expect(JSON.stringify(executed.nationalPolitics)).not.toContain("treasury");
     expect(JSON.stringify(executed.nationalPolitics)).not.toContain("troops");
     expect(JSON.stringify(executed.nationalPolitics)).not.toContain("terms");
+  });
+
+  it("E1 executed duplicate founding rejection is emitted once to the current actor, never on enqueue", async () => {
+    const game = await populated();
+    const stream = runnerFor(game, north.clientID!);
+    const executor = new Executor(game, "e3-r5-politics", north.clientID!);
+    // Actor-bound Game journal is optional only until E1 R5 merges.
+    const supportsJournal = typeof (game as Game & {
+      nationalCommandResults?: unknown;
+    }).nationalCommandResults === "function";
+    for (let attempt = 0; attempt < 2; attempt++) {
+      game.addExecution(executor.createExec({
+        type: "national_found_empire",
+        empireId: "duplicate_kingdom",
+        clientID: north.clientID!,
+      }));
+      const pending = stream.next();
+      expect(pending).not.toHaveProperty("nationalCommandResults");
+      const processed = stream.next() as PoliticalPacket & {
+        nationalCommandResults?: readonly {
+          recipientId: string;
+          accepted: boolean;
+          reason?: string;
+          empireId?: string;
+        }[];
+      };
+      if (supportsJournal) {
+        expect(processed.nationalCommandResults).toEqual([
+          expect.objectContaining({
+            recipientId: north.id,
+            empireId: "duplicate_kingdom",
+            accepted: attempt === 0,
+            reason: attempt === 0 ? "accepted" : "political-rule",
+          }),
+        ]);
+        expect(stream.next()).not.toHaveProperty("nationalCommandResults");
+      }
+    }
+    expect(game.nationalPublicPoliticalView()?.empires).toHaveLength(1);
   });
 
   it("public political state is authentic on a new runner and after snapshot restore, without foreign resources", async () => {
