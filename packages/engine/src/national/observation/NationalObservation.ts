@@ -270,7 +270,7 @@ export function projectNationalObservation(
     visibleAssets: visibleAssets.sort(byId),
     frontiers,
     diplomaticEvents: world.diplomaticEvents
-      .filter((e) => e.tick <= world.tick && (e.public || e.visibleTo?.includes(observerId)))
+      .filter((e) => e.tick <= world.tick && (e.public || e.visibleTo?.some((id) => intelligencePrincipals.has(id))))
       .map((e) => ({ id: e.id, tick: e.tick, actorId: e.actorId, kind: e.kind, public: e.public }))
       .sort((a, b) => a.tick - b.tick || byId(a, b)),
   };

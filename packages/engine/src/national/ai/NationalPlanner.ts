@@ -14,13 +14,14 @@ export type NationalObjective = "defend" | "expand" | "consolidate";
 export interface DiplomaticReputation {
   readonly nationId: NationId;
   readonly credibility: number;
+  readonly lastObservedTick: number;
 }
 export interface NationalPlannerMemory {
   readonly observerId: NationId;
   readonly objective: NationalObjective;
   readonly targetId: NationId | null;
   readonly nextPlanningTick: number;
-  readonly processedEvents: readonly string[];
+  readonly lastProcessedEvent: { readonly tick: number; readonly id: string } | null;
   readonly reputation: readonly DiplomaticReputation[];
 }
 export interface NationalDecision {
@@ -36,7 +37,6 @@ export interface NationalPlanResult {
 }
 
 const cmp = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
-const EVENT_LIMIT = 128;
 const REPUTATION_LIMIT = 128;
 const clamp = (n: number): number => Math.max(-10, Math.min(10, n));
 const weight: Record<PublicDiplomaticEventKind, number> = {
@@ -52,7 +52,7 @@ export function initialNationalPlannerMemory(observerId: NationId): NationalPlan
     objective: "consolidate",
     targetId: null,
     nextPlanningTick: 0,
-    processedEvents: [],
+    lastProcessedEvent: null,
     reputation: [],
   };
 }
@@ -65,24 +65,29 @@ export function updateNationalDiplomaticMemory(
   if (observation.observerId !== memory.observerId) {
     throw new Error("Planner memory principal mismatch");
   }
-  const seen = new Set(memory.processedEvents);
-  const processed = [...memory.processedEvents];
-  const reputation = new Map(memory.reputation.map((r) => [r.nationId, r.credibility]));
+  let cursor = memory.lastProcessedEvent;
+  const reputation = new Map(memory.reputation.map((r) => [r.nationId, r]));
   let sawNewEvent = false;
+  // Events are sorted by (tick, ID); the cursor makes long repeated
+  // histories idempotent without unbounded event-ID storage.
   for (const e of observation.diplomaticEvents) {
-    if (e.tick > observation.tick || seen.has(e.id)) continue;
-    seen.add(e.id);
-    processed.push(e.id);
+    if (e.tick > observation.tick) continue;
+    if (cursor && (e.tick < cursor.tick || (e.tick === cursor.tick && e.id <= cursor.id))) continue;
+    cursor = { tick: e.tick, id: e.id };
     sawNewEvent = true;
-    reputation.set(e.actorId, clamp((reputation.get(e.actorId) ?? 0) + weight[e.kind]));
+    reputation.set(e.actorId, {
+      nationId: e.actorId,
+      credibility: clamp((reputation.get(e.actorId)?.credibility ?? 0) + weight[e.kind]),
+      lastObservedTick: e.tick,
+    });
   }
-  const trimmed = processed.slice(-EVENT_LIMIT);
-  const sortedReputation = [...reputation].sort((a, b) => cmp(a[0], b[0]))
+  const sortedReputation = [...reputation.values()]
+    .sort((a, b) => b.lastObservedTick - a.lastObservedTick || cmp(a.nationId, b.nationId))
     .slice(0, REPUTATION_LIMIT)
-    .map(([nationId, credibility]) => ({ nationId, credibility }));
+    .sort((a, b) => cmp(a.nationId, b.nationId));
   return {
     sawNewEvent,
-    memory: { ...memory, processedEvents: trimmed, reputation: sortedReputation },
+    memory: { ...memory, lastProcessedEvent: cursor, reputation: sortedReputation },
   };
 }
 

@@ -89,6 +89,7 @@ describe("NATIONAL observation FOG-01 / FOG-02 / FOG-07", () => {
     expect(b.visibleAssets.find((u) => u.id === "b-ship")?.source).toBe("own");
     expect(c.visibleAssets.find((u) => u.id === "d-fort")?.source).toBe("empire");
     expect(c.visibleAssets.find((u) => u.id === "d-fort")?.sourceNationId).toBe("b");
+    expect(c.diplomaticEvents.some((e) => e.id === "private1")).toBe(true);
     expect(b.visibleAssets.find((u) => u.id === "b-ship")?.strength).toBe(7777);
     expect(c.visibleAssets.find((u) => u.id === "b-ship")?.strength).toBeUndefined();
     expect(a.visibleAssets.map((u) => u.id)).toEqual(["a-ship"]);

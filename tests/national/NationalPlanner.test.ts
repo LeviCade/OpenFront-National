@@ -66,13 +66,14 @@ describe("NATIONAL independent strategic planner", () => {
       diplomaticEvents: [{ id: "evt-1", actorId: "neighbor", tick: 61, kind: "bluff-exposed", public: true }],
     }, "self"), skipped.memory, 40);
     expect(triggered.planned).toBe(true);
-    expect(triggered.memory.reputation).toEqual([{ nationId: "neighbor", credibility: -3 }]);
+    expect(triggered.memory.reputation).toEqual([{ nationId: "neighbor", credibility: -3, lastObservedTick: 61 }]);
     const again = planNationalInterest(projectNationalObservation({
       ...w, tick: 62,
       diplomaticEvents: [{ id: "evt-1", actorId: "neighbor", tick: 61, kind: "bluff-exposed", public: true }],
     }, "self"), triggered.memory, 40);
     expect(again.planned).toBe(false);
-    expect(again.memory.reputation).toEqual([{ nationId: "neighbor", credibility: -3 }]);
+    expect(again.memory.lastProcessedEvent).toEqual({ tick: 61, id: "evt-1" });
+    expect(again.memory.reputation).toEqual([{ nationId: "neighbor", credibility: -3, lastObservedTick: 61 }]);
   });
 
   it("rejects another nation's memory and invalid cadence", () => {
