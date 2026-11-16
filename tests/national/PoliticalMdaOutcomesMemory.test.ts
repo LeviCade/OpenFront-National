@@ -80,14 +80,14 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
     const game = await gameWithPlayers();
     treaty(game, "pact-1", A, [C, B]);
     treaty(game, "pact-2", A, [D, C]);
-    expect(game.nationalMdaAllies(A)).toEqual([B, C, D]);
+    expect(game.nationalMdaAllies(A)).toEqual([B, D, C]);
     expect(game.nationalMdaAllies("forged")).toEqual([]);
     expect(game.nationalMdaAllies(B)).toEqual([A, C]);
     expect(game.nationalMdaAllies(C)).toEqual([A, B, D]);
     expect(game.nationalMdaAllies(D)).toEqual([A, C]);
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
-    expect(restored.nationalMdaAllies(A)).toEqual([B, C, D]);
+    expect(restored.nationalMdaAllies(A)).toEqual([B, D, C]);
     expect(restored.nationalMdaAllies(C)).toEqual([A, B, D]);
     expect(snapshotGameData(restored).game).toEqual(snapshotGameData(game).game);
   });
@@ -99,11 +99,11 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
     expect(() => game.performNationalCommand(game.player(D), {
       kind: "expel-pact", pactId: "pact-1", memberId: B,
     })).toThrow();
-    expect(game.nationalMdaAllies(A)).toEqual([B, C, D]);
+    expect(game.nationalMdaAllies(A)).toEqual([B, D, C]);
     game.performNationalCommand(game.player(C), {
       kind: "betray-pact", pactId: "pact-1",
     });
-    expect(game.nationalMdaAllies(A)).toEqual([B, C, D]);
+    expect(game.nationalMdaAllies(A)).toEqual([B, D, C]);
     game.performNationalCommand(game.player(C), {
       kind: "betray-pact", pactId: "pact-2",
     });
@@ -308,7 +308,9 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
     expect(restored.readNationalObserverMemory(A)).toEqual(shared);
     for (const g of [game, restored]) {
       eliminate(g, B);
-      expect(g.nationalPoliticalAuthority()?.empireOf(A)).toBeNull();
+      // The eliminated subordinate leaves, but living emperor A remains.
+      expect(g.nationalPoliticalAuthority()?.empireOf(A)).toBe("sight-empire");
+      expect(g.nationalPoliticalAuthority()?.empireOf(B)).toBeNull();
       expect(g.readNationalObserverMemory(A)?.assets).toEqual([]);
       expect(g.readNationalObserverMemory(B)).toBeNull();
       g.writeNationalObserverMemory(A, prior);
