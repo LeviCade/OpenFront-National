@@ -5,7 +5,10 @@
 import { z } from "zod";
 import {
   DefenseLevyLedger,
+  type DefenseResult,
+  type IncomingDefense,
   type LevyLedgerState,
+  type TroopDebitTransactionAdapter,
 } from "../conflict/DefenseLevy";
 import {
   WarLedger,
@@ -78,15 +81,16 @@ export class NationalWarStateService {
   private readonly levy: DefenseLevyLedger;
   readonly authority: Readonly<NationalWarAuthority>;
 
-  constructor(private readonly politics: PoliticsPort) {
-    this.wars = new WarLedger(politics);
-    // Until E2 supplies a real atomic compare-and-swap troop debit adapter,
-    // any attempted funded levy must fail BEFORE making a troop mutation.
-    this.levy = new DefenseLevyLedger({
+  constructor(
+    private readonly politics: PoliticsPort,
+    private readonly transactions: TroopDebitTransactionAdapter = {
       prepare: () => {
         throw new Error("NATIONAL levy: atomic troop debit not connected");
       },
-    });
+    },
+  ) {
+    this.wars = new WarLedger(politics);
+    this.levy = new DefenseLevyLedger(transactions);
     this.authority = Object.freeze({
       authorizeOffensiveAction: (attackerId: string, targetId: string | null) =>
         this.wars.authorizeOffensiveAction(attackerId, targetId),
@@ -108,14 +112,20 @@ export class NationalWarStateService {
     const state = NationalWarStateSnapshotSchema.parse(raw);
     const probeWars = new WarLedger(this.politics);
     probeWars.restoreState(state.wars as ConflictLedgerState);
-    const probeLevy = new DefenseLevyLedger({
-      prepare: () => {
-        throw new Error("NATIONAL levy: atomic troop debit not connected");
-      },
-    });
+    const probeLevy = new DefenseLevyLedger(this.transactions);
     probeLevy.restoreState(state.levy as LevyLedgerState);
     this.wars.restoreState(probeWars.exportState());
     this.levy.restoreState(probeLevy.exportState());
+  }
+
+  /**
+   * E2 must call only after AttackExecution accepts a real authorized attack.
+   * E1's GameImpl verifies the live MDA, contributor identity and troop CAS.
+   */
+  interceptAcceptedAttacks(
+    requests: readonly IncomingDefense[],
+  ): DefenseResult[] {
+    return this.levy.interceptAcceptedAttacks(requests);
   }
 
   perform(actorId: string, command: NationalWarCommand, tick: number): void {

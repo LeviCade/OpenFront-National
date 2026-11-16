@@ -57,6 +57,11 @@ import type {
 } from "../national/politics/PoliticalAuthorityAdapter";
 import type { LastSovereignResult } from "../national/politics/sovereignty";
 import type {
+  DefenseResult,
+  IncomingDefense,
+  TroopSource,
+} from "../national/conflict/DefenseLevy";
+import type {
   NationalWarAuthority,
   NationalWarCommand,
   NationalWarStateSnapshot,
@@ -602,6 +607,12 @@ export interface Game extends GameLike {
   nationalWarState(): NationalWarStateSnapshot | null;
   /** Internal trusted actor; E2 owns external schema and command validation. */
   performNationalWarCommand(actor: Player, command: NationalWarCommand): void;
+  /** Canonical read-only source from a real living Game Player. */
+  nationalLevySource(nationId: PlayerID): TroopSource | null;
+  /** Internal E2 accepted-attack hook; MDA, WAR and atomic debits verified. */
+  applyNationalDefenseLevy(
+    attacks: readonly IncomingDefense[],
+  ): readonly DefenseResult[];
   nationalWinner(): PlayerID | null;
   performNationalCommand(actor: Player, command: NationalCommand): void;
   isPaused(): boolean;

@@ -81,6 +81,13 @@ import {
   type NationalConflictPoliticsPort,
 } from "../national/politics/PoliticalAuthorityAdapter";
 import type { LastSovereignResult } from "../national/politics/sovereignty";
+import type {
+  DefenseResult,
+  IncomingDefense,
+  PreparedTroopDebits,
+  TroopDebitTransactionAdapter,
+  TroopSource,
+} from "../national/conflict/DefenseLevy";
 import {
   NationalWarStateService,
   NationalWarStateSnapshotSchema,
@@ -195,6 +202,8 @@ export class GameImpl implements Game {
   private _national: NationalRuntime | null = null;
   /** E2 WAR/LEVY is canonically stored here, never in a WeakMap or fork. */
   private _nationalWar: NationalWarStateService | null = null;
+  /** Reusable detached read sources; only PlayerImpl owns real troop balances. */
+  private readonly _nationalLevySources = new Map<PlayerID, TroopSource>();
   /** Cached query facade; the closure resolves the CURRENT runtime after restore. */
   private _nationalAuthority: PoliticalAuthorityAdapter | null = null;
   private _waterManager: WaterManager;
@@ -240,6 +249,7 @@ export class GameImpl implements Game {
         );
         this._nationalWar = new NationalWarStateService(
           this.nationalPoliticalAuthority()!,
+          this.nationalTroopDebits(),
         );
       }
     }
@@ -624,6 +634,116 @@ export class GameImpl implements Game {
     }
     this.synchronizeNationalState();
     this._nationalWar.perform(actor.id(), command, this._ticks);
+  }
+
+  /**
+   * Returns a stable source wrapper around a real, currently living player.
+   * Cached wrappers contain no authoritative balance; troops() rereads Player.
+   */
+  nationalLevySource(nationId: PlayerID): TroopSource | null {
+    if (this._nationalWar === null) return null;
+    const player = this._players.get(nationId);
+    if (!player || !player.isAlive() || !player.hasSpawned()) return null;
+    let source = this._nationalLevySources.get(nationId);
+    if (!source) {
+      source = Object.freeze({
+        nationId,
+        troops: () => this._players.get(nationId)?.troops() ?? 0,
+      });
+      this._nationalLevySources.set(nationId, source);
+    }
+    return source;
+  }
+
+  /**
+   * Exclusive synchronous Game tick lock provides atomic compare-and-swap.
+   * Prepare validates ALL sources/balances without mutation; commit checks
+   * ALL expected balances before setting any real PlayerImpl troop field.
+   */
+  private nationalTroopDebits(): TroopDebitTransactionAdapter {
+    return {
+      prepare: (debits): PreparedTroopDebits => {
+        const ids = new Set<string>();
+        const staged = debits.map((d) => {
+          const id = d.source.nationId;
+          const p = this._players.get(id);
+          if (
+            ids.has(id) ||
+            p === undefined ||
+            !p.isAlive() ||
+            !p.hasSpawned() ||
+            this.nationalLevySource(id) !== d.source ||
+            !Number.isSafeInteger(d.expectedBalance) ||
+            !Number.isSafeInteger(d.debit) ||
+            !Number.isSafeInteger(d.resultingBalance) ||
+            d.debit <= 0 ||
+            d.resultingBalance < 0 ||
+            d.expectedBalance !== d.resultingBalance + d.debit ||
+            p.troops() !== d.expectedBalance
+          ) {
+            throw new Error("NATIONAL levy: invalid or stale real troop debit");
+          }
+          ids.add(id);
+          return { id, p, expected: d.expectedBalance, next: d.resultingBalance, debit: d.debit };
+        });
+        let finalized = false;
+        return {
+          approved: staged.map((d) => ({
+            nationId: d.id, troopsDebited: d.debit,
+          })),
+          commit: () => {
+            if (finalized) throw new Error("NATIONAL levy: already finalized");
+            // Validate the WHOLE batch again before ANY mutation.
+            if (staged.some((d) => d.p.troops() !== d.expected))
+              throw new Error("NATIONAL levy: stale atomic balance");
+            for (const d of staged) d.p.setTroops(d.next);
+            finalized = true;
+          },
+          discard: () => {
+            finalized = true;
+          },
+        };
+      },
+    };
+  }
+
+  /**
+   * INTERNAL accepted-attack path. Only real formal WAR hostilities can levy;
+   * every contributor must belong to a real live MDA with the defender.
+   * E2's AttackExecution must supply an already validated stable campaign ID.
+   */
+  applyNationalDefenseLevy(
+    attacks: readonly IncomingDefense[],
+  ): readonly DefenseResult[] {
+    if (this._nationalWar === null || this._national === null)
+      throw new Error("NATIONAL levy: mode not enabled");
+    this.synchronizeNationalState();
+    const political = this._national.snapshot().politics;
+    for (const attack of attacks) {
+      if (
+        attack.confirmedAccepted !== true ||
+        !this._nationalWar.authority.authorizeOffensiveAction(
+          attack.attackerId, attack.defenderId,
+        )
+      ) {
+        throw new Error("NATIONAL levy: attack not formally authorized");
+      }
+      for (const entry of attack.eligible) {
+        const id = entry.source.nationId;
+        if (
+          this.nationalLevySource(id) !== entry.source ||
+          !political.pacts.some(
+            (p) =>
+              p.kind === "MDA" &&
+              p.memberIds.includes(attack.defenderId) &&
+              p.memberIds.includes(id),
+          )
+        ) {
+          throw new Error("NATIONAL levy: not an authoritative MDA contributor");
+        }
+      }
+    }
+    return this._nationalWar.interceptAcceptedAttacks(attacks);
   }
 
   /** Complete NATIONAL victor roster; old game Winner schema stays unchanged. */
@@ -1905,6 +2025,7 @@ export class GameImpl implements Game {
       );
       this._nationalWar = new NationalWarStateService(
         this.nationalPoliticalAuthority()!,
+        this.nationalTroopDebits(),
       );
       // v2 snapshot migration supplies null (no WAR/LEVY records yet).
       if (s.nationalWar !== null) this._nationalWar.restore(s.nationalWar);
