@@ -84,7 +84,7 @@ describe("E5 Round Five FOG: real GameRunner visibility / revoked empire / resto
       expect(advanceLastKnown(revoked.observation, saved, 60).stale.some((item) => item.id === String(hostileShip.id()))).toBe(false);
       runner.addTurn({ turnNumber: game.ticks(), intents: [] });
       expect(runner.executeNextTick()).toBe(true);
-      const packet = packets.at(-1);
+      const packet = packets[packets.length - 1];
       expect(JSON.stringify(packet)).not.toContain("8765432");
     } finally {
       spy.mockRestore();
