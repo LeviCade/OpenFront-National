@@ -475,8 +475,7 @@ export class GameRightSidebar extends LitElement implements Controller {
       </aside>
       ${
         this.game.config().gameConfig().nationalMode === true &&
-        this.game.config().gameConfig().gameType === GameType.Singleplayer &&
-        true
+        this.game.config().gameConfig().gameType === GameType.Singleplayer
           ? html`<national-diplomacy-panel
               .game=${this.game}
               .eventBus=${this.eventBus}
