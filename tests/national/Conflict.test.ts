@@ -325,7 +325,8 @@ describe("NATIONAL real defensive levies — D-008", () => {
       ledger.interceptAcceptedAttacks(attacks).map((x) => x.intercepted),
     ).toEqual(r.map((x) => x.intercepted));
     expect(donor.balance).toBe(90_000);
-    expect(donor.calls).toBe(2);
+    // Twenty clicks are funded by one atomic batch commit, not two callbacks.
+    expect(donor.calls).toBe(1);
   });
   it("LEVY-05 simultaneous obligations use deterministic order and never double spend", () => {
     const d1 = new Troops("C", 100_000),
