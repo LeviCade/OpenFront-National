@@ -7,8 +7,40 @@
 import type {
   NationId,
   NationalObservation,
+  NationalWarView,
   PublicDiplomaticEventKind,
 } from "../observation/NationalObservation";
+
+/**
+ * Nations on the SAME side are comrades, NOT enemies.
+ * Opposing side alone produces possible hostile identities. Malformed records
+ * where observer is on both sides fail closed; if contradictory independent
+ * layers contain an ally and enemy at once, same-side protection wins.
+ * This strategic reader does not authorize a military command.
+ */
+export function deriveNationalWarSides(
+  wars: readonly NationalWarView[],
+  observerId: NationId,
+): {
+  readonly enemies: ReadonlySet<NationId>;
+  readonly allies: ReadonlySet<NationId>;
+} {
+  const enemies = new Set<NationId>();
+  const allies = new Set<NationId>();
+  for (const war of wars) {
+    const first = war.first.activeMemberIds;
+    const second = war.second.activeMemberIds;
+    const onFirst = first.includes(observerId);
+    const onSecond = second.includes(observerId);
+    if (onFirst === onSecond) continue;
+    const sameSide = onFirst ? first : second;
+    const oppositeSide = onFirst ? second : first;
+    for (const id of sameSide) if (id !== observerId) allies.add(id);
+    for (const id of oppositeSide) if (id !== observerId) enemies.add(id);
+  }
+  for (const id of allies) enemies.delete(id);
+  return { enemies, allies };
+}
 
 export type NationalObjective = "defend" | "expand" | "consolidate";
 export interface DiplomaticReputation {
@@ -150,11 +182,8 @@ export function planNationalInterest(
   }
 
   const publicNations = new Map(observation.nations.map((n) => [n.id, n]));
-  const enemiesAtWar = new Set<string>();
-  for (const war of observation.wars) {
-    if (!war.participants.includes(self.id)) continue;
-    for (const id of war.participants) if (id !== self.id) enemiesAtWar.add(id);
-  }
+  const { enemies: enemiesAtWar, allies: warAllies } =
+    deriveNationalWarSides(observation.wars, self.id);
   const closeThreat = observation.visibleAssets.some(
     (a) => a.ownerId !== self.id && enemiesAtWar.has(a.ownerId),
   );
@@ -185,7 +214,7 @@ export function planNationalInterest(
       .filter((a) => a.kind === "army" || a.kind === "warship")
       .map((a) => a.ownerId),
   );
-  const protectedPartners = new Set<string>();
+  const protectedPartners = new Set<string>(warAllies);
   for (const c of observation.coalitions) {
     if (c.members.includes(self.id))
       for (const id of c.members) protectedPartners.add(id);
@@ -197,7 +226,8 @@ export function planNationalInterest(
   for (const frontier of observation.frontiers) {
     const target = publicNations.get(frontier.targetId);
     if (!target || !target.alive || target.status === "eliminated") continue;
-    // Existing coalitions cannot become ordinary offensive targets.
+    // Neither treaty members nor same-war-side comrades can become routine
+    // offensive targets, even without an ordinary coalition treaty.
     if (protectedPartners.has(target.id)) continue;
     const credibility = knownCredibility.get(target.id) ?? 0;
     const seenMilitary = visibleMilitary.has(target.id);

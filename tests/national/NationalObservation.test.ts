@@ -63,7 +63,15 @@ function fixture(): NationalWorld {
         terms: { levyPercent: 10, vote: "unanimous" },
       },
     ],
-    wars: [{ id: "war-1", participants: ["a", "b"] }],
+    wars: [
+      {
+        id: "war-1",
+        scope: "national",
+        first: { kind: "nation", stableId: "a", activeMemberIds: ["a"] },
+        second: { kind: "nation", stableId: "b", activeMemberIds: ["b"] },
+        startedTick: 3,
+      },
+    ],
     invitations: [],
     assets: [
       {
@@ -136,7 +144,15 @@ describe("NATIONAL observation FOG-01 / FOG-02 / FOG-07", () => {
       "Cedar",
       "Dawn",
     ]);
-    expect(view.wars).toEqual([{ id: "war-1", participants: ["a", "b"] }]);
+    expect(view.wars).toEqual([
+      {
+        id: "war-1",
+        scope: "national",
+        first: { kind: "nation", stableId: "a", activeMemberIds: ["a"] },
+        second: { kind: "nation", stableId: "b", activeMemberIds: ["b"] },
+        startedTick: 3,
+      },
+    ]);
     expect(view.coalitions.find((c) => c.id === "empire-1")?.members).toEqual([
       "b",
       "c",

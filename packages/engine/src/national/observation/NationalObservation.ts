@@ -43,10 +43,22 @@ export interface NationalCoalition {
   readonly terms: Readonly<Record<string, string | number | boolean>>;
 }
 
-export interface NationalWar {
-  readonly id: string;
-  readonly participants: readonly NationId[];
+/** M0 public scoped active-war view; see docs/19-stage3-m0-interface.md. */
+export interface NationalWarSideView {
+  readonly kind: "nation" | "empire";
+  readonly stableId: string;
+  readonly activeMemberIds: readonly NationId[];
 }
+
+export interface NationalWarView {
+  readonly id: string;
+  readonly scope: "national" | "imperial";
+  readonly first: NationalWarSideView;
+  readonly second: NationalWarSideView;
+  readonly startedTick: number;
+}
+
+export type NationalWar = NationalWarView;
 
 export interface NationalInvitation {
   readonly coalitionId: string;
@@ -311,8 +323,25 @@ export function projectNationalObservation(
       }))
       .sort(byId),
     coalitions: coalitionObservations.sort(byId),
+    // Copy only M0-approved public fields. Never serialize raw war records.
     wars: world.wars
-      .map((w) => ({ id: w.id, participants: [...w.participants].sort() }))
+      .map(
+        (w): NationalWarView => ({
+          id: w.id,
+          scope: w.scope,
+          first: {
+            kind: w.first.kind,
+            stableId: w.first.stableId,
+            activeMemberIds: [...w.first.activeMemberIds].sort(),
+          },
+          second: {
+            kind: w.second.kind,
+            stableId: w.second.stableId,
+            activeMemberIds: [...w.second.activeMemberIds].sort(),
+          },
+          startedTick: w.startedTick,
+        }),
+      )
       .sort(byId),
     ownResources: { troops: own.troops, treasury: own.treasury },
     visibleAssets: visibleAssets.sort(byId),
