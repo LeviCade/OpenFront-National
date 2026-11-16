@@ -46,6 +46,10 @@ import {
 import { collectLiveNationalObservation } from "./national/observation/LiveObservation";
 import { NationalOutboundFilter } from "./national/observation/NationalOutbound";
 import {
+  actorNationalResults,
+  currentNationalResultCursor,
+} from "./national/observation/NationalPoliticalPacket";
+import {
   readSnapshotHeader,
   restoreGame,
   snapshotGame,
@@ -170,6 +174,8 @@ export class GameRunner {
 
   private readonly nationalObserverId: string | null;
   private readonly nationalOutbound: NationalOutboundFilter | null;
+  /** Per authenticated recipient, not per world or client-provided ID. */
+  private nationalResultCursor = -1;
 
   constructor(
     public game: Game,
@@ -194,6 +200,12 @@ export class GameRunner {
         // Principal identity was resolved from the actual clientID registry.
         this.nationalOutbound.restoreSightMemory(
           restoreNationalHumanSight(game, this.nationalObserverId),
+        );
+        // Do not replay old success/rejection toasts when reconnecting.
+        // Reconnected clients reconstruct truth from nationalPolitics.
+        this.nationalResultCursor = currentNationalResultCursor(
+          game,
+          game.player(this.nationalObserverId),
         );
       }
     } else {
@@ -446,9 +458,18 @@ export class GameRunner {
           this.game,
           this.nationalObserverId!,
         );
+        const resultStream = actorNationalResults(
+          this.game,
+          this.game.player(this.nationalObserverId!),
+          this.nationalResultCursor,
+        );
+        this.nationalResultCursor = resultStream.latestSequence;
+        const authenticatedPacket = resultStream.results.length
+          ? { ...fullPacket, nationalCommandResults: resultStream.results }
+          : fullPacket;
         const projected = this.nationalOutbound.project(
           this.game,
-          fullPacket,
+          authenticatedPacket,
           verified,
         );
         // Advance and persist this authenticated human's sight at the
