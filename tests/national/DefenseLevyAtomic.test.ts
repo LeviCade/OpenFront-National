@@ -299,7 +299,12 @@ describe("NATIONAL levy transaction atomicity — D-008 / LEVY-01..07", () => {
     expect(original.reduce((n, x) => n + x.intercepted, 0)).toBe(10_000);
     expect(bank.balance("C")).toBe(90_000);
     expect(adapter.commitCount).toBe(1);
-    expect(ledger.interceptAcceptedAttacks(spam)).toEqual(original);
+    const replays = ledger.interceptAcceptedAttacks(spam);
+    expect(replays.every((x) => x.application === "replay")).toBe(true);
+    expect(replays.every((x) => x.intercepted === 0)).toBe(true);
+    expect(
+      replays.every((x) => x.remainingAttackingTroops === 2_000),
+    ).toBe(true);
     expect(bank.balance("C")).toBe(90_000);
     expect(adapter.commitCount).toBe(1);
     expect(
@@ -358,7 +363,15 @@ describe("NATIONAL levy transaction atomicity — D-008 / LEVY-01..07", () => {
     const clone = new DefenseLevyLedger(adapter);
     clone.restoreState(state);
     const countBefore = adapter.commitCount;
-    expect(clone.interceptAcceptedAttacks([first])).toEqual([result]);
+    expect(clone.interceptAcceptedAttacks([first])).toEqual([
+      {
+        ...result,
+        application: "replay",
+        intercepted: 0,
+        remainingAttackingTroops: 3_000,
+        contributions: [],
+      },
+    ]);
     expect(adapter.commitCount).toBe(countBefore);
     expect(bank.balance("C")).toBe(restoredBalance);
     expect(
