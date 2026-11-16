@@ -234,6 +234,71 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
     expect(south.troops()).toBe(50_000);
   });
 
+  it("LEVY-07 rejects an invalid, duplicated or incomplete authoritative MDA roster without a debit", async () => {
+    for (const roster of [
+      ["unknown-nation"],
+      ["east-id", "east-id"],
+      ["west-id", "east-id"],
+    ]) {
+      const game = await spawned();
+      const north = game.player("north-id");
+      const south = game.player("south-id");
+      const east = game.player("east-id");
+      north.setTroops(50_000);
+      south.setTroops(50_000);
+      east.setTroops(50_000);
+      const prior = game.nationalWarState();
+      Object.assign(game, {
+        nationalWarAuthority: () => ({
+          authorizeOffensiveAction: () => true,
+          atWar: () => true,
+        }),
+        nationalMdaAllies: () => roster,
+        applyNationalDefenseLevy: () => {
+          throw new Error("must not reach the debit adapter");
+        },
+      });
+      expect(() =>
+        interceptNationalAttack(
+          game, "denied-attack", north.id(), south.id(), 10_000,
+        ),
+      ).toThrow("invalid authoritative MDA donor identity");
+      expect([north.troops(), south.troops(), east.troops()]).toEqual([
+        50_000, 50_000, 50_000,
+      ]);
+      expect(game.nationalWarState()).toEqual(prior);
+    }
+  });
+
+  it("LEVY-07 missing actual contributor troop source fails closed", async () => {
+    const game = await spawned();
+    const north = game.player("north-id");
+    const south = game.player("south-id");
+    const east = game.player("east-id");
+    north.setTroops(50_000);
+    south.setTroops(50_000);
+    east.setTroops(50_000);
+    Object.assign(game, {
+      nationalWarAuthority: () => ({
+        authorizeOffensiveAction: () => true,
+        atWar: () => true,
+      }),
+      nationalMdaAllies: () => [east.id()],
+      nationalLevySource: () => null,
+      applyNationalDefenseLevy: () => {
+        throw new Error("must not debit missing contributor");
+      },
+    });
+    expect(() =>
+      interceptNationalAttack(
+        game, "no-source", north.id(), south.id(), 10_000,
+      ),
+    ).toThrow("missing authoritative MDA troop source");
+    expect([north.troops(), south.troops(), east.troops()]).toEqual([
+      50_000, 50_000, 50_000,
+    ]);
+  });
+
   it("snapshot round-trips queued real war execution without forging war authority", async () => {
     const game = await spawned();
     game.addExecution(
