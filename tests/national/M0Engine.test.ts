@@ -203,7 +203,9 @@ describe("Stage 3 M0: authoritative NATIONAL vertical slice", () => {
   it("migrates legacy version-1 game snapshots with NATIONAL absent", async () => {
     const legacy = await spawned(false);
     const old = readVersioned(GameSnapshot, snapshotGameData(legacy).game);
-    const { national: _national, ...v1 } = old;
+    const v1 = Object.fromEntries(
+      Object.entries(old).filter(([key]) => key !== "national"),
+    );
     expect(readVersioned(GameSnapshot, { v: 1, d: v1 }).national).toBeNull();
     const { bytes } = await roundTrip(legacy, "plains");
     const restored = await restoreTestGame(bytes, "plains");
