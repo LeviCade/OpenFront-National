@@ -292,7 +292,7 @@ describe("NATIONAL player-facing founding", () => {
       actorId: "nation-a",
       empireId: "Atlas",
       accepted: true,
-      tick: 10,
+      tick: 9,
     }];
     element.refresh();
     await element.updateComplete;
