@@ -11,9 +11,9 @@ import { Controller } from "../../Controller";
 import { isDesktopShell } from "../../DesktopShell";
 import { gamePortal } from "../../GamePortal";
 import "../../NationalDiplomacyPanel";
-import type { NationalDiplomacyPanel } from "../../NationalDiplomacyPanel";
 import { showInGameAlert, showInGameConfirm } from "../../InGameModal";
 import { TogglePauseIntentEvent } from "../../InputHandler";
+import type { NationalDiplomacyPanel } from "../../NationalDiplomacyPanel";
 import { PauseGameIntentEvent, SendWinnerEvent } from "../../Transport";
 import { shareGame } from "../../utilities/ShareGame";
 import { homeHref, showToast, translateText } from "../../Utils";
@@ -41,7 +41,8 @@ const ONE_MINUTE_WARNING_DURATION_MS = 4_000;
 export class GameRightSidebar extends LitElement implements Controller {
   public game: GameView;
   public eventBus: EventBus;
-  @query("national-diplomacy-panel") private nationalPanel?: NationalDiplomacyPanel;
+  @query("national-diplomacy-panel")
+  private nationalPanel?: NationalDiplomacyPanel;
 
   @state()
   private _isSinglePlayer: boolean = false;
