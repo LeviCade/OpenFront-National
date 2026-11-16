@@ -39,6 +39,8 @@ import { createGame } from "./game/GameImpl";
 import { humanDisconnects, humanStatsSnapshot } from "./game/HumanStats";
 import { placeName, placeSpawnName } from "./game/NameBoxCalculator";
 import { createNationsForGame } from "./game/NationCreation";
+import { collectLiveNationalObservation } from "./national/observation/LiveObservation";
+import { NationalOutboundFilter } from "./national/observation/NationalOutbound";
 import {
   readSnapshotHeader,
   restoreGame,
@@ -94,6 +96,7 @@ export async function createGameRunner(
       gameStart.tribes?.map((t) => t.name),
     ),
     callBack,
+    clientID,
   );
   gr.init();
   return gr;
@@ -144,6 +147,7 @@ export async function createGameRunnerFromSnapshot(
       gameStart.tribes?.map((t) => t.name),
     ),
     callBack,
+    clientID,
   );
 }
 
@@ -160,11 +164,30 @@ export class GameRunner {
 
   private lastSpawnTiles = new Map<PlayerID, TileRef>();
 
+  private readonly nationalObserverId: string | null;
+  private readonly nationalOutbound: NationalOutboundFilter | null;
+
   constructor(
     public game: Game,
     private execManager: Executor,
     private callBack: (gu: GameUpdateViewData | ErrorUpdate) => void,
-  ) {}
+    clientID?: ClientID,
+  ) {
+    if (game.config().nationalMode()) {
+      // Principal is resolved from the actual game player registry, NEVER
+      // from an observerId asserted by a client or packet body.
+      const player = clientID === undefined
+        ? null : game.playerByClientID(clientID);
+      this.nationalObserverId = player?.id() ?? null;
+      this.nationalOutbound = new NationalOutboundFilter(
+        game,
+        this.nationalObserverId,
+      );
+    } else {
+      this.nationalObserverId = null;
+      this.nationalOutbound = null;
+    }
+  }
 
   /**
    * Serializes the simulation at the current tick boundary. Turns that were
@@ -308,7 +331,7 @@ export class GameRunner {
       updates[GameUpdateType.Unit] = [];
     }
 
-    this.callBack({
+    const fullPacket: GameUpdateViewData = {
       tick: this.game.ticks(),
       packedTileUpdates,
       ...(packedMotionPlans ? { packedMotionPlans } : {}),
@@ -325,7 +348,19 @@ export class GameRunner {
         : {}),
       tickExecutionDuration: tickExecutionDuration,
       pendingTurns: pendingTurns ?? 0,
-    });
+    };
+    if (this.nationalOutbound !== null) {
+      const verified = this.nationalObserverId !== null
+        ? collectLiveNationalObservation(this.game, this.nationalObserverId)
+        : null;
+      this.callBack(this.nationalOutbound.project(
+        this.game,
+        fullPacket,
+        verified,
+      ));
+    } else {
+      this.callBack(fullPacket);
+    }
     this.isExecuting = false;
     return true;
   }
