@@ -45,7 +45,7 @@ must pass **on the exact same integration SHA** before any acceptance.
 ### Genuine test-failure controls
 
 1. **WAR-01:** live `AttackExecution.init` must refuse an undeclared attack
-   *before* charging real attacker troops. E5 replaces the Game's read-only
+   _before_ charging real attacker troops. E5 replaces the Game's read-only
    authorization result with `true` in a controlled test fixture and asserts
    the independent authorization oracle detects the violation, then restores
    the real method.
@@ -126,6 +126,7 @@ a snapshot obtained by a modified local worker.
 
 [Round Five strict CI run 43917058642](https://github.com/LeviCade/OpenFront-National/actions/runs/43917058642)
 executed 14 targeted tests: **12 passed, 2 failed**. Failures:
+
 - WAR-04: formal declaration reached `AttackExecution`, but it aborted with
   `NATIONAL: missing authoritative MDA contributors`.
 - LEVY-01/05: `nationalMdaAllies` canonical discovery was undefined.
