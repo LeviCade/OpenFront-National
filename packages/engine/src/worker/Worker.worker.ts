@@ -167,6 +167,20 @@ function sendMessage(message: WorkerMessage) {
 async function onMessage(e: MessageEvent<MainThreadMessage>) {
   const message = e.data;
 
+  // Replay extraction may be invoked on a standalone worker with NO running
+  // GameRunner. Close this bypass before the session-dependent checks below.
+  if (
+    message.type === "extract_snapshot" &&
+    message.gameStartInfo.config.nationalMode === true
+  ) {
+    sendMessage({
+      type: "extract_snapshot_error",
+      id: message.id,
+      error: "NATIONAL snapshot extraction requires a trusted host",
+    } as ExtractSnapshotErrorMessage);
+    return;
+  }
+
   // A browser worker cannot provide hostile-client secrecy because the
   // authoritative game itself lives in the same browser. Nevertheless,
   // reject every alternate RPC/snapshot bypass before it can return raw data.
