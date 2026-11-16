@@ -545,7 +545,9 @@ export class Transport {
         }
         this.isSessionReady = true;
         if (msg.type === "lobby_info" || msg.type === "start") {
-          this.eventBus.emit(new NationalTransportStatusEvent(true, this.lobbyConfig.gameID));
+          this.eventBus.emit(
+            new NationalTransportStatusEvent(true, this.lobbyConfig.gameID),
+          );
         }
         this.flushBuffer();
         this.onmessage(msg);
@@ -578,7 +580,9 @@ export class Transport {
     };
     this.socket.onclose = (event: CloseEvent) => {
       this.isSessionReady = false;
-      this.eventBus.emit(new NationalTransportStatusEvent(false, this.lobbyConfig.gameID));
+      this.eventBus.emit(
+        new NationalTransportStatusEvent(false, this.lobbyConfig.gameID),
+      );
       const detail = describeSocketClose(socket.url, event, openedAt);
       if (event.code === CloseCode.Normal) {
         console.log(`Game socket ${detail}`);
@@ -772,7 +776,9 @@ export class Transport {
   }
 
   leaveGame() {
-    this.eventBus.emit(new NationalTransportStatusEvent(false, this.lobbyConfig.gameID));
+    this.eventBus.emit(
+      new NationalTransportStatusEvent(false, this.lobbyConfig.gameID),
+    );
     for (const unsubscribe of this.unsubscribers.splice(0)) {
       unsubscribe();
     }
