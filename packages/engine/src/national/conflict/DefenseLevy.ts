@@ -12,9 +12,42 @@
 
 export interface TroopSource {
   readonly nationId: string;
+  /** A pure read of real authoritative troops; never a virtual donation pool. */
   troops(): number;
-  /** Exactly the real Player.removeTroops operation; no synthetic ledger. */
-  removeTroops(requested: number): number;
+}
+
+/**
+ * Exact full-batch debit intent. The adapter must verify expectedBalance at
+ * commit under the authoritative engine's exclusive tick lock.
+ */
+export interface TroopDebit {
+  readonly source: TroopSource;
+  readonly expectedBalance: number;
+  readonly debit: number;
+  readonly resultingBalance: number;
+}
+
+/**
+ * The prepare phase is completely read-only: it may throw, refuse, or return
+ * malformed acknowledgements but MUST NOT mutate troop balances.
+ */
+export interface PreparedTroopDebits {
+  /** Exact one-to-one approval, same sorted order and full requested amounts. */
+  readonly approved: readonly LevyContribution[];
+  /**
+   * ATOMIC: compare expected balances and apply ALL proposed debits in one
+   * indivisible engine transaction. On ANY exception, zero balances change.
+   * On success, EVERY exact debit is applied. No partial/short responses.
+   * Never call arbitrary Player.removeTroops callbacks one by one.
+   */
+  commit(): void;
+  /** Discard a staged, uncommitted plan without touching troop balances. */
+  discard(): void;
+}
+
+/** The conductor must implement this boundary against authoritative state. */
+export interface TroopDebitTransactionAdapter {
+  prepare(debits: readonly TroopDebit[]): PreparedTroopDebits;
 }
 
 export interface LevyEligibility {
@@ -29,6 +62,8 @@ export interface LevyEligibility {
 export interface IncomingDefense {
   /** Must be a stable ID for a *validated* attack, not a click ID. */
   readonly attackId: string;
+  /** Authoritative code must construct this only after acceptance. */
+  readonly confirmedAccepted: true;
   /** Same invasion campaign across microattacks; supplied by M0. */
   readonly campaignId: string;
   readonly attackerId: string;
@@ -147,24 +182,41 @@ export function weightedLevyAllocation(
   return result;
 }
 
+
+type LedgerMaps = {
+  allowances: Map<string, Allowance>;
+  processed: Map<string, Processed>;
+};
+
+/**
+ * Calculates the whole tick/campaign batch in scratch state. Nothing is
+ * irreversible until ONE atomic adapter commit succeeds. A failed prepare,
+ * invalid approval, stale balance, or failed atomic commit changes neither
+ * troop balances nor ledger history.
+ */
 export class DefenseLevyLedger {
-  private allowances = new Map<string, Allowance>();
-  private processed = new Map<string, Processed>();
+  private state: LedgerMaps = {
+    allowances: new Map<string, Allowance>(),
+    processed: new Map<string, Processed>(),
+  };
+
+  constructor(private readonly transactions: TroopDebitTransactionAdapter) {}
 
   exportState(): LevyLedgerState {
     return {
       version: 1,
-      allowances: [...this.allowances.values()]
+      allowances: [...this.state.allowances.values()]
         .map((x) => ({ ...x }))
         .sort(
           (a, b) =>
             compare(a.key, b.key) || compare(a.contributorId, b.contributorId),
         ),
-      processed: [...this.processed.values()]
+      processed: [...this.state.processed.values()]
         .map((x) => ({ ...x, result: copyResult(x.result) }))
         .sort((a, b) => compare(a.attackId, b.attackId)),
     };
   }
+
   restoreState(s: LevyLedgerState): void {
     if (s.version !== 1) throw new Error("unknown levy ledger version");
     const allowances = new Map<string, Allowance>(),
@@ -228,16 +280,15 @@ export class DefenseLevyLedger {
     }
     for (const key of accounted.keys())
       if (!allowances.has(key)) throw new Error("missing campaign allowance");
-    // Never mutate live troop balances in restore. The owner of the snapshot
-    // must restore Player troops and this ledger from the same tick boundary.
-    this.allowances = allowances;
-    this.processed = processed;
+    // The conductor restores real troop balances and ledger together.
+    // This function performs no troop debit or refund on restoration.
+    this.state = { allowances, processed };
   }
 
   /**
-   * Batch simultaneous incoming attacks in ID order. Debits are made directly
-   * against the live source and recorded once per validated attack. Return
-   * values are the contract for AttackExecution's before-tile interception.
+   * Input is an already accepted, tick-ordered batch, not requests/clicks.
+   * Sort by attack ID, simulate virtual balances across ALL attacks, then
+   * prepare/commit ONE all-or-nothing debit against live player balances.
    */
   interceptAcceptedAttacks(
     requests: readonly IncomingDefense[],
@@ -249,6 +300,8 @@ export class DefenseLevyLedger {
       requireIdentity(r.campaignId);
       requireIdentity(r.attackerId);
       requireIdentity(r.defenderId);
+      if (r.confirmedAccepted !== true)
+        throw new Error("levy requires authoritative accepted attack");
       assertNonnegative(r.attackingTroops, "attacking troops");
       if (r.attackerId === r.defenderId) throw new Error("self-attack");
       if (ids.has(r.attackId)) throw new Error("duplicate attack within batch");
@@ -264,9 +317,83 @@ export class DefenseLevyLedger {
         fraction(e.protectedCapacityFraction);
       }
     }
-    return [...requests]
+
+    const initialBalances = new Map<string, number>();
+    const virtualBalances = new Map<string, number>();
+    for (const [id, source] of [...liveSources].sort(([a], [b]) => compare(a, b))) {
+      const balance = source.troops();
+      assertNonnegative(balance, "actual contributor troops");
+      initialBalances.set(id, balance);
+      virtualBalances.set(id, balance);
+    }
+
+    const staging: LedgerMaps = {
+      allowances: new Map(
+        [...this.state.allowances].map(([id, x]) => [id, { ...x }]),
+      ),
+      processed: new Map(this.state.processed),
+    };
+    const results = [...requests]
       .sort((a, b) => compare(a.attackId, b.attackId))
-      .map((r) => this.intercept(r));
+      .map((r) => this.stage(r, staging, virtualBalances));
+
+    const debits: TroopDebit[] = [...initialBalances]
+      .filter(([id, initial]) => initial !== virtualBalances.get(id))
+      .sort(([a], [b]) => compare(a, b))
+      .map(([id, initial]) => {
+        const remaining = virtualBalances.get(id)!;
+        const debit = initial - remaining;
+        if (!positiveInteger(debit) || debit === 0)
+          throw new Error("invalid staged debit");
+        return {
+          source: liveSources.get(id)!,
+          expectedBalance: initial,
+          debit,
+          resultingBalance: remaining,
+        };
+      });
+
+    // No funding needed: still remember the zero-interception accepted attack,
+    // preventing duplicate/replay events from opening a fresh allowance.
+    if (debits.length === 0) {
+      this.state = staging;
+      return results;
+    }
+
+    let prepared: PreparedTroopDebits | undefined;
+    try {
+      prepared = this.transactions.prepare(debits);
+      if (!prepared || !Array.isArray(prepared.approved))
+        throw new Error("invalid debit preparation response");
+      if (prepared.approved.length !== debits.length)
+        throw new Error("short/extra debit approval");
+      for (let i = 0; i < debits.length; i++) {
+        const requested = debits[i];
+        const approved = prepared.approved[i];
+        if (
+          !approved ||
+          approved.nationId !== requested.source.nationId ||
+          !positiveInteger(approved.troopsDebited) ||
+          approved.troopsDebited !== requested.debit
+        )
+          throw new Error("invalid or short debit approval");
+      }
+      // A pure pre-commit freshness check, plus the mandatory adapter CAS.
+      for (const debit of debits) {
+        if (debit.source.troops() !== debit.expectedBalance)
+          throw new Error("contributor balance changed before commit");
+      }
+      // A compliant adapter never partially modifies balances if this throws.
+      // No further user-supplied callbacks occur after successful commit.
+      prepared.commit();
+    } catch (error) {
+      if (prepared) prepared.discard();
+      throw error;
+    }
+
+    // Single state swap only AFTER every real balance was atomically debited.
+    this.state = staging;
+    return results;
   }
 
   private allowanceKey(
@@ -276,8 +403,14 @@ export class DefenseLevyLedger {
     // Length framing avoids ambiguous concatenation and supports arbitrary IDs.
     return `${r.campaignId.length}:${r.campaignId}${r.attackerId.length}:${r.attackerId}${r.defenderId.length}:${r.defenderId}${contributorId.length}:${contributorId}`;
   }
-  private intercept(r: IncomingDefense): DefenseResult {
-    const previous = this.processed.get(r.attackId);
+
+  /** This method only mutates private scratch maps and virtual balances. */
+  private stage(
+    r: IncomingDefense,
+    maps: LedgerMaps,
+    balances: Map<string, number>,
+  ): DefenseResult {
+    const previous = maps.processed.get(r.attackId);
     if (previous) {
       if (
         previous.campaignId !== r.campaignId ||
@@ -288,13 +421,12 @@ export class DefenseLevyLedger {
         throw new Error("attack ID reused with different details");
       return copyResult(previous.result);
     }
+
     const candidates = new Map<string, LevyEligibility>();
     for (const e of r.eligible) {
       const id = e.source.nationId;
       if (id === r.attackerId || id === r.defenderId) continue;
       const prior = candidates.get(id);
-      // One physical contributor can appear in several MDAs. Apply both the
-      // smallest levy percentage and the highest protected reserve.
       if (prior) {
         if (
           prior.source !== e.source ||
@@ -304,7 +436,10 @@ export class DefenseLevyLedger {
         candidates.set(id, {
           source: e.source,
           troopCapacity: e.troopCapacity,
-          maximumFraction: Math.min(prior.maximumFraction, e.maximumFraction),
+          maximumFraction: Math.min(
+            prior.maximumFraction,
+            e.maximumFraction,
+          ),
           protectedCapacityFraction: Math.max(
             prior.protectedCapacityFraction,
             e.protectedCapacityFraction,
@@ -312,8 +447,8 @@ export class DefenseLevyLedger {
         });
       } else candidates.set(id, e);
     }
+
     const allocations: {
-      source: TroopSource;
       id: string;
       cap: number;
       weight: number;
@@ -321,11 +456,12 @@ export class DefenseLevyLedger {
       allowance: Allowance;
     }[] = [];
     for (const [id, e] of [...candidates].sort(([a], [b]) => compare(a, b))) {
-      const current = e.source.troops();
-      assertNonnegative(current, "actual contributor troops");
-      const reserve = Math.ceil(e.troopCapacity * e.protectedCapacityFraction);
+      const current = balances.get(id)!;
+      const reserve = Math.ceil(
+        e.troopCapacity * e.protectedCapacityFraction,
+      );
       const key = this.allowanceKey(r, id);
-      const existing = this.allowances.get(key);
+      const existing = maps.allowances.get(key);
       const cap =
         existing?.limit ??
         Math.min(
@@ -333,7 +469,6 @@ export class DefenseLevyLedger {
           Math.max(0, current - reserve),
         );
       assertNonnegative(cap, "campaign cap");
-      // Persist initial ceiling; never refresh via repeated micro-attacks.
       const allowance = existing ?? {
         key,
         contributorId: id,
@@ -341,34 +476,41 @@ export class DefenseLevyLedger {
         spent: 0,
       };
       allocations.push({
-        source: e.source,
         id,
-        cap: Math.max(0, Math.min(cap - allowance.spent, current - reserve)),
+        cap: Math.max(
+          0,
+          Math.min(cap - allowance.spent, current - reserve),
+        ),
         weight: current,
         key,
         allowance,
       });
     }
+
     const split = weightedLevyAllocation(
       r.attackingTroops,
-      allocations.map((a) => ({ id: a.id, cap: a.cap, weight: a.weight })),
+      allocations.map((a) => ({
+        id: a.id,
+        cap: a.cap,
+        weight: a.weight,
+      })),
     );
     let intercepted = 0;
     const contributions: LevyContribution[] = [];
     for (const a of allocations) {
       const asked = split.get(a.id) ?? 0;
-      // This is the live Player.removeTroops contract, not a virtual transfer.
-      const received = asked === 0 ? 0 : a.source.removeTroops(asked);
-      if (!positiveInteger(received) || received > asked)
-        throw new Error("invalid live removeTroops result");
-      const row = this.allowances.get(a.key) ?? a.allowance;
-      row.spent += received;
-      this.allowances.set(a.key, row);
-      if (received > 0) {
-        intercepted += received;
-        contributions.push({ nationId: a.id, troopsDebited: received });
+      const row = a.allowance;
+      row.spent += asked;
+      maps.allowances.set(a.key, row);
+      if (asked > 0) {
+        const available = balances.get(a.id)!;
+        if (asked > available) throw new Error("overcommitted troop balance");
+        balances.set(a.id, available - asked);
+        intercepted += asked;
+        contributions.push({ nationId: a.id, troopsDebited: asked });
       }
     }
+
     const result: DefenseResult = {
       attackId: r.attackId,
       campaignId: r.campaignId,
@@ -377,7 +519,7 @@ export class DefenseLevyLedger {
       remainingAttackingTroops: r.attackingTroops - intercepted,
       contributions,
     };
-    this.processed.set(r.attackId, {
+    maps.processed.set(r.attackId, {
       attackId: r.attackId,
       campaignId: r.campaignId,
       attackerId: r.attackerId,
