@@ -213,6 +213,7 @@ export class NationalDiplomacyPanel extends LitElement {
       <section
         class="text-white w-[min(25rem,calc(100vw-1rem))] max-w-full rounded-xl border border-amber-400/50 bg-slate-950/95 shadow-xl backdrop-blur-sm overflow-hidden"
         aria-label="NATIONAL diplomacy"
+        data-national-phase=${this.phase}
         @keydown=${this.handlePanelKeyDown}
       >
         <button
