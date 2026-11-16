@@ -24,7 +24,20 @@ async function mount(
     spawned: options.spawned ?? true,
     alive: options.alive ?? true,
     replay: options.replay ?? false,
-    politics: options.politics ?? null,
+    politics:
+      options.politics === undefined
+        ? { empires: [], warnings: [] }
+        : options.politics,
+    tick: 10,
+    results: [] as Array<{
+      type: "national_found_empire";
+      recipientId: string;
+      actorId: string;
+      empireId: string;
+      accepted: boolean;
+      tick: number;
+      reason?: string;
+    }>,
   };
   const player = {
     id: () => "nation-a",
@@ -45,6 +58,9 @@ async function mount(
     inSpawnPhase: () => !optionsState.spawned,
     nationalPolitics: () => optionsState.politics,
     nationalFoundingOutcome: () => null,
+    nationalFoundingResults: () => optionsState.results,
+    ticks: () => optionsState.tick,
+    gameID: () => "national-test",
     players: () => [player],
   } as unknown as GameView;
   const eventBus = new EventBus();
@@ -72,11 +88,12 @@ afterEach(() => {
 });
 
 describe("NATIONAL player-facing founding", () => {
-  it("does not render inside ordinary Solo or replay", async () => {
+  it("keeps ordinary Solo untouched, but shows read-only NATIONAL replay roster", async () => {
     const { element } = await mount({ national: false });
     expect(element.querySelector("button")).toBeNull();
     const replay = await mount({ replay: true });
-    expect(replay.element.querySelector("button")).toBeNull();
+    expect(replay.element.textContent).toContain("Replay is read-only");
+    expect(replay.element.querySelector('button[type="submit"]')).toBeNull();
   });
 
   it("disables founding until the real player has spawned and remains alive", async () => {
@@ -115,7 +132,7 @@ describe("NATIONAL player-facing founding", () => {
     await element.updateComplete;
 
     expect(sent).toEqual(["Atlas_Empire"]);
-    expect(element.textContent).toContain("Awaiting authoritative game state");
+    expect(element.textContent).toContain("Awaiting its accepted or rejected result");
     expect(element.textContent).not.toContain("Confirmed by game");
     expect(
       element.querySelector<HTMLButtonElement>('button[type="submit"]')!
@@ -124,7 +141,7 @@ describe("NATIONAL player-facing founding", () => {
   });
 
   it("shows confirmed leadership only after authoritative state arrives, including restored games", async () => {
-    const { element, optionsState } = await mount();
+    const { element, optionsState } = await mount({ politics: null });
     expect(element.textContent).toContain(
       "Verified political state has not arrived",
     );
@@ -132,10 +149,12 @@ describe("NATIONAL player-facing founding", () => {
       empires: [
         { id: "Atlas_Empire", leaderId: "nation-a", memberIds: ["nation-a"] },
       ],
+      warnings: [],
     };
     element.refresh();
     await element.updateComplete;
     expect(element.textContent).toContain("You are the emperor.");
+    expect(element.textContent).not.toContain("Confirmed by game");
     expect(element.textContent).toMatch(/Leader:\s+A Nation/);
     expect(element.querySelector('button[type="submit"]')).toBeNull();
   });
