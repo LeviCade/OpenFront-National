@@ -152,6 +152,7 @@ export class NationalOutboundFilter {
           : {
               ...observedUnit(raw),
               ...(allied?.source === "empire" &&
+              allied.sourceNationId === allied.ownerId &&
               allied.strength !== undefined
                 ? { troops: allied.strength }
                 : {}),
