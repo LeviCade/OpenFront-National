@@ -535,8 +535,21 @@ export class NationExecution implements Execution {
       expandRatio: this.expandRatio,
       embargoMalusApplied: [...this.embargoMalusApplied],
       spawnExecAdded: this.spawnExecAdded,
-      nationalPlannerMemory: this.nationalPlannerMemory,
-      nationalSightMemory: this.nationalSightMemory,
+      nationalPlannerMemory: this.nationalPlannerMemory === null
+        ? null
+        : {
+            ...this.nationalPlannerMemory,
+            reputation: this.nationalPlannerMemory.reputation.map((entry) => ({ ...entry })),
+            lastProcessedEvent: this.nationalPlannerMemory.lastProcessedEvent === null
+              ? null
+              : { ...this.nationalPlannerMemory.lastProcessedEvent },
+          },
+      nationalSightMemory: this.nationalSightMemory === null
+        ? null
+        : {
+            observerId: this.nationalSightMemory.observerId,
+            assets: this.nationalSightMemory.assets.map((asset) => ({ ...asset })),
+          },
       behaviors: this.behaviorsInitialized
         ? {
             emoji: this.emojiBehavior.snapshot(w),
