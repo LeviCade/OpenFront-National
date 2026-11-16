@@ -877,9 +877,15 @@ export class GameImpl implements Game {
       throw new Error("NATIONAL command journal: mode not enabled");
     if (this._players.get(actor.id()) !== actor)
       throw new Error("NATIONAL command journal: forged actor");
+    // Reject pathological identifiers without persisting unbounded client
+    // input or partially committing a result when Zod validates the journal.
+    const recordedEmpireId =
+      typeof empireId === "string" && empireId.length <= 256
+        ? empireId
+        : "<invalid-empire-id>";
     return this._nationalGovernance.recordFoundEmpire(
       actor.id(),
-      empireId,
+      recordedEmpireId,
       this._ticks,
       requestId,
       () => {

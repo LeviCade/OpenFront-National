@@ -248,12 +248,48 @@ describe("R5 real Found Empire outcome journal, principal scope and replay", () 
     expect(bad).toMatchObject({ accepted: false, reason: "invalid-empire-id" });
     expect(() => live.performNationalFoundEmpireWithOutcome(game.player(A), "forged", "forged-actor"))
       .toThrow(/forged actor/);
-    expect(live.nationalCommandResults(live.player(A))).toHaveLength(1);
+    const oversized = live.performNationalFoundEmpireWithOutcome(
+      live.player(A), "X".repeat(1000), "invalid-long-id",
+    );
+    expect(oversized).toMatchObject({
+      accepted: false,
+      empireId: "<invalid-empire-id>",
+      reason: "invalid-empire-id",
+    });
+    expect(live.nationalCommandResults(live.player(A))).toHaveLength(2);
     expect(live.nationalCommandResults(live.player(B))).toEqual([]);
     const legacy = await gameWithPlayers(2, false);
     expect(legacy.nationalCommandResults(legacy.player(A))).toEqual([]);
     expect(() => legacy.performNationalFoundEmpireWithOutcome(legacy.player(A), "legacy"))
       .toThrow(/mode not enabled/);
+  });
+
+  it("pending registered Found Empire execution restores before acceptance with the same request ID and journal sequence", async () => {
+    const game = await gameWithPlayers(2);
+    game.addExecution(new NationalFoundEmpireExecution(
+      game.player(A), "queued-r5", null, "durable-queued-request",
+    ));
+    const { restored, bytes, again } = await roundTrip(game, "plains");
+    expect([...again]).toEqual([...bytes]);
+    expect(restored.nationalCommandResults(restored.player(A))).toEqual([]);
+    for (let i = 0; i < 2; i++) {
+      game.executeNextTick();
+      restored.executeNextTick();
+    }
+    const expected = game.nationalCommandResults(game.player(A));
+    expect(expected).toHaveLength(1);
+    expect(expected[0]).toMatchObject({
+      accepted: true, actorId: A,
+      requestId: "durable-queued-request",
+      empireId: "queued-r5",
+    });
+    expect(restored.nationalCommandResults(restored.player(A))).toEqual(expected);
+    expect(snapshotGameData(restored).game).toEqual(snapshotGameData(game).game);
+    const replay = restored.performNationalFoundEmpireWithOutcome(
+      restored.player(A), "queued-r5", "durable-queued-request",
+    );
+    expect(replay).toEqual(expected[0]);
+    expect(restored.nationalCommandResults(restored.player(A))).toHaveLength(1);
   });
 
   it("bounded journal retains 128 actor-scoped outcomes with deterministic monotonic sequence", async () => {
@@ -331,6 +367,17 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
     expect(game.readNationalObserverMemory(A)?.assets).toHaveLength(1);
     // The real Game revokes membership when the new emperor is eliminated.
     eliminate(game, B);
+    expect(game.readNationalObserverMemory(A)?.assets).toEqual([]);
+    const { restored } = await roundTrip(game, "plains");
+    expect(restored.readNationalObserverMemory(A)?.assets).toEqual([]);
+  });
+
+  it("human sight expires after exactly sixty deterministic simulation ticks and stays expired after restore", async () => {
+    const game = await gameWithPlayers(2);
+    game.writeNationalObserverMemory(A, memory(A, game.ticks()));
+    for (let i = 0; i < 60; i++) game.executeNextTick();
+    expect(game.readNationalObserverMemory(A)?.assets).toHaveLength(1);
+    game.executeNextTick();
     expect(game.readNationalObserverMemory(A)?.assets).toEqual([]);
     const { restored } = await roundTrip(game, "plains");
     expect(restored.readNationalObserverMemory(A)?.assets).toEqual([]);
