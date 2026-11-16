@@ -43,18 +43,18 @@ artifact retained 30 days. Read the artifact, not just the workflow badge.
 
 ## 2. Actual-engine acceptance matrix
 
-| Gate | Executable evidence | Pass condition |
-| --- | --- | --- |
-| M0 opt-in | `IntegratedAcceptance.test.ts` | NATIONAL only under unranked Solo FFA; legacy `nationalPoliticalAuthority() === null`; illegal Team/Public rejected |
-| M1 founding | same, via **real GameRunner + Executor + SpawnExecution** | stamped `national_found_empire` executes on next game tick and authoritative emperor/member records change |
-| M2 sovereign victory | same, via **WinCheckExecution** | final remaining empire wins even with unclaimed land; legacy FFA does **not** adopt NATIONAL victory |
-| snapshot/restore | `roundTrip`, real `GameSnapshot` | re-encoded bytes match checkpoint exactly and restored political authority survives |
-| replay | 2 named seeds, original + restored `GameRunner` | byte-identical SHA-256 snapshots for each of eight continued ticks; results emitted in logs |
-| invalid commands | real command and runner scenarios | forged unknown client is NoOp; invalid name, pre-spawn and duplicate founding throw; no extra empire/assets |
-| authorization | `PacketCanaries.test.ts` | actual GameRunner rejects foreign observer, stale client binding and unseen coordinate/tile probes |
-| leakage | actual `GameRunner` and hostile injected authoritative updates | secret troop and ship strengths plus diplomatic string do not reach filtered packet |
-| oracle sensitivity | deliberately tainted packet and packed typed arrays | inspection helper MUST throw; otherwise the test is falsely green |
-| performance | five real projected ticks | under **8,000 ms** on CI; real measured value logged per run |
+| Gate                 | Executable evidence                                            | Pass condition                                                                                                      |
+| -------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| M0 opt-in            | `IntegratedAcceptance.test.ts`                                 | NATIONAL only under unranked Solo FFA; legacy `nationalPoliticalAuthority() === null`; illegal Team/Public rejected |
+| M1 founding          | same, via **real GameRunner + Executor + SpawnExecution**      | stamped `national_found_empire` executes on next game tick and authoritative emperor/member records change          |
+| M2 sovereign victory | same, via **WinCheckExecution**                                | final remaining empire wins even with unclaimed land; legacy FFA does **not** adopt NATIONAL victory                |
+| snapshot/restore     | `roundTrip`, real `GameSnapshot`                               | re-encoded bytes match checkpoint exactly and restored political authority survives                                 |
+| replay               | 2 named seeds, original + restored `GameRunner`                | byte-identical SHA-256 snapshots for each of eight continued ticks; results emitted in logs                         |
+| invalid commands     | real command and runner scenarios                              | forged unknown client is NoOp; invalid name, pre-spawn and duplicate founding throw; no extra empire/assets         |
+| authorization        | `PacketCanaries.test.ts`                                       | actual GameRunner rejects foreign observer, stale client binding and unseen coordinate/tile probes                  |
+| leakage              | actual `GameRunner` and hostile injected authoritative updates | secret troop and ship strengths plus diplomatic string do not reach filtered packet                                 |
+| oracle sensitivity   | deliberately tainted packet and packed typed arrays            | inspection helper MUST throw; otherwise the test is falsely green                                                   |
+| performance          | five real projected ticks                                      | under **8,000 ms** on CI; real measured value logged per run                                                        |
 
 **Seed precision:** the scenario IDs `qa-seed-alpha` and
 `qa-seed-bravo` are fixed game identifiers used by the real Executor, with
@@ -135,7 +135,7 @@ NATIONAL, Start/Play and Found Empire controls, and requires a displayed
 empire/emperor success result. It writes screenshots under
 `national-qa-artifacts/` after each step. **Failure is blocking**, including
 controls that are absent because E4 has not yet merged. This path must be
-updated to the *verified* E4 UI labels once integrated; never fake the
+updated to the _verified_ E4 UI labels once integrated; never fake the
 button or set game state from the browser console to pass. Run the same flow
 at 1280×800 and at a 390-pixel-wide mobile viewport in a manual browser.
 Check keyboard tab/focus/Enter, one rejected action/error message, legacy
@@ -152,7 +152,7 @@ rendering, WebGL recovery, console errors and unauthorized network requests.
 
 The repository retains `LICENSE` (AGPLv3 source),
 `LICENSE-ASSETS` and `LICENSING.md` (open `/resources` are CC BY-SA 4.0,
-`/proprietary` is all-rights-reserved), plus a *text-only archived*
+`/proprietary` is all-rights-reserved), plus a _text-only archived_
 `docs/upstream-licenses/PROPRIETARY-ASSET-LICENSE.txt`.
 The protected `/proprietary` tree is absent in the QA starting tree.
 Original NATIONAL `NationalLogo.svg` and `NationalMark.svg` exist.
