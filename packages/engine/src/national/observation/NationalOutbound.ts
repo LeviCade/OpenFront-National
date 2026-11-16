@@ -23,6 +23,10 @@ import {
 } from "@openfront/engine-lib/game/PackedUnitUpdates";
 import type { Game } from "../../game/Game";
 import type { LiveNationalObservation } from "./LiveObservation";
+import {
+  advanceLastKnown,
+  type NationalSightMemory,
+} from "./NationalObservation";
 
 function publicPlayer(u: PlayerUpdate): PlayerUpdate {
   // Enumerate allowed fields explicitly. The full internal PlayerUpdate
@@ -66,6 +70,32 @@ export class NationalOutboundFilter {
   private readonly previousUnits = new Map<number, UnitUpdate>();
   private readonly observerId: string | null;
   private readonly ownSmallID: number | null;
+  private sightMemory: NationalSightMemory | null = null;
+
+  /**
+   * Detached, principal-bound serialization for a future Game-owned snapshot
+   * port. Never share a cached observer record across clients.
+   */
+  snapshotSightMemory(): NationalSightMemory | null {
+    if (this.sightMemory === null) return null;
+    return {
+      observerId: this.sightMemory.observerId,
+      assets: this.sightMemory.assets.map((asset) => ({ ...asset })),
+    };
+  }
+
+  restoreSightMemory(memory: NationalSightMemory | null): void {
+    if (memory !== null && memory.observerId !== this.observerId) {
+      throw new Error("NATIONAL sight restore principal mismatch");
+    }
+    this.sightMemory =
+      memory === null
+        ? null
+        : {
+            observerId: memory.observerId,
+            assets: memory.assets.map((asset) => ({ ...asset })),
+          };
+  }
 
   constructor(game: Game, observerId: string | null) {
     this.observerId = observerId;
@@ -89,6 +119,13 @@ export class NationalOutboundFilter {
     ) {
       throw new Error("NATIONAL outbound principal mismatch");
     }
+    // Human observers use the SAME verified sight history as AI, including
+    // sourceNationId for instant expulsion/split revocation. The record is
+    // deliberately private to this recipient until E1 snapshots it in Game.
+    this.sightMemory =
+      verified === null
+        ? null
+        : advanceLastKnown(verified.observation, this.sightMemory, 60).memory;
     const visibleTiles = verified?.visibleTiles ?? new Set<number>();
     const visibleAssets = new Map(
       (verified?.observation.visibleAssets ?? []).map((asset) => [
