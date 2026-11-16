@@ -201,3 +201,15 @@ Run an actual multiplayer/trusted-host serialized-byte audit before
 marketing FOG-01..07 as enforced. No E3 changes were made to `GameImpl`,
 `Game.ts`, engine API schemas, `ExecutionManager`, `AttackExecution`,
 `PlayerImpl` or the shared snapshot/registry owner files.
+
+### Authenticated coordinate-probe rejection
+
+NATIONAL worker RPC authorization checks **both** the requester and the
+current geographical right to inspect the requested location.
+`player_actions` / `player_buildables` coordinates and
+`transport_ship_spawn.targetTile` fail closed when not in
+`collectLiveNationalObservation(...).visibleTiles`, even if the correct
+human player supplied their own `playerID`. Invalid, incomplete and
+off-map coordinates are rejected. This blocks a concealed-unit/territory
+oracle through apparently legitimate action previews; it does not
+authorize host-side combat or replace E2 war restrictions.
