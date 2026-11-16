@@ -18,14 +18,6 @@ const foreign = new PlayerInfo("Foreign", PlayerType.Nation, null, "memory-forei
 type SightPort = Game & {
   readNationalObserverMemory?: (principal: string) => NationalSightMemory | null;
 };
-function nextPacket(game: Game, runner: GameRunner) {
-  let emitted: GameUpdateViewData | null = null;
-  const callback = (gu: GameUpdateViewData) => { emitted = gu; };
-  void callback;
-  runner.addTurn({ turnNumber: game.ticks(), intents: [] });
-  expect(runner.executeNextTick()).toBe(true);
-  return emitted;
-}
 function session(game: Game, packets: GameUpdateViewData[]) {
   const runner = new GameRunner(
     game,
@@ -73,14 +65,16 @@ describe("Round Five authenticated human GameSnapshot intelligence", () => {
     const spy = game.player(foreign.id).buildUnit(
       UnitType.TransportShip,
       discovered!,
-      { troops: 4_321_987, targetTile: game.ref(90, 90) },
+      { troops: 4_321_987 },
     );
 
     const seen: GameUpdateViewData[] = [];
     const runner = session(game, seen);
     runner.addTurn({ turnNumber: game.ticks(), intents: [] });
     expect(runner.executeNextTick()).toBe(true);
-    expect(JSON.stringify(seen[0])).not.toContain("4321987");
+    expect(JSON.stringify(seen[0], (_key, value) =>
+      typeof value === "bigint" ? value.toString() : value,
+    )).not.toContain("4321987");
     if (canonicalMemory) {
       expect(publicWarPort.readNationalObserverMemory!(viewer.id)?.assets).toEqual(
         expect.arrayContaining([
@@ -108,7 +102,9 @@ describe("Round Five authenticated human GameSnapshot intelligence", () => {
     const fresh = session(restored, resumed);
     fresh.addTurn({ turnNumber: restored.ticks(), intents: [] });
     expect(fresh.executeNextTick()).toBe(true);
-    expect(JSON.stringify(resumed[0])).not.toContain("4321987");
+    expect(JSON.stringify(resumed[0], (_key, value) =>
+      typeof value === "bigint" ? value.toString() : value,
+    )).not.toContain("4321987");
     if (canonicalMemory) {
       expect(
         (restored as SightPort).readNationalObserverMemory!(viewer.id)?.assets.some(
