@@ -150,8 +150,13 @@ export class NationExecution implements Execution {
     // NATIONAL must never run legacy omniscient ship monitoring. Legacy
     // behavior remains byte-for-byte equivalent with the flag absent.
     if (this.mg.config().nationalMode() && !this.mg.inSpawnPhase()) {
-      if (this.player === null || !this.player.isAlive()) {
-        if (this.player !== null && !this.player.isAlive()) this.active = false;
+      if (this.player === null) return;
+      // An unspawned nation is NOT eliminated. The separate SpawnExecution
+      // may still be pending; marking this execution inactive before spawn
+      // would permanently disable all NATIONAL AI for that nation.
+      if (!this.player.hasSpawned()) return;
+      if (!this.player.isAlive()) {
+        this.active = false;
         return;
       }
       this.tickNational(ticks);
