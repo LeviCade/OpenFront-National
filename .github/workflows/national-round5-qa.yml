@@ -14,6 +14,10 @@ on:
       - "src/client/**"
   workflow_dispatch:
 
+concurrency:
+  group: national-r5-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
