@@ -193,9 +193,12 @@ export class GameRunner {
 
   /** Principal rights follow the current engine identity, not cached init data. */
   private isCurrentNationalViewer(): boolean {
-    return this.nationalObserverId !== null &&
+    return (
+      this.nationalObserverId !== null &&
       this.viewerClientID !== undefined &&
-      this.game.playerByClientID(this.viewerClientID)?.id() === this.nationalObserverId;
+      this.game.playerByClientID(this.viewerClientID)?.id() ===
+        this.nationalObserverId
+    );
   }
 
   /** Only the authenticated game principal may use NATIONAL private RPCs. */
@@ -212,12 +215,16 @@ export class GameRunner {
   isNationalTileVisible(tile: TileRef): boolean {
     if (!this.game.config().nationalMode()) return true;
     const principal = this.nationalObserverId;
-    return principal !== null && this.isCurrentNationalViewer() &&
-      Number.isSafeInteger(tile) && tile >= 0 && tile < this.game.width() * this.game.height() &&
-      collectLiveNationalObservation(
-        this.game,
-        principal,
-      ).visibleTiles.has(tile);
+    return (
+      principal !== null &&
+      this.isCurrentNationalViewer() &&
+      Number.isSafeInteger(tile) &&
+      tile >= 0 &&
+      tile < this.game.width() * this.game.height() &&
+      collectLiveNationalObservation(this.game, principal).visibleTiles.has(
+        tile,
+      )
+    );
   }
 
   /** A coordinate query may not probe another nation's unseen territory. */
@@ -232,7 +239,8 @@ export class GameRunner {
       !Number.isSafeInteger(x) ||
       !Number.isSafeInteger(y) ||
       !this.game.isValidCoord(x, y)
-    ) return false;
+    )
+      return false;
     return collectLiveNationalObservation(
       this.game,
       principal,

@@ -226,11 +226,13 @@ async function onMessage(e: MessageEvent<MainThreadMessage>) {
           break;
         case "player_actions":
         case "player_buildables":
-          denied = !gr.isNationalRequesterAuthorized(message.playerID) ||
+          denied =
+            !gr.isNationalRequesterAuthorized(message.playerID) ||
             !gr.isNationalCoordinateVisible(message.x, message.y);
           break;
         case "transport_ship_spawn":
-          denied = !gr.isNationalRequesterAuthorized(message.playerID) ||
+          denied =
+            !gr.isNationalRequesterAuthorized(message.playerID) ||
             !gr.isNationalTileVisible(message.targetTile);
           break;
         case "player_border_tiles":

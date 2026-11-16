@@ -158,9 +158,11 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
       viewer.clientID!,
     );
     expect(runner.isNationalRequesterAuthorized(viewer.id)).toBe(true);
-    game.player(viewer.id).setPlayerInfo(
-      new PlayerInfo("Viewer", PlayerType.Nation, null, viewer.id),
-    );
+    game
+      .player(viewer.id)
+      .setPlayerInfo(
+        new PlayerInfo("Viewer", PlayerType.Nation, null, viewer.id),
+      );
     expect(runner.isNationalRequesterAuthorized(viewer.id)).toBe(false);
     expect(runner.isNationalIntentAuthorized(viewer.clientID!)).toBe(false);
     expect(runner.isNationalCoordinateVisible(10, 10)).toBe(false);
