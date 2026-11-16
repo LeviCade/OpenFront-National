@@ -437,10 +437,24 @@ async function main() {
           throw Error("Legacy FFA did not start from an unselected NATIONAL checkbox");
         }
         await click("start|play", "single-player-modal", 65);
-        await poll(
-          () => evaluate("!!window.__nationalQaFind('game-right-sidebar') && !document.body.innerText.includes('Game is starting')"),
-          "running legacy FFA HUD", 100, 350,
+        const ffaStatus = await poll(
+          () => evaluate(`(() => {
+            const gate = window.__nationalQaFind('webgl-gate');
+            if (gate) return { blocked: true, status: gate.status };
+            const loading = /game is starting/i.test(document.body.innerText);
+            const hud = window.__nationalQaFind('game-right-sidebar');
+            const canvas = [...document.querySelectorAll('canvas')].some(
+              (item) => item.getBoundingClientRect().width > 150
+            );
+            return !loading && hud && canvas ? { running: true } : null;
+          })()`),
+          "real FFA canvas and HUD AFTER loading clears, or WebGL hard blocker",
+          100, 350,
         );
+        if (ffaStatus.blocked) {
+          throw Error("REAL_CHROMIUM_GPU_REQUIRED: legacy FFA blocked by WebGL gate (" + ffaStatus.status + ")");
+        }
+        if (!ffaStatus.running) throw Error("Legacy FFA never reached a running game");
         if (await evaluate("!!window.__nationalQaFind('national-diplomacy-panel')")) {
           throw Error("Legacy FFA leaked an active NATIONAL diplomacy component");
         }
@@ -476,7 +490,7 @@ async function main() {
           const gate = window.__nationalQaFind('webgl-gate');
           if (gate) return { blocked: true, status: gate.status };
           const panel = window.__nationalQaFind('national-diplomacy-panel');
-          return panel && !document.body.innerText.includes('Game is starting')
+          return panel && !/game is starting/i.test(document.body.innerText)
             ? { running: true } : null;
         })()`),
         "actual started match or explicit WebGL hard blocker",
