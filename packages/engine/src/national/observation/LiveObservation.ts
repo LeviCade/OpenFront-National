@@ -23,9 +23,9 @@ interface PoliticalReadFacade {
   membersOf(id: string): readonly string[];
 }
 
-interface GameWithReadFacade extends Game {
-  nationalPoliticalAuthority?(): PoliticalReadFacade | null;
-}
+type GameWithReadFacade = Game & {
+  nationalPoliticalAuthority?: () => PoliticalReadFacade | null;
+};
 
 export interface LiveNationalObservation {
   readonly observation: NationalObservation;
