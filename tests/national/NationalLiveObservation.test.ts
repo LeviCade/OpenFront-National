@@ -146,6 +146,29 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     ).not.toContain(hiddenTile);
   });
 
+  it("FOG-02 denies confidential diplomatic canaries in actual outbound packets", async () => {
+    const game = await activeGame(true);
+    const confidential = "TOP_SECRET_TREATY_CANARY_638155";
+    const originalTick = game.executeNextTick.bind(game);
+    game.executeNextTick = () => {
+      const updates = originalTick();
+      // Simulates a future E1/E2 private diplomatic event in the authoritative
+      // ledger output. The REAL GameRunner/worker-facing filter must drop it.
+      (updates[GameUpdateType.DisplayChatEvent] as unknown[]).push({
+        type: GameUpdateType.DisplayChatEvent,
+        message: confidential,
+      });
+      return updates;
+    };
+    const recipient = runPacket(game, viewer.clientID!);
+    expect(recipient.updates[GameUpdateType.DisplayChatEvent]).toEqual([]);
+    expect(
+      JSON.stringify(recipient, (_key, value) =>
+        typeof value === "bigint" ? value.toString() : value,
+      ),
+    ).not.toContain(confidential);
+  });
+
   it("FOG-06 current own sight follows actual territory, not client assertions", async () => {
     const game = await activeGame(true);
     const a = collectLiveNationalObservation(game, viewer.id);
