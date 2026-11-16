@@ -276,3 +276,27 @@ export function reconcileNationalFounding(
   }
   return { phase: "pending", acceptedResultSeen };
 }
+
+/** Retain E3 one-shot results while slower HUD controllers refresh. */
+export function retainNationalFoundingReceipts(
+  previous: readonly NationalFoundingResult[],
+  received: readonly NationalFoundingResult[],
+  tick: number,
+  reset: boolean,
+): readonly NationalFoundingResult[] {
+  const seen = new Map<string, NationalFoundingResult>();
+  for (const result of [...(reset ? [] : previous), ...received]) {
+    if (
+      typeof result.tick !== "number" ||
+      result.tick > tick ||
+      result.tick < tick - 240
+    ) {
+      continue;
+    }
+    seen.set(
+      `${result.actorId}:${result.recipientId}:${result.empireId}:${result.tick}:${result.accepted}`,
+      result,
+    );
+  }
+  return [...seen.values()].slice(-32);
+}
