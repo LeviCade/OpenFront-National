@@ -384,7 +384,20 @@ async function main() {
     });
     await step("start", async () => {
       await click("start|play", "single-player-modal", 65);
-      await poll(() => evaluate("!!window.__nationalQaFind('national-diplomacy-panel') && !document.body.innerText.includes('Game is starting')"), "real started game with NATIONAL diplomacy panel", 100, 350);
+      const launch = await poll(
+        () => evaluate(`(() => {
+          const gate = window.__nationalQaFind('webgl-gate');
+          if (gate) return { blocked: true, status: gate.status };
+          const panel = window.__nationalQaFind('national-diplomacy-panel');
+          return panel && !document.body.innerText.includes('Game is starting')
+            ? { running: true } : null;
+        })()`),
+        "actual started match or explicit WebGL hard blocker",
+        100, 350,
+      );
+      if (launch.blocked) {
+        throw new Error("REAL_CHROMIUM_GPU_REQUIRED: WebGL gate blocked game startup (" + launch.status + "). Hosted Ubuntu software GL is not a playable-game acceptance environment.");
+      }
       await capture("game-hud");
     });
     await step("spawn", async () => {
