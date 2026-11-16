@@ -163,6 +163,6 @@ describe("Round Five real NATIONAL bot war legality (AI-01/02, WAR-01/03/07)", (
     const illegal = new AttackExecution(10_000, attacker, human.id);
     illegal.init(game, game.ticks());
     expect(illegal.isActive()).toBe(false);
-    expect(attacker.outgoingAttacks()).toHaveLength(0);
+    expect(attacker.outgoingAttacks()).toHaveLength(priorAttacks);
   });
 });
