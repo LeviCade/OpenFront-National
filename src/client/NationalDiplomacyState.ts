@@ -246,7 +246,8 @@ export function reconcileNationalFounding(
       entry.recipientId === attempt.actorId &&
       entry.empireId === attempt.empireId &&
       typeof entry.tick === "number" &&
-      entry.tick > attempt.issuedTick &&
+      // GameImpl journals during tick T and increments before packet T+1.
+      entry.tick >= attempt.issuedTick &&
       entry.tick <= view.tick,
   );
   if (outcome?.accepted === false) {
