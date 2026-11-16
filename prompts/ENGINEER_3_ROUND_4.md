@@ -4,18 +4,15 @@
 then extend it to persisted sight, legal war awareness and actual
 honest-client packet tests. **No more red exact-head CI.**
 
-**Current PR:** #19, branch `stage3/e3-round3-live-observation-20261115`.
-The conductor removed your temporary formatter capture file and
-formatted the nine genuine changed files using the repository-pinned
-formatter, then repaired an E1 facade type compatibility error.
-Review these narrowly scoped housekeeping commits against your code
-before further development. You own any remaining substantive bug
-fixes. Full CI must pass including production build; no diagnostic
-test may remain. Do NOT merge your own PR.
+**PR #19:** MERGED at `9e3138a915421e5fdfdb6585c7f28c01fafb3830`.
+Its full exact-head CI [#43880562888](https://github.com/LeviCade/OpenFront-National/actions/runs/43880562888)
+passed after removal of the temporary diagnostic artifact and a narrow E1
+facade type compatibility correction. Inspect those changes, then work
+on additional real-game intelligence.
 
-Once #19 is accepted, create
-`stage3/e3-round4-persisted-intelligence-20261116` from the CURRENT
-integration HEAD and target integration.
+**Your Round Four branch is already created:**
+`stage3/e3-round4-persisted-intelligence-20261116`, rooted at the
+verified three-PR merge `9e3138a`. Target integration.
 **Issue:** #11; **contract:** `docs/22-stage3-round4-integration.md`.
 You exclusively own `NationExecution`, `GameRunner`, worker
 bridges, `national/ai/**`, `national/observation/**`, and E3 tests.

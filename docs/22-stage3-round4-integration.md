@@ -4,8 +4,10 @@
 **Entry:** E2 conflict PR #14 merged as `85d245b70c242f09a3dcc66a0c284eb40489d658`.
 E1 live politics PR #18 merged as `90259d78670161dee4b58bbfd83ec63bbbb67c55`.
 Combined source CI [#43878979429](https://github.com/LeviCade/OpenFront-National/actions/runs/43878979429) SUCCESS.
-E3 PR #19 has real engine AI/filtered outbound work but exact-head verification
-is in progress. Do not merge red or skip security review.
+E3 PR #19 merged as `9e3138a915421e5fdfdb6585c7f28c01fafb3830`
+after exact-head full CI [#43880562888](https://github.com/LeviCade/OpenFront-National/actions/runs/43880562888)
+SUCCESS. This is experimental honest-client Solo visibility, not adversarial
+browser secrecy; combined source integration CI is separately verified.
 **Project:** [21% verified](21-progress-of-project.md), [score issue #20](https://github.com/LeviCade/OpenFront-National/issues/20).
 
 ## Five disjoint engine and UI leases
@@ -80,8 +82,9 @@ playtest and security review remain open.
 
 ## Merge sequencing and progress
 
-E2 #14 and E1 #18 are merged. E3 #19 is held until true exact-head
-green plus specific threat-model review. Next priority is real WAR
+E2 #14, E1 #18 and E3 #19 are merged with exact-head PR CI verified.
+The trusted-host threat model remains a release gate, not a claim of
+malicious-browser confidentiality. Next priority is real WAR
 commands and legal AttackExecution, real troop debit adapter, honest
 client-filtered Solo packets and player-facing founding. Integrate
 E1/E2/E3/E4/E5 in small independent PRs with full combined CI after
