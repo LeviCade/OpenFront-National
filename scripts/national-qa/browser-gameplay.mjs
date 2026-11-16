@@ -297,6 +297,18 @@ async function main() {
     record("clicked", { label, text: target.text });
     return target;
   };
+  const clickSelector = async (selector) => {
+    const target = await poll(() => evaluate(`(() => {
+      const node = window.__nationalQaFind(${JSON.stringify(selector)});
+      if (!node || node.disabled) return null;
+      const bounds = node.getBoundingClientRect();
+      return bounds.width && bounds.height
+        ? { x: bounds.x + bounds.width/2, y: bounds.y + bounds.height/2 }
+        : null;
+    })()`), selector);
+    await hit(target.x,target.y);
+    record("clicked-selector",{selector});
+  };
   const fill = async (selector,value) => {
     const target = await poll(() => evaluate(`(() => {
       const element = window.__nationalQaFind(${JSON.stringify(selector)});
@@ -421,16 +433,40 @@ async function main() {
       await capture("founding-rejected");
     });
     await step("save-restore",async()=>{
-      // NATIONAL snapshot currently blocked for client-side workers. This
-      // MUST fail until a trusted-host supported save/restore is provided.
-      const saver=await locate("save game|save", "game-right-sidebar");
-      if(!saver) throw Error("NATIONAL browser save/restore is not available through a trusted host.");
-      await hit(saver.x,saver.y);
+      const rosterPackets = await worker();
+      const lastRoster = [...rosterPackets].reverse().find((p)=>p.publicPolitics?.empires)?.publicPolitics;
+      if(!lastRoster?.empires?.some((e)=>e.id==="R5_Browser_QA")) {
+        throw Error("Cannot save without authoritative public political roster");
+      }
+      await clickSelector('img[alt="settings"]');
+      // The live game may permit saving only for a signed-in user. A
+      // deliberately denied raw NATIONAL worker snapshot MUST remain denied.
+      if (!await evaluate("!!window.__nationalQaFind('[data-save-game]')")) {
+        throw Error("No authenticated trusted-host save path available for NATIONAL Solo");
+      }
+      await clickSelector('[data-save-game]');
       await poll(async()=>{
-        const status=await evaluate("document.querySelector('[data-save-status]')?.innerText || ''");
-        return /saved/i.test(status)&&!/failed|error|unavailable/i.test(status);
-      },"authoritative saved game confirmation",45);
-      throw Error("Save button acknowledged, but verified restore and identical game roster have not been demonstrated.");
+        const status=await evaluate("window.__nationalQaFind('[data-save-status]')?.innerText ?? ''");
+        return /saved|success/i.test(status) && !/failed|error|unavailable/i.test(status);
+      },"verified saved game acknowledgement",65);
+      await capture("saved-confirmed");
+      await send("Page.navigate",{url:base});
+      await poll(()=>locate("^solo$"),"returned home for save restore",95);
+      await click("^solo$");
+      await clickSelector('[data-saved-games-toggle]');
+      await poll(()=>evaluate("!!window.__nationalQaFind('[data-save-id] [data-action=play]')"),"trusted-host saved game row",70);
+      const savedId=await evaluate("window.__nationalQaFind('[data-save-id]')?.getAttribute('data-save-id')");
+      await clickSelector('[data-save-id] [data-action=play]');
+      const restored = await poll(async()=>{
+        const packets=await worker();
+        const publicView=[...packets].reverse().find((p)=>p.publicPolitics?.empires)?.publicPolitics;
+        return publicView?.empires?.some((e)=>e.id==="R5_Browser_QA")?publicView:null;
+      },"restored authoritative political roster",100,300);
+      if (JSON.stringify(restored.empires) !== JSON.stringify(lastRoster.empires)) {
+        throw Error("NATIONAL restored authoritative roster differs from saved roster");
+      }
+      record("trusted-host-save-restore-passed",{savedId,empires:restored.empires.length});
+      await capture("restored-roster");
     });
     await step("sovereign-victory",async()=>{
       const pkts=await worker();
