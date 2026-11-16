@@ -187,11 +187,13 @@ export class NationalWarExecution implements Execution {
     ) return;
 
     const political = game.nationalPoliticalAuthority()!;
-    const previous = port.nationalWarState?.();
-    if (!previous) return;
-    // Engine-generated, deterministic command identity. Namespaces include the
-    // tick and the count of the persisted canonical command history.
-    const id = `national-${tick}-${previous.wars.layers.length + previous.wars.motions.length}`;
+    if (!port.nationalWarState?.()) return;
+    // An execution's engine tick + registered ordinal is deterministic across
+    // snapshot/replay and cannot reuse an ID when peace deletes stale motions.
+    // Unlike a client action ID, neither value is controlled by the request.
+    const ordinal = game.executions().indexOf(this);
+    if (ordinal < 0) return;
+    const id = `national-${tick}-${this.actor.smallID()}-${ordinal}`;
     let command: CanonicalWarCommand;
     switch (this.command.kind) {
       case "declare-national":
