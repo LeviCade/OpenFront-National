@@ -198,7 +198,13 @@ describe.each(VARIANTS)("full game snapshots: %s", (_, overrides) => {
       // alive at a tick boundary. BasicExecutions.test.ts covers it directly.
       // NATIONAL founding is opt-in, so a legacy FFA fixture must never use it;
       // M0Engine.test.ts exercises its authenticated route and snapshots.
-      const neverStored = new Set(["Pause", "NationalFoundEmpire"]);
+      // NATIONAL war commands must not appear in a legacy FFA fixture;
+      // ConflictLiveGame.test.ts exercises their real snapshot path.
+      const neverStored = new Set([
+        "Pause",
+        "NationalFoundEmpire",
+        "NationalWar",
+      ]);
       const missing = EXECUTION_SNAPSHOT_TYPES.map((t) => t.name).filter(
         (name) => !reference.execTypes.has(name) && !neverStored.has(name),
       );
