@@ -15,8 +15,16 @@ export interface NationalPublicEmpire {
   memberIds: readonly string[];
 }
 
+export interface NationalUngovernableWarning {
+  empireId: string;
+  deadlineMs: number;
+  remainingMs: number;
+  blockedByAssetDisposition: boolean;
+}
+
 export interface NationalPublicPolitics {
   empires: readonly NationalPublicEmpire[];
+  warnings: readonly NationalUngovernableWarning[];
 }
 
 export interface NationalFoundingResult {
@@ -24,7 +32,10 @@ export interface NationalFoundingResult {
   actorId: string;
   empireId: string;
   accepted: boolean;
+  /** Deterministic engine tick; never inferred from UI dispatch. */
+  tick?: number;
   reason?: string;
+  requestId?: string;
 }
 
 const EMPIRE_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -72,7 +83,36 @@ export function readNationalPolitics(
       memberIds: [...empire.memberIds],
     });
   }
-  return { empires };
+  const warnings: NationalUngovernableWarning[] = [];
+  if (source.warnings !== undefined) {
+    if (!Array.isArray(source.warnings)) return null;
+    const warningIds = new Set<string>();
+    for (const warning of source.warnings) {
+      if (
+        !record(warning) ||
+        typeof warning.empireId !== "string" ||
+        !seen.has(warning.empireId) ||
+        warningIds.has(warning.empireId) ||
+        typeof warning.blockedByAssetDisposition !== "boolean" ||
+        typeof warning.deadlineMs !== "number" ||
+        !Number.isSafeInteger(warning.deadlineMs) ||
+        warning.deadlineMs < 0 ||
+        typeof warning.remainingMs !== "number" ||
+        !Number.isSafeInteger(warning.remainingMs) ||
+        warning.remainingMs < 0
+      ) {
+        return null;
+      }
+      warningIds.add(warning.empireId);
+      warnings.push({
+        empireId: warning.empireId,
+        deadlineMs: warning.deadlineMs,
+        remainingMs: warning.remainingMs,
+        blockedByAssetDisposition: warning.blockedByAssetDisposition,
+      });
+    }
+  }
+  return { empires, warnings };
 }
 
 export function readNationalFoundingResults(
@@ -96,7 +136,17 @@ export function readNationalFoundingResults(
       actorId: item.actorId,
       empireId: item.empireId,
       accepted: item.accepted,
-      ...(typeof item.reason === "string" ? { reason: item.reason } : {}),
+      ...(typeof item.tick === "number" &&
+      Number.isSafeInteger(item.tick) &&
+      item.tick >= 0
+        ? { tick: item.tick }
+        : {}),
+      ...(typeof item.requestId === "string" && item.requestId.length > 0
+        ? { requestId: item.requestId }
+        : {}),
+      ...(typeof item.reason === "string"
+        ? { reason: item.reason.slice(0, 240) }
+        : {}),
     });
   }
   return results;
@@ -138,4 +188,85 @@ export function foundingUnavailableReason(state: {
   }
   if (state.pending) return "A founding command is awaiting game confirmation.";
   return null;
+}
+
+/** Session-scoped, UI-only request bookkeeping. Never a political projection. */
+export interface NationalFoundingAttempt {
+  readonly gameId: string;
+  readonly actorId: string;
+  readonly empireId: string;
+  readonly issuedTick: number;
+  readonly acceptedResultSeen: boolean;
+}
+
+export type NationalFoundingDecision =
+  | { phase: "pending"; acceptedResultSeen: boolean }
+  | { phase: "accepted"; acceptedResultSeen: true }
+  | { phase: "rejected"; reason: string; acceptedResultSeen: boolean }
+  | { phase: "unknown"; reason: string; acceptedResultSeen: boolean };
+
+/**
+ * A matching accepted command AND same-empire authoritative membership are
+ * required to display "founding confirmed". A roster alone (e.g. restore)
+ * proves membership, never that THIS button press was accepted.
+ *
+ * Reject journal entries from another game/player, stale previous attempts,
+ * rewound replay ticks or a different empire. A rejected command is final.
+ */
+export function reconcileNationalFounding(
+  attempt: NationalFoundingAttempt,
+  view: {
+    gameId: string;
+    actorId: string;
+    tick: number;
+    politics: NationalPublicPolitics | null;
+    results: readonly NationalFoundingResult[];
+  },
+): NationalFoundingDecision {
+  if (
+    view.gameId !== attempt.gameId ||
+    view.actorId !== attempt.actorId ||
+    view.tick < attempt.issuedTick
+  ) {
+    return {
+      phase: "unknown",
+      reason: "The game session changed. Founding was not confirmed.",
+      acceptedResultSeen: attempt.acceptedResultSeen,
+    };
+  }
+
+  const outcome = view.results.find(
+    (entry) =>
+      entry.actorId === attempt.actorId &&
+      entry.empireId === attempt.empireId &&
+      typeof entry.tick === "number" &&
+      entry.tick > attempt.issuedTick &&
+      entry.tick <= view.tick,
+  );
+  if (outcome?.accepted === false) {
+    return {
+      phase: "rejected",
+      reason: outcome.reason ?? "The game rejected empire founding.",
+      acceptedResultSeen: attempt.acceptedResultSeen,
+    };
+  }
+  const acceptedResultSeen = attempt.acceptedResultSeen ||
+    outcome?.accepted === true;
+  const member = empireForMember(view.politics, attempt.actorId);
+  if (
+    acceptedResultSeen &&
+    member?.id === attempt.empireId &&
+    member.leaderId === attempt.actorId
+  ) {
+    return { phase: "accepted", acceptedResultSeen: true };
+  }
+  // Missing/invalid packets are NOT evidence of acceptance or rejection.
+  if (view.tick - attempt.issuedTick >= 200) {
+    return {
+      phase: "unknown",
+      reason: "No final founding confirmation arrived. Check the verified empire roster before retrying.",
+      acceptedResultSeen,
+    };
+  }
+  return { phase: "pending", acceptedResultSeen };
 }
