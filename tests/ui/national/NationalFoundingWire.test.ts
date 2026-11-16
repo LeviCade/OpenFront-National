@@ -150,14 +150,16 @@ describe("NATIONAL UI → normal local server command", () => {
 
     // E1's real journal, E2's recipient-scoped DTO, E3's routed packet:
     // only their exact accepted result confirms the action.
-    state.results = [{
-      type: "national_found_empire",
-      recipientId: "nation-a",
-      actorId: "nation-a",
-      empireId: "Atlas_Empire",
-      accepted: true,
-      tick: 11,
-    }];
+    state.results = [
+      {
+        type: "national_found_empire",
+        recipientId: "nation-a",
+        actorId: "nation-a",
+        empireId: "Atlas_Empire",
+        accepted: true,
+        tick: 11,
+      },
+    ];
     panel.refresh();
     await panel.updateComplete;
     expect(panel.textContent).toContain("Confirmed by game");
