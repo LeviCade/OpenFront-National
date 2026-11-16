@@ -27,6 +27,36 @@ type GameWithReadFacade = Game & {
   nationalPoliticalAuthority?: () => PoliticalReadFacade | null;
 };
 
+/**
+ * Structural read-only bridge to E1's Game-owned E2 WarLedger.
+ * No local war registry, no client assertions and no synthetic hostility.
+ * The bridge remains null until the canonical E1/E2 runtime is merged.
+ */
+export interface LiveWarAuthority {
+  authorizeOffensiveAction(attackerId: string, targetId: string | null): boolean;
+  snapshot(): {
+    readonly wars: {
+      readonly layers: readonly {
+        readonly id: string;
+        readonly scope: "national" | "imperial";
+        readonly first: { readonly kind: "nation" | "empire"; readonly id: string };
+        readonly second: { readonly kind: "nation" | "empire"; readonly id: string };
+        readonly startedTick: number;
+        readonly endedTick: number | null;
+      }[];
+    };
+  };
+}
+
+type GameWithWarFacade = Game & {
+  nationalWarAuthority?: () => LiveWarAuthority | null;
+};
+
+export function liveNationalWarAuthority(game: Game): LiveWarAuthority | null {
+  const candidate = (game as GameWithWarFacade).nationalWarAuthority;
+  return typeof candidate === "function" ? candidate.call(game) : null;
+}
+
 export interface LiveNationalObservation {
   readonly observation: NationalObservation;
   /** Tiles with trusted live ownership or adjacent-border sight. */
@@ -91,6 +121,7 @@ export function collectLiveNationalObservation(
   const observer = game.player(observerId);
   if (!observer.isPlayer()) throw new Error("Invalid observation principal");
   const authority = getFacade(game);
+  const warAuthority = liveNationalWarAuthority(game);
   const { members } = activeEmpireMembers(authority, observer);
   const allowedPrincipals = new Set(members);
   const visibleTiles = new Set<TileRef>();
@@ -210,14 +241,57 @@ export function collectLiveNationalObservation(
     }
   }
 
-  // The E2 canonical scoped war read-port has not yet been merged. Intentionally
-  // no guessed war records or arbitrary alliances from Game. Foreign combat
-  // remains disabled until a conductor-owned E2 adapter supplies active wars.
+  // Public war IDs/sides come ONLY from the current Game-owned canonical
+  // ledger. Never copy private peace motions, levy spending or declaredBy.
+  // A stale empire roster cannot resurrect a departed member's war rights.
+  const activeSide = (side: {
+    readonly kind: "nation" | "empire";
+    readonly id: string;
+  }): readonly string[] => {
+    if (side.kind === "nation") {
+      return game.hasPlayer(side.id) && game.player(side.id).isAlive()
+        ? [side.id]
+        : [];
+    }
+    return [...(authority?.membersOf(side.id) ?? [])]
+      .filter(
+        (id) =>
+          game.hasPlayer(id) &&
+          game.player(id).isAlive() &&
+          authority?.empireOf(id) === side.id,
+      )
+      .sort();
+  };
+  const wars: NationalWorld["wars"][number][] = [];
+  if (authority && warAuthority) {
+    for (const layer of warAuthority.snapshot().wars.layers) {
+      if (layer.endedTick !== null) continue;
+      const firstMembers = activeSide(layer.first);
+      const secondMembers = activeSide(layer.second);
+      if (firstMembers.length === 0 || secondMembers.length === 0) continue;
+      wars.push({
+        id: layer.id,
+        scope: layer.scope,
+        first: {
+          kind: layer.first.kind,
+          stableId: layer.first.id,
+          activeMemberIds: firstMembers,
+        },
+        second: {
+          kind: layer.second.kind,
+          stableId: layer.second.id,
+          activeMemberIds: secondMembers,
+        },
+        startedTick: layer.startedTick,
+      });
+    }
+    wars.sort((a, b) => a.id.localeCompare(b.id, "en"));
+  }
   const world: NationalWorld = {
     tick,
     nations,
     coalitions,
-    wars: [],
+    wars,
     invitations: [],
     assets,
     sightGrants,
