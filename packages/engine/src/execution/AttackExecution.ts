@@ -132,7 +132,10 @@ export class AttackExecution implements Execution {
       }
     }
 
-    if (this.target && this.target.isPlayer()) {
+    // Keep legacy FFA's original embargo timing byte-for-byte. NATIONAL
+    // defers hostile side effects until the real attack is accepted and its
+    // multi-contributor levy preflight/commit has succeeded.
+    if (mg.nationalPoliticalAuthority() === null && this.target.isPlayer()) {
       const targetPlayer = this.target as Player;
       if (
         targetPlayer.type() !== PlayerType.Bot &&
@@ -275,6 +278,20 @@ export class AttackExecution implements Execution {
     if (this.toConquer.size() === 0) {
       this.retreat();
       return;
+    }
+
+    // NATIONAL: embargo and outstanding alliance rejection are downstream
+    // of BOTH legal war authorization and successful troop transaction.
+    // Rejected, canceled and failed attacks cannot cause these side effects.
+    if (mg.nationalPoliticalAuthority() !== null && this.target.isPlayer()) {
+      const targetPlayer = this.target as Player;
+      if (
+        targetPlayer.type() !== PlayerType.Bot &&
+        this._owner.type() !== PlayerType.Bot
+      ) {
+        targetPlayer.addEmbargo(this._owner, true);
+        this.rejectIncomingAllianceRequests(targetPlayer);
+      }
     }
 
     // Only now is it known how large the attack the defender actually faces
