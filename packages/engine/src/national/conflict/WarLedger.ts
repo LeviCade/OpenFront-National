@@ -339,12 +339,10 @@ export class WarLedger {
     attackerId: string,
     targetId: string | null,
   ): boolean {
+    // Even neutral territory needs an existing, living authoritative actor.
+    if (!this.politics.nationAlive(attackerId)) return false;
     if (targetId === null) return true;
-    if (
-      !this.politics.nationAlive(attackerId) ||
-      !this.politics.nationAlive(targetId)
-    )
-      return false;
+    if (!this.politics.nationAlive(targetId)) return false;
     if (attackerId === targetId || this.sameEmpire(attackerId, targetId))
       return false;
     if (this.politics.treatyProtects(attackerId, targetId)) return false;
