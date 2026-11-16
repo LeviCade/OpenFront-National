@@ -18,9 +18,71 @@ import {
   WarshipState,
 } from "./GameTypes";
 
+/**
+ * PUBLIC NATIONAL politics that may cross the worker boundary. This mirrors
+ * E1's NationalPublicPoliticalView using protocol-owned primitive types;
+ * never include the private pact terms, troop reserves, treasury, sight,
+ * invitations, peace motions or raw WarLedger/LevyLedger snapshots.
+ */
+export interface NationalPoliticsViewData {
+  readonly empires: readonly {
+    readonly id: string;
+    readonly leaderId: PlayerID;
+    readonly memberIds: readonly PlayerID[];
+  }[];
+  readonly warnings: readonly {
+    readonly empireId: string;
+    readonly deadlineMs: number;
+    readonly remainingMs: number;
+    readonly blockedByAssetDisposition: boolean;
+  }[];
+  readonly victory: {
+    readonly sovereignPowerCount: number;
+    readonly resolved: boolean;
+    readonly prizes: readonly (
+      | { readonly kind: "SovereignVictor"; readonly nationId: PlayerID }
+      | {
+          readonly kind: "ImperialVictor" | "EmpireVictor";
+          readonly nationId: PlayerID;
+          readonly empireId: string;
+        }
+    )[];
+  } | null;
+}
+
+/**
+ * Single addressed command outcome. The worker MUST select results using its
+ * authenticated principal, NOT an observerId supplied by a browser packet.
+ * Only that recipient's packet may contain the result. Reason must be a
+ * bounded, sanitized public error code/message, never private engine state.
+ */
+export interface NationalCommandResultViewData {
+  readonly recipientId: PlayerID;
+  readonly actorId: PlayerID;
+  readonly type:
+    | "national_found_empire"
+    | "national_declare_war"
+    | "national_propose_peace"
+    | "national_accept_peace";
+  readonly accepted: boolean;
+  readonly tick: Tick;
+  /** Public identifier only, when applicable to the actual command. */
+  readonly empireId?: string;
+  readonly warId?: string;
+  readonly motionId?: string;
+  readonly reason?: string;
+}
+
 export interface GameUpdateViewData {
   tick: number;
   updates: GameUpdates;
+  /** E1 authoritative public-only politics; E3 emits, E4 consumes. */
+  nationalPolitics?: NationalPoliticsViewData;
+  /**
+   * Outcomes scoped to the authenticated recipient of THIS view only.
+   * E3 must filter before serialization; never broadcast the E1 journal.
+   */
+  nationalCommandResults?: readonly NationalCommandResultViewData[];
   /**
    * Packed tile updates as `[tileRef, state]` uint32 pairs.
    *
