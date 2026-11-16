@@ -82,9 +82,21 @@ const NationalFoundEmpireStateSchema = z.object({
   politicalCommand: z
     .discriminatedUnion("kind", [
       z.object({ kind: z.literal("found-empire"), empireId: z.string() }),
-      z.object({ kind: z.literal("offer-empire"), empireId: z.string(), candidateId: z.string() }),
-      z.object({ kind: z.literal("accept-empire"), empireId: z.string(), candidateId: z.string() }),
-      z.object({ kind: z.literal("transfer-crown"), empireId: z.string(), successorId: z.string() }),
+      z.object({
+        kind: z.literal("offer-empire"),
+        empireId: z.string(),
+        candidateId: z.string(),
+      }),
+      z.object({
+        kind: z.literal("accept-empire"),
+        empireId: z.string(),
+        candidateId: z.string(),
+      }),
+      z.object({
+        kind: z.literal("transfer-crown"),
+        empireId: z.string(),
+        successorId: z.string(),
+      }),
       z.object({
         kind: z.literal("found-pact"),
         pactId: z.string(),
@@ -95,7 +107,11 @@ const NationalFoundEmpireStateSchema = z.object({
           expulsion: z.enum(["leader", "unanimous", "forbidden"]),
         }),
       }),
-      z.object({ kind: z.literal("invite-pact"), pactId: z.string(), candidateId: z.string() }),
+      z.object({
+        kind: z.literal("invite-pact"),
+        pactId: z.string(),
+        candidateId: z.string(),
+      }),
       z.object({ kind: z.literal("accept-pact"), pactId: z.string() }),
       z.object({ kind: z.literal("betray-pact"), pactId: z.string() }),
     ])

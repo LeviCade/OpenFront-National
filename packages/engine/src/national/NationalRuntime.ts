@@ -258,10 +258,16 @@ export class NationalRuntime {
       .map((e) => ({
         empireId: e.id,
         deadlineMs: e.crisisDeadlineMs!,
-        remainingMs: Math.max(0, e.crisisDeadlineMs! - this.politics.simulationMs),
-        blockedByAssetDisposition: this.politics.simulationMs >= e.crisisDeadlineMs!,
+        remainingMs: Math.max(
+          0,
+          e.crisisDeadlineMs! - this.politics.simulationMs,
+        ),
+        blockedByAssetDisposition:
+          this.politics.simulationMs >= e.crisisDeadlineMs!,
       }))
-      .sort((a, b) => a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0);
+      .sort((a, b) =>
+        a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0,
+      );
   }
 
   /** Accept only the actor resolved from the real GameImpl player registry. */

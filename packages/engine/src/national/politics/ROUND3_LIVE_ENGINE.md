@@ -24,7 +24,7 @@ constitution or raw mutable `PoliticsProjection` is given to clients.
 
 - `GameImpl.synchronizeNationalState` executes after ordinary executions
   every tick, reads real `PlayerID`, liveness, spawned state, territory,
-  troop cap and troops, and counts *active finished* Cities, Factories, Ports,
+  troop cap and troops, and counts _active finished_ Cities, Factories, Ports,
   Missile Silos and Warships from actual owned Unit objects.
 - **maxPopulation** is `Math.floor(game.config().maxTroops(player))`, the
   existing engine's true effective troop capacity including cities,
@@ -66,7 +66,7 @@ conserving disposition (#15 P3). The pure standalone
 SOV-05/06 tests but its **GameImpl** call explicitly passes
 `allowCollapse=false`.
 
-Emperor *elimination* still dissolves political membership on real
+Emperor _elimination_ still dissolves political membership on real
 engine liveness, a distinct authorized SOV-06 transition. Its pooled
 resource and war consequences also require approval before production
 enablement of pooled military systems. No new resource pools are created

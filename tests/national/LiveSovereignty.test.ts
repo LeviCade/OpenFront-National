@@ -4,8 +4,11 @@ import {
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
+import {
+  NationalFoundEmpireExecution,
+  NationalFoundEmpireExecutionSnapshot,
+} from "@openfront/engine/execution/NationalFoundEmpireExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
-import { NationalFoundEmpireExecution, NationalFoundEmpireExecutionSnapshot } from "@openfront/engine/execution/NationalFoundEmpireExecution";
 import { WinCheckExecution } from "@openfront/engine/execution/WinCheckExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
@@ -71,7 +74,10 @@ function eliminate(game: Game, playerId: string): void {
   game.executeNextTick();
 }
 
-const pactTerms = { admission: "leader" as const, expulsion: "forbidden" as const };
+const pactTerms = {
+  admission: "leader" as const,
+  expulsion: "forbidden" as const,
+};
 
 describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
   it("M0 facade reads the single running political authority and never leaks legacy state", async () => {
@@ -122,7 +128,9 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
     });
     units[0].setUnderConstruction(true);
     game.nationalVictoryRoster();
-    expect(snapshot(game)?.politics.nations.find((n) => n.id === S)?.metrics.cities).toBe(0);
+    expect(
+      snapshot(game)?.politics.nations.find((n) => n.id === S)?.metrics.cities,
+    ).toBe(0);
   });
 
   it("SOV-01: a one-tile independent sovereign blocks a large empire from winning", async () => {
@@ -165,7 +173,9 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
     expect(a?.mayDeclareNational(S)).toBe(true);
     const { restored } = await roundTrip(game, "plains");
     expect(snapshot(restored)).toEqual(snapshot(game));
-    expect(restored.nationalPoliticalAuthority()?.emperorOf("empire-r3")).toBe(S);
+    expect(restored.nationalPoliticalAuthority()?.emperorOf("empire-r3")).toBe(
+      S,
+    );
     eliminate(game, W);
     eliminate(restored, W);
     const full = [
@@ -188,7 +198,9 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
     );
     game.executeNextTick(); // initialize a registered actual execution
     game.executeNextTick(); // execute founding
-    expect(game.nationalPoliticalAuthority()?.emperorOf("queued-imperium")).toBe(N);
+    expect(
+      game.nationalPoliticalAuthority()?.emperorOf("queued-imperium"),
+    ).toBe(N);
     game.addExecution(
       new NationalFoundEmpireExecution(game.player(N), "", {
         kind: "offer-empire",
@@ -212,7 +224,9 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
       );
       g.executeNextTick();
       g.executeNextTick();
-      expect(g.nationalPoliticalAuthority()?.membersOf("queued-imperium")).toEqual([N, S]);
+      expect(
+        g.nationalPoliticalAuthority()?.membersOf("queued-imperium"),
+      ).toEqual([N, S]);
       g.addExecution(
         new NationalFoundEmpireExecution(g.player(N), "", {
           kind: "transfer-crown",
@@ -222,7 +236,9 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
       );
       g.executeNextTick();
       g.executeNextTick();
-      expect(g.nationalPoliticalAuthority()?.emperorOf("queued-imperium")).toBe(S);
+      expect(g.nationalPoliticalAuthority()?.emperorOf("queued-imperium")).toBe(
+        S,
+      );
     }
     expect(snapshot(restored)).toEqual(snapshot(game));
     // Previous v1 pending founding records still restore under the new
@@ -407,9 +423,13 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
       remainingMs: 0,
       blockedByAssetDisposition: true,
     });
-    expect(restored.nationalUngovernableWarnings()).toEqual(game.nationalUngovernableWarnings());
+    expect(restored.nationalUngovernableWarnings()).toEqual(
+      game.nationalUngovernableWarnings(),
+    );
     expect(snapshot(restored)).toEqual(snapshot(game));
-    expect(game.nationalPoliticalAuthority()?.empireExists("empire-r3")).toBe(true);
+    expect(game.nationalPoliticalAuthority()?.empireExists("empire-r3")).toBe(
+      true,
+    );
     // The emperor can no longer evade the expired deadline by transferring.
     expect(() =>
       game.performNationalCommand(north, {
@@ -435,7 +455,10 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
     const pending = new NationalRuntime([N, S]);
     const realMetrics = facts.find((n) => n.id === N)!.metrics;
     const neverSpawned = {
-      id: S, alive: false, spawned: false, pendingSpawn: true,
+      id: S,
+      alive: false,
+      spawned: false,
+      pendingSpawn: true,
       metrics: facts.find((n) => n.id === S)!.metrics,
     };
     const north = { id: N, alive: true, spawned: true, metrics: realMetrics };

@@ -70,16 +70,16 @@ import { NationExecution } from "../execution/NationExecution";
 import { SpawnTimerExecution } from "../execution/SpawnTimerExecution";
 import { TribeExecution } from "../execution/TribeExecution";
 import {
-  PoliticalAuthorityAdapter,
-  type NationalPoliticalAuthority,
-  type NationalConflictPoliticsPort,
-} from "../national/politics/PoliticalAuthorityAdapter";
-import {
   NationalRuntime,
   NationalRuntimeSnapshotSchema,
   type NationalCommand,
   type NationalUngovernableWarning,
 } from "../national/NationalRuntime";
+import {
+  PoliticalAuthorityAdapter,
+  type NationalPoliticalAuthority,
+  type NationalConflictPoliticsPort,
+} from "../national/politics/PoliticalAuthorityAdapter";
 import type { LastSovereignResult } from "../national/politics/sovereignty";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
@@ -549,7 +549,9 @@ export class GameImpl implements Game {
     if (this._national === null) return;
     // Read the eight live facts from real engine players after each tick.
     const standingCount = (player: Player, type: UnitType): number =>
-      player.units(type).filter((unit) => unit.isActive() && !unit.isUnderConstruction())
+      player
+        .units(type)
+        .filter((unit) => unit.isActive() && !unit.isUnderConstruction())
         .length;
     this._national.synchronize(
       this._playersBySmallID.map((p) => ({
@@ -572,9 +574,10 @@ export class GameImpl implements Game {
     );
   }
 
-  /** Returns the actual victorious sovereign (no legacy-mode shortcut). */
   /** Never exposes the mutable PoliticsProjection to a caller. */
-  nationalPoliticalAuthority(): Readonly<NationalPoliticalAuthority & NationalConflictPoliticsPort> | null {
+  nationalPoliticalAuthority(): Readonly<
+    NationalPoliticalAuthority & NationalConflictPoliticsPort
+  > | null {
     if (this._national === null) return null;
     this._nationalAuthority ??= new PoliticalAuthorityAdapter(() => {
       if (this._national === null) throw new Error("NATIONAL is not enabled");
