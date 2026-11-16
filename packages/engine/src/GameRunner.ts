@@ -200,6 +200,35 @@ export class GameRunner {
       : this.game.player(this.nationalObserverId).smallID() === id;
   }
 
+  /** Fail closed on target tiles outside the authenticated observer's sight. */
+  isNationalTileVisible(tile: TileRef): boolean {
+    if (!this.game.config().nationalMode()) return true;
+    return this.nationalObserverId !== null &&
+      Number.isSafeInteger(tile) && tile >= 0 && tile < this.game.width() * this.game.height() &&
+      collectLiveNationalObservation(
+        this.game,
+        this.nationalObserverId,
+      ).visibleTiles.has(tile);
+  }
+
+  /** A coordinate query may not probe another nation's unseen territory. */
+  isNationalCoordinateVisible(x?: number, y?: number): boolean {
+    if (!this.game.config().nationalMode()) return true;
+    if (this.nationalObserverId === null) return false;
+    if (x === undefined && y === undefined) return true;
+    if (
+      x === undefined ||
+      y === undefined ||
+      !Number.isSafeInteger(x) ||
+      !Number.isSafeInteger(y) ||
+      !this.game.isValidCoord(x, y)
+    ) return false;
+    return collectLiveNationalObservation(
+      this.game,
+      this.nationalObserverId,
+    ).visibleTiles.has(this.game.ref(x, y));
+  }
+
   /** Signed/stamped turn intents must match the authentic NATIONAL player. */
   isNationalIntentAuthorized(clientID: ClientID): boolean {
     if (!this.game.config().nationalMode()) return true;
