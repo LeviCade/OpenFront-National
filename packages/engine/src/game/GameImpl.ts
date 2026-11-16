@@ -535,8 +535,24 @@ export class GameImpl implements Game {
     return this._config;
   }
 
+  /** Sync the identity/territory picture after executions have changed it. */
+  private synchronizeNationalState(): void {
+    if (this._national === null) return;
+    this._national.synchronize(
+      this._playersBySmallID.map((p) => ({
+        id: p.id(),
+        alive: p.isAlive(),
+        spawned: p.hasSpawned(),
+        land: p.numTilesOwned(),
+      })),
+      this._ticks,
+      !this.inSpawnPhase(),
+    );
+  }
+
   /** Returns the actual victorious sovereign (no legacy-mode shortcut). */
   nationalWinner(): PlayerID | null {
+    this.synchronizeNationalState();
     return this._national?.winner() ?? null;
   }
 
@@ -551,16 +567,7 @@ export class GameImpl implements Game {
     ) {
       throw new Error("NATIONAL: unauthenticated or inactive actor");
     }
-    this._national.synchronize(
-      this._playersBySmallID.map((p) => ({
-        id: p.id(),
-        alive: p.isAlive(),
-        spawned: p.hasSpawned(),
-        land: p.numTilesOwned(),
-      })),
-      this._ticks,
-      true,
-    );
+    this.synchronizeNationalState();
     this._national.perform(actor.id(), command);
   }
 
@@ -637,16 +644,6 @@ export class GameImpl implements Game {
   }
 
   executeNextTick(): GameUpdates {
-    this._national?.synchronize(
-      this._playersBySmallID.map((p) => ({
-        id: p.id(),
-        alive: p.isAlive(),
-        spawned: p.hasSpawned(),
-        land: p.numTilesOwned(),
-      })),
-      this._ticks,
-      !this.inSpawnPhase(),
-    );
     this.updates = createGameUpdatesMap();
     this.tileUpdatePairs.length = 0;
     if (this.viewResyncQueued) {
@@ -677,6 +674,7 @@ export class GameImpl implements Game {
     }
 
     this.removeInactiveExecutions();
+    this.synchronizeNationalState();
 
     for (const player of this._playersBySmallID) {
       // Sampled before toUpdate so the reading is of the tick that just ran.
