@@ -17,7 +17,9 @@ const profile = mkdtempSync(join(tmpdir(), "national-chrome-"));
 const port = 10000 + (process.pid % 10000);
 const children = [];
 const watchdog = setTimeout(() => {
-  console.error("QA_BROWSER_FAIL: smoke exceeded 90-second wall-clock deadline");
+  console.error(
+    "QA_BROWSER_FAIL: smoke exceeded 90-second wall-clock deadline",
+  );
   for (const child of children) child.kill("SIGKILL");
   process.exit(1);
 }, 90_000);
@@ -76,10 +78,14 @@ function createCdp(ws) {
 }
 
 async function main() {
-  const server = processChild(process.execPath, ["node_modules/vite/bin/vite.js"], {
-    SKIP_BROWSER_OPEN: "true",
-    GAME_ENV: "dev",
-  });
+  const server = processChild(
+    process.execPath,
+    ["node_modules/vite/bin/vite.js", "--host", "127.0.0.1"],
+    {
+      SKIP_BROWSER_OPEN: "true",
+      GAME_ENV: "dev",
+    },
+  );
   const response = await poll(async () => {
     if (server.exitCode !== null) throw new Error("Vite exited");
     const r = await fetch("http://127.0.0.1:9000/", {
