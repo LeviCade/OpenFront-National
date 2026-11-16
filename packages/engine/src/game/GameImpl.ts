@@ -778,6 +778,16 @@ export class GameImpl implements Game {
       ) {
         throw new Error("NATIONAL levy: attack not formally authorized");
       }
+      const expectedDonors = this.nationalMdaAllies(attack.defenderId)
+        .filter((id) => id !== attack.attackerId);
+      const suppliedDonors = attack.eligible.map((e) => e.source.nationId);
+      if (
+        suppliedDonors.length !== expectedDonors.length ||
+        new Set(suppliedDonors).size !== suppliedDonors.length ||
+        expectedDonors.some((id) => !suppliedDonors.includes(id))
+      ) {
+        throw new Error("NATIONAL levy: missing or forged MDA donor roster");
+      }
       for (const entry of attack.eligible) {
         const id = entry.source.nationId;
         if (

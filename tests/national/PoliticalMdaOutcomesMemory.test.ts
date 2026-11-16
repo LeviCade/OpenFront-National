@@ -133,6 +133,46 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
     expect(restored.nationalMdaAllies(A)).toEqual([B]);
   });
 
+  it("LEVY-07: accepted attack cannot silently omit an active MDA contributor", async () => {
+    const game = await gameWithPlayers();
+    treaty(game, "levy-defenders", A, [B, C]);
+    game.player(B).setTroops(500_000);
+    game.player(C).setTroops(500_000);
+    game.performNationalWarCommand(game.player(D), {
+      kind: "declare-national", warId: "r5-defense-war",
+      aggressorId: D, targetId: A,
+    });
+    const request = (eligible: { source: NonNullable<ReturnType<Game["nationalLevySource"]>>; troopCapacity: number; maximumFraction: number; protectedCapacityFraction: number }[]) => ({
+      attackId: "r5-accepted-attack",
+      confirmedAccepted: true as const,
+      campaignId: "r5-campaign",
+      attackerId: D, defenderId: A, attackingTroops: 1_000, eligible,
+    });
+    const beforeB = game.player(B).troops();
+    const beforeC = game.player(C).troops();
+    expect(() => game.applyNationalDefenseLevy([request([])]))
+      .toThrow(/missing or forged MDA donor roster/);
+    expect(game.player(B).troops()).toBe(beforeB);
+    expect(game.player(C).troops()).toBe(beforeC);
+    expect(game.nationalWarState()?.levy.processed).toEqual([]);
+    const eligible = game.nationalMdaAllies(A).map((id) => ({
+      source: game.nationalLevySource(id)!,
+      troopCapacity: Math.floor(game.config().maxTroops(game.player(id))),
+      maximumFraction: 0.1,
+      protectedCapacityFraction: 0.3,
+    }));
+    expect(eligible.map((e) => e.source.nationId)).toEqual([B, C]);
+    const [funded] = game.applyNationalDefenseLevy([request(eligible)]);
+    expect(funded.application).toBe("applied");
+    expect(funded.intercepted).toBe(1_000);
+    expect(beforeB + beforeC - game.player(B).troops() - game.player(C).troops())
+      .toBe(1_000);
+    const { restored } = await roundTrip(game, "plains");
+    expect(restored.nationalWarState()).toEqual(game.nationalWarState());
+    expect(restored.player(B).troops()).toBe(game.player(B).troops());
+    expect(restored.player(C).troops()).toBe(game.player(C).troops());
+  });
+
   it("unspawned and legacy defenders fail closed; no client-chosen eligibility", async () => {
     const waiting = await setup("plains", { nationalMode: true }, humans.slice(0, 2));
     expect(waiting.nationalMdaAllies(A)).toEqual([]);
