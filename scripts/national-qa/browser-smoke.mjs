@@ -84,21 +84,18 @@ async function main() {
   const html = await response.text();
   if (!/<html/i.test(html)) throw new Error("Homepage is not HTML");
 
-  processChild(
-    process.env.CHROME_BIN ?? "google-chrome",
-    [
-      "--headless=new",
-      "--no-sandbox",
-      "--disable-gpu",
-      "--disable-dev-shm-usage",
-      "--no-first-run",
-      "--no-default-browser-check",
-      "--remote-allow-origins=*",
-      "--user-data-dir=" + profile,
-      "--remote-debugging-port=" + port,
-      "about:blank",
-    ],
-  );
+  processChild(process.env.CHROME_BIN ?? "google-chrome", [
+    "--headless=new",
+    "--no-sandbox",
+    "--disable-gpu",
+    "--disable-dev-shm-usage",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--remote-allow-origins=*",
+    "--user-data-dir=" + profile,
+    "--remote-debugging-port=" + port,
+    "about:blank",
+  ]);
   const pages = await poll(async () => {
     const r = await fetch("http://127.0.0.1:" + port + "/json/list", {
       signal: AbortSignal.timeout(1000),
@@ -120,7 +117,10 @@ async function main() {
       awaitPromise: true,
     });
     if (result.exceptionDetails) {
-      throw new Error("Browser evaluation exception: " + JSON.stringify(result.exceptionDetails));
+      throw new Error(
+        "Browser evaluation exception: " +
+          JSON.stringify(result.exceptionDetails),
+      );
     }
     return result.result?.value;
   };
@@ -136,7 +136,10 @@ async function main() {
     await command("Runtime.enable");
     await command("Page.navigate", { url: "http://127.0.0.1:9000/" });
     await poll(
-      () => evaluate("document.readyState === 'complete' && !!document.body && document.body.innerText.length > 0"),
+      () =>
+        evaluate(
+          "document.readyState === 'complete' && !!document.body && document.body.innerText.length > 0",
+        ),
       "homepage DOM",
     );
     await screenshot("browser-landing.png");
@@ -144,7 +147,13 @@ async function main() {
     if (!landing || landing.length < 10) {
       throw new Error("Visible landing DOM is empty");
     }
-    console.info("QA_BROWSER_LANDING " + JSON.stringify({ title: await evaluate("document.title"), textLength: landing.length }));
+    console.info(
+      "QA_BROWSER_LANDING " +
+        JSON.stringify({
+          title: await evaluate("document.title"),
+          textLength: landing.length,
+        }),
+    );
 
     if (full) {
       // Probe actual DOM and open shadow roots, not source text. The browser
@@ -198,7 +207,9 @@ async function main() {
       await clickLabel("found empire", "found-empire");
       const visible = await evaluate("document.body.innerText");
       if (!/emperor|empire founded|founded empire/i.test(visible)) {
-        throw new Error("Found Empire action produced no observable successful result");
+        throw new Error(
+          "Found Empire action produced no observable successful result",
+        );
       }
       await screenshot("browser-national-result.png");
     }
