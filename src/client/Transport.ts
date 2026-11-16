@@ -116,7 +116,10 @@ export class SendNationalFoundEmpireIntentEvent implements GameEvent {
 
 /** Signals loss/reestablishment of a verified game transport session. */
 export class NationalTransportStatusEvent implements GameEvent {
-  constructor(public readonly ready: boolean) {}
+  constructor(
+    public readonly ready: boolean,
+    public readonly gameID: string,
+  ) {}
 }
 
 export class SendAttackIntentEvent implements GameEvent {
@@ -542,7 +545,7 @@ export class Transport {
         }
         this.isSessionReady = true;
         if (msg.type === "lobby_info" || msg.type === "start") {
-          this.eventBus.emit(new NationalTransportStatusEvent(true));
+          this.eventBus.emit(new NationalTransportStatusEvent(true, this.lobbyConfig.gameID));
         }
         this.flushBuffer();
         this.onmessage(msg);
@@ -575,7 +578,7 @@ export class Transport {
     };
     this.socket.onclose = (event: CloseEvent) => {
       this.isSessionReady = false;
-      this.eventBus.emit(new NationalTransportStatusEvent(false));
+      this.eventBus.emit(new NationalTransportStatusEvent(false, this.lobbyConfig.gameID));
       const detail = describeSocketClose(socket.url, event, openedAt);
       if (event.code === CloseCode.Normal) {
         console.log(`Game socket ${detail}`);
@@ -769,7 +772,7 @@ export class Transport {
   }
 
   leaveGame() {
-    this.eventBus.emit(new NationalTransportStatusEvent(false));
+    this.eventBus.emit(new NationalTransportStatusEvent(false, this.lobbyConfig.gameID));
     for (const unsubscribe of this.unsubscribers.splice(0)) {
       unsubscribe();
     }
