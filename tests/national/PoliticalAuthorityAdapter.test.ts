@@ -199,8 +199,9 @@ describe("Round Two treaty and war permission queries (D-007, D-010)", () => {
 
   it("WAR-04/07: independent and reigning emperor have authority; subordinate defaults DENY", () => {
     let state = setupEmpire();
-    const a: NationalPoliticalAuthority & NationalConflictPoliticsPort =
-      authority(() => state);
+    const a = authority(() => state);
+    const port: NationalPoliticalAuthority & NationalConflictPoliticsPort = a;
+    expect(port.mayDeclareNational(beta)).toBe(false);
     expect(a.delegatedNationalWar(gamma, "declare")).toBe(true);
     expect(a.delegatedNationalWar(gamma, "peace")).toBe(true);
     expect(a.delegatedNationalWar(alpha, "declare")).toBe(true);
