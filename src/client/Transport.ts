@@ -816,7 +816,9 @@ export class Transport {
     });
   }
 
-  private onSendNationalFoundEmpireIntent(event: SendNationalFoundEmpireIntentEvent) {
+  private onSendNationalFoundEmpireIntent(
+    event: SendNationalFoundEmpireIntentEvent,
+  ) {
     // The wire schema and engine validate the ID and acting client again.
     // Do not stamp a player ID here or create political state on the client.
     this.sendIntent({
