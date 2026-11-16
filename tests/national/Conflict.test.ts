@@ -177,6 +177,7 @@ describe("NATIONAL layered conflict — D-010/D-014", () => {
     const ledger = new WarLedger(new Politics());
     expect(ledger.authorizeOffensiveAction("A", "X")).toBe(false);
     expect(ledger.authorizeOffensiveAction("A", null)).toBe(true);
+    expect(ledger.authorizeOffensiveAction("UNKNOWN", null)).toBe(false);
     ledger.declareNational("war-1", "A", "A", "X", 1);
     expect(ledger.authorizeOffensiveAction("A", "X")).toBe(true);
     expect(ledger.authorizeOffensiveAction("X", "A")).toBe(true);
@@ -335,9 +336,14 @@ describe("NATIONAL real defensive levies — D-008", () => {
     const r = ledger.interceptAcceptedAttacks(attacks);
     expect(r.reduce((s, x) => s + x.intercepted, 0)).toBe(10_000);
     expect(donor.balance).toBe(90_000);
-    expect(
-      ledger.interceptAcceptedAttacks(attacks).map((x) => x.intercepted),
-    ).toEqual(r.map((x) => x.intercepted));
+    const replays = ledger.interceptAcceptedAttacks(attacks);
+    expect(replays.map((x) => x.application)).toEqual(
+      Array(20).fill("replay"),
+    );
+    expect(replays.map((x) => x.intercepted)).toEqual(Array(20).fill(0));
+    expect(replays.map((x) => x.remainingAttackingTroops)).toEqual(
+      Array(20).fill(5_000),
+    );
     expect(donor.balance).toBe(90_000);
     // Twenty clicks are funded by one atomic batch commit, not two callbacks.
     expect(donor.calls).toBe(1);
@@ -409,7 +415,15 @@ describe("NATIONAL real defensive levies — D-008", () => {
     expect(clone.exportState()).toEqual(state);
     expect(
       clone.interceptAcceptedAttacks([levy("a", "campaign", 5_000, [donor])]),
-    ).toEqual([r]);
+    ).toEqual([
+      {
+        ...r,
+        application: "replay",
+        intercepted: 0,
+        remainingAttackingTroops: 5_000,
+        contributions: [],
+      },
+    ]);
     expect(donor.balance).toBe(95_000);
     const next = clone.interceptAcceptedAttacks([
       levy("b", "campaign", 50_000, [donor]),
