@@ -44,11 +44,18 @@ jobs:
       - name: Typecheck
         if: always()
         run: npm run typecheck
-      - name: Lint and formatting
+      - name: Lint and formatting with exact QA-only diff on failure
         if: always()
+        shell: bash
         run: |
+          set -euo pipefail
           npm run lint
-          npm run format:check
+          if ! npm run format:check; then
+            echo "::error::QA file formatting mismatch"
+            npx --no-install oxfmt --write tests/e2e/national/RoundFiveWarLevy.test.ts scripts/national-qa/browser-gameplay.mjs .github/workflows/national-round5-qa.yml
+            git diff -- tests/e2e/national/RoundFiveWarLevy.test.ts scripts/national-qa/browser-gameplay.mjs .github/workflows/national-round5-qa.yml
+            exit 1
+          fi
       - name: Audit independent license baseline
         if: always()
         run: node scripts/national-qa/asset-audit.mjs
