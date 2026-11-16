@@ -66,6 +66,12 @@ export interface NationalCommandResultViewData {
     | "national_accept_peace";
   readonly accepted: boolean;
   readonly tick: Tick;
+  /**
+   * E1 canonical command-journal sequence/request receipt when available.
+   * E3 must preserve these for replay-safe recipient filtering and dedup.
+   */
+  readonly sequence?: number;
+  readonly requestId?: string;
   /** Public identifier only, when applicable to the actual command. */
   readonly empireId?: string;
   readonly warId?: string;
