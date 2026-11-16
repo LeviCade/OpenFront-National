@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
-import { authorizeNationalAttack, interceptNationalAttack } from "@openfront/engine/execution/NationalWarExecution";
+import { authorizeNationalAttack } from "@openfront/engine/execution/NationalWarExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { PlayerImpl } from "@openfront/engine/game/PlayerImpl";
