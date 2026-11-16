@@ -27,6 +27,7 @@ vi.mock("../../../src/client/InGameModal", () => ({
 import "../../../src/client/NationalDiplomacyPanel";
 import type { LobbyConfig } from "../../../src/client/ClientGameRunner";
 import type { NationalDiplomacyPanel } from "../../../src/client/NationalDiplomacyPanel";
+import type { NationalFoundingResult } from "../../../src/client/NationalDiplomacyState";
 import { SetIntentGateEvent, Transport } from "../../../src/client/Transport";
 import type { GameView } from "../../../src/client/view";
 
@@ -57,7 +58,10 @@ async function setup() {
   const state = {
     politics: {
       empires: [] as { id: string; leaderId: string; memberIds: string[] }[],
+      warnings: [],
     },
+    tick: 10,
+    results: [] as NationalFoundingResult[],
   };
   const game = {
     config: () => ({
@@ -72,6 +76,9 @@ async function setup() {
     inSpawnPhase: () => false,
     nationalPolitics: () => state.politics,
     nationalFoundingOutcome: () => null,
+    nationalFoundingResults: () => state.results,
+    ticks: () => state.tick,
+    gameID: () => "national-test",
     players: () => [me],
   } as unknown as GameView;
 
@@ -134,7 +141,23 @@ describe("NATIONAL UI → normal local server command", () => {
       empires: [
         { id: "Atlas_Empire", leaderId: "nation-a", memberIds: ["nation-a"] },
       ],
+      warnings: [],
     };
+    state.tick = 11;
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).not.toContain("Confirmed by game");
+
+    // E1's real journal, E2's recipient-scoped DTO, E3's routed packet:
+    // only their exact accepted result confirms the action.
+    state.results = [{
+      type: "national_found_empire",
+      recipientId: "nation-a",
+      actorId: "nation-a",
+      empireId: "Atlas_Empire",
+      accepted: true,
+      tick: 11,
+    }];
     panel.refresh();
     await panel.updateComplete;
     expect(panel.textContent).toContain("Confirmed by game");
