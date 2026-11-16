@@ -35,6 +35,12 @@ import { TerrainMapData } from "@openfront/engine-lib/game/TerrainMapLoader";
 import { TerraNulliusImpl } from "@openfront/engine-lib/game/TerraNulliusImpl";
 import { UnitGrid } from "@openfront/engine-lib/game/UnitGrid";
 import { PlayerCosmetics, WirePlayer } from "@openfront/shared/WireSchemas";
+import {
+  readNationalFoundingResults,
+  readNationalPolitics,
+  type NationalFoundingResult,
+  type NationalPublicPolitics,
+} from "../NationalDiplomacyState";
 import { computeAllianceClusters } from "../render/frame/derive/AllianceClusters";
 import { extractAttackRings } from "../render/frame/derive/AttackRings";
 import { extractNukeTelegraphs } from "../render/frame/derive/NukeTelegraphs";
@@ -69,6 +75,18 @@ function readCosmeticVisibility(): CosmeticVisibility {
 
 export class GameView implements GameLike {
   private lastUpdate: GameUpdateViewData | null;
+  // Authoritative, viewer-filtered worker values only. Never reconstruct
+  // sovereignty from local intents or speculative client player data.
+  private _nationalPolitics: NationalPublicPolitics | null = null;
+  private _nationalFoundingOutcome: NationalFoundingResult | null = null;
+
+  public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
+    return this._nationalPolitics;
+  }
+
+  public nationalFoundingOutcome(): Readonly<NationalFoundingResult> | null {
+    return this._nationalFoundingOutcome;
+  }
   private startTick: Tick | null = null;
   private smallIDToID = new Map<number, PlayerID>();
   private _players = new Map<PlayerID, PlayerView>();
@@ -257,6 +275,31 @@ export class GameView implements GameLike {
     this.toDelete.clear();
 
     this.lastUpdate = gu;
+
+    // Legacy/replay test adapters can provide a partial Config without
+    // gameConfig(). Keep ordinary FFA view updates entirely unchanged.
+    if (
+      typeof this._config.gameConfig === "function" &&
+      this._config.gameConfig().nationalMode === true
+    ) {
+      // Contract supplied by E1/E3: a complete public projection per tick and
+      // a per-principal result. Missing/invalid projections NEVER mean success.
+      const nationalPacket = gu as GameUpdateViewData & {
+        nationalPolitics?: unknown;
+        nationalCommandResults?: unknown;
+      };
+      this._nationalPolitics = readNationalPolitics(
+        nationalPacket.nationalPolitics,
+      );
+      const outcomes = readNationalFoundingResults(
+        nationalPacket.nationalCommandResults,
+      );
+      for (const outcome of outcomes) {
+        if (outcome.actorId === this._myPlayer?.id()) {
+          this._nationalFoundingOutcome = outcome;
+        }
+      }
+    }
 
     this.updatedTiles = [];
     this.updatedTerrainTiles = [];

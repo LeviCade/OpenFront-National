@@ -109,6 +109,11 @@ export class SendSpawnIntentEvent implements GameEvent {
   constructor(public readonly tile: TileRef) {}
 }
 
+/** User-originated NATIONAL founding, stamped by the normal transport. */
+export class SendNationalFoundEmpireIntentEvent implements GameEvent {
+  constructor(public readonly empireId: string) {}
+}
+
 export class SendAttackIntentEvent implements GameEvent {
   constructor(
     public readonly targetID: PlayerID | null,
@@ -320,6 +325,9 @@ export class Transport {
     );
     this.subscribe(SetIntentGateEvent, (e) => (this.intentGate = e.gate));
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
+    this.subscribe(SendNationalFoundEmpireIntentEvent, (e) =>
+      this.onSendNationalFoundEmpireIntent(e),
+    );
     this.subscribe(SendAttackIntentEvent, (e) => this.onSendAttackIntent(e));
     this.subscribe(SendUpgradeStructureIntentEvent, (e) =>
       this.onSendUpgradeStructureIntent(e),
@@ -805,6 +813,17 @@ export class Transport {
     this.sendIntent({
       type: "allianceExtension",
       recipient: event.recipient.id(),
+    });
+  }
+
+  private onSendNationalFoundEmpireIntent(
+    event: SendNationalFoundEmpireIntentEvent,
+  ) {
+    // The wire schema and engine validate the ID and acting client again.
+    // Do not stamp a player ID here or create political state on the client.
+    this.sendIntent({
+      type: "national_found_empire",
+      empireId: event.empireId,
     });
   }
 
