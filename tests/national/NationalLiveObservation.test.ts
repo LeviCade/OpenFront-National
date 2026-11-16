@@ -286,6 +286,142 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     expect(restored.player(botInfo.id).numTilesOwned()).toBe(advanced);
   });
 
+  it("FOG-04/06 attributes real empire sightings to their member and revokes them immediately", async () => {
+    const ally = new PlayerInfo("Ally", PlayerType.Nation, null, "ally-id");
+    const foreign = new PlayerInfo(
+      "Foreign",
+      PlayerType.Nation,
+      null,
+      "foreign-id",
+    );
+    const game = await setup("plains", { nationalMode: true }, [
+      viewer,
+      ally,
+      foreign,
+    ]);
+    game.addExecution(
+      new SpawnExecution("empire-sight-test", viewer, game.ref(10, 10)),
+      new SpawnExecution("empire-sight-test", ally, game.ref(45, 45)),
+      new SpawnExecution("empire-sight-test", foreign, game.ref(80, 80)),
+    );
+    game.executeNextTick();
+    game.executeNextTick();
+    game.endSpawnPhase();
+
+    const sovereign = game.player(viewer.id);
+    game.performNationalCommand(sovereign, {
+      kind: "found-empire",
+      empireId: "e3_sight",
+    });
+    game.performNationalCommand(sovereign, {
+      kind: "offer-empire",
+      empireId: "e3_sight",
+      candidateId: ally.id,
+    });
+    game.performNationalCommand(game.player(ally.id), {
+      kind: "accept-empire",
+      empireId: "e3_sight",
+      candidateId: ally.id,
+    });
+
+    let nearby: number | null = null;
+    for (const border of game.player(ally.id).borderTiles()) {
+      game.forEachNeighbor(border, (tile) => {
+        if (
+          nearby === null &&
+          game.isLand(tile) &&
+          !game.owner(tile).isPlayer()
+        ) {
+          nearby = tile;
+        }
+      });
+      if (nearby !== null) break;
+    }
+    expect(nearby).not.toBeNull();
+    const hostileShip = game
+      .player(foreign.id)
+      .buildUnit(UnitType.TransportShip, nearby!, { troops: 2_345_987 });
+    const allyShip = game
+      .player(ally.id)
+      .buildUnit(UnitType.TransportShip, game.ref(45, 45), {
+        troops: 36_000,
+      });
+
+    const seen = collectLiveNationalObservation(game, viewer.id);
+    const hostile = seen.observation.visibleAssets.find(
+      (a) => a.id === String(hostileShip.id()),
+    );
+    expect(hostile?.source).toBe("empire");
+    expect(hostile?.sourceNationId).toBe(ally.id);
+    expect(hostile?.strength).toBeUndefined();
+    const allied = seen.observation.visibleAssets.find(
+      (a) => a.id === String(allyShip.id()),
+    );
+    expect(allied?.source).toBe("empire");
+    expect(allied?.sourceNationId).toBe(ally.id);
+    expect(allied?.strength).toBe(allyShip.troops());
+    const savedSight = advanceLastKnown(seen.observation, null, 60);
+
+    const packets: GameUpdateViewData[] = [];
+    const runner = new GameRunner(
+      game,
+      new Executor(game, "empire-packet", viewer.clientID!),
+      (packet) => {
+        if ("updates" in packet) packets.push(packet);
+      },
+      viewer.clientID!,
+    );
+    game.queueViewResync();
+    runner.addTurn({ turnNumber: game.ticks(), intents: [] });
+    expect(runner.executeNextTick()).toBe(true);
+    const first = unpackUnitUpdates(
+      packets[0].packedUnitUpdates,
+      packets[0].packedMissileTimers,
+    );
+    expect(first.find((u) => u.id === hostileShip.id())?.troops).toBe(0);
+    expect(first.find((u) => u.id === allyShip.id())?.troops).toBe(
+      allyShip.troops(),
+    );
+
+    // Simulate an authoritative membership revocation at the E1 read-port.
+    // No client-supplied roster or remembered grant may keep inherited sight.
+    const authority = game.nationalPoliticalAuthority()!;
+    const revoked = vi.spyOn(game, "nationalPoliticalAuthority");
+    revoked.mockImplementation(() => ({
+      ...authority,
+      empireOf: (id: string) =>
+        id === viewer.id || id === ally.id ? null : authority.empireOf(id),
+      emperorOf: (id: string) =>
+        id === "e3_sight" ? null : authority.emperorOf(id),
+      membersOf: (id: string) =>
+        id === "e3_sight" ? [] : authority.membersOf(id),
+    }));
+    const after = collectLiveNationalObservation(game, viewer.id);
+    expect(after.observation.visibleAssets.some(
+      (a) => a.id === String(hostileShip.id()),
+    )).toBe(false);
+    expect(
+      advanceLastKnown(after.observation, savedSight.memory, 60).stale.some(
+        (a) => a.id === String(hostileShip.id()),
+      ),
+    ).toBe(false);
+
+    runner.addTurn({ turnNumber: game.ticks(), intents: [] });
+    expect(runner.executeNextTick()).toBe(true);
+    const lost = unpackUnitUpdates(
+      packets[1].packedUnitUpdates,
+      packets[1].packedMissileTimers,
+    );
+    const hidden = lost.find((u) => u.id === hostileShip.id());
+    expect(hidden?.pos).toBe(nearby);
+    expect(hidden?.troops).toBe(0);
+    expect(hidden?.markedForDeletion).not.toBe(false);
+    const exAlly = lost.find((u) => u.id === allyShip.id());
+    expect(exAlly?.troops).toBe(0);
+    expect(exAlly?.markedForDeletion).not.toBe(false);
+    revoked.mockRestore();
+  });
+
   it("LEGACY full runner packets retain existing enemy troop and ship fields", async () => {
     const game = await activeGame(false);
     game.player(secret.id).setTroops(8_765_432);
