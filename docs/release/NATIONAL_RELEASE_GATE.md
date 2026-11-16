@@ -169,8 +169,13 @@ do not imply upstream endorsement.
 ### Issue #6 — inherited dependency advisories, OPEN
 
 Stage 2 recorded **17 advisories (4 critical, 7 high, 6 moderate)** from
-Node 24.15.0 and npm 12.1.0. That is a recorded **historical count**, not
-a fresh assertion about the current exact lockfile. CI now captures
+Node 24.15.0 and npm 12.1.0. Engineer 5's first independent QA run
+[43885685212](https://github.com/LeviCade/OpenFront-National/actions/runs/43885685212)
+on PR SHA `d4b36ce5e3e96697584de0d1f95050be4d980b66` measured
+**17 total advisories (4 critical, 7 high, 6 moderate)** and, with
+`npm audit --omit=dev --json`, **7 production-tree advisories
+(2 critical, 3 high, 2 moderate)**. These are tree-scope audit counts;
+they do not by themselves establish production exploitability. CI stores
 `npm audit --json` and `npm audit --omit=dev --json` separately.
 An audit nonzero exit does not automatically fail this **development QA**
 pipeline because that is an already-open **release gate**. Before public
