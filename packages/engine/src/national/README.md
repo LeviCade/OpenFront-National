@@ -27,3 +27,87 @@ The host's M0 adapter must supply validated geographical sight grants (the 100-t
 Covered by `tests/national/`: FOG-01, FOG-02, FOG-07, preliminary FOG-04/05/06 observation behavior; AI-01, AI-02, AI-04, event-driven deterministic memory/cadence and synthetic workload measurements.
 
 **Still required before accepted implementation:** M0 interface approval, authoritative geometry and sight invalidation, worker/client broadcast split, snapshot and replay serialization, route legality, integrated headless game, full regression CI and benchmark on realistic map sizes.
+
+
+## Round Two — scoped war sides and precise M0 filtering adapter
+
+**Contract alignment:** `docs/19-stage3-m0-interface.md` (conductor draft)
+defines `NationalWarView` with `id`, `scope: "national" | "imperial"`,
+`first`/`second` (`kind`, `stableId`, `activeMemberIds`) and
+`startedTick`. E2's authoritative ledger must supply **active** records with
+both sides, not a flattened set of participants. The public projection copies
+only those fields; AI derives opponents strictly from the opposite side.
+Same-side comrades are excluded from attacks even when no independent treaty
+exists. Independent national and imperial wars have separate record IDs;
+closing one must not mutate any other record. Tests simulate peace by supplying
+the resulting active-war list; they do not execute game war/peace commands.
+
+### Mandatory conductor-owned authoritative adapter
+
+1. **Mode, principal and political state.** Validate an opt-in NATIONAL flag
+   for `GameType.Singleplayer` + `GameMode.FFA` *before* constructing the
+   simulation. The absent flag preserves old behavior. Derive the observer's
+   existing stable `PlayerID` from authenticated engine/session state, not a
+   request parameter. `GameImpl` remains the sole mutable NATIONAL authority.
+   Construct an internal `NationalWorld` from real E1 political membership
+   and E2 scoped active war records. Preserve every side's kind, stable ID and
+   active members; do not synthesize enemy status from a flat participation
+   roster. Validate invitation recipients, member rights and active war IDs
+   against the current state at each snapshot/tick boundary.
+2. **Sight-grant producer.** Compute grants from actual owned borders and
+   observer-owned coast/warships, under agreed tile geometry (initial proposed
+   distances: 100 land tiles, 200 ship tiles). Define coast/occlusion rules and
+   deterministic invalidation on tile ownership changes, fleet movements,
+   recon purchase/expiry and empire joining/dissolution. A `NationalWorld` and
+   its sight grants must **never** be accepted from any client or bot input.
+   Empire unions only currently authorized member discoveries, with source
+   provenance; stale inherited sightings disappear on departure/dissolution.
+3. **`NationExecution` adapter.** The present
+   `packages/engine/src/execution/NationExecution.ts` creates unrestricted
+   `Game`/`Player`-backed `NationAttackBehavior`, `NationWarshipBehavior`
+   and allied behaviors. The legacy attack selector reads enemy `troops()`,
+   `units()` and global leader stats. Warship behavior scans global
+   `game.units(UnitType.TransportShip)`. For **NATIONAL only**, replace all
+   strategic reads with a conductor-owned
+   `NationalObservationBoundary.projectForAI(playerId)` built using
+   `projectNationalObservation`; feed that **whitelist DTO exclusively** into
+   `planNationalInterest`. Disable bypassing legacy behaviors in NATIONAL,
+   including ship tracking, follow-up attacks, nukes and embassy/structure
+   target paths where they access unrestricted enemy state. Preserve their
+   behavior in legacy modes. Persist planner cadence/reputation/sight memory
+   through canonical versioned snapshot/restore; do not execute the planner's
+   suggested objective directly. Route suggested actions through the same
+   authenticated E1/E2 diplomacy/war/peace/attack validators as humans.
+4. **`GameUpdates` outbound adapter.** Existing
+   `PlayerImpl.toFullUpdate()` sends exact gold, troops, income and attacks;
+   `PlayerImpl.toUpdate()` emits packed `[smallID, tilesOwned, gold, troops,
+   goldEarned]` stats and `[ownerSmallID, direction, index, troops]` attack
+   deltas. `GameImpl.executeNextTick()` also emits packed tile/unit/motion
+   data to `GameView.update()`. The conductor must create a **per-recipient
+   observation-to-wire projection before serialization/transmission**, not
+   filter a universal `GameUpdateViewData` only in a React view. It must
+   suppress/redact foreign exact gold, troops, earned income, secret clauses,
+   structures, ships, unobserved transport destinations, concealed tile/unit
+   changes, attack indexes/counts, name-position leaks and hidden event
+   messages. Handle *all* `packedPlayerUpdates`, `packedAttackUpdates`,
+   `packedUnitUpdates`, `packedMotionPlans`, unit/tile/name/structure updates
+   and initial full `PlayerUpdate` payloads. Scope diff caches and resync
+   state per authenticated observer so changing visibility emits removals and
+   never resurrects a hidden asset from prior cached client data.
+5. **Alternate exit paths.** Enforce the same whitelist for initial world
+   state, join/rejoin, spectators, replay playback, export, snapshot downloads,
+   reconnect/resync, admin/debug interfaces and worker messages. A game worker
+   that retains full hidden state *in the user's browser* is not a genuine
+   adversarial confidentiality boundary, even if worker-to-main messages are
+   filtered; tamper-resistant fog requires authoritative simulation on a
+   trusted host or an explicitly limited UI-fairness-only threat model.
+6. **Verification before enforcement claims.** Test actual serialized bytes
+   delivered to humans and AI; same-seed war-side behavior and real 2-vs-1
+   combats; independent national+imperial war/peace transitions through E2;
+   exact union/revocation on empire changes; snapshot/save/replay hash and
+   legacy-disabled flag behavior. Record CPU and heap for realistic maps.
+
+**Round Two implementation scope:** only the isolated observation projection,
+planner and dedicated tests/docs. No modifications to `NationExecution`,
+`GameImpl`, `GameUpdates`, `ExecutionManager`, schemas or snapshots. Real
+FOG enforcement and legal combat routing remain **not implemented** in PR #12.
