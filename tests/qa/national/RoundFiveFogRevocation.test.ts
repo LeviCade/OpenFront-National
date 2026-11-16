@@ -1,4 +1,5 @@
 import { PlayerInfo, PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
+import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import { unpackUnitUpdates } from "@openfront/engine-lib/game/PackedUnitUpdates";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
@@ -52,7 +53,7 @@ describe("E5 Round Five FOG: real GameRunner visibility / revoked empire / resto
     expect(before.observation.visibleAssets.some((item) => item.id === String(hostileShip.id()))).toBe(true);
     const saved = advanceLastKnown(before.observation, null, 60).memory;
 
-    const packets: unknown[] = [];
+    const packets: GameUpdateViewData[] = [];
     const runner = new GameRunner(
       game,
       new Executor(game, "qa-r5-fog", viewer.clientID!),
@@ -62,7 +63,7 @@ describe("E5 Round Five FOG: real GameRunner visibility / revoked empire / resto
     game.queueViewResync();
     runner.addTurn({ turnNumber: game.ticks(), intents: [] });
     expect(runner.executeNextTick()).toBe(true);
-    const first = packets[0] as { packedUnitUpdates?: Uint8Array; packedMissileTimers?: Uint8Array };
+    const first = packets[0];
     const units = unpackUnitUpdates(first.packedUnitUpdates, first.packedMissileTimers);
     expect(units.find((unit) => unit.id === hostileShip.id())?.troops).toBe(0);
     expect(JSON.stringify(first)).not.toContain("8765432");
