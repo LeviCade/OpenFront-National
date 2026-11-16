@@ -117,7 +117,12 @@ export class NationalDiplomacyPanel extends LitElement {
   }
 
   private playerName(id: string): string {
-    return this.game?.players().find((player) => player.id() === id)?.name() ?? id;
+    return (
+      this.game
+        ?.players()
+        .find((player) => player.id() === id)
+        ?.name() ?? id
+    );
   }
 
   private handlePanelKeyDown(event: KeyboardEvent): void {
@@ -157,105 +162,158 @@ export class NationalDiplomacyPanel extends LitElement {
           <span>👑 NATIONAL · Diplomacy</span>
           <span aria-hidden="true">${this.expanded ? "▴" : "▾"}</span>
         </button>
-        ${this.expanded
-          ? html`<div
-              id="national-diplomacy-content"
-              class="px-4 pb-4 space-y-4 max-h-[min(65vh,32rem)] overflow-y-auto text-sm"
-            >
-              <p class="text-xs text-slate-300">
-                Empire membership and leadership are verified from game state.
-                Requests do not become successful until the game confirms them.
-              </p>
-              ${politics
-                ? html`<div class="space-y-2">
-                    <h2 class="font-semibold text-amber-200">Empires</h2>
-                    ${politics.empires.length === 0
-                      ? html`<p class="text-slate-300">No empires founded yet.</p>`
-                      : politics.empires.map(
-                          (empire) => html`<article
-                            class="rounded-lg border border-white/15 p-3 space-y-1"
-                          >
-                            <h3 class="font-semibold break-words">${empire.id}</h3>
-                            <p>Leader: ${this.playerName(empire.leaderId)}</p>
-                            <p class="text-xs text-slate-300">
-                              Members (${empire.memberIds.length}):
-                              ${empire.memberIds.map((id) => this.playerName(id)).join(", ")}
-                            </p>
-                          </article>`,
-                        )}
-                  </div>`
-                : html`<p class="text-amber-200 text-xs" role="status">
-                    Verified political state has not arrived from the game.
-                    Leadership and membership are not yet available.
-                  </p>`}
-
-              ${ownEmpire
-                ? html`<p class="rounded-lg bg-emerald-900/35 p-3 text-emerald-200">
-                    Your nation belongs to <strong>${ownEmpire.id}</strong>.
-                    ${ownEmpire.leaderId === game.myPlayer()?.id()
-                      ? "You are the emperor."
-                      : `Emperor: ${this.playerName(ownEmpire.leaderId)}.`}
-                  </p>`
-                : html`<form class="space-y-2" @submit=${this.submitFounding}>
-                    <label for="national-empire-id" class="block font-semibold">
-                      Found an empire
-                    </label>
-                    <input
-                      id="national-empire-id"
-                      name="empireId"
-                      type="text"
-                      required
-                      minlength="1"
-                      maxlength="64"
-                      pattern="[A-Za-z0-9_-]+"
-                      autocomplete="off"
-                      autocapitalize="off"
-                      spellcheck="false"
-                      class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-white focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50"
-                      placeholder="e.g. Atlas_Empire"
-                      aria-describedby="national-id-help"
-                      .value=${this.draftEmpireId}
-                      @input=${(e: Event) =>
-                        (this.draftEmpireId = (e.target as HTMLInputElement).value)}
-                      ?disabled=${!canFound}
-                    />
-                    <p id="national-id-help" class="text-xs text-slate-400">
-                      1–64 letters, digits, underscores or hyphens.
-                    </p>
-                    <button
-                      type="submit"
-                      class="rounded-lg bg-amber-400 px-4 py-2 font-bold text-slate-950 hover:bg-amber-300 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
-                      ?disabled=${!canFound || !this.eventBus}
-                    >${this.pendingEmpireId ? "Founding requested…" : "Found Empire"}</button>
-                    ${this.unavailableReason
-                      ? html`<p class="text-xs text-slate-300">${this.unavailableReason}</p>`
-                      : nothing}
-                  </form>`}
-
-              <div role="status" aria-live="polite" class="text-xs text-amber-200">
-                ${this.message ?? nothing}
-              </div>
-              ${this.error
-                ? html`<p role="alert" class="text-xs text-red-300">${this.error}</p>`
-                : nothing}
-
-              <div class="border-t border-white/15 pt-3 space-y-2">
-                <h2 class="font-semibold text-amber-200">Diplomatic actions</h2>
-                <p class="text-xs text-slate-400">
-                  Further actions require authenticated game command contracts.
+        ${
+          this.expanded
+            ? html`<div
+                id="national-diplomacy-content"
+                class="px-4 pb-4 space-y-4 max-h-[min(65vh,32rem)] overflow-y-auto text-sm"
+              >
+                <p class="text-xs text-slate-300">
+                  Empire membership and leadership are verified from game state.
+                  Requests do not become successful until the game confirms
+                  them.
                 </p>
-                ${["Invite nation", "Non-aggression pact", "Mutual defense pact", "Offer peace"].map(
-                  (label) => html`<button
-                    type="button"
-                    disabled
-                    aria-label="${label} (not yet available)"
-                    title="Awaiting authenticated engine command"
-                    class="mr-2 mb-2 rounded-md border border-white/20 px-3 py-1.5 text-xs text-slate-500 cursor-not-allowed"
-                  >${label} · Unavailable</button>`,
-                )}
-              </div>
-            </div>`
-          : nothing}
+                ${
+                  politics
+                    ? html`<div class="space-y-2">
+                        <h2 class="font-semibold text-amber-200">Empires</h2>
+                        ${
+                          politics.empires.length === 0
+                            ? html`<p class="text-slate-300">
+                                No empires founded yet.
+                              </p>`
+                            : politics.empires.map(
+                                (empire) =>
+                                  html`<article
+                                    class="rounded-lg border border-white/15 p-3 space-y-1"
+                                  >
+                                    <h3 class="font-semibold break-words">
+                                      ${empire.id}
+                                    </h3>
+                                    <p>
+                                      Leader:
+                                      ${this.playerName(empire.leaderId)}
+                                    </p>
+                                    <p class="text-xs text-slate-300">
+                                      Members (${empire.memberIds.length}):
+                                      ${empire.memberIds.map((id) => this.playerName(id)).join(", ")}
+                                    </p>
+                                  </article>`,
+                              )
+                        }
+                      </div>`
+                    : html`<p class="text-amber-200 text-xs" role="status">
+                        Verified political state has not arrived from the game.
+                        Leadership and membership are not yet available.
+                      </p>`
+                }
+                ${
+                  ownEmpire
+                    ? html`<p
+                        class="rounded-lg bg-emerald-900/35 p-3 text-emerald-200"
+                      >
+                        Your nation belongs to <strong>${ownEmpire.id}</strong>.
+                        ${
+                          ownEmpire.leaderId === game.myPlayer()?.id()
+                            ? "You are the emperor."
+                            : `Emperor: ${this.playerName(ownEmpire.leaderId)}.`
+                        }
+                      </p>`
+                    : html`<form
+                        class="space-y-2"
+                        @submit=${this.submitFounding}
+                      >
+                        <label
+                          for="national-empire-id"
+                          class="block font-semibold"
+                        >
+                          Found an empire
+                        </label>
+                        <input
+                          id="national-empire-id"
+                          name="empireId"
+                          type="text"
+                          required
+                          minlength="1"
+                          maxlength="64"
+                          pattern="[A-Za-z0-9_-]+"
+                          autocomplete="off"
+                          autocapitalize="off"
+                          spellcheck="false"
+                          class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-white focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50"
+                          placeholder="e.g. Atlas_Empire"
+                          aria-describedby="national-id-help"
+                          .value=${this.draftEmpireId}
+                          @input=${(e: Event) =>
+                            (this.draftEmpireId = (
+                              e.target as HTMLInputElement
+                            ).value)}
+                          ?disabled=${!canFound}
+                        />
+                        <p id="national-id-help" class="text-xs text-slate-400">
+                          1–64 letters, digits, underscores or hyphens.
+                        </p>
+                        <button
+                          type="submit"
+                          class="rounded-lg bg-amber-400 px-4 py-2 font-bold text-slate-950 hover:bg-amber-300 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
+                          ?disabled=${!canFound || !this.eventBus}
+                        >
+                          ${this.pendingEmpireId ? "Founding requested…" : "Found Empire"}
+                        </button>
+                        ${
+                          this.unavailableReason
+                            ? html`<p class="text-xs text-slate-300">
+                                ${this.unavailableReason}
+                              </p>`
+                            : nothing
+                        }
+                      </form>`
+                }
+
+                <div
+                  role="status"
+                  aria-live="polite"
+                  class="text-xs text-amber-200"
+                >
+                  ${this.message ?? nothing}
+                </div>
+                ${
+                  this.error
+                    ? html`<p role="alert" class="text-xs text-red-300">
+                        ${this.error}
+                      </p>`
+                    : nothing
+                }
+
+                <div class="border-t border-white/15 pt-3 space-y-2">
+                  <h2 class="font-semibold text-amber-200">
+                    Diplomatic actions
+                  </h2>
+                  <p class="text-xs text-slate-400">
+                    Further actions require authenticated game command
+                    contracts.
+                  </p>
+                  ${[
+                    "Invite nation",
+                    "Non-aggression pact",
+                    "Mutual defense pact",
+                    "Offer peace",
+                  ].map(
+                    (label) =>
+                      html`<button
+                        type="button"
+                        disabled
+                        aria-label="${label} (not yet available)"
+                        title="Awaiting authenticated engine command"
+                        class="mr-2 mb-2 rounded-md border border-white/20 px-3 py-1.5 text-xs text-slate-500 cursor-not-allowed"
+                      >
+                        ${label} · Unavailable
+                      </button>`,
+                  )}
+                </div>
+              </div>`
+            : nothing
+        }
       </section>
     `;
   }
