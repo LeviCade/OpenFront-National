@@ -83,6 +83,12 @@ import {
   type NationalPublicPoliticalView,
   type NationalUngovernableWarning,
 } from "../national/NationalRuntime";
+import type { NationalSightMemory } from "../national/observation/NationalObservation";
+import {
+  NationalGovernanceState,
+  NationalGovernanceSnapshotSchema,
+  type NationalFoundEmpireResult,
+} from "../national/politics/NationalGovernanceState";
 import {
   NationalWarStateService,
   NationalWarStateSnapshotSchema,
@@ -96,12 +102,6 @@ import {
   type NationalConflictPoliticsPort,
 } from "../national/politics/PoliticalAuthorityAdapter";
 import type { LastSovereignResult } from "../national/politics/sovereignty";
-import {
-  NationalGovernanceState,
-  NationalGovernanceSnapshotSchema,
-  type NationalFoundEmpireResult,
-} from "../national/politics/NationalGovernanceState";
-import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathFinder } from "../pathfinding/types";
@@ -778,15 +778,18 @@ export class GameImpl implements Game {
       ) {
         throw new Error("NATIONAL levy: attack not formally authorized");
       }
-      const expectedDonors = this.nationalMdaAllies(attack.defenderId)
-        .filter((id) => id !== attack.attackerId);
+      const expectedDonors = this.nationalMdaAllies(attack.defenderId).filter(
+        (id) => id !== attack.attackerId,
+      );
       const suppliedDonors = attack.eligible.map((e) => e.source.nationId);
       if (
         suppliedDonors.length !== expectedDonors.length ||
         new Set(suppliedDonors).size !== suppliedDonors.length ||
         expectedDonors.some((id) => !suppliedDonors.includes(id))
       ) {
-        throw new Error("NATIONAL levy: missing or forged MDA contributor roster");
+        throw new Error(
+          "NATIONAL levy: missing or forged MDA contributor roster",
+        );
       }
       for (const entry of attack.eligible) {
         const id = entry.source.nationId;
@@ -891,10 +894,12 @@ export class GameImpl implements Game {
       () => {
         if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
           return "actor-inactive";
-        if (!/^[A-Za-z0-9_-]{1,64}$/.test(empireId))
-          return "invalid-empire-id";
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(empireId)) return "invalid-empire-id";
         try {
-          this.performNationalCommand(actor, { kind: "found-empire", empireId });
+          this.performNationalCommand(actor, {
+            kind: "found-empire",
+            empireId,
+          });
           return "accepted";
         } catch {
           // Never serialize exception text, engine internals or other
@@ -908,15 +913,20 @@ export class GameImpl implements Game {
   nationalCommandResults(
     observer: Player,
   ): readonly NationalFoundEmpireResult[] {
-    if (this._nationalGovernance === null ||
-        this._players.get(observer.id()) !== observer ||
-        observer.type() !== PlayerType.Human)
+    if (
+      this._nationalGovernance === null ||
+      this._players.get(observer.id()) !== observer ||
+      observer.type() !== PlayerType.Human
+    )
       return [];
     return this._nationalGovernance.resultsFor(observer.id());
   }
 
   /** Same live reciprocal empire membership check used by E3 sight. */
-  private hasNationalSharedSight(observerId: PlayerID, sourceId: PlayerID): boolean {
+  private hasNationalSharedSight(
+    observerId: PlayerID,
+    sourceId: PlayerID,
+  ): boolean {
     const auth = this.nationalPoliticalAuthority();
     const empire = auth?.empireOf(observerId) ?? null;
     return (
@@ -934,9 +944,12 @@ export class GameImpl implements Game {
 
   private isNationalHuman(observerId: PlayerID): boolean {
     const player = this._players.get(observerId);
-    return player !== undefined &&
+    return (
+      player !== undefined &&
       player.type() === PlayerType.Human &&
-      player.hasSpawned() && player.isAlive();
+      player.hasSpawned() &&
+      player.isAlive()
+    );
   }
 
   /** Called at every political tick, transition and snapshot restore. */
@@ -960,7 +973,9 @@ export class GameImpl implements Game {
     data: NationalSightMemory,
   ): void {
     if (!this.isNationalHuman(observerId) || this._nationalGovernance === null)
-      throw new Error("NATIONAL sight: unknown or unauthorized human principal");
+      throw new Error(
+        "NATIONAL sight: unknown or unauthorized human principal",
+      );
     this.synchronizeNationalState();
     this._nationalGovernance.writeMemory(
       observerId,

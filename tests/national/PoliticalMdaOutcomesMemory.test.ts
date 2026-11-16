@@ -15,13 +15,18 @@ const humans = [
   new PlayerInfo("Gamma", PlayerType.Human, "r5-gamma-client", "r5-gamma"),
   new PlayerInfo("Delta", PlayerType.Human, "r5-delta-client", "r5-delta"),
 ];
-const A = "r5-alpha", B = "r5-beta", C = "r5-gamma", D = "r5-delta";
+const A = "r5-alpha",
+  B = "r5-beta",
+  C = "r5-gamma",
+  D = "r5-delta";
 
 async function gameWithPlayers(count = 4, nationalMode = true): Promise<Game> {
   const game = await setup("plains", { nationalMode }, humans.slice(0, count));
   const tiles = [
-    game.map().ref(30, 30), game.map().ref(70, 70),
-    game.map().ref(30, 70), game.map().ref(70, 30),
+    game.map().ref(30, 30),
+    game.map().ref(70, 70),
+    game.map().ref(30, 70),
+    game.map().ref(70, 30),
   ];
   for (let i = 0; i < count; i++)
     game.addExecution(new SpawnExecution("r5-political", humans[i], tiles[i]));
@@ -32,46 +37,75 @@ async function gameWithPlayers(count = 4, nationalMode = true): Promise<Game> {
   return game;
 }
 
-function treaty(game: Game, pactId: string, founder: string, ids: string[], expulsion: "leader" | "forbidden" = "leader"): void {
+function treaty(
+  game: Game,
+  pactId: string,
+  founder: string,
+  ids: string[],
+  expulsion: "leader" | "forbidden" = "leader",
+): void {
   game.performNationalCommand(game.player(founder), {
-    kind: "found-pact", pactId, name: pactId, pactKind: "MDA",
+    kind: "found-pact",
+    pactId,
+    name: pactId,
+    pactKind: "MDA",
     terms: { admission: "leader", expulsion },
   });
   for (const id of ids) {
     game.performNationalCommand(game.player(founder), {
-      kind: "invite-pact", pactId, candidateId: id,
+      kind: "invite-pact",
+      pactId,
+      candidateId: id,
     });
     game.performNationalCommand(game.player(id), {
-      kind: "accept-pact", pactId,
+      kind: "accept-pact",
+      pactId,
     });
   }
 }
 
 function eliminate(game: Game, id: string): void {
-  for (const tile of [...game.player(id).tiles()]) game.player(id).relinquish(tile);
+  for (const tile of [...game.player(id).tiles()])
+    game.player(id).relinquish(tile);
   game.executeNextTick();
 }
 
-function joinEmpire(game: Game, founder: string, candidate: string, empireId: string): void {
-  game.performNationalCommand(game.player(founder), { kind: "found-empire", empireId });
+function joinEmpire(
+  game: Game,
+  founder: string,
+  candidate: string,
+  empireId: string,
+): void {
   game.performNationalCommand(game.player(founder), {
-    kind: "offer-empire", empireId, candidateId: candidate,
+    kind: "found-empire",
+    empireId,
+  });
+  game.performNationalCommand(game.player(founder), {
+    kind: "offer-empire",
+    empireId,
+    candidateId: candidate,
   });
   game.performNationalCommand(game.player(candidate), {
-    kind: "accept-empire", empireId, candidateId: candidate,
+    kind: "accept-empire",
+    empireId,
+    candidateId: candidate,
   });
 }
 
 function memory(observerId: string, tick: number, sourceNationId?: string) {
   return {
     observerId,
-    assets: [{
-      id: "observed-hostile-unit",
-      ownerId: C,
-      kind: "army" as const,
-      x: 27, y: 31, lastSeenTick: tick,
-      ...(sourceNationId === undefined ? {} : { sourceNationId }),
-    }],
+    assets: [
+      {
+        id: "observed-hostile-unit",
+        ownerId: C,
+        kind: "army" as const,
+        x: 27,
+        y: 31,
+        lastSeenTick: tick,
+        ...(sourceNationId === undefined ? {} : { sourceNationId }),
+      },
+    ],
   };
 }
 
@@ -89,27 +123,37 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
     expect([...again]).toEqual([...bytes]);
     expect(restored.nationalMdaAllies(A)).toEqual([B, D, C]);
     expect(restored.nationalMdaAllies(C)).toEqual([A, B, D]);
-    expect(snapshotGameData(restored).game).toEqual(snapshotGameData(game).game);
+    expect(snapshotGameData(restored).game).toEqual(
+      snapshotGameData(game).game,
+    );
   });
 
   it("Betray and leader constitutional expulsion alter only current treaty eligibility", async () => {
     const game = await gameWithPlayers();
     treaty(game, "pact-1", A, [B, C]);
     treaty(game, "pact-2", A, [C, D]);
-    expect(() => game.performNationalCommand(game.player(D), {
-      kind: "expel-pact", pactId: "pact-1", memberId: B,
-    })).toThrow();
+    expect(() =>
+      game.performNationalCommand(game.player(D), {
+        kind: "expel-pact",
+        pactId: "pact-1",
+        memberId: B,
+      }),
+    ).toThrow();
     expect(game.nationalMdaAllies(A)).toEqual([B, D, C]);
     game.performNationalCommand(game.player(C), {
-      kind: "betray-pact", pactId: "pact-1",
+      kind: "betray-pact",
+      pactId: "pact-1",
     });
     expect(game.nationalMdaAllies(A)).toEqual([B, D, C]);
     game.performNationalCommand(game.player(C), {
-      kind: "betray-pact", pactId: "pact-2",
+      kind: "betray-pact",
+      pactId: "pact-2",
     });
     expect(game.nationalMdaAllies(A)).toEqual([B, D]);
     game.performNationalCommand(game.player(A), {
-      kind: "expel-pact", pactId: "pact-1", memberId: B,
+      kind: "expel-pact",
+      pactId: "pact-1",
+      memberId: B,
     });
     expect(game.nationalMdaAllies(A)).toEqual([D]);
     const { restored } = await roundTrip(game, "plains");
@@ -139,19 +183,32 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
     game.player(B).setTroops(500_000);
     game.player(C).setTroops(500_000);
     game.performNationalWarCommand(game.player(D), {
-      kind: "declare-national", warId: "r5-defense-war",
-      aggressorId: D, targetId: A,
+      kind: "declare-national",
+      warId: "r5-defense-war",
+      aggressorId: D,
+      targetId: A,
     });
-    const request = (eligible: { source: NonNullable<ReturnType<Game["nationalLevySource"]>>; troopCapacity: number; maximumFraction: number; protectedCapacityFraction: number }[]) => ({
+    const request = (
+      eligible: {
+        source: NonNullable<ReturnType<Game["nationalLevySource"]>>;
+        troopCapacity: number;
+        maximumFraction: number;
+        protectedCapacityFraction: number;
+      }[],
+    ) => ({
       attackId: "r5-accepted-attack",
       confirmedAccepted: true as const,
       campaignId: "r5-campaign",
-      attackerId: D, defenderId: A, attackingTroops: 1_000, eligible,
+      attackerId: D,
+      defenderId: A,
+      attackingTroops: 1_000,
+      eligible,
     });
     const beforeB = game.player(B).troops();
     const beforeC = game.player(C).troops();
-    expect(() => game.applyNationalDefenseLevy([request([])]))
-      .toThrow(/missing or forged MDA contributor roster/);
+    expect(() => game.applyNationalDefenseLevy([request([])])).toThrow(
+      /missing or forged MDA contributor roster/,
+    );
     expect(game.player(B).troops()).toBe(beforeB);
     expect(game.player(C).troops()).toBe(beforeC);
     expect(game.nationalWarState()?.levy.processed).toEqual([]);
@@ -165,8 +222,9 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
     const [funded] = game.applyNationalDefenseLevy([request(eligible)]);
     expect(funded.application).toBe("applied");
     expect(funded.intercepted).toBe(1_000);
-    expect(beforeB + beforeC - game.player(B).troops() - game.player(C).troops())
-      .toBe(1_000);
+    expect(
+      beforeB + beforeC - game.player(B).troops() - game.player(C).troops(),
+    ).toBe(1_000);
     const { restored } = await roundTrip(game, "plains");
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
     expect(restored.player(B).troops()).toBe(game.player(B).troops());
@@ -174,7 +232,11 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
   });
 
   it("unspawned and legacy defenders fail closed; no client-chosen eligibility", async () => {
-    const waiting = await setup("plains", { nationalMode: true }, humans.slice(0, 2));
+    const waiting = await setup(
+      "plains",
+      { nationalMode: true },
+      humans.slice(0, 2),
+    );
     expect(waiting.nationalMdaAllies(A)).toEqual([]);
     const legacy = await gameWithPlayers(2, false);
     expect(legacy.nationalMdaAllies(A)).toEqual([]);
@@ -185,29 +247,46 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
 describe("R5 real Found Empire outcome journal, principal scope and replay", () => {
   it("registered queued execution emits accepted then sanitized rejection, visible only to actor", async () => {
     const game = await gameWithPlayers(3);
-    game.addExecution(new NationalFoundEmpireExecution(
-      game.player(A), "first-empire", null, "request-A-1",
-    ));
+    game.addExecution(
+      new NationalFoundEmpireExecution(
+        game.player(A),
+        "first-empire",
+        null,
+        "request-A-1",
+      ),
+    );
     game.executeNextTick();
     game.executeNextTick();
-    expect(game.nationalPoliticalAuthority()?.emperorOf("first-empire")).toBe(A);
+    expect(game.nationalPoliticalAuthority()?.emperorOf("first-empire")).toBe(
+      A,
+    );
     const one = game.nationalCommandResults(game.player(A));
     expect(one).toHaveLength(1);
     expect(one[0]).toMatchObject({
-      actorId: A, empireId: "first-empire",
-      requestId: "request-A-1", accepted: true, reason: "accepted",
+      actorId: A,
+      empireId: "first-empire",
+      requestId: "request-A-1",
+      accepted: true,
+      reason: "accepted",
     });
     expect(game.nationalCommandResults(game.player(B))).toEqual([]);
-    game.addExecution(new NationalFoundEmpireExecution(
-      game.player(A), "second-empire", null, "request-A-2",
-    ));
+    game.addExecution(
+      new NationalFoundEmpireExecution(
+        game.player(A),
+        "second-empire",
+        null,
+        "request-A-2",
+      ),
+    );
     game.executeNextTick();
     game.executeNextTick();
     const second = game.nationalCommandResults(game.player(A));
     expect(second).toHaveLength(2);
     expect(second[0].sequence).toBeLessThan(second[1].sequence);
     expect(second[1]).toMatchObject({
-      accepted: false, reason: "political-rule", requestId: "request-A-2",
+      accepted: false,
+      reason: "political-rule",
+      requestId: "request-A-2",
     });
     expect(JSON.stringify(second)).not.toContain("Error:");
     expect(game.nationalPublicPoliticalView()?.empires).toEqual([
@@ -221,35 +300,74 @@ describe("R5 real Found Empire outcome journal, principal scope and replay", () 
 
   it("duplicate request ID is idempotent even after snapshot; collision with another principal rejects", async () => {
     const game = await gameWithPlayers(2);
-    const first = game.performNationalFoundEmpireWithOutcome(game.player(A), "a-empire", "same-request");
+    const first = game.performNationalFoundEmpireWithOutcome(
+      game.player(A),
+      "a-empire",
+      "same-request",
+    );
     expect(first.accepted).toBe(true);
-    const again = game.performNationalFoundEmpireWithOutcome(game.player(A), "a-empire", "same-request");
+    const again = game.performNationalFoundEmpireWithOutcome(
+      game.player(A),
+      "a-empire",
+      "same-request",
+    );
     expect(again).toEqual(first);
     expect(game.nationalCommandResults(game.player(A))).toHaveLength(1);
-    expect(() => game.performNationalFoundEmpireWithOutcome(game.player(B), "b-empire", "same-request"))
-      .toThrow(/foreign request ID/);
+    expect(() =>
+      game.performNationalFoundEmpireWithOutcome(
+        game.player(B),
+        "b-empire",
+        "same-request",
+      ),
+    ).toThrow(/foreign request ID/);
     expect(game.nationalCommandResults(game.player(B))).toEqual([]);
     const { restored } = await roundTrip(game, "plains");
-    expect(restored.performNationalFoundEmpireWithOutcome(restored.player(A), "a-empire", "same-request"))
-      .toEqual(first);
+    expect(
+      restored.performNationalFoundEmpireWithOutcome(
+        restored.player(A),
+        "a-empire",
+        "same-request",
+      ),
+    ).toEqual(first);
     expect(restored.nationalCommandResults(restored.player(A))).toHaveLength(1);
     expect(restored.nationalPublicPoliticalView()?.empires).toHaveLength(1);
   });
 
   it("genuine pre-spawn and invalid empire IDs produce sanitized rejection; forged Player cannot get a journal entry", async () => {
-    const game = await setup("plains", { nationalMode: true }, humans.slice(0, 2));
-    const inactive = game.performNationalFoundEmpireWithOutcome(game.player(A), "waiting", "pre-spawn");
+    const game = await setup(
+      "plains",
+      { nationalMode: true },
+      humans.slice(0, 2),
+    );
+    const inactive = game.performNationalFoundEmpireWithOutcome(
+      game.player(A),
+      "waiting",
+      "pre-spawn",
+    );
     expect(inactive).toMatchObject({
-      accepted: false, reason: "actor-inactive", actorId: A,
+      accepted: false,
+      reason: "actor-inactive",
+      actorId: A,
     });
     expect(game.nationalPublicPoliticalView()?.empires).toEqual([]);
     const live = await gameWithPlayers(2);
-    const bad = live.performNationalFoundEmpireWithOutcome(live.player(A), "forbidden name", "bad-id");
+    const bad = live.performNationalFoundEmpireWithOutcome(
+      live.player(A),
+      "forbidden name",
+      "bad-id",
+    );
     expect(bad).toMatchObject({ accepted: false, reason: "invalid-empire-id" });
-    expect(() => live.performNationalFoundEmpireWithOutcome(game.player(A), "forged", "forged-actor"))
-      .toThrow(/forged actor/);
+    expect(() =>
+      live.performNationalFoundEmpireWithOutcome(
+        game.player(A),
+        "forged",
+        "forged-actor",
+      ),
+    ).toThrow(/forged actor/);
     const oversized = live.performNationalFoundEmpireWithOutcome(
-      live.player(A), "X".repeat(1000), "invalid-long-id",
+      live.player(A),
+      "X".repeat(1000),
+      "invalid-long-id",
     );
     expect(oversized).toMatchObject({
       accepted: false,
@@ -260,15 +378,21 @@ describe("R5 real Found Empire outcome journal, principal scope and replay", () 
     expect(live.nationalCommandResults(live.player(B))).toEqual([]);
     const legacy = await gameWithPlayers(2, false);
     expect(legacy.nationalCommandResults(legacy.player(A))).toEqual([]);
-    expect(() => legacy.performNationalFoundEmpireWithOutcome(legacy.player(A), "legacy"))
-      .toThrow(/mode not enabled/);
+    expect(() =>
+      legacy.performNationalFoundEmpireWithOutcome(legacy.player(A), "legacy"),
+    ).toThrow(/mode not enabled/);
   });
 
   it("pending registered Found Empire execution restores before acceptance with the same request ID and journal sequence", async () => {
     const game = await gameWithPlayers(2);
-    game.addExecution(new NationalFoundEmpireExecution(
-      game.player(A), "queued-r5", null, "durable-queued-request",
-    ));
+    game.addExecution(
+      new NationalFoundEmpireExecution(
+        game.player(A),
+        "queued-r5",
+        null,
+        "durable-queued-request",
+      ),
+    );
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
     expect(restored.nationalCommandResults(restored.player(A))).toEqual([]);
@@ -279,14 +403,21 @@ describe("R5 real Found Empire outcome journal, principal scope and replay", () 
     const expected = game.nationalCommandResults(game.player(A));
     expect(expected).toHaveLength(1);
     expect(expected[0]).toMatchObject({
-      accepted: true, actorId: A,
+      accepted: true,
+      actorId: A,
       requestId: "durable-queued-request",
       empireId: "queued-r5",
     });
-    expect(restored.nationalCommandResults(restored.player(A))).toEqual(expected);
-    expect(snapshotGameData(restored).game).toEqual(snapshotGameData(game).game);
+    expect(restored.nationalCommandResults(restored.player(A))).toEqual(
+      expected,
+    );
+    expect(snapshotGameData(restored).game).toEqual(
+      snapshotGameData(game).game,
+    );
     const replay = restored.performNationalFoundEmpireWithOutcome(
-      restored.player(A), "queued-r5", "durable-queued-request",
+      restored.player(A),
+      "queued-r5",
+      "durable-queued-request",
     );
     expect(replay).toEqual(expected[0]);
     expect(restored.nationalCommandResults(restored.player(A))).toHaveLength(1);
@@ -296,7 +427,9 @@ describe("R5 real Found Empire outcome journal, principal scope and replay", () 
     const game = await gameWithPlayers(2);
     for (let i = 0; i < 132; i++) {
       const result = game.performNationalFoundEmpireWithOutcome(
-        game.player(A), "bad name", "invalid-" + i,
+        game.player(A),
+        "bad name",
+        "invalid-" + i,
       );
       expect(result.accepted).toBe(false);
     }
@@ -306,7 +439,9 @@ describe("R5 real Found Empire outcome journal, principal scope and replay", () 
     expect(results[127].sequence).toBe(131);
     expect(game.nationalCommandResults(game.player(B))).toEqual([]);
     const { restored } = await roundTrip(game, "plains");
-    expect(restored.nationalCommandResults(restored.player(A))).toEqual(results);
+    expect(restored.nationalCommandResults(restored.player(A))).toEqual(
+      results,
+    );
   });
 });
 
@@ -318,9 +453,15 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
     const read = game.readNationalObserverMemory(A)!;
     expect(read).toEqual(item);
     expect(game.readNationalObserverMemory(B)).toBeNull();
-    expect(() => game.writeNationalObserverMemory(B, item)).toThrow(/wrong observer principal/);
-    expect(() => game.writeNationalObserverMemory("invented", memory("invented", game.ticks())))
-      .toThrow(/unknown or unauthorized/);
+    expect(() => game.writeNationalObserverMemory(B, item)).toThrow(
+      /wrong observer principal/,
+    );
+    expect(() =>
+      game.writeNationalObserverMemory(
+        "invented",
+        memory("invented", game.ticks()),
+      ),
+    ).toThrow(/unknown or unauthorized/);
     (read.assets[0] as { x: number }).x = 99999;
     expect(game.readNationalObserverMemory(A)?.assets[0].x).toBe(27);
     expect(game.readNationalObserverMemory(B)).toBeNull();
@@ -334,8 +475,9 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
     const game = await gameWithPlayers(3);
     const prior = memory(A, game.ticks());
     game.writeNationalObserverMemory(A, prior);
-    expect(() => game.writeNationalObserverMemory(A, memory(A, game.ticks(), B)))
-      .toThrow(/no current empire intelligence grant/);
+    expect(() =>
+      game.writeNationalObserverMemory(A, memory(A, game.ticks(), B)),
+    ).toThrow(/no current empire intelligence grant/);
     joinEmpire(game, A, B, "sight-empire");
     const shared = memory(A, game.ticks(), B);
     game.writeNationalObserverMemory(A, shared);
@@ -352,7 +494,9 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
       g.writeNationalObserverMemory(A, prior);
       expect(g.readNationalObserverMemory(A)).toEqual(prior);
     }
-    expect(snapshotGameData(restored).game).toEqual(snapshotGameData(game).game);
+    expect(snapshotGameData(restored).game).toEqual(
+      snapshotGameData(game).game,
+    );
   });
 
   it("membership revokes inherited sight immediately on political transition, not just a future worker packet", async () => {
@@ -362,7 +506,9 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
     expect(game.readNationalObserverMemory(A)?.assets).toHaveLength(1);
     // A transfer of crown does not remove membership or shared intelligence.
     game.performNationalCommand(game.player(A), {
-      kind: "transfer-crown", empireId: "current-sight-empire", successorId: B,
+      kind: "transfer-crown",
+      empireId: "current-sight-empire",
+      successorId: B,
     });
     expect(game.readNationalObserverMemory(A)?.assets).toHaveLength(1);
     // The real Game revokes membership when the new emperor is eliminated.
@@ -387,12 +533,15 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
     const game = await gameWithPlayers(3);
     const original = memory(A, game.ticks());
     game.writeNationalObserverMemory(A, original);
-    expect(() => game.writeNationalObserverMemory(A, memory(A, game.ticks() + 1)))
-      .toThrow(/duplicate or future observation/);
-    expect(() => game.writeNationalObserverMemory(A, {
-      observerId: A,
-      assets: [original.assets[0], original.assets[0]],
-    })).toThrow(/duplicate or future observation/);
+    expect(() =>
+      game.writeNationalObserverMemory(A, memory(A, game.ticks() + 1)),
+    ).toThrow(/duplicate or future observation/);
+    expect(() =>
+      game.writeNationalObserverMemory(A, {
+        observerId: A,
+        assets: [original.assets[0], original.assets[0]],
+      }),
+    ).toThrow(/duplicate or future observation/);
     expect(game.readNationalObserverMemory(A)).toEqual(original);
     const { restored } = await roundTrip(game, "plains");
     expect(restored.readNationalObserverMemory(A)).toEqual(original);

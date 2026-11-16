@@ -57,6 +57,8 @@ import type {
   NationalPublicPoliticalView,
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
+import type { NationalSightMemory } from "../national/observation/NationalObservation";
+import type { NationalFoundEmpireResult } from "../national/politics/NationalGovernanceState";
 import type {
   NationalWarAuthority,
   NationalWarCommand,
@@ -67,10 +69,6 @@ import type {
   NationalConflictPoliticsPort,
 } from "../national/politics/PoliticalAuthorityAdapter";
 import type { LastSovereignResult } from "../national/politics/sovereignty";
-import type {
-  NationalFoundEmpireResult,
-} from "../national/politics/NationalGovernanceState";
-import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { PathFinder } from "../pathfinding/types";
 import type { ExecRecord, SnapshotWriter } from "../snapshot/SnapshotContext";
@@ -629,7 +627,9 @@ export interface Game extends GameLike {
     requestId?: string | null,
   ): NationalFoundEmpireResult;
   /** Detached per-actor journal. Never enumerate results for other players. */
-  nationalCommandResults(observer: Player): readonly NationalFoundEmpireResult[];
+  nationalCommandResults(
+    observer: Player,
+  ): readonly NationalFoundEmpireResult[];
   /** E3 stores each human observer's verified, principal-bound sightings. */
   readNationalObserverMemory(observerId: PlayerID): NationalSightMemory | null;
   writeNationalObserverMemory(

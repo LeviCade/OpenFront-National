@@ -80,8 +80,7 @@ export class NationalGovernanceState {
     perform: () => FoundEmpireReason,
   ): NationalFoundEmpireResult {
     const requestId =
-      suppliedRequestId ??
-      `auto:${gameTick}:${this.nextSequence}`;
+      suppliedRequestId ?? `auto:${gameTick}:${this.nextSequence}`;
     identity.parse(requestId);
     identity.parse(actorId);
     if (!Number.isSafeInteger(gameTick) || gameTick < 0)
@@ -227,7 +226,8 @@ export class NationalGovernanceState {
       saved.results.some(
         (entry) =>
           !saved.receipts.some(
-            (r) => r.requestId === entry.requestId &&
+            (r) =>
+              r.requestId === entry.requestId &&
               JSON.stringify(r) === JSON.stringify(entry),
           ),
       )
@@ -235,7 +235,8 @@ export class NationalGovernanceState {
       throw new Error("NATIONAL journal: inconsistent results");
     const seen = new Set<string>();
     for (const row of saved.memories) {
-      if (seen.has(row.observerId)) throw new Error("NATIONAL sight: duplicate principal");
+      if (seen.has(row.observerId))
+        throw new Error("NATIONAL sight: duplicate principal");
       seen.add(row.observerId);
       const assetIds = new Set<string>();
       for (const item of row.assets) {

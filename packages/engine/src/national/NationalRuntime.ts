@@ -314,7 +314,7 @@ export class NationalRuntime {
         }
       }
     }
-    return [...result].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+    return [...result].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   }
 
   /** Copy-only, opt-in NATIONAL public facts for E3/E4's trusted UI bridge. */
