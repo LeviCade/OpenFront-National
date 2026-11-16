@@ -1,7 +1,8 @@
 # 👑 OPENFRONT NATIONAL — ENGINEER #1, ROUND THREE: REAL POLITICS IN THE ENGINE
 
 **Repository:** `LeviCade/OpenFront-National`
-**Audited source baseline:** `9de2e923532c307c144375ff0172b7e6261750ed`\n**Branch starting SHA:** retrieve and record the CURRENT HEAD of `stage3/integration-20261115` AFTER `docs/20-stage3-round3-integration.md` is present; do not branch from the older source baseline.
+**Audited source baseline:** `9de2e923532c307c144375ff0172b7e6261750ed`
+**Branch starting SHA:** retrieve and record the CURRENT HEAD of `stage3/integration-20261115` AFTER `docs/20-stage3-round3-integration.md` is present; do not branch from the older source baseline.
 **Branch to create:** `stage3/e1-round3-live-sovereignty-20261115`
 **PR target:** `stage3/integration-20261115`
 **Issue:** #9; handoff: `docs/20-stage3-round3-integration.md`
