@@ -214,6 +214,38 @@ describe("E5 Round Five independent real-game WAR + MDA acceptance", () => {
     expect(donor.troops()).toBe(90_000);
   });
 
+  it("LEVY-06 a real accepted AttackExecution rolls back attacker and donors on injected CAS failure", async () => {
+    const game = await live();
+    border(game);
+    mda(game);
+    war(game, "r5-atomic-attack");
+    game.player(A).setTroops(100_000);
+    game.player(B).setTroops(100_000);
+    game.player(C).setTroops(500_000);
+    const before = [A, B, C].map((id) => game.player(id).troops());
+
+    const original = game.applyNationalDefenseLevy.bind(game);
+    let reachedRealAdapter = 0;
+    Object.assign(game, {
+      applyNationalDefenseLevy: () => {
+        reachedRealAdapter++;
+        throw new Error("QA injected second-contributor CAS failure");
+      },
+    });
+    try {
+      const attack = new AttackExecution(20_000, game.player(A), B);
+      attack.init(game, game.ticks());
+      expect(reachedRealAdapter).toBe(1);
+      expect(attack.isActive()).toBe(false);
+      expect(game.player(A).outgoingAttacks()).toHaveLength(0);
+      assertResources(game, before, [0, 0, 0]);
+    } finally {
+      Object.assign(game, { applyNationalDefenseLevy: original });
+    }
+    expect(game.nationalWarState()?.levy.processed).toEqual([]);
+    expect(game.nationalWarState()?.levy.allowances).toEqual([]);
+  });
+
   it("WAR-04 independent peace layers and source snapshot hash survive restore", async () => {
     const game = await live();
     game.performNationalCommand(game.player(A), { kind: "found-empire", empireId: "r5_empire" });
