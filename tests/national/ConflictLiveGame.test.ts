@@ -78,6 +78,7 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
     expect(attack.isActive()).toBe(false);
     expect(north.troops()).toBe(before);
     expect(south.troops()).toBe(southBefore);
+    expect(south.hasEmbargoAgainst(north)).toBe(false);
     expect(north.outgoingAttacks()).toHaveLength(0);
   });
 
