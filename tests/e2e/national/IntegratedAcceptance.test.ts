@@ -9,8 +9,8 @@ import { EngineConfig } from "@openfront/engine/configuration/EngineConfig";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { WinCheckExecution } from "@openfront/engine/execution/WinCheckExecution";
-import { GameRunner } from "@openfront/engine/GameRunner";
 import type { Game } from "@openfront/engine/game/Game";
+import { GameRunner } from "@openfront/engine/GameRunner";
 import { snapshotGame } from "@openfront/engine/snapshot/GameSnapshot";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
@@ -85,17 +85,19 @@ describe("NATIONAL independently integrated acceptance (actual Game + GameRunner
     expect(game.config().gameConfig().gameMode).toBe(GameMode.FFA);
     expect(game.nationalPoliticalAuthority()).not.toBeNull();
     expect(game.nationalPoliticalAuthority()?.alive(north.id)).toBe(true);
-    expect(() =>
-      new EngineConfig(
-        { ...game.config().gameConfig(), gameMode: GameMode.Team },
-        false,
-      ),
+    expect(
+      () =>
+        new EngineConfig(
+          { ...game.config().gameConfig(), gameMode: GameMode.Team },
+          false,
+        ),
     ).toThrow(/Solo Free For All/);
-    expect(() =>
-      new EngineConfig(
-        { ...game.config().gameConfig(), gameType: GameType.Public },
-        false,
-      ),
+    expect(
+      () =>
+        new EngineConfig(
+          { ...game.config().gameConfig(), gameType: GameType.Public },
+          false,
+        ),
     ).toThrow(/Solo Free For All/);
   });
 
@@ -129,8 +131,9 @@ describe("NATIONAL independently integrated acceptance (actual Game + GameRunner
       const checkpoint = await roundTrip(game, "plains");
       expect(checkpoint.again).toEqual(checkpoint.bytes);
       expect(checkpoint.bytes).toEqual(before);
-      expect(checkpoint.restored.nationalPoliticalAuthority()?.emperorOf(empireId))
-        .toBe(north.id);
+      expect(
+        checkpoint.restored.nationalPoliticalAuthority()?.emperorOf(empireId),
+      ).toBe(north.id);
 
       const restored = checkpoint.restored;
       const replay = new GameRunner(
@@ -179,7 +182,10 @@ describe("NATIONAL independently integrated acceptance (actual Game + GameRunner
   );
 
   it("M1 fraud canaries: invalid, unauthenticated, pre-spawn and duplicate political actions do not mint assets", async () => {
-    const unspawned = await setup("plains", { nationalMode: true }, [north, south]);
+    const unspawned = await setup("plains", { nationalMode: true }, [
+      north,
+      south,
+    ]);
     expect(() =>
       unspawned.performNationalCommand(unspawned.player(north.id), {
         kind: "found-empire",
@@ -212,14 +218,17 @@ describe("NATIONAL independently integrated acceptance (actual Game + GameRunner
     });
     expect(runner.executeNextTick()).toBe(true);
     step(runner);
-    expect(game.nationalPoliticalAuthority()?.empireExists("forged-empire"))
-      .toBe(false);
+    expect(
+      game.nationalPoliticalAuthority()?.empireExists("forged-empire"),
+    ).toBe(false);
 
     game.performNationalCommand(game.player(north.id), {
       kind: "found-empire",
       empireId: "legitimate-empire",
     });
-    const count = game.nationalPoliticalAuthority()?.membersOf("legitimate-empire");
+    const count = game
+      .nationalPoliticalAuthority()
+      ?.membersOf("legitimate-empire");
     const gold = game.player(north.id).gold();
     const troops = game.player(north.id).troops();
     const tiles = game.player(north.id).numTilesOwned();
@@ -231,8 +240,9 @@ describe("NATIONAL independently integrated acceptance (actual Game + GameRunner
       }),
     ).toThrow();
     expect(snapshotGame(game)).toEqual(after);
-    expect(game.nationalPoliticalAuthority()?.membersOf("legitimate-empire"))
-      .toEqual(count);
+    expect(
+      game.nationalPoliticalAuthority()?.membersOf("legitimate-empire"),
+    ).toEqual(count);
     expect(game.player(north.id).gold()).toBe(gold);
     expect(game.player(north.id).troops()).toBe(troops);
     expect(game.player(north.id).numTilesOwned()).toBe(tiles);
