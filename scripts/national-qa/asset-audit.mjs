@@ -38,7 +38,7 @@ for (const path of required) {
 if (existsSync("resources/manifest.json")) {
   const manifest = JSON.parse(readFileSync("resources/manifest.json", "utf8"));
   for (const icon of manifest.icons ?? []) {
-    const name = "resources/" + icon.src.replace(/^\\/+/, "");
+    const name = "resources/" + icon.src.replace(/^[/]+/, "");
     if (!existsSync(name)) failed.push("missing manifest icon: " + name);
   }
 }
