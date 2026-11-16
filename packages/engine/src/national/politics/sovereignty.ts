@@ -738,6 +738,8 @@ function strictlyWeakest(
 export function evaluateUngovernable(
   world: PoliticsProjection,
   simulationMs: number,
+  /** False until the emperor's pooled assets have a conservation-safe owner. */
+  allowCollapse = true,
 ): {
   state: PoliticsProjection;
   warnings: { empireId: string; deadlineMs: number }[];
@@ -755,10 +757,12 @@ export function evaluateUngovernable(
       continue;
     }
     target.crisisDeadlineMs ??= simulationMs + IMPERIAL_CRISIS_MS;
-    if (simulationMs >= target.crisisDeadlineMs) {
+    if (simulationMs >= target.crisisDeadlineMs && allowCollapse) {
       collapsed.push(e);
       dissolve(next, e);
     } else {
+      // When disposition is unapproved, retain the expired deadline as a
+      // durable blocked warning; never dissolve and strand pooled assets.
       warnings.push({ empireId: e, deadlineMs: target.crisisDeadlineMs });
     }
   }
