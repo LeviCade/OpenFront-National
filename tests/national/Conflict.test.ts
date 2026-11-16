@@ -1,35 +1,62 @@
 import { describe, expect, it } from "vitest";
 import {
-  WarLedger,
-  type PoliticsPort,
-} from "../../packages/engine/src/national/conflict/WarLedger";
-import {
   DefenseLevyLedger,
   weightedLevyAllocation,
   type TroopSource,
   type IncomingDefense,
 } from "../../packages/engine/src/national/conflict/DefenseLevy";
+import {
+  WarLedger,
+  type PoliticsPort,
+} from "../../packages/engine/src/national/conflict/WarLedger";
 
 class Politics implements PoliticsPort {
-  membership = new Map([["B", "E"], ["C", "E"], ["I", "E"]]);
+  membership = new Map([
+    ["B", "E"],
+    ["C", "E"],
+    ["I", "E"],
+  ]);
   leaders = new Map([["E", "I"]]);
   declare = false;
   peace = false;
   blocked = false;
-  empireOf(id: string) { return this.membership.get(id) ?? null; }
-  emperorOf(id: string) { return this.leaders.get(id) ?? null; }
-  membersOf(id: string): string[] { return [...this.membership].filter(([, empire]) => empire === id).map(([nation]) => nation); }
-  nationAlive(id: string) { return ["A", "B", "C", "I", "X", "Y"].includes(id); }
-  empireExists(id: string) { return this.leaders.has(id); }
-  mayDeclareNational(_memberId: string) { return this.declare; }
-  maySettleNational(_memberId: string) { return this.peace; }
-  treatyProtects(_a: string, _b: string) { return this.blocked; }
+  empireOf(id: string) {
+    return this.membership.get(id) ?? null;
+  }
+  emperorOf(id: string) {
+    return this.leaders.get(id) ?? null;
+  }
+  membersOf(id: string): string[] {
+    return [...this.membership]
+      .filter(([, empire]) => empire === id)
+      .map(([nation]) => nation);
+  }
+  nationAlive(id: string) {
+    return ["A", "B", "C", "I", "X", "Y"].includes(id);
+  }
+  empireExists(id: string) {
+    return this.leaders.has(id);
+  }
+  mayDeclareNational(_memberId: string) {
+    return this.declare;
+  }
+  maySettleNational(_memberId: string) {
+    return this.peace;
+  }
+  treatyProtects(_a: string, _b: string) {
+    return this.blocked;
+  }
 }
 
 class Troops implements TroopSource {
   calls = 0;
-  constructor(public nationId: string, public balance: number) {}
-  troops() { return this.balance; }
+  constructor(
+    public nationId: string,
+    public balance: number,
+  ) {}
+  troops() {
+    return this.balance;
+  }
   removeTroops(amount: number) {
     this.calls++;
     const taken = Math.min(this.balance, Math.floor(amount));
@@ -38,8 +65,27 @@ class Troops implements TroopSource {
   }
 }
 
-function levy(attackId: string, campaignId: string, troops: number, donors: Troops[], attackerId = "A", defenderId = "B"): IncomingDefense {
-  return { attackId, campaignId, attackerId, defenderId, attackingTroops: troops, eligible: donors.map(source => ({ source, troopCapacity: 100_000, maximumFraction: .1, protectedCapacityFraction: .3 })) };
+function levy(
+  attackId: string,
+  campaignId: string,
+  troops: number,
+  donors: Troops[],
+  attackerId = "A",
+  defenderId = "B",
+): IncomingDefense {
+  return {
+    attackId,
+    campaignId,
+    attackerId,
+    defenderId,
+    attackingTroops: troops,
+    eligible: donors.map((source) => ({
+      source,
+      troopCapacity: 100_000,
+      maximumFraction: 0.1,
+      protectedCapacityFraction: 0.3,
+    })),
+  };
 }
 
 describe("NATIONAL layered conflict — D-010/D-014", () => {
@@ -54,7 +100,8 @@ describe("NATIONAL layered conflict — D-010/D-014", () => {
     expect(() => ledger.declareNational("bad", "A", "A", "A", 1)).toThrow();
   });
   it("WAR-02 B's national war never draws C or the imperial leader into war", () => {
-    const p = new Politics(); p.declare = true;
+    const p = new Politics();
+    p.declare = true;
     const ledger = new WarLedger(p);
     ledger.declareNational("B-X", "B", "B", "X", 10);
     expect(ledger.atWar("B", "X")).toBe(true);
@@ -64,8 +111,14 @@ describe("NATIONAL layered conflict — D-010/D-014", () => {
   it("WAR-03/04 imperial overlay is scoped and peace cannot erase national war", () => {
     const ledger = new WarLedger(new Politics());
     ledger.declareNational("B-X", "I", "B", "X", 1);
-    ledger.declareImperial("E-X", "I", { kind: "empire", id: "E" }, { kind: "nation", id: "X" }, 2);
-    expect(["B", "C", "I"].every(n => ledger.atWar(n, "X"))).toBe(true);
+    ledger.declareImperial(
+      "E-X",
+      "I",
+      { kind: "empire", id: "E" },
+      { kind: "nation", id: "X" },
+      2,
+    );
+    expect(["B", "C", "I"].every((n) => ledger.atWar(n, "X"))).toBe(true);
     ledger.proposePeace("offer-E", "E-X", "I", 3);
     expect(ledger.atWar("C", "X")).toBe(true); // proposal is NOT peace
     expect(() => ledger.acceptPeace("offer-E", "B", 4)).toThrow();
@@ -84,7 +137,8 @@ describe("NATIONAL layered conflict — D-010/D-014", () => {
     expect(ledger.atWar("B", "X")).toBe(false);
   });
   it("member authority is delegated for each action, emperor never loses override", () => {
-    const p = new Politics(); const w = new WarLedger(p);
+    const p = new Politics();
+    const w = new WarLedger(p);
     expect(() => w.declareNational("B-X", "B", "B", "X", 1)).toThrow();
     p.declare = true;
     w.declareNational("B-X", "B", "B", "X", 1);
@@ -93,19 +147,22 @@ describe("NATIONAL layered conflict — D-010/D-014", () => {
     w.acceptPeace("m", "X", 3);
   });
   it("NAP/MDA protection requires prior betrayal even with declared war", () => {
-    const p = new Politics(); const w = new WarLedger(p);
+    const p = new Politics();
+    const w = new WarLedger(p);
     w.declareNational("A-X", "A", "A", "X", 1);
     p.blocked = true;
     expect(w.authorizeOffensiveAction("A", "X")).toBe(false);
     expect(() => w.declareNational("A-Y", "A", "A", "Y", 2)).toThrow();
   });
   it("replay-accurate snapshot, stable sorted IDs, and protected state mutation", () => {
-    const p = new Politics(); const w = new WarLedger(p);
+    const p = new Politics();
+    const w = new WarLedger(p);
     w.declareNational("z", "A", "A", "X", 1);
     w.declareNational("a", "A", "A", "Y", 2);
     const s = w.exportState();
-    expect(s.layers.map(l => l.id)).toEqual(["a", "z"]);
-    const restored = new WarLedger(p); restored.restoreState(s);
+    expect(s.layers.map((l) => l.id)).toEqual(["a", "z"]);
+    const restored = new WarLedger(p);
+    restored.restoreState(s);
     expect(restored.exportState()).toEqual(s);
     expect(restored.atWar("A", "X")).toBe(true);
     expect(() => restored.declareNational("z", "A", "A", "Y", 3)).toThrow();
@@ -119,8 +176,15 @@ describe("NATIONAL layered conflict — D-010/D-014", () => {
     expect(w.atWar("A", "X")).toBe(true);
   });
   it("emperor transfer dynamically changes authority but not war identity", () => {
-    const p = new Politics(); const w = new WarLedger(p);
-    w.declareImperial("war", "I", {kind:"empire",id:"E"}, {kind:"nation",id:"X"}, 1);
+    const p = new Politics();
+    const w = new WarLedger(p);
+    w.declareImperial(
+      "war",
+      "I",
+      { kind: "empire", id: "E" },
+      { kind: "nation", id: "X" },
+      1,
+    );
     p.leaders.set("E", "C");
     expect(() => w.proposePeace("m1", "war", "I", 2)).toThrow();
     w.proposePeace("m2", "war", "C", 2);
@@ -133,80 +197,139 @@ describe("NATIONAL real defensive levies — D-008", () => {
   it("LEVY-01 50K push intercepts exactly 45K, no phantom troops", () => {
     const donors = [new Troops("C", 450_000)];
     const ledger = new DefenseLevyLedger();
-    const r = ledger.interceptAcceptedAttacks([{...levy("attack", "campaign", 50_000, donors),eligible:[{source:donors[0],troopCapacity:500_000,maximumFraction:.1,protectedCapacityFraction:.3}]}])[0];
+    const r = ledger.interceptAcceptedAttacks([
+      {
+        ...levy("attack", "campaign", 50_000, donors),
+        eligible: [
+          {
+            source: donors[0],
+            troopCapacity: 500_000,
+            maximumFraction: 0.1,
+            protectedCapacityFraction: 0.3,
+          },
+        ],
+      },
+    ])[0];
     expect(r.intercepted).toBe(45_000);
     expect(r.remainingAttackingTroops).toBe(5_000);
     expect(donors[0].balance).toBe(405_000);
-    expect(r.contributions).toEqual([{ nationId:"C", troopsDebited:45_000 }]);
+    expect(r.contributions).toEqual([{ nationId: "C", troopsDebited: 45_000 }]);
   });
   it("LEVY-02 fully shields an incoming attack before territorial combat", () => {
-    const donors=[new Troops("C",450_000)];
-    const r=new DefenseLevyLedger().interceptAcceptedAttacks([{...levy("a","c",30_000,donors),eligible:[{source:donors[0],troopCapacity:500_000,maximumFraction:.1,protectedCapacityFraction:.3}]}])[0];
+    const donors = [new Troops("C", 450_000)];
+    const r = new DefenseLevyLedger().interceptAcceptedAttacks([
+      {
+        ...levy("a", "c", 30_000, donors),
+        eligible: [
+          {
+            source: donors[0],
+            troopCapacity: 500_000,
+            maximumFraction: 0.1,
+            protectedCapacityFraction: 0.3,
+          },
+        ],
+      },
+    ])[0];
     expect(r.remainingAttackingTroops).toBe(0);
     expect(donors[0].balance).toBe(420_000);
   });
   it("LEVY-03 rejected/cancelled attack is never charged because no event reaches ledger", () => {
-    const donor=new Troops("C",100_000), ledger=new DefenseLevyLedger();
+    const donor = new Troops("C", 100_000),
+      ledger = new DefenseLevyLedger();
     expect(ledger.interceptAcceptedAttacks([])).toEqual([]);
     expect(donor.balance).toBe(100_000);
     expect(donor.calls).toBe(0);
   });
   it("LEVY-04 twenty microattacks share one finite campaign cap", () => {
-    const donor=new Troops("C",100_000), ledger=new DefenseLevyLedger();
-    const attacks=Array.from({length:20},(_,i)=>levy(`a-${String(i).padStart(2,"0")}`,"same-campaign",5_000,[donor]));
-    const r=ledger.interceptAcceptedAttacks(attacks);
-    expect(r.reduce((s,x)=>s+x.intercepted,0)).toBe(10_000);
+    const donor = new Troops("C", 100_000),
+      ledger = new DefenseLevyLedger();
+    const attacks = Array.from({ length: 20 }, (_, i) =>
+      levy(`a-${String(i).padStart(2, "0")}`, "same-campaign", 5_000, [donor]),
+    );
+    const r = ledger.interceptAcceptedAttacks(attacks);
+    expect(r.reduce((s, x) => s + x.intercepted, 0)).toBe(10_000);
     expect(donor.balance).toBe(90_000);
-    expect(ledger.interceptAcceptedAttacks(attacks).map(x=>x.intercepted)).toEqual(r.map(x=>x.intercepted));
+    expect(
+      ledger.interceptAcceptedAttacks(attacks).map((x) => x.intercepted),
+    ).toEqual(r.map((x) => x.intercepted));
     expect(donor.balance).toBe(90_000);
     expect(donor.calls).toBe(2);
   });
   it("LEVY-05 simultaneous obligations use deterministic order and never double spend", () => {
-    const d1=new Troops("C",100_000), d2=new Troops("C",100_000);
-    const a=levy("a","campaign-1",20_000,[d1],"A","B");
-    const b=levy("b","campaign-2",20_000,[d1],"X","Y");
-    const r1=new DefenseLevyLedger().interceptAcceptedAttacks([b,a]);
-    const r2=new DefenseLevyLedger().interceptAcceptedAttacks([a,b].map(x=>({...x,eligible:x.eligible.map(e=>({...e,source:d2}))})));
+    const d1 = new Troops("C", 100_000),
+      d2 = new Troops("C", 100_000);
+    const a = levy("a", "campaign-1", 20_000, [d1], "A", "B");
+    const b = levy("b", "campaign-2", 20_000, [d1], "X", "Y");
+    const r1 = new DefenseLevyLedger().interceptAcceptedAttacks([b, a]);
+    const r2 = new DefenseLevyLedger().interceptAcceptedAttacks(
+      [a, b].map((x) => ({
+        ...x,
+        eligible: x.eligible.map((e) => ({ ...e, source: d2 })),
+      })),
+    );
     expect(r1).toEqual(r2);
     expect(d1.balance).toBe(81_000);
     expect(d2.balance).toBe(81_000);
-    expect(r1.reduce((s,x)=>s+x.intercepted,0)).toBe(19_000);
+    expect(r1.reduce((s, x) => s + x.intercepted, 0)).toBe(19_000);
   });
   it("LEVY-06 protected reserve prevents excessive levy despite high campaign cap", () => {
-    const donor=new Troops("C",32_000);
-    const r=new DefenseLevyLedger().interceptAcceptedAttacks([levy("a","c",20_000,[donor])])[0];
+    const donor = new Troops("C", 32_000);
+    const r = new DefenseLevyLedger().interceptAcceptedAttacks([
+      levy("a", "c", 20_000, [donor]),
+    ])[0];
     expect(r.intercepted).toBe(2_000);
     expect(donor.balance).toBe(30_000);
   });
   it("LEVY-07 multiple treaty memberships count one nation once", () => {
-    const donor=new Troops("C",100_000);
-    const request=levy("a","c",40_000,[donor]);
-    const r=new DefenseLevyLedger().interceptAcceptedAttacks([{...request,eligible:[...request.eligible,...request.eligible]}])[0];
+    const donor = new Troops("C", 100_000);
+    const request = levy("a", "c", 40_000, [donor]);
+    const r = new DefenseLevyLedger().interceptAcceptedAttacks([
+      { ...request, eligible: [...request.eligible, ...request.eligible] },
+    ])[0];
     expect(r.intercepted).toBe(10_000);
     expect(donor.balance).toBe(90_000);
   });
   it("weighted allocation is capped, conserves integers, and stable on tied weights", () => {
-    const r=weightedLevyAllocation(17,[{id:"D",cap:4,weight:2},{id:"C",cap:20,weight:2},{id:"E",cap:20,weight:2}]);
-    expect([...r.values()].reduce((a,b)=>a+b,0)).toBe(17);
+    const r = weightedLevyAllocation(17, [
+      { id: "D", cap: 4, weight: 2 },
+      { id: "C", cap: 20, weight: 2 },
+      { id: "E", cap: 20, weight: 2 },
+    ]);
+    expect([...r.values()].reduce((a, b) => a + b, 0)).toBe(17);
     expect(r.get("D")).toBeLessThanOrEqual(4);
-    expect(weightedLevyAllocation(1,[{id:"Z",cap:1,weight:1},{id:"A",cap:1,weight:1}]).get("A")).toBe(1);
+    expect(
+      weightedLevyAllocation(1, [
+        { id: "Z", cap: 1, weight: 1 },
+        { id: "A", cap: 1, weight: 1 },
+      ]).get("A"),
+    ).toBe(1);
   });
   it("restore retains campaign spend and prevents replay levy duplication", () => {
-    const donor=new Troops("C",100_000), ledger=new DefenseLevyLedger();
-    const r=ledger.interceptAcceptedAttacks([levy("a","campaign",5_000,[donor])])[0];
-    const state=ledger.exportState(); const clone=new DefenseLevyLedger(); clone.restoreState(state);
+    const donor = new Troops("C", 100_000),
+      ledger = new DefenseLevyLedger();
+    const r = ledger.interceptAcceptedAttacks([
+      levy("a", "campaign", 5_000, [donor]),
+    ])[0];
+    const state = ledger.exportState();
+    const clone = new DefenseLevyLedger();
+    clone.restoreState(state);
     expect(clone.exportState()).toEqual(state);
-    expect(clone.interceptAcceptedAttacks([levy("a","campaign",5_000,[donor])])).toEqual([r]);
+    expect(
+      clone.interceptAcceptedAttacks([levy("a", "campaign", 5_000, [donor])]),
+    ).toEqual([r]);
     expect(donor.balance).toBe(95_000);
-    const next=clone.interceptAcceptedAttacks([levy("b","campaign",50_000,[donor])])[0];
+    const next = clone.interceptAcceptedAttacks([
+      levy("b", "campaign", 50_000, [donor]),
+    ])[0];
     expect(next.intercepted).toBe(5_000);
     expect(donor.balance).toBe(90_000);
   });
   it("tampered snapshot claiming interception without deductions is rejected", () => {
-    const donor=new Troops("C",100_000), ledger=new DefenseLevyLedger();
-    ledger.interceptAcceptedAttacks([levy("a","c",10_000,[donor])]);
-    const state=JSON.parse(JSON.stringify(ledger.exportState()));
-    state.processed[0].result.intercepted=20_000;
-    expect(()=>new DefenseLevyLedger().restoreState(state)).toThrow();
+    const donor = new Troops("C", 100_000),
+      ledger = new DefenseLevyLedger();
+    ledger.interceptAcceptedAttacks([levy("a", "c", 10_000, [donor])]);
+    const state = JSON.parse(JSON.stringify(ledger.exportState()));
+    state.processed[0].result.intercepted = 20_000;
+    expect(() => new DefenseLevyLedger().restoreState(state)).toThrow();
   });
 });
