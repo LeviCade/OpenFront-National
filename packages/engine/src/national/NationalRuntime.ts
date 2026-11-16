@@ -16,6 +16,7 @@ import {
   clonePoliticalProjection,
   eliminatePoliticalNation,
   evaluateUngovernable,
+  expelPactMember,
   foundEmpire,
   foundPact,
   initialPolitics,
@@ -114,7 +115,13 @@ export type NationalCommand =
     }
   | { kind: "invite-pact"; pactId: string; candidateId: PlayerID }
   | { kind: "accept-pact"; pactId: string }
-  | { kind: "betray-pact"; pactId: string };
+  | { kind: "betray-pact"; pactId: string }
+  | {
+      kind: "expel-pact";
+      pactId: string;
+      memberId: PlayerID;
+      approvingIds?: PlayerID[];
+    };
 
 export interface NationalLivePlayer {
   readonly id: PlayerID;
@@ -389,6 +396,16 @@ export class NationalRuntime {
       case "betray-pact":
         requireCommandId(command.pactId);
         next = betrayPact(this.politics, command.pactId, actorId);
+        break;
+      case "expel-pact":
+        requireCommandId(command.pactId);
+        next = expelPactMember(
+          this.politics,
+          command.pactId,
+          actorId,
+          command.memberId,
+          command.approvingIds ?? [],
+        );
         break;
       default:
         throw new Error("NATIONAL: unsupported political command");

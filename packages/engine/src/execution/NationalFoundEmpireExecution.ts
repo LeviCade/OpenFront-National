@@ -124,6 +124,12 @@ const NationalFoundEmpireStateSchema = z.object({
       }),
       z.object({ kind: z.literal("accept-pact"), pactId: z.string() }),
       z.object({ kind: z.literal("betray-pact"), pactId: z.string() }),
+      z.object({
+        kind: z.literal("expel-pact"),
+        pactId: z.string(),
+        memberId: z.string(),
+        approvingIds: z.array(z.string()).optional(),
+      }),
     ])
     .nullable(),
   requestId: z.string().min(1).max(256).nullable(),
