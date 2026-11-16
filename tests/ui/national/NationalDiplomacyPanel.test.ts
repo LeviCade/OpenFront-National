@@ -134,7 +134,7 @@ describe("NATIONAL player-facing founding", () => {
       'button[aria-controls="national-diplomacy-content"]',
     )!;
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    element.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    element.querySelector("section")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await element.updateComplete;
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
