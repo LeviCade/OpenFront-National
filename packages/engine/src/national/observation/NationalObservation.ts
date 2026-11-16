@@ -258,6 +258,21 @@ export function projectNationalObservation(
       });
       continue;
     }
+    // A member's own unit positions and strength are legitimate first-party
+    // intelligence, and are shared with all current empire members.
+    if (empire && intelligencePrincipals.has(asset.ownerId)) {
+      visibleAssets.push({
+        id: asset.id,
+        ownerId: asset.ownerId,
+        kind: asset.kind,
+        x: asset.x,
+        y: asset.y,
+        source: "empire",
+        sourceNationId: asset.ownerId,
+        ...(asset.strength === undefined ? {} : { strength: asset.strength }),
+      });
+      continue;
+    }
     const grant = validGrant.get(asset.id);
     if (grant === undefined) continue;
     visibleAssets.push({

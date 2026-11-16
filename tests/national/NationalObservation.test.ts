@@ -208,9 +208,9 @@ describe("NATIONAL observation FOG-01 / FOG-02 / FOG-07", () => {
     );
     expect(c.diplomaticEvents.some((e) => e.id === "private1")).toBe(true);
     expect(b.visibleAssets.find((u) => u.id === "b-ship")?.strength).toBe(7777);
-    expect(
-      c.visibleAssets.find((u) => u.id === "b-ship")?.strength,
-    ).toBeUndefined();
+    expect(c.visibleAssets.find((u) => u.id === "b-ship")?.strength).toBe(7777);
+    expect(b.visibleAssets.find((u) => u.id === "c-ship")?.source).toBe("empire");
+    expect(b.visibleAssets.find((u) => u.id === "c-ship")?.strength).toBe(250);
     expect(a.visibleAssets.map((u) => u.id)).toEqual(["a-ship"]);
     expect(JSON.stringify(c)).not.toContain("landingDestination");
     const revoked: NationalWorld = {
