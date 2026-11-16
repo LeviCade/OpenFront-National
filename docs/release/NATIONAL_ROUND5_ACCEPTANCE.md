@@ -68,7 +68,15 @@ must pass **on the exact same integration SHA** before any acceptance.
    `GameRunner` with injected enemy troop, transport and private diplomatic
    canaries. A deliberately tainted output must cause the oracle to throw.
    Revoked principal / unidentified viewer must not see hidden packed fields.
-7. **Legacy FFA:** real default FFA preserves prior attack permissions, has
+7. **FOG-04 / revoked empire:** `RoundFiveFogRevocation.test.ts` uses
+   three real spawned nations, actual empire accession, a hidden-strength
+   vessel inherited through allied sight and actual GameRunner packed update
+   projection. A deliberately revoked Game authority view must eliminate
+   inherited sight and stale memories; restoring a recipient-bound memory
+   into an unrelated principal must throw. An actual Game snapshot/restore
+   retains its original authoritative political roster, not test-only
+   revocation state.
+8. **Legacy FFA:** real default FFA preserves prior attack permissions, has
    no NATIONAL political authority, and must not render an active NATIONAL
    diplomacy panel in Chromium.
 
@@ -86,6 +94,12 @@ genuine E1 rejected command → authenticated save → navigate away →
 load same saved game → equal authoritative roster → actual sovereign
 victory packet**. Both 1280×800 and 390×844 require success. The browser
 harness deliberately rejects transient “Founding request sent” copy.
+After genuine accepted founding, E5 submits a deliberately duplicated
+`national_found_empire` action through the **existing live client EventBus
+and Transport event**, rather than bypassing production authorization or
+inventing a rejection; it requires an E1 rejected outcome to travel back to
+the same recipient. The harness captures Chromium console exceptions and
+failed network loads as separate evidence.
 
 Actual `MessagePort` receive events are instrumented **before app load**;
 the test does not alter messages. Evidence contains packet *type, tick,
