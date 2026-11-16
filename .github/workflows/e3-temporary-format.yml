@@ -1,0 +1,44 @@
+name: E3 temporary formatter (branch-only)
+on:
+  push:
+    branches: [stage3/engineer-3-intelligence-20261115]
+permissions:
+  contents: write
+jobs:
+  format-owned-files:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stage3/engineer-3-intelligence-20261115
+          persist-credentials: true
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Install pinned formatter
+        run: npm install --global --ignore-scripts oxfmt@0.73.0
+      - name: Format only E3-owned paths
+        run: |
+          oxfmt --write packages/engine/src/national/README.md \
+            packages/engine/src/national/ai/NationalPlanner.ts \
+            packages/engine/src/national/observation/NationalObservation.ts \
+            tests/national/NationalIntelligencePerf.test.ts \
+            tests/national/NationalObservation.test.ts \
+            tests/national/NationalPlanner.test.ts
+      - name: Commit formatted E3-owned files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/engine/src/national/README.md \
+            packages/engine/src/national/ai/NationalPlanner.ts \
+            packages/engine/src/national/observation/NationalObservation.ts \
+            tests/national/NationalIntelligencePerf.test.ts \
+            tests/national/NationalObservation.test.ts \
+            tests/national/NationalPlanner.test.ts
+          git diff --cached --stat
+          if ! git diff --cached --quiet; then
+            git commit -m "style(national): apply exact pinned oxfmt to E3 files"
+            git push origin HEAD:refs/heads/stage3/engineer-3-intelligence-20261115
+          fi
