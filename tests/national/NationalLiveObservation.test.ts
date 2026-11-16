@@ -143,9 +143,14 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     const bot = game.player(botInfo.id);
     expect(bot.hasSpawned()).toBe(true);
     bot.setTroops(75_000);
+    expect(
+      collectLiveNationalObservation(game, botInfo.id).observation.unownedFrontier,
+    ).toBe(true);
     const firstLand = bot.numTilesOwned();
     const firstAttacks = bot.outgoingAttacks().length;
-    for (let i = 0; i < 15; i++) game.executeNextTick();
+    // One initial decision can predate the troop injection. Exercise multiple
+    // complete 30-tick strategy cycles and observe actual land capture.
+    for (let i = 0; i < 75; i++) game.executeNextTick();
     const advanced = bot.numTilesOwned();
     expect(advanced).toBeGreaterThan(firstLand);
     expect(bot.outgoingAttacks().length + advanced).toBeGreaterThan(
