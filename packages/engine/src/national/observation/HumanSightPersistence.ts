@@ -14,7 +14,7 @@ interface NationalHumanSightGamePort {
   readNationalObserverMemory(playerId: string): NationalSightMemory | null;
   writeNationalObserverMemory(
     playerId: string,
-    memory: NationalSightMemory | null,
+    memory: NationalSightMemory,
   ): void;
 }
 
@@ -49,17 +49,12 @@ export function persistNationalHumanSight(
   memory: NationalSightMemory | null,
 ): void {
   const port = readPort(game);
-  if (port === null) return;
-  if (memory !== null && memory.observerId !== principalId) {
+  if (port === null || memory === null) return;
+  if (memory.observerId !== principalId) {
     throw new Error("NATIONAL persisted sight principal mismatch");
   }
-  port.writeNationalObserverMemory(
-    principalId,
-    memory === null
-      ? null
-      : {
-          observerId: memory.observerId,
-          assets: memory.assets.map((asset) => ({ ...asset })),
-        },
-  );
+  port.writeNationalObserverMemory(principalId, {
+    observerId: memory.observerId,
+    assets: memory.assets.map((asset) => ({ ...asset })),
+  });
 }
