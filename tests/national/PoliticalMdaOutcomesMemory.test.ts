@@ -469,6 +469,14 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
     expect([...again]).toEqual([...bytes]);
     expect(restored.readNationalObserverMemory(A)).toEqual(item);
     expect(restored.readNationalObserverMemory(B)).toBeNull();
+    // Historical v3 snapshots had no human sight/journal state. Preserve
+    // their exact upgrade behavior while new v4 snapshots retain memory.
+    const latest = readVersioned(GameSnapshot, snapshotGameData(game).game);
+    const preGovernance = Object.fromEntries(
+      Object.entries(latest).filter(([key]) => key !== "nationalGovernance"),
+    );
+    const migrated = readVersioned(GameSnapshot, { v: 3, d: preGovernance });
+    expect(migrated.nationalGovernance).toBeNull();
   });
 
   it("foreign inherited sight is rejected until empire membership; dissolution revokes only inherited memory", async () => {
