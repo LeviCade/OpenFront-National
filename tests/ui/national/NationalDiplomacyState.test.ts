@@ -21,8 +21,16 @@ describe("NATIONAL read-only political projection", () => {
   it("never creates an empire from an absent or malformed packet", () => {
     expect(readNationalPolitics(undefined)).toBeNull();
     expect(readNationalPolitics({ empires: "not a roster" })).toBeNull();
-    expect(readNationalPolitics({ empires: [{ ...verified.empires[0], memberIds: [] }] })).toBeNull();
-    expect(readNationalPolitics({ empires: [{ ...verified.empires[0], leaderId: "intruder" }] })).toBeNull();
+    expect(
+      readNationalPolitics({
+        empires: [{ ...verified.empires[0], memberIds: [] }],
+      }),
+    ).toBeNull();
+    expect(
+      readNationalPolitics({
+        empires: [{ ...verified.empires[0], leaderId: "intruder" }],
+      }),
+    ).toBeNull();
   });
 
   it("only identifies membership and emperor from a valid game projection", () => {
@@ -34,20 +42,51 @@ describe("NATIONAL read-only political projection", () => {
   });
 
   it("rejects overlapping membership and duplicate empire IDs", () => {
-    expect(readNationalPolitics({
-      empires: [verified.empires[0], { id: "South", leaderId: "nation-b", memberIds: ["nation-b"] }],
-    })).toBeNull();
-    expect(readNationalPolitics({ empires: [verified.empires[0], verified.empires[0]] })).toBeNull();
+    expect(
+      readNationalPolitics({
+        empires: [
+          verified.empires[0],
+          { id: "South", leaderId: "nation-b", memberIds: ["nation-b"] },
+        ],
+      }),
+    ).toBeNull();
+    expect(
+      readNationalPolitics({
+        empires: [verified.empires[0], verified.empires[0]],
+      }),
+    ).toBeNull();
   });
 
   it("only consumes authenticated-style game command outcomes and never assumes acceptance", () => {
     expect(readNationalFoundingResults(undefined)).toEqual([]);
-    expect(readNationalFoundingResults([
-      { type: "national_found_empire", actorId: "nation-a", empireId: "North_Union", accepted: true },
-      { type: "national_found_empire", actorId: "nation-b", empireId: "North_Union", accepted: false, reason: "already member" },
-      { type: "national_found_empire", actorId: "nation-b", empireId: "North_Union" },
-      { type: "attack", actorId: "nation-a", empireId: "North_Union", accepted: true },
-    ])).toHaveLength(2);
+    expect(
+      readNationalFoundingResults([
+        {
+          type: "national_found_empire",
+          actorId: "nation-a",
+          empireId: "North_Union",
+          accepted: true,
+        },
+        {
+          type: "national_found_empire",
+          actorId: "nation-b",
+          empireId: "North_Union",
+          accepted: false,
+          reason: "already member",
+        },
+        {
+          type: "national_found_empire",
+          actorId: "nation-b",
+          empireId: "North_Union",
+        },
+        {
+          type: "attack",
+          actorId: "nation-a",
+          empireId: "North_Union",
+          accepted: true,
+        },
+      ]),
+    ).toHaveLength(2);
   });
 
   it("validates wire IDs before sending", () => {
@@ -75,13 +114,26 @@ describe("NATIONAL founding eligibility", () => {
   });
 
   it("disables ordinary FFA, replays, pre-spawn, dead, and already-member controls", () => {
-    expect(foundingUnavailableReason({ ...active, national: false })).toBeTruthy();
+    expect(
+      foundingUnavailableReason({ ...active, national: false }),
+    ).toBeTruthy();
     expect(foundingUnavailableReason({ ...active, solo: false })).toBeTruthy();
     expect(foundingUnavailableReason({ ...active, replay: true })).toBeTruthy();
-    expect(foundingUnavailableReason({ ...active, spawned: false })).toBeTruthy();
+    expect(
+      foundingUnavailableReason({ ...active, spawned: false }),
+    ).toBeTruthy();
     expect(foundingUnavailableReason({ ...active, alive: false })).toBeTruthy();
-    expect(foundingUnavailableReason({ ...active, spectator: true })).toBeTruthy();
-    expect(foundingUnavailableReason({ ...active, memberEmpire: { id: "X", leaderId: "n", memberIds: ["n"] } })).toBeTruthy();
-    expect(foundingUnavailableReason({ ...active, pending: true })).toBeTruthy();
+    expect(
+      foundingUnavailableReason({ ...active, spectator: true }),
+    ).toBeTruthy();
+    expect(
+      foundingUnavailableReason({
+        ...active,
+        memberEmpire: { id: "X", leaderId: "n", memberIds: ["n"] },
+      }),
+    ).toBeTruthy();
+    expect(
+      foundingUnavailableReason({ ...active, pending: true }),
+    ).toBeTruthy();
   });
 });
