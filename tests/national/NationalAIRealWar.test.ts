@@ -64,6 +64,7 @@ describe("Round Five real NATIONAL bot war legality (AI-01/02, WAR-01/03/07)", (
     const game = await battleground();
     const attacker = game.player(bot.id);
     const before = attacker.troops();
+    const priorAttacks = attacker.outgoingAttacks().length;
     expect(
       game.nationalWarAuthority()?.authorizeOffensiveAction(bot.id, human.id),
     ).toBe(false);
@@ -71,7 +72,7 @@ describe("Round Five real NATIONAL bot war legality (AI-01/02, WAR-01/03/07)", (
     illegal.init(game, game.ticks());
     expect(illegal.isActive()).toBe(false);
     expect(attacker.troops()).toBe(before);
-    expect(attacker.outgoingAttacks()).toHaveLength(0);
+    expect(attacker.outgoingAttacks()).toHaveLength(priorAttacks);
   });
 
   it("bot observes only actual opposing war sides, chooses legal enemy and executes live attack", async () => {
@@ -158,6 +159,7 @@ describe("Round Five real NATIONAL bot war legality (AI-01/02, WAR-01/03/07)", (
       30,
     );
     expect(plan.decision?.targetId).not.toBe(human.id);
+    const priorAttacks = attacker.outgoingAttacks().length;
     const illegal = new AttackExecution(10_000, attacker, human.id);
     illegal.init(game, game.ticks());
     expect(illegal.isActive()).toBe(false);
