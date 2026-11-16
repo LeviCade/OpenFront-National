@@ -14,7 +14,11 @@ import "../../NationalDiplomacyPanel";
 import { showInGameAlert, showInGameConfirm } from "../../InGameModal";
 import { TogglePauseIntentEvent } from "../../InputHandler";
 import type { NationalDiplomacyPanel } from "../../NationalDiplomacyPanel";
-import { PauseGameIntentEvent, SendWinnerEvent } from "../../Transport";
+import {
+  NationalTransportStatusEvent,
+  PauseGameIntentEvent,
+  SendWinnerEvent,
+} from "../../Transport";
 import { shareGame } from "../../utilities/ShareGame";
 import { homeHref, showToast, translateText } from "../../Utils";
 import { GameView } from "../../view";
@@ -104,6 +108,13 @@ export class GameRightSidebar extends LitElement implements Controller {
     this.eventBus.on(ImmunityBarVisibleEvent, (e) => {
       this.immunityBarVisible = e.visible;
       this.updateParentOffset();
+    });
+
+    this.eventBus.on(NationalTransportStatusEvent, (e) => {
+      if (!e.ready) {
+        this.nationalPanel?.connectionInterrupted();
+        this.game.invalidateNationalPoliticalView?.();
+      }
     });
 
     this.eventBus.on(SendWinnerEvent, () => {
@@ -465,7 +476,7 @@ export class GameRightSidebar extends LitElement implements Controller {
       ${
         this.game.config().gameConfig().nationalMode === true &&
         this.game.config().gameConfig().gameType === GameType.Singleplayer &&
-        !this.game.config().isReplay()
+        true
           ? html`<national-diplomacy-panel
               .game=${this.game}
               .eventBus=${this.eventBus}
