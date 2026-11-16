@@ -11,7 +11,7 @@
 
 1. `DefenseLevyLedger.stage()` returns previous `DefenseResult` for a duplicate accepted `attackId`, but there is no fresh/replay indicator. A live attack consumer could subtract interception from attacker strength AGAIN even though defenders were not newly debited. Extend the return/apply-once contract, include both sides in duplicate and snapshot replay tests, and ensure a reused ID with different parameters fails.
 2. `WarLedger.authorizeOffensiveAction(attackerId, null)` currently allows unowned capture even when attacker is unknown/dead. Fail closed for invalid actor before honoring legitimate terra nullius capture. Tests must distinguish both cases.
-Keep all 19 original conflict cases and existing atomicity tests passing; obtain exact-head green CI. Conductor will then merge #14.
+   Keep all 19 original conflict cases and existing atomicity tests passing; obtain exact-head green CI. Conductor will then merge #14.
 
 ## GATE B — LIVE GAME INTEGRATION, NO FAKE LEDGER
 
