@@ -99,6 +99,14 @@ export class GameView implements GameLike {
   public nationalPoliticsTick(): number | null {
     return this._nationalPoliticsTick;
   }
+
+  /** Invalidate an old roster on disconnect; await a new GameRunner packet. */
+  public invalidateNationalPoliticalView(): void {
+    this._nationalPolitics = null;
+    this._nationalPoliticsTick = null;
+    this._nationalFoundingResults = [];
+    this._nationalFoundingOutcome = null;
+  }
   private startTick: Tick | null = null;
   private smallIDToID = new Map<number, PlayerID>();
   private _players = new Map<PlayerID, PlayerView>();
