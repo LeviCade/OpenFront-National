@@ -146,6 +146,22 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
     ).not.toContain(hiddenTile);
   });
 
+  it("FOG-03 rejects hidden-location RPC probes by the correct player", async () => {
+    const game = await activeGame(true);
+    const runner = new GameRunner(
+      game,
+      new Executor(game, "probe-test", viewer.clientID!),
+      () => {},
+      viewer.clientID!,
+    );
+    expect(runner.isNationalRequesterAuthorized(viewer.id)).toBe(true);
+    expect(runner.isNationalCoordinateVisible(10, 10)).toBe(true);
+    expect(runner.isNationalCoordinateVisible(80, 80)).toBe(false);
+    expect(runner.isNationalTileVisible(game.ref(80, 80))).toBe(false);
+    expect(runner.isNationalRequesterAuthorized(secret.id)).toBe(false);
+    expect(runner.isNationalCoordinateVisible(100000, 100000)).toBe(false);
+  });
+
   it("FOG-02 denies confidential diplomatic canaries in actual outbound packets", async () => {
     const game = await activeGame(true);
     const confidential = "TOP_SECRET_TREATY_CANARY_638155";
