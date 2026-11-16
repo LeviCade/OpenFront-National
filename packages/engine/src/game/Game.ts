@@ -47,10 +47,10 @@ import {
 } from "@openfront/engine-api/Schemas";
 import { MotionPlanRecord } from "@openfront/engine-lib/game/MotionPlans";
 import type { EngineConfig } from "../configuration/EngineConfig";
+import type { NationalCommand } from "../national/NationalRuntime";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { PathFinder } from "../pathfinding/types";
 import type { ExecRecord, SnapshotWriter } from "../snapshot/SnapshotContext";
-import type { NationalCommand } from "../national/NationalRuntime";
 import { RailNetwork } from "./RailNetwork";
 import { Stats } from "./Stats";
 

@@ -69,6 +69,11 @@ import {
 import { NationExecution } from "../execution/NationExecution";
 import { SpawnTimerExecution } from "../execution/SpawnTimerExecution";
 import { TribeExecution } from "../execution/TribeExecution";
+import {
+  NationalRuntime,
+  NationalRuntimeSnapshotSchema,
+  type NationalCommand,
+} from "../national/NationalRuntime";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathFinder } from "../pathfinding/types";
@@ -106,11 +111,6 @@ import { Railroad } from "./Railroad";
 import { Stats } from "./Stats";
 import { StatsImpl, StatsSnapshot } from "./StatsImpl";
 import { WaterManager, WaterManagerSnapshot } from "./WaterManager";
-import {
-  NationalRuntime,
-  NationalRuntimeSnapshotSchema,
-  type NationalCommand,
-} from "../national/NationalRuntime";
 
 export function createGame(
   humans: PlayerInfo[],
@@ -1808,14 +1808,16 @@ export class GameImpl implements Game {
       readVersioned(StatsSnapshot, s.stats),
     );
     if (this._config.nationalMode()) {
-      if (s.national === null) throw new Error("NATIONAL snapshot state missing");
+      if (s.national === null)
+        throw new Error("NATIONAL snapshot state missing");
       this._national = NationalRuntime.restore(
         s.national,
         this._playersBySmallID.map((p) => p.id()),
         this._ticks,
       );
     } else {
-      if (s.national !== null) throw new Error("NATIONAL data in legacy snapshot");
+      if (s.national !== null)
+        throw new Error("NATIONAL data in legacy snapshot");
       this._national = null;
     }
   }

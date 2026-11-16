@@ -559,7 +559,9 @@ export class SinglePlayerModal extends BaseModal {
             @open-shared-save=${(e: CustomEvent<string>) =>
               (this.sharedSaveId = e.detail)}
           ></saved-games-panel>
-          <label class="flex items-start gap-3 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 mb-4 cursor-pointer">
+          <label
+            class="flex items-start gap-3 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 mb-4 cursor-pointer"
+          >
             <input
               type="checkbox"
               class="mt-1 accent-yellow-400"

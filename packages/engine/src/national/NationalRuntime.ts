@@ -35,35 +35,45 @@ const pactTerms = z.object({
   expulsion: z.enum(["leader", "unanimous", "forbidden"]),
 });
 const politicsSchema = z.object({
-  nations: z.array(z.object({
-    id: z.string().min(1),
-    alive: z.boolean(),
-    metrics,
-  })),
-  pacts: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    kind: z.enum(["NAP", "MDA"]),
-    memberIds: z.array(z.string()),
-    administratorId: z.string().nullable(),
-    terms: pactTerms,
-    invitations: z.array(z.object({
-      targetId: z.string(),
-      approvedBy: z.array(z.string()),
-    })),
-  })),
-  empires: z.array(z.object({
-    id: z.string(),
-    leaderId: z.string(),
-    memberIds: z.array(z.string()),
-    crisisDeadlineMs: counter.nullable(),
-  })),
-  accessionOffers: z.array(z.object({
-    empireId: z.string(),
-    candidateId: z.string(),
-    proposerId: z.string(),
-    recipientId: z.string(),
-  })),
+  nations: z.array(
+    z.object({
+      id: z.string().min(1),
+      alive: z.boolean(),
+      metrics,
+    }),
+  ),
+  pacts: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      kind: z.enum(["NAP", "MDA"]),
+      memberIds: z.array(z.string()),
+      administratorId: z.string().nullable(),
+      terms: pactTerms,
+      invitations: z.array(
+        z.object({
+          targetId: z.string(),
+          approvedBy: z.array(z.string()),
+        }),
+      ),
+    }),
+  ),
+  empires: z.array(
+    z.object({
+      id: z.string(),
+      leaderId: z.string(),
+      memberIds: z.array(z.string()),
+      crisisDeadlineMs: counter.nullable(),
+    }),
+  ),
+  accessionOffers: z.array(
+    z.object({
+      empireId: z.string(),
+      candidateId: z.string(),
+      proposerId: z.string(),
+      recipientId: z.string(),
+    }),
+  ),
   simulationMs: counter,
 });
 
@@ -118,15 +128,22 @@ export class NationalRuntime {
     tick: number,
     spawnPhaseEnded: boolean,
   ): void {
-    if (!Number.isSafeInteger(tick) || tick < this.lastTick ||
-        !Number.isSafeInteger(tick * 100)) {
+    if (
+      !Number.isSafeInteger(tick) ||
+      tick < this.lastTick ||
+      !Number.isSafeInteger(tick * 100)
+    ) {
       throw new Error("NATIONAL: invalid or nonmonotonic simulation tick");
     }
     const known = new Set(this.politics.nations.map((n) => n.id));
     const live = new Map<PlayerID, NationalLivePlayer>();
     for (const player of players) {
-      if (live.has(player.id) || !player.id ||
-          !Number.isSafeInteger(player.land) || player.land < 0) {
+      if (
+        live.has(player.id) ||
+        !player.id ||
+        !Number.isSafeInteger(player.land) ||
+        player.land < 0
+      ) {
         throw new Error("NATIONAL: invalid live player identity/land");
       }
       live.set(player.id, player);
@@ -161,9 +178,11 @@ export class NationalRuntime {
 
   /** One real authenticated, live nation may found an empire. No side effects on failure. */
   perform(actorId: PlayerID, command: NationalCommand): void {
-    if (command.kind !== "found-empire" ||
-        typeof command.empireId !== "string" ||
-        !/^[A-Za-z0-9_-]{1,64}$/.test(command.empireId)) {
+    if (
+      command.kind !== "found-empire" ||
+      typeof command.empireId !== "string" ||
+      !/^[A-Za-z0-9_-]{1,64}$/.test(command.empireId)
+    ) {
       throw new Error("NATIONAL: invalid authenticated political command");
     }
     // E1 transition validates independent status, liveness and empire uniqueness.
@@ -199,14 +218,18 @@ export class NationalRuntime {
   ): NationalRuntime {
     const saved = NationalRuntimeSnapshotSchema.parse(raw);
     validatePolitics(saved.politics);
-    if (saved.lastTick > engineTick ||
-        saved.politics.simulationMs > engineTick * 100) {
+    if (
+      saved.lastTick > engineTick ||
+      saved.politics.simulationMs > engineTick * 100
+    ) {
       throw new Error("NATIONAL: snapshot is from the future");
     }
     const ids = new Set(actualIds);
-    if (ids.size !== actualIds.length ||
-        ids.size !== saved.politics.nations.length ||
-        saved.politics.nations.some((n) => !ids.has(n.id))) {
+    if (
+      ids.size !== actualIds.length ||
+      ids.size !== saved.politics.nations.length ||
+      saved.politics.nations.some((n) => !ids.has(n.id))
+    ) {
       throw new Error("NATIONAL: snapshot identities differ from real players");
     }
     const restored = new NationalRuntime([]);

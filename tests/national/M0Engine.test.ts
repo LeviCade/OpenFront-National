@@ -16,8 +16,8 @@ import type { Game } from "@openfront/engine/game/Game";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
-import { roundTrip, restoreTestGame } from "../util/Snapshot";
 import { setup } from "../util/Setup";
+import { roundTrip, restoreTestGame } from "../util/Snapshot";
 
 const names = [
   new PlayerInfo("North", PlayerType.Human, "north-client", "north-id"),
@@ -57,19 +57,21 @@ describe("Stage 3 M0: authoritative NATIONAL vertical slice", () => {
       { gameMode: GameMode.Team },
       { tutorial: true },
     ]) {
-      expect(
-        () => new EngineConfig({ ...valid, ...patch }, false),
-      ).toThrow(/Solo Free For All/);
+      expect(() => new EngineConfig({ ...valid, ...patch }, false)).toThrow(
+        /Solo Free For All/,
+      );
     }
     const ranked = {
       ...valid,
       rankedType: "ffa" as GameConfig["rankedType"],
     };
-    expect(() => new EngineConfig(ranked, false)).toThrow(
-      /Solo Free For All/,
-    );
-    expect(new EngineConfig({ ...config, nationalMode: false }, false)
-      .nationalMode()).toBe(false);
+    expect(() => new EngineConfig(ranked, false)).toThrow(/Solo Free For All/);
+    expect(
+      new EngineConfig(
+        { ...config, nationalMode: false },
+        false,
+      ).nationalMode(),
+    ).toBe(false);
     expect(config.difficulty).toBe(Difficulty.Medium);
   });
 
@@ -121,29 +123,45 @@ describe("Stage 3 M0: authoritative NATIONAL vertical slice", () => {
 
   it("rejects forged players, pre-spawn commands, duplicate empires, and legacy actions", async () => {
     const beforeSpawn = await setup("plains", { nationalMode: true }, names);
-    expect(() => beforeSpawn.performNationalCommand(beforeSpawn.player("north-id"), {
-      kind: "found-empire", empireId: "pre-spawn",
-    })).toThrow();
+    expect(() =>
+      beforeSpawn.performNationalCommand(beforeSpawn.player("north-id"), {
+        kind: "found-empire",
+        empireId: "pre-spawn",
+      }),
+    ).toThrow();
     const national = await spawned(true);
     const outsider = await spawned(true);
-    expect(() => national.performNationalCommand(outsider.player("north-id"), {
-      kind: "found-empire", empireId: "stolen",
-    })).toThrow();
-    expect(() => national.performNationalCommand(national.player("north-id"), {
-      kind: "found-empire", empireId: "invalid empire name",
-    })).toThrow();
+    expect(() =>
+      national.performNationalCommand(outsider.player("north-id"), {
+        kind: "found-empire",
+        empireId: "stolen",
+      }),
+    ).toThrow();
+    expect(() =>
+      national.performNationalCommand(national.player("north-id"), {
+        kind: "found-empire",
+        empireId: "invalid empire name",
+      }),
+    ).toThrow();
     expect(state(national)?.politics.empires).toHaveLength(0);
     national.performNationalCommand(national.player("north-id"), {
-      kind: "found-empire", empireId: "national-1",
+      kind: "found-empire",
+      empireId: "national-1",
     });
-    expect(() => national.performNationalCommand(national.player("north-id"), {
-      kind: "found-empire", empireId: "national-1",
-    })).toThrow();
+    expect(() =>
+      national.performNationalCommand(national.player("north-id"), {
+        kind: "found-empire",
+        empireId: "national-1",
+      }),
+    ).toThrow();
     expect(state(national)?.politics.empires).toHaveLength(1);
     const legacy = await spawned(false);
-    expect(() => legacy.performNationalCommand(legacy.player("north-id"), {
-      kind: "found-empire", empireId: "forbidden",
-    })).toThrow(/not enabled/);
+    expect(() =>
+      legacy.performNationalCommand(legacy.player("north-id"), {
+        kind: "found-empire",
+        empireId: "forbidden",
+      }),
+    ).toThrow(/not enabled/);
   });
 
   it("restores politics through a version-2 GameSnapshot with exact bytes", async () => {

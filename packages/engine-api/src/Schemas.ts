@@ -577,7 +577,11 @@ export const ToggleGameStartTimerIntentSchema = z.object({
 // Actor identity is resolved from the trusted stamped clientID.
 export const NationalFoundEmpireIntentSchema = z.object({
   type: z.literal("national_found_empire"),
-  empireId: z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/),
+  empireId: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Za-z0-9_-]+$/),
 });
 
 export const IntentSchema = z.discriminatedUnion("type", [

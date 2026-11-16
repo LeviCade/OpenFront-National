@@ -26,7 +26,10 @@ interface NationalPoliticalAuthority {
   membersOf(empireId: string): readonly NationalPlayerID[];
   alive(id: NationalPlayerID): boolean;
   protectedByTreaty(a: NationalPlayerID, b: NationalPlayerID): boolean;
-  delegatedNationalWar(id: NationalPlayerID, action: "declare" | "peace"): boolean;
+  delegatedNationalWar(
+    id: NationalPlayerID,
+    action: "declare" | "peace",
+  ): boolean;
   checkLastSovereignVictory(): SovereignVictory | null;
 }
 
@@ -85,6 +88,7 @@ interface NationalObservationBoundary {
 ## Explicitly unresolved; DO NOT invent policy
 
 These decisions remain open in [the decision register](11-decisions.md), and require focused scenario acceptance:
+
 - Server-generated campaign identity/window for repeated attacks and when two offensives count as the same campaign.
 - Whether already-intercepted defensive levy troops can or should return on attack retreat; any decision must preserve troop conservation.
 - Existing scoped national wars on imperial accession, imperial war disposition on empire collapse, and treasury/troop redistribution.
@@ -93,6 +97,7 @@ These decisions remain open in [the decision register](11-decisions.md), and req
 ## Round Two merge / release gates
 
 A complete M0 executable adapter must pass:
+
 - Legacy mode invariant: absence of the flag yields byte-equivalent old outcomes for identical seeds.
 - Invalid NATIONAL selector or command is rejected before any side effect.
 - SOV-01/04/06/07 across real game players, winner routing and snapshot restore.
