@@ -341,6 +341,28 @@ async function main() {
       await poll(() => evaluate("!!document.querySelector('single-player-modal input[aria-label=\"Enable NATIONAL sovereignty in Solo\"]')"), "Solo modal controls");
       await capture("solo-modal");
     });
+    if (legacy) {
+      await step("legacy-ffa", async () => {
+        const national = await locate("Enable NATIONAL sovereignty in Solo", "single-player-modal", false);
+        if (!national || national.checked) {
+          throw Error("Legacy FFA did not start from an unselected NATIONAL checkbox");
+        }
+        await click("start|play", "single-player-modal", 65);
+        await poll(
+          () => evaluate("!!window.__nationalQaFind('game-right-sidebar') && !document.body.innerText.includes('Game is starting')"),
+          "running legacy FFA HUD", 100, 350,
+        );
+        if (await evaluate("!!window.__nationalQaFind('national-diplomacy-panel')")) {
+          throw Error("Legacy FFA leaked an active NATIONAL diplomacy component");
+        }
+        await capture("legacy-ffa-game-hud");
+        record("legacy-ffa-verified", {
+          nationalPanelAbsent: true,
+          workerPacketCount: observed.length,
+        });
+      });
+      return;
+    }
     await step("national-mode", async () => {
       const checkbox = await locate("Enable NATIONAL sovereignty in Solo", "single-player-modal");
       if (!checkbox) throw Error("NATIONAL opt-in control missing");
