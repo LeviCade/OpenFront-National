@@ -285,7 +285,7 @@ export function collectLiveNationalObservation(
         startedTick: layer.startedTick,
       });
     }
-    wars.sort((a, b) => a.id.localeCompare(b.id, "en"));
+    wars.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   }
   const world: NationalWorld = {
     tick,
