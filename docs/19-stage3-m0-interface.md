@@ -1,5 +1,8 @@
 # 19 — M0 authoritative integration contract (CONDUCTOR DRAFT)
 
+> **HISTORICAL M0 DESIGN — SUPERSEDED FOR ROUND THREE:** The draft status, branch SHA and assertion that no PR was merged below describe the **pre-implementation checkpoint** only. The executable M0 state is integrated, E1 PR #13/#17 and E3 PR #12 are merged; E2 PR #14 is held for repair. Use [current Stage 3 Round Three integration contract](20-stage3-round3-integration.md) and [GitHub issue #8](https://github.com/LeviCade/OpenFront-National/issues/8) for current ownership, testing and implementation status. Unresolved policy remains in issue #15.
+
+
 **Status:** Published conductor interface draft, November 15, 2026. **M0 runtime implementation is NOT complete.** This document establishes the common target for integrating the three already-CI-green engineering PRs. No PR #12/#13/#14 is merged at this checkpoint.
 
 **Starting integration SHA:** `dacb0fe6b7e7c4dd5e681b9bf671498ee4827e6a`.

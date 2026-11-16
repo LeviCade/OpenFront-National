@@ -1,5 +1,8 @@
 # Instructions for coding agents and future engineer/conductor sessions
 
+> **Current Stage 3 checkpoint (November 15, 2026):** Executable NATIONAL M0 political state, one authenticated founding command and last-sovereign winner are integrated on `stage3/integration-20261115`. E1 Round Two politics authority PR #17 and E3 Round Two observation/AI PR #12 are merged; E2 PR #14 awaits documented replay/authorization repair. **Stage 3 is IN PROGRESS, not fully playable.** For current engineering ownership and Round Three orders, read [`docs/20-stage3-round3-integration.md`](docs/20-stage3-round3-integration.md), which supersedes older central-file prohibitions for this round. The historical stage label immediately below describes the start-of-stage baseline, not current state.
+
+
 ## Current stage
 
 **Stage 1 — VISION COMPLETE. Stage 2 — SOURCE MIGRATION ACCEPTED AND MERGED. Stage 3 — AUTHORIZED, NOT YET IMPLEMENTED.** Read [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md), [docs/17-stage2-acceptance.md](docs/17-stage2-acceptance.md), and [docs/18-stage3-conductor.md](docs/18-stage3-conductor.md) before changing implementation. Use the verified merged source on main. Preserve the vision, upstream notices, original NATIONAL asset replacements, and legacy behavior. Do not ship publicly until remaining pre-release checks are resolved.
