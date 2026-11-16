@@ -46,6 +46,12 @@ import { SpiralTrails } from "../render/frame/SpiralTrails";
 import { TrailManager } from "../render/frame/TrailManager";
 import type { FrameData, NameEntry } from "../render/types";
 import { STRUCTURE_TYPES, TRAIL_TYPES } from "../render/types";
+import {
+  readNationalFoundingResults,
+  readNationalPolitics,
+  type NationalFoundingResult,
+  type NationalPublicPolitics,
+} from "../NationalDiplomacyState";
 import { UserSettings } from "../UserSettings";
 import { resolveTeamClanTag } from "../Utils";
 import { WorkerClient } from "../WorkerClient";
@@ -69,6 +75,18 @@ function readCosmeticVisibility(): CosmeticVisibility {
 
 export class GameView implements GameLike {
   private lastUpdate: GameUpdateViewData | null;
+  // Authoritative, viewer-filtered worker values only. Never reconstruct
+  // sovereignty from local intents or speculative client player data.
+  private _nationalPolitics: NationalPublicPolitics | null = null;
+  private _nationalFoundingOutcome: NationalFoundingResult | null = null;
+
+  public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
+    return this._nationalPolitics;
+  }
+
+  public nationalFoundingOutcome(): Readonly<NationalFoundingResult> | null {
+    return this._nationalFoundingOutcome;
+  }
   private startTick: Tick | null = null;
   private smallIDToID = new Map<number, PlayerID>();
   private _players = new Map<PlayerID, PlayerView>();
@@ -257,6 +275,26 @@ export class GameView implements GameLike {
     this.toDelete.clear();
 
     this.lastUpdate = gu;
+
+    if (this._config.gameConfig().nationalMode === true) {
+      // Contract supplied by E1/E3: a complete public projection per tick and
+      // a per-principal result. Missing/invalid projections NEVER mean success.
+      const nationalPacket = gu as GameUpdateViewData & {
+        nationalPolitics?: unknown;
+        nationalCommandResults?: unknown;
+      };
+      this._nationalPolitics = readNationalPolitics(
+        nationalPacket.nationalPolitics,
+      );
+      const outcomes = readNationalFoundingResults(
+        nationalPacket.nationalCommandResults,
+      );
+      for (const outcome of outcomes) {
+        if (outcome.actorId === this._myPlayer?.id()) {
+          this._nationalFoundingOutcome = outcome;
+        }
+      }
+    }
 
     this.updatedTiles = [];
     this.updatedTerrainTiles = [];
