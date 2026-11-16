@@ -27,6 +27,45 @@ type GameWithReadFacade = Game & {
   nationalPoliticalAuthority?: () => PoliticalReadFacade | null;
 };
 
+/**
+ * Structural read-only bridge to E1's Game-owned E2 WarLedger.
+ * No local war registry, no client assertions and no synthetic hostility.
+ * The bridge remains null until the canonical E1/E2 runtime is merged.
+ */
+export interface LiveWarAuthority {
+  authorizeOffensiveAction(
+    attackerId: string,
+    targetId: string | null,
+  ): boolean;
+  snapshot(): {
+    readonly wars: {
+      readonly layers: readonly {
+        readonly id: string;
+        readonly scope: "national" | "imperial";
+        readonly first: {
+          readonly kind: "nation" | "empire";
+          readonly id: string;
+        };
+        readonly second: {
+          readonly kind: "nation" | "empire";
+          readonly id: string;
+        };
+        readonly startedTick: number;
+        readonly endedTick: number | null;
+      }[];
+    };
+  };
+}
+
+type GameWithWarFacade = Game & {
+  nationalWarAuthority?: () => LiveWarAuthority | null;
+};
+
+export function liveNationalWarAuthority(game: Game): LiveWarAuthority | null {
+  const candidate = (game as GameWithWarFacade).nationalWarAuthority;
+  return typeof candidate === "function" ? candidate.call(game) : null;
+}
+
 export interface LiveNationalObservation {
   readonly observation: NationalObservation;
   /** Tiles with trusted live ownership or adjacent-border sight. */
@@ -70,7 +109,14 @@ function activeEmpireMembers(
   if (!members.includes(observer.id())) {
     return { empire: null, members: [observer.id()] };
   }
-  return { empire, members };
+  // Trust reciprocal, current membership for every contributor, not only
+  // the observer. A stale/forged roster cannot grant another nation's sight.
+  return {
+    empire,
+    members: [...new Set(members)]
+      .filter((id) => authority?.empireOf(id) === empire)
+      .sort(),
+  };
 }
 
 /** Recomputes sight directly from the *current* game at a tick boundary. */
@@ -84,23 +130,37 @@ export function collectLiveNationalObservation(
   const observer = game.player(observerId);
   if (!observer.isPlayer()) throw new Error("Invalid observation principal");
   const authority = getFacade(game);
+  const warAuthority = liveNationalWarAuthority(game);
   const { members } = activeEmpireMembers(authority, observer);
   const allowedPrincipals = new Set(members);
   const visibleTiles = new Set<TileRef>();
+  // Record the ACTUAL sight contributor. Crediting a member's sight to the
+  // requesting observer would make inherited sightings survive an empire split.
+  const sightOrigin = new Map<TileRef, string>();
+  const markVisible = (tile: TileRef, memberId: string): void => {
+    visibleTiles.add(tile);
+    if (!sightOrigin.has(tile)) sightOrigin.set(tile, memberId);
+  };
   const frontierKeys = new Set<string>();
   const frontiers: NationalWorld["frontiers"][number][] = [];
   let unownedFrontier = false;
 
   // Do not enumerate globally owned tiles just to discover enemies. Every
   // seed is a current authenticated member's actual territory.
-  for (const memberId of [...allowedPrincipals].sort()) {
+  // Own sight takes precedence when the same tile is visible to several
+  // members. Thus a direct sighting remains valid after a membership split.
+  const sightOrder = [
+    observerId,
+    ...[...allowedPrincipals].filter((id) => id !== observerId).sort(),
+  ];
+  for (const memberId of sightOrder) {
     if (!game.hasPlayer(memberId)) continue;
     const member = game.player(memberId);
-    for (const tile of member.tiles()) visibleTiles.add(tile);
+    for (const tile of member.tiles()) markVisible(tile, memberId);
     for (const tile of member.borderTiles()) {
-      visibleTiles.add(tile);
+      markVisible(tile, memberId);
       game.forEachNeighbor(tile, (neighbor) => {
-        visibleTiles.add(neighbor);
+        markVisible(neighbor, memberId);
         const owner = game.owner(neighbor);
         if (!owner.isPlayer()) {
           if (memberId === observerId && game.isLand(neighbor)) {
@@ -181,7 +241,7 @@ export function collectLiveNationalObservation(
     });
     if (!allowedPrincipals.has(ownerId) && visibleTiles.has(tile)) {
       sightGrants.push({
-        observerId,
+        observerId: sightOrigin.get(tile) ?? observerId,
         assetId: String(unit.id()),
         source: "border",
         observedAtTick: tick,
@@ -190,14 +250,57 @@ export function collectLiveNationalObservation(
     }
   }
 
-  // The E2 canonical scoped war read-port has not yet been merged. Intentionally
-  // no guessed war records or arbitrary alliances from Game. Foreign combat
-  // remains disabled until a conductor-owned E2 adapter supplies active wars.
+  // Public war IDs/sides come ONLY from the current Game-owned canonical
+  // ledger. Never copy private peace motions, levy spending or declaredBy.
+  // A stale empire roster cannot resurrect a departed member's war rights.
+  const activeSide = (side: {
+    readonly kind: "nation" | "empire";
+    readonly id: string;
+  }): readonly string[] => {
+    if (side.kind === "nation") {
+      return game.hasPlayer(side.id) && game.player(side.id).isAlive()
+        ? [side.id]
+        : [];
+    }
+    return [...(authority?.membersOf(side.id) ?? [])]
+      .filter(
+        (id) =>
+          game.hasPlayer(id) &&
+          game.player(id).isAlive() &&
+          authority?.empireOf(id) === side.id,
+      )
+      .sort();
+  };
+  const wars: NationalWorld["wars"][number][] = [];
+  if (authority && warAuthority) {
+    for (const layer of warAuthority.snapshot().wars.layers) {
+      if (layer.endedTick !== null) continue;
+      const firstMembers = activeSide(layer.first);
+      const secondMembers = activeSide(layer.second);
+      if (firstMembers.length === 0 || secondMembers.length === 0) continue;
+      wars.push({
+        id: layer.id,
+        scope: layer.scope,
+        first: {
+          kind: layer.first.kind,
+          stableId: layer.first.id,
+          activeMemberIds: firstMembers,
+        },
+        second: {
+          kind: layer.second.kind,
+          stableId: layer.second.id,
+          activeMemberIds: secondMembers,
+        },
+        startedTick: layer.startedTick,
+      });
+    }
+    wars.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  }
   const world: NationalWorld = {
     tick,
     nations,
     coalitions,
-    wars: [],
+    wars,
     invitations: [],
     assets,
     sightGrants,
