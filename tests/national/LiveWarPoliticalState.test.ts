@@ -345,6 +345,10 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     game.performNationalCommand(game.player(C), {
       kind: "accept-pact", pactId: "r4-private-nap",
     });
+    const preAccession = game.nationalPublicPoliticalView()!;
+    expect(preAccession.empires).toEqual([]);
+    expect(JSON.stringify(preAccession)).not.toContain("Not client public");
+    expect(JSON.stringify(preAccession)).not.toContain("r4-private-nap");
     joined(game);
     const view = game.nationalPublicPoliticalView()!;
     expect(Object.keys(view).sort()).toEqual(["empires", "victory", "warnings"]);
