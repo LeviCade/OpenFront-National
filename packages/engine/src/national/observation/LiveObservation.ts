@@ -33,14 +33,23 @@ type GameWithReadFacade = Game & {
  * The bridge remains null until the canonical E1/E2 runtime is merged.
  */
 export interface LiveWarAuthority {
-  authorizeOffensiveAction(attackerId: string, targetId: string | null): boolean;
+  authorizeOffensiveAction(
+    attackerId: string,
+    targetId: string | null,
+  ): boolean;
   snapshot(): {
     readonly wars: {
       readonly layers: readonly {
         readonly id: string;
         readonly scope: "national" | "imperial";
-        readonly first: { readonly kind: "nation" | "empire"; readonly id: string };
-        readonly second: { readonly kind: "nation" | "empire"; readonly id: string };
+        readonly first: {
+          readonly kind: "nation" | "empire";
+          readonly id: string;
+        };
+        readonly second: {
+          readonly kind: "nation" | "empire";
+          readonly id: string;
+        };
         readonly startedTick: number;
         readonly endedTick: number | null;
       }[];

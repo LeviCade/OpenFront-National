@@ -20,9 +20,7 @@ import {
   planNationalInterest,
 } from "@openfront/engine/national/ai/NationalPlanner";
 import { WarLedger } from "@openfront/engine/national/conflict/WarLedger";
-import {
-  collectLiveNationalObservation,
-} from "@openfront/engine/national/observation/LiveObservation";
+import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import { advanceLastKnown } from "@openfront/engine/national/observation/NationalObservation";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
@@ -181,9 +179,9 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
       activeMemberIds: [viewer.id],
     });
     expect(during.wars[0].second.activeMemberIds).toEqual([secret.id]);
-    expect(
-      [...deriveNationalWarSides(during.wars, viewer.id).enemies],
-    ).toEqual([secret.id]);
+    expect([...deriveNationalWarSides(during.wars, viewer.id).enemies]).toEqual(
+      [secret.id],
+    );
     expect(JSON.stringify(during.wars)).not.toContain("declaredBy");
     expect(JSON.stringify(during.wars)).not.toContain("proposedBy");
     expect(JSON.stringify(during.wars)).not.toContain("motions");
@@ -448,9 +446,11 @@ describe("REAL NATIONAL NationExecution and GameRunner observation boundary", ()
         id === "e3_sight" ? [] : authority.membersOf(id),
     }));
     const after = collectLiveNationalObservation(game, viewer.id);
-    expect(after.observation.visibleAssets.some(
-      (a) => a.id === String(hostileShip.id()),
-    )).toBe(false);
+    expect(
+      after.observation.visibleAssets.some(
+        (a) => a.id === String(hostileShip.id()),
+      ),
+    ).toBe(false);
     expect(
       advanceLastKnown(after.observation, savedSight.memory, 60).stale.some(
         (a) => a.id === String(hostileShip.id()),
