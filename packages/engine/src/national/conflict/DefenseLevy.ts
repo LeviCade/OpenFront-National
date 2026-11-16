@@ -78,6 +78,11 @@ export interface LevyContribution {
   readonly troopsDebited: number;
 }
 export interface DefenseResult {
+  /**
+   * Only "applied" represents a newly funded interception. A replay result
+   * reports ZERO new interception and MUST NOT reduce attacking troops again.
+   */
+  readonly application: "applied" | "replay";
   readonly attackId: string;
   readonly campaignId: string;
   readonly attackTroopsBefore: number;
@@ -122,6 +127,19 @@ function fraction(n: number): void {
 }
 function copyResult(r: DefenseResult): DefenseResult {
   return { ...r, contributions: r.contributions.map((c) => ({ ...c })) };
+}
+
+/** Duplicate receipt is a strict no-op for BOTH sides, not a combat result. */
+function replayResult(r: DefenseResult): DefenseResult {
+  return {
+    application: "replay",
+    attackId: r.attackId,
+    campaignId: r.campaignId,
+    attackTroopsBefore: r.attackTroopsBefore,
+    intercepted: 0,
+    remainingAttackingTroops: r.attackTroopsBefore,
+    contributions: [],
+  };
 }
 
 /** Deterministic capped weighted distribution: sum exactly min(demand, caps). */
@@ -238,6 +256,8 @@ export class DefenseLevyLedger {
       assertNonnegative(x.attackTroopsBefore, "attack size");
       if (
         processed.has(x.attackId) ||
+        (x.result.application !== undefined &&
+          x.result.application !== "applied") ||
         x.result.attackId !== x.attackId ||
         x.result.campaignId !== x.campaignId ||
         x.result.attackTroopsBefore !== x.attackTroopsBefore
@@ -262,7 +282,10 @@ export class DefenseLevyLedger {
       }
       if (charged !== x.result.intercepted)
         throw new Error("phantom interception");
-      processed.set(x.attackId, { ...x, result: copyResult(x.result) });
+      processed.set(x.attackId, {
+        ...x,
+        result: copyResult({ ...x.result, application: "applied" }),
+      });
     }
     const accounted = new Map<string, number>();
     for (const record of processed.values())
@@ -420,7 +443,7 @@ export class DefenseLevyLedger {
         previous.attackTroopsBefore !== r.attackingTroops
       )
         throw new Error("attack ID reused with different details");
-      return copyResult(previous.result);
+      return replayResult(previous.result);
     }
 
     const candidates = new Map<string, LevyEligibility>();
@@ -505,6 +528,7 @@ export class DefenseLevyLedger {
     }
 
     const result: DefenseResult = {
+      application: "applied",
       attackId: r.attackId,
       campaignId: r.campaignId,
       attackTroopsBefore: r.attackingTroops,
