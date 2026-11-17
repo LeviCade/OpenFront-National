@@ -46,7 +46,13 @@ export class NationalFoundEmpireExecution implements Execution {
         if (!result.accepted)
           console.warn("NATIONAL founding rejected:", result.reason);
       } else {
-        this.game.performNationalCommand(this.actor, this.politicalCommand);
+        const result = this.game.performNationalPoliticalCommandWithOutcome(
+          this.actor,
+          this.politicalCommand,
+          this.requestId,
+        );
+        if (!result.accepted)
+          console.warn("NATIONAL political command rejected:", result.reason);
       }
     } catch (err) {
       // A malicious, duplicate or now-illegal command is a deterministic
