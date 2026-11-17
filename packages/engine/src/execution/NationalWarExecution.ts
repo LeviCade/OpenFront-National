@@ -51,11 +51,18 @@ const stateSchema = z.object({
   initialized: z.boolean(),
   actor: zPlayerRef(),
   command: warCommandSchema,
+  // Historic v1 execution states are migrated to null, never invent a click.
+  requestId: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .nullable(),
 });
 type State = z.infer<typeof stateSchema>;
 
 type WarParty = { kind: "nation" | "empire"; id: string };
-type CanonicalWarCommand =
+type CanonicalWarCommand = (
   | {
       kind: "declare-national";
       warId: string;
@@ -69,7 +76,8 @@ type CanonicalWarCommand =
       target: WarParty;
     }
   | { kind: "propose-peace"; motionId: string; warId: string }
-  | { kind: "accept-peace"; motionId: string };
+  | { kind: "accept-peace"; motionId: string }
+) & { readonly requestId?: string };
 
 /**
  * Exactly E1's Round Four canonical Game port, included structurally here
@@ -201,6 +209,8 @@ export class NationalWarExecution implements Execution {
   constructor(
     private actor: Player,
     private command: NationalWarCommand,
+    // Optional E4 click correlation. E1's journal owns acceptance/idempotency.
+    private requestId: string | null = null,
   ) {}
 
   isActive(): boolean {
@@ -274,7 +284,14 @@ export class NationalWarExecution implements Execution {
     try {
       // GameImpl rechecks authoritative actor, timing, live politics and
       // delegates to the canonical snapshotted WarLedger.
-      port.performNationalWarCommand(this.actor, command);
+      // Passing the token cannot confer legitimacy: the actor remains the
+      // server-stamped Player and E1 rechecks sovereignty before any change.
+      port.performNationalWarCommand(
+        this.actor,
+        this.requestId === null
+          ? command
+          : { ...command, requestId: this.requestId },
+      );
     } catch (error) {
       console.warn("NATIONAL war command rejected:", String(error));
     }
@@ -286,6 +303,7 @@ export class NationalWarExecution implements Execution {
       initialized: this.game !== null,
       actor: w.player(this.actor),
       command: this.command,
+      requestId: this.requestId,
     });
   }
 
@@ -294,12 +312,16 @@ export class NationalWarExecution implements Execution {
     this.game = state.initialized ? reader.game : null;
     this.actor = reader.player(state.actor);
     this.command = state.command;
+    this.requestId = state.requestId;
   }
 }
 
 export const NationalWarExecutionSnapshot = execSnapshotType({
   name: "NationalWar",
-  version: 1,
+  version: 2,
   schema: stateSchema,
+  migrations: {
+    1: (old: object) => ({ ...old, requestId: null }),
+  },
   cls: () => NationalWarExecution,
 });
