@@ -327,7 +327,9 @@ export function readNationalDiplomacyResults(
       sequence: entry.sequence as number,
       requestId: entry.requestId,
       ...(typeof entry.warId === "string" ? { warId: entry.warId } : {}),
-      ...(typeof entry.motionId === "string" ? { motionId: entry.motionId } : {}),
+      ...(typeof entry.motionId === "string"
+        ? { motionId: entry.motionId }
+        : {}),
       ...(typeof entry.reason === "string"
         ? { reason: entry.reason.slice(0, 240) }
         : {}),

@@ -346,7 +346,9 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     ];
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.textContent).toContain("The game rejected this diplomacy action");
+    expect(panel.textContent).toContain(
+      "The game rejected this diplomacy action",
+    );
     expect(panel.textContent).toContain("political-rule");
     expect(panel.textContent).not.toContain("Confirmed by game");
   });
@@ -371,7 +373,9 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     ];
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.textContent).toContain("Authenticated positive command receipt");
+    expect(panel.textContent).toContain(
+      "Authenticated positive command receipt",
+    );
     expect(panel.textContent).toContain("No completed action is confirmed");
     expect(panel.textContent).not.toContain("War accepted");
   });
@@ -387,14 +391,16 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       requestId: "nc_11111111111111111111111111111111",
       reason: "political-rule",
     };
-    expect(readNationalDiplomacyResults([
-      { ...valid, recipientId: "nation-b" },
-      { ...valid, sequence: -1 },
-      { ...valid, requestId: "legacy" },
-      { ...valid, tick: -4 },
-      { ...valid, type: "national_found_empire" },
-      valid,
-    ])).toEqual([valid]);
+    expect(
+      readNationalDiplomacyResults([
+        { ...valid, recipientId: "nation-b" },
+        { ...valid, sequence: -1 },
+        { ...valid, requestId: "legacy" },
+        { ...valid, tick: -4 },
+        { ...valid, type: "national_found_empire" },
+        valid,
+      ]),
+    ).toEqual([valid]);
   });
 
   it("preserves legacy FFA isolation and respects the existing intent gate", async () => {
