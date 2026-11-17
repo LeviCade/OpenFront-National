@@ -347,10 +347,16 @@ export function collectLiveNationalObservation(
     if (!allowedPrincipals.has(ownerId)) {
       const x = game.x(tile);
       const y = game.y(tile);
+      // FOG-03 extends visibility of BORDER STRUCTURES, not armies or
+      // hidden transports. FOG-05 forbids granting an unseen invasion
+      // force a free 100-tile detection radius just because its tile is
+      // near a country's distant frontier.
       const fromBorder =
         visibleTiles.has(tile)
           ? sightOrigin.get(tile) ?? observerId
-          : nearestSightContributor(borderSight, x, y, BORDER_SIGHT_RADIUS);
+          : kind(unit.type()) === "structure"
+            ? nearestSightContributor(borderSight, x, y, BORDER_SIGHT_RADIUS)
+            : null;
       const isShip =
         unit.type() === UnitType.Warship ||
         unit.type() === UnitType.TransportShip ||
