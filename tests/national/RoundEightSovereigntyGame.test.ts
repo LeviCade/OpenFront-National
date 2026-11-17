@@ -6,8 +6,9 @@ import type { Game } from "@openfront/engine/game/Game";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
+import { TrustedNationalSaveStore } from "../../src/server/national/TrustedNationalSaveStore";
 import { setup } from "../util/Setup";
-import { roundTrip } from "../util/Snapshot";
+import { restoreTestGame, roundTrip } from "../util/Snapshot";
 
 const players = [
   new PlayerInfo("R8 North", PlayerType.Human, "r8-client-a", "r8-a"),
@@ -276,5 +277,57 @@ describe("Round Eight real Game sovereignty and constitutional voting", () => {
       }),
     ).toThrow(/remaining members/);
     expect(snapshotGameData(game)).toEqual(before);
+  });
+});
+
+describe("Round Eight trusted-host private NATIONAL save primitive", () => {
+  const resolveServerSession = (session: unknown, gameID: string) => {
+    if (gameID !== "r8-host-game") return null;
+    if (session === "verified-alice") {
+      return { accountId: "account-a", playerId: A, clientID: "r8-client-a" };
+    }
+    if (session === "verified-bob") {
+      return { accountId: "account-b", playerId: B, clientID: "r8-client-b" };
+    }
+    if (session === "forged-player") {
+      return { accountId: "account-a", playerId: B, clientID: "r8-client-a" };
+    }
+    return null;
+  };
+
+  it("persists the full real political snapshot only inside host memory and restores for its verified account/player", async () => {
+    const game = await spawned();
+    foundEmpire(game);
+    addEmpireMember(game, B);
+    const store = new TrustedNationalSaveStore(resolveServerSession, 1);
+    const handle = store.save("r8-host-game", "verified-alice", game);
+    expect(Object.keys(handle).sort()).toEqual(["gameID", "id", "tick"]);
+    expect(JSON.stringify(handle)).not.toContain("r8-empire");
+    expect(() => store.save("r8-host-game", "verified-alice", game)).toThrow(/quota/);
+    expect(() => store.save("r8-host-game", "forged-player", game)).toThrow(/unauthorized/);
+    let restores = 0;
+    const restore = async (bytes: Uint8Array) => {
+      restores++;
+      return restoreTestGame(bytes, "plains");
+    };
+    await expect(store.restore(handle.id, "verified-bob", restore)).rejects.toThrow(/unauthorized/);
+    await expect(store.restore(handle.id, "no-session", restore)).rejects.toThrow(/unauthorized/);
+    expect(restores).toBe(0);
+    const recovered = await store.restore(handle.id, "verified-alice", restore);
+    expect(restores).toBe(1);
+    expect(recovered.nationalPoliticalAuthority()?.membersOf("r8-empire")).toEqual([A, B]);
+    expect(snapshotGameData(recovered)).toEqual(snapshotGameData(game));
+    expect(() => store.delete(handle.id, "verified-bob")).toThrow(/unauthorized/);
+    store.delete(handle.id, "verified-alice");
+    await expect(store.restore(handle.id, "verified-alice", restore)).rejects.toThrow(/not found/);
+  });
+
+  it("refuses legacy FFA and any session without a Game-registered player binding", async () => {
+    const game = await spawned();
+    const legacy = await setup("plains", { nationalMode: false }, players);
+    const store = new TrustedNationalSaveStore(resolveServerSession);
+    expect(() => store.save("r8-host-game", "no-session", game)).toThrow(/unauthorized/);
+    expect(() => store.save("r8-host-game", "verified-alice", legacy)).toThrow(/legacy/);
+    expect(() => store.save("different-game", "verified-alice", game)).toThrow(/unauthorized/);
   });
 });
