@@ -842,17 +842,21 @@ async function main() {
         "window.__nationalQaFind('national-diplomacy-panel')?.game?.myPlayer()?.id() ?? null",
       );
       if (typeof actorId !== "string" || !actorId) {
-        throw Error("No authenticated current player at sovereign-victory check");
+        throw Error(
+          "No authenticated current player at sovereign-victory check",
+        );
       }
       const prize = await poll(
         async () => {
           const pkts = await worker();
-          const verified = pkts.find((p) =>
-            p.publicPolitics?.victory?.resolved === true &&
-            p.publicPolitics?.victory?.prizes?.some(
-              (award) =>
-                award.kind === "SovereignVictor" && award.nationId === actorId,
-            ),
+          const verified = pkts.find(
+            (p) =>
+              p.publicPolitics?.victory?.resolved === true &&
+              p.publicPolitics?.victory?.prizes?.some(
+                (award) =>
+                  award.kind === "SovereignVictor" &&
+                  award.nationId === actorId,
+              ),
           );
           return verified?.publicPolitics?.victory ?? null;
         },
