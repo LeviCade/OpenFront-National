@@ -1,0 +1,39 @@
+name: E3 R8 Final Pinned Formatter
+on:
+  push:
+    branches:
+      - feature/national-r8-e3-strategic-fog-ai-20261117
+    paths:
+      - .github/workflows/e3-r8-one-shot-final-format.yml
+permissions:
+  contents: write
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/national-r8-e3-strategic-fog-ai-20261117
+          submodules: false
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Pinned E3-owned formatter
+        run: |
+          set -euo pipefail
+          npm exec -- oxfmt --write tests/national/NationalStrategicSimulationR8.test.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/national/NationalStrategicSimulationR8.test.ts
+          if ! git diff --cached --quiet; then
+            git commit -m "style(national): pin final R8 defensive scenario format"
+            git push origin HEAD:refs/heads/feature/national-r8-e3-strategic-fog-ai-20261117
+          fi
+      - name: Check complete repository format
+        run: npm run format:check
+      - name: Replay actual AI with defensive scenario
+        run: npm exec -- vitest run --project node tests/national/NationalStrategicSimulationR8.test.ts tests/national/NationalPlanner.test.ts tests/national/NationalWarSides.test.ts tests/national/NationalIntelligencePerf.test.ts
