@@ -98,7 +98,7 @@ describe("Round Eight real geographic fog FOG-03/04/05/06/07", () => {
       for (let x = 1; x < game.width() - 1; x++) {
         const tile = game.ref(x, y);
         if (game.isLand(tile)) {
-          if (otherLand === undefined) otherLand = tile;
+          otherLand ??= tile;
           let edge = false;
           game.forEachNeighbor(tile, (neighbor) => {
             if (!game.isLand(neighbor)) {
