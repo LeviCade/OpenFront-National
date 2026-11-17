@@ -243,6 +243,29 @@ describe("Round Eight actual WAR-09–12 in-flight combat", () => {
     troopRefund.mockRestore();
   });
 
+  it("WAR-09/11: paid coastal landers are repatriated once if peace arrives before their inland attack initializes", async () => {
+    const { game, attacker, defender, targetTile } = await spawnOnIslands();
+    declare(game);
+    const paid = attacker.removeTroops(10_000);
+    expect(paid).toBe(10_000);
+    attacker.conquer(targetTile); // The ship's one lawful first landing.
+    const afterPayment = attacker.troops();
+    makePeace(game);
+
+    // This is the actual engine handoff emitted by TransportShipExecution at
+    // arrival: the boat has already paid for these troops (removeTroops=false).
+    const queued = new AttackExecution(paid, attacker, defender.id(), targetTile, false);
+    queued.init(game, game.ticks());
+    expect(queued.isActive()).toBe(false);
+    expect(attacker.troops()).toBe(afterPayment + paid);
+    expect(attacker.outgoingAttacks()).toHaveLength(0);
+
+    // A restored/duplicate initialization of a rejected attempt never mints
+    // another troop refund: the execution is inactive and has consumed it.
+    queued.init(game, game.ticks());
+    expect(attacker.troops()).toBe(afterPayment + paid);
+  });
+
   it("WAR-12: national and empire-wide records survive crown transfer, old emperor cannot negotiate", async () => {
     const game = await spawnOnPlains();
     const sovereign = game.player(A);
