@@ -83,6 +83,12 @@ import {
   type NationalPublicPoliticalView,
   type NationalUngovernableWarning,
 } from "../national/NationalRuntime";
+import type { NationalSightMemory } from "../national/observation/NationalObservation";
+import {
+  NationalGovernanceState,
+  NationalGovernanceSnapshotSchema,
+  type NationalFoundEmpireResult,
+} from "../national/politics/NationalGovernanceState";
 import {
   NationalWarStateService,
   NationalWarStateSnapshotSchema,
@@ -201,6 +207,8 @@ export class GameImpl implements Game {
   private _isPaused: boolean = false;
   private _winner: Player | Team | null = null;
   private _national: NationalRuntime | null = null;
+  /** One persisted principal journal + human sight store per NATIONAL Game. */
+  private _nationalGovernance: NationalGovernanceState | null = null;
   /** E2 WAR/LEVY is canonically stored here, never in a WeakMap or fork. */
   private _nationalWar: NationalWarStateService | null = null;
   /** Stable read port resolves the current Game-owned service after restore. */
@@ -250,6 +258,7 @@ export class GameImpl implements Game {
         this._national = new NationalRuntime(
           this._playersBySmallID.map((p) => p.id()),
         );
+        this._nationalGovernance = new NationalGovernanceState();
         this._nationalWar = new NationalWarStateService(
           this.nationalPoliticalAuthority()!,
           this.nationalTroopDebits(),
@@ -597,6 +606,7 @@ export class GameImpl implements Game {
       this._ticks,
       !this.inSpawnPhase(),
     );
+    this.revokeNationalObserverMemory();
   }
 
   /** Never exposes the mutable PoliticsProjection to a caller. */
@@ -718,10 +728,16 @@ export class GameImpl implements Game {
           })),
           commit: () => {
             if (finalized) throw new Error("NATIONAL levy: already finalized");
-            // Validate the WHOLE batch again before ANY mutation.
-            if (staged.some((d) => d.p.troops() !== d.expected))
-              throw new Error("NATIONAL levy: stale atomic balance");
-            for (const d of staged) d.p.setTroops(d.next);
+            // E2's PlayerImpl primitive stages ALL BigInts before any write,
+            // including the final contributor's CAS. Never loop setTroops.
+            PlayerImpl.commitNationalTroopDebits(
+              staged.map((d) => ({
+                player: d.p as PlayerImpl,
+                expectedBalance: d.expected,
+                debit: d.debit,
+                resultingBalance: d.next,
+              })),
+            );
             finalized = true;
           },
           discard: () => {
@@ -762,6 +778,19 @@ export class GameImpl implements Game {
       ) {
         throw new Error("NATIONAL levy: attack not formally authorized");
       }
+      const expectedDonors = this.nationalMdaAllies(attack.defenderId).filter(
+        (id) => id !== attack.attackerId,
+      );
+      const suppliedDonors = attack.eligible.map((e) => e.source.nationId);
+      if (
+        suppliedDonors.length !== expectedDonors.length ||
+        new Set(suppliedDonors).size !== suppliedDonors.length ||
+        expectedDonors.some((id) => !suppliedDonors.includes(id))
+      ) {
+        throw new Error(
+          "NATIONAL levy: missing or forged MDA contributor roster",
+        );
+      }
       for (const entry of attack.eligible) {
         const id = entry.source.nationId;
         if (
@@ -787,6 +816,21 @@ export class GameImpl implements Game {
     if (this._national === null) return null;
     this.synchronizeNationalState();
     return this._national.publicPoliticalView();
+  }
+
+  /**
+   * E2 contributor authority. Read treaty membership from ONE runtime;
+   * validate every actual player is live and spawned before considering it.
+   */
+  nationalMdaAllies(defenderId: PlayerID): readonly PlayerID[] {
+    if (this._national === null || this._nationalWar === null) return [];
+    const defender = this._players.get(defenderId);
+    if (!defender || !defender.hasSpawned() || !defender.isAlive()) return [];
+    this.synchronizeNationalState();
+    return this._national.mdaAllies(defenderId).filter((id) => {
+      const player = this._players.get(id);
+      return player !== undefined && player.hasSpawned() && player.isAlive();
+    });
   }
 
   /** Complete NATIONAL victor roster; old game Winner schema stays unchanged. */
@@ -819,6 +863,126 @@ export class GameImpl implements Game {
     }
     this.synchronizeNationalState();
     this._national.perform(actor.id(), command);
+    this.revokeNationalObserverMemory();
+  }
+
+  /**
+   * Trusted in-engine Found Empire execution outcome. A valid registered
+   * Player may be inactive: the rejection still reaches that same actor.
+   * A borrowed/forged player object is never journaled or authorized.
+   */
+  performNationalFoundEmpireWithOutcome(
+    actor: Player,
+    empireId: string,
+    requestId: string | null = null,
+  ): NationalFoundEmpireResult {
+    if (this._national === null || this._nationalGovernance === null)
+      throw new Error("NATIONAL command journal: mode not enabled");
+    if (this._players.get(actor.id()) !== actor)
+      throw new Error("NATIONAL command journal: forged actor");
+    // Reject pathological identifiers without persisting unbounded client
+    // input or partially committing a result when Zod validates the journal.
+    const recordedEmpireId =
+      typeof empireId === "string" && empireId.length <= 256
+        ? empireId
+        : "<invalid-empire-id>";
+    return this._nationalGovernance.recordFoundEmpire(
+      actor.id(),
+      recordedEmpireId,
+      this._ticks,
+      requestId,
+      () => {
+        if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
+          return "actor-inactive";
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(empireId)) return "invalid-empire-id";
+        try {
+          this.performNationalCommand(actor, {
+            kind: "found-empire",
+            empireId,
+          });
+          return "accepted";
+        } catch {
+          // Never serialize exception text, engine internals or other
+          // actors' private coalition/governance data.
+          return "political-rule";
+        }
+      },
+    );
+  }
+
+  nationalCommandResults(
+    observer: Player,
+  ): readonly NationalFoundEmpireResult[] {
+    if (
+      this._nationalGovernance === null ||
+      this._players.get(observer.id()) !== observer ||
+      observer.type() !== PlayerType.Human
+    )
+      return [];
+    return this._nationalGovernance.resultsFor(observer.id());
+  }
+
+  /** Same live reciprocal empire membership check used by E3 sight. */
+  private hasNationalSharedSight(
+    observerId: PlayerID,
+    sourceId: PlayerID,
+  ): boolean {
+    const auth = this.nationalPoliticalAuthority();
+    const empire = auth?.empireOf(observerId) ?? null;
+    return (
+      empire !== null &&
+      auth?.empireOf(sourceId) === empire &&
+      auth?.membersOf(empire).includes(observerId) === true &&
+      auth?.membersOf(empire).includes(sourceId) === true
+    );
+  }
+
+  private _isRestoredHumanPrincipal(observerId: PlayerID): boolean {
+    const player = this._players.get(observerId);
+    return player !== undefined && player.type() === PlayerType.Human;
+  }
+
+  private isNationalHuman(observerId: PlayerID): boolean {
+    const player = this._players.get(observerId);
+    return (
+      player !== undefined &&
+      player.type() === PlayerType.Human &&
+      player.hasSpawned() &&
+      player.isAlive()
+    );
+  }
+
+  /** Called at every political tick, transition and snapshot restore. */
+  private revokeNationalObserverMemory(): void {
+    this._nationalGovernance?.revokeMemory(
+      this._ticks,
+      (id) => this.isNationalHuman(id),
+      (observer, source) => this.hasNationalSharedSight(observer, source),
+    );
+  }
+
+  readNationalObserverMemory(observerId: PlayerID): NationalSightMemory | null {
+    if (!this.isNationalHuman(observerId) || this._nationalGovernance === null)
+      return null;
+    this.synchronizeNationalState();
+    return this._nationalGovernance.readMemory(observerId);
+  }
+
+  writeNationalObserverMemory(
+    observerId: PlayerID,
+    data: NationalSightMemory,
+  ): void {
+    if (!this.isNationalHuman(observerId) || this._nationalGovernance === null)
+      throw new Error(
+        "NATIONAL sight: unknown or unauthorized human principal",
+      );
+    this.synchronizeNationalState();
+    this._nationalGovernance.writeMemory(
+      observerId,
+      data,
+      this._ticks,
+      (sourceId) => this.hasNationalSharedSight(observerId, sourceId),
+    );
   }
 
   isPaused(): boolean {
@@ -1048,6 +1212,8 @@ export class GameImpl implements Game {
     if (this._national !== null) hash += this._national.stateHash();
     if (this._nationalWar !== null)
       hash += simpleHash(JSON.stringify(this._nationalWar.snapshot()));
+    if (this._nationalGovernance !== null)
+      hash += simpleHash(JSON.stringify(this._nationalGovernance.snapshot()));
     return hash;
   }
 
@@ -1996,6 +2162,7 @@ export class GameImpl implements Game {
       stats: w.versioned(StatsSnapshot, (this._stats as StatsImpl).snapshot()),
       national: this._national?.snapshot() ?? null,
       nationalWar: this._nationalWar?.snapshot() ?? null,
+      nationalGovernance: this._nationalGovernance?.snapshot() ?? null,
     };
   }
 
@@ -2066,6 +2233,17 @@ export class GameImpl implements Game {
         this._playersBySmallID.map((p) => p.id()),
         this._ticks,
       );
+      this._nationalGovernance = new NationalGovernanceState();
+      if (s.nationalGovernance !== null) {
+        this._nationalGovernance.restore(s.nationalGovernance, this._ticks);
+        for (const receipt of s.nationalGovernance.receipts)
+          if (!this._players.has(receipt.actorId))
+            throw new Error("NATIONAL journal: restored actor does not exist");
+        for (const stored of s.nationalGovernance.memories)
+          if (!this._isRestoredHumanPrincipal(stored.observerId))
+            throw new Error("NATIONAL sight: restored human principal invalid");
+      }
+      this.revokeNationalObserverMemory();
       this._nationalWar = new NationalWarStateService(
         this.nationalPoliticalAuthority()!,
         this.nationalTroopDebits(),
@@ -2080,6 +2258,9 @@ export class GameImpl implements Game {
       if (s.national !== null)
         throw new Error("NATIONAL data in legacy snapshot");
       this._national = null;
+      if (s.nationalGovernance !== null)
+        throw new Error("NATIONAL governance in legacy game snapshot");
+      this._nationalGovernance = null;
       if (s.nationalWar !== null)
         throw new Error("NATIONAL WAR state in legacy game snapshot");
       this._nationalWar = null;
@@ -2172,7 +2353,7 @@ export class GameImpl implements Game {
 
 export const GameSnapshot = snapshotType({
   name: "Game",
-  version: 3,
+  version: 4,
   migrations: {
     1: (data: unknown) => ({
       ...(data as Record<string, unknown>),
@@ -2181,6 +2362,10 @@ export const GameSnapshot = snapshotType({
     2: (data: unknown) => ({
       ...(data as Record<string, unknown>),
       nationalWar: null,
+    }),
+    3: (data: unknown) => ({
+      ...(data as Record<string, unknown>),
+      nationalGovernance: null,
     }),
   },
   schema: z.object({
@@ -2218,6 +2403,7 @@ export const GameSnapshot = snapshotType({
     stats: VersionedSchema,
     national: NationalRuntimeSnapshotSchema.nullable(),
     nationalWar: NationalWarStateSnapshotSchema.nullable(),
+    nationalGovernance: NationalGovernanceSnapshotSchema.nullable(),
   }),
 });
 export type GameState = z.infer<typeof GameSnapshot.schema>;

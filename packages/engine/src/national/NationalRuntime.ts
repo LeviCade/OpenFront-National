@@ -16,6 +16,7 @@ import {
   clonePoliticalProjection,
   eliminatePoliticalNation,
   evaluateUngovernable,
+  expelPactMember,
   foundEmpire,
   foundPact,
   initialPolitics,
@@ -114,7 +115,13 @@ export type NationalCommand =
     }
   | { kind: "invite-pact"; pactId: string; candidateId: PlayerID }
   | { kind: "accept-pact"; pactId: string }
-  | { kind: "betray-pact"; pactId: string };
+  | { kind: "betray-pact"; pactId: string }
+  | {
+      kind: "expel-pact";
+      pactId: string;
+      memberId: PlayerID;
+      approvingIds?: PlayerID[];
+    };
 
 export interface NationalLivePlayer {
   readonly id: PlayerID;
@@ -284,6 +291,32 @@ export class NationalRuntime {
       );
   }
 
+  /**
+   * Authoritative MDA membership only: never accepts client-supplied donors.
+   * Excludes the defender, unknown/dead members, overlapping duplicates.
+   * GameImpl additionally verifies actual spawned PlayerImpl identities.
+   */
+  mdaAllies(defenderId: PlayerID): readonly PlayerID[] {
+    if (!this.politics.nations.some((n) => n.id === defenderId && n.alive)) {
+      return [];
+    }
+    const alive = new Set(
+      this.politics.nations.filter((n) => n.alive).map((n) => n.id),
+    );
+    const result = new Set<PlayerID>();
+    for (const pact of this.politics.pacts) {
+      if (pact.kind !== "MDA" || !pact.memberIds.includes(defenderId)) {
+        continue;
+      }
+      for (const memberId of pact.memberIds) {
+        if (memberId !== defenderId && alive.has(memberId)) {
+          result.add(memberId);
+        }
+      }
+    }
+    return [...result].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  }
+
   /** Copy-only, opt-in NATIONAL public facts for E3/E4's trusted UI bridge. */
   publicPoliticalView(): NationalPublicPoliticalView {
     return {
@@ -363,6 +396,16 @@ export class NationalRuntime {
       case "betray-pact":
         requireCommandId(command.pactId);
         next = betrayPact(this.politics, command.pactId, actorId);
+        break;
+      case "expel-pact":
+        requireCommandId(command.pactId);
+        next = expelPactMember(
+          this.politics,
+          command.pactId,
+          actorId,
+          command.memberId,
+          command.approvingIds ?? [],
+        );
         break;
       default:
         throw new Error("NATIONAL: unsupported political command");

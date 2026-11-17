@@ -57,6 +57,8 @@ import type {
   NationalPublicPoliticalView,
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
+import type { NationalSightMemory } from "../national/observation/NationalObservation";
+import type { NationalFoundEmpireResult } from "../national/politics/NationalGovernanceState";
 import type {
   NationalWarAuthority,
   NationalWarCommand,
@@ -610,12 +612,30 @@ export interface Game extends GameLike {
   nationalWarState(): NationalWarStateSnapshot | null;
   /** Internal trusted actor; E2 owns external schema and command validation. */
   performNationalWarCommand(actor: Player, command: NationalWarCommand): void;
+  /** Canonical sorted, unique living/spawned MDA donors; E2 never chooses IDs. */
+  nationalMdaAllies(defenderId: PlayerID): readonly PlayerID[];
   /** Canonical read-only source from a real living Game Player. */
   nationalLevySource(nationId: PlayerID): TroopSource | null;
   /** Internal E2 accepted-attack hook; MDA, WAR and atomic debits verified. */
   applyNationalDefenseLevy(
     attacks: readonly IncomingDefense[],
   ): readonly DefenseResult[];
+  /** Trusted execution records real Found Empire acceptance/rejection once. */
+  performNationalFoundEmpireWithOutcome(
+    actor: Player,
+    empireId: string,
+    requestId?: string | null,
+  ): NationalFoundEmpireResult;
+  /** Detached per-actor journal. Never enumerate results for other players. */
+  nationalCommandResults(
+    observer: Player,
+  ): readonly NationalFoundEmpireResult[];
+  /** E3 stores each human observer's verified, principal-bound sightings. */
+  readNationalObserverMemory(observerId: PlayerID): NationalSightMemory | null;
+  writeNationalObserverMemory(
+    observerId: PlayerID,
+    data: NationalSightMemory,
+  ): void;
   nationalWinner(): PlayerID | null;
   performNationalCommand(actor: Player, command: NationalCommand): void;
   isPaused(): boolean;
