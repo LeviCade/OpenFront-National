@@ -3,6 +3,7 @@ import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import {
+  createNationalFoundingRequestId,
   empireForMember,
   foundingUnavailableReason,
   reconcileNationalFounding,
@@ -161,7 +162,18 @@ export class NationalDiplomacyPanel extends LitElement {
       this.error = "There is no active player to authorize founding.";
       return;
     }
+    // Cryptographic uniqueness is required; if the browser cannot generate
+    // a secure token the command is NOT sent and no pending receipt is set.
+    let requestId: string;
+    try {
+      requestId = createNationalFoundingRequestId();
+    } catch {
+      this.error = "Secure command identification is unavailable. Founding was not sent.";
+      this.phase = "unknown";
+      return;
+    }
     this.pendingAttempt = {
+      requestId,
       gameId: game.gameID?.() ?? "",
       actorId: player.id(),
       empireId,
@@ -175,7 +187,7 @@ export class NationalDiplomacyPanel extends LitElement {
     this.message =
       "Request sent to game. Awaiting its accepted or rejected result…";
     try {
-      this.eventBus.emit(new SendNationalFoundEmpireIntentEvent(empireId));
+      this.eventBus.emit(new SendNationalFoundEmpireIntentEvent(empireId, requestId));
     } catch {
       // Only a synchronous producer failure may clear the local latch.
       // An enqueued command is never equated with a successful execution.
