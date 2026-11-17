@@ -838,14 +838,33 @@ async function main() {
       await capture("restored-roster");
     });
     await step("sovereign-victory", async () => {
-      const pkts = await worker();
-      if (
-        !pkts.some((p) => p.publicPolitics?.victor ?? p.publicPolitics?.victors)
-      ) {
-        throw Error(
-          "No authoritative sovereign-victory packet observed in actual Chromium game",
-        );
+      const actorId = await evaluate(
+        "window.__nationalQaFind('national-diplomacy-panel')?.game?.myPlayer()?.id() ?? null",
+      );
+      if (typeof actorId !== "string" || !actorId) {
+        throw Error("No authenticated current player at sovereign-victory check");
       }
+      const prize = await poll(
+        async () => {
+          const pkts = await worker();
+          const verified = pkts.find((p) =>
+            p.publicPolitics?.victory?.resolved === true &&
+            p.publicPolitics?.victory?.prizes?.some(
+              (award) =>
+                award.kind === "SovereignVictor" && award.nationId === actorId,
+            ),
+          );
+          return verified?.publicPolitics?.victory ?? null;
+        },
+        "E1 authoritative public resolved victory containing this actor's SovereignVictor prize",
+        70,
+        250,
+      );
+      record("authoritative-sovereign-victory", {
+        nationId: actorId,
+        sovereignPowerCount: prize.sovereignPowerCount,
+        prizes: prize.prizes,
+      });
       await capture("sovereign-victory");
     });
   } finally {
