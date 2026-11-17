@@ -64,12 +64,14 @@ describe("NATIONAL read-only political projection", () => {
         {
           type: "national_found_empire",
           actorId: "nation-a",
+          recipientId: "nation-a",
           empireId: "North_Union",
           accepted: true,
         },
         {
           type: "national_found_empire",
           actorId: "nation-b",
+          recipientId: "nation-b",
           empireId: "North_Union",
           accepted: false,
           reason: "already member",
@@ -77,6 +79,7 @@ describe("NATIONAL read-only political projection", () => {
         {
           type: "national_found_empire",
           actorId: "nation-b",
+          recipientId: "nation-b",
           empireId: "North_Union",
         },
         {

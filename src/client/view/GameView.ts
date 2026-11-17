@@ -38,6 +38,7 @@ import { PlayerCosmetics, WirePlayer } from "@openfront/shared/WireSchemas";
 import {
   readNationalFoundingResults,
   readNationalPolitics,
+  retainNationalFoundingReceipts,
   type NationalFoundingResult,
   type NationalPublicPolitics,
 } from "../NationalDiplomacyState";
@@ -79,6 +80,8 @@ export class GameView implements GameLike {
   // sovereignty from local intents or speculative client player data.
   private _nationalPolitics: NationalPublicPolitics | null = null;
   private _nationalFoundingOutcome: NationalFoundingResult | null = null;
+  private _nationalFoundingResults: readonly NationalFoundingResult[] = [];
+  private _nationalPoliticsTick: number | null = null;
 
   public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
     return this._nationalPolitics;
@@ -86,6 +89,24 @@ export class GameView implements GameLike {
 
   public nationalFoundingOutcome(): Readonly<NationalFoundingResult> | null {
     return this._nationalFoundingOutcome;
+  }
+
+  /** Short-lived, recipient-bound results received in this live session. */
+  public nationalFoundingResults(): readonly Readonly<NationalFoundingResult>[] {
+    return this._nationalFoundingResults;
+  }
+
+  /** Null means the worker has not delivered a valid public roster. */
+  public nationalPoliticsTick(): number | null {
+    return this._nationalPoliticsTick;
+  }
+
+  /** Invalidate an old roster on disconnect; await a new GameRunner packet. */
+  public invalidateNationalPoliticalView(): void {
+    this._nationalPolitics = null;
+    this._nationalPoliticsTick = null;
+    this._nationalFoundingResults = [];
+    this._nationalFoundingOutcome = null;
   }
   private startTick: Tick | null = null;
   private smallIDToID = new Map<number, PlayerID>();
@@ -274,6 +295,7 @@ export class GameView implements GameLike {
     });
     this.toDelete.clear();
 
+    const previousTick = this.lastUpdate?.tick ?? -1;
     this.lastUpdate = gu;
 
     // Legacy/replay test adapters can provide a partial Config without
@@ -291,14 +313,36 @@ export class GameView implements GameLike {
       this._nationalPolitics = readNationalPolitics(
         nationalPacket.nationalPolitics,
       );
-      const outcomes = readNationalFoundingResults(
-        nationalPacket.nationalCommandResults,
+      this._nationalPoliticsTick =
+        this._nationalPolitics === null ? null : gu.tick;
+
+      // E3 emits each journal result ONCE. HUD components may refresh slower
+      // than engine ticks; retain a bounded, principal-scoped receipt buffer
+      // until the panel sees it. Old request ticks cannot acknowledge a new
+      // click, and disconnect/replay rewind clears all buffered receipts.
+      const myActorId = this._myPlayer?.id() ?? null;
+      const received =
+        myActorId === null
+          ? []
+          : readNationalFoundingResults(
+              nationalPacket.nationalCommandResults,
+            ).filter(
+              (outcome) =>
+                outcome.actorId === myActorId &&
+                outcome.recipientId === myActorId &&
+                typeof outcome.tick === "number" &&
+                outcome.tick <= gu.tick,
+            );
+      this._nationalFoundingResults = retainNationalFoundingReceipts(
+        this._nationalFoundingResults,
+        received,
+        gu.tick,
+        gu.tick < previousTick || this._nationalPolitics === null,
       );
-      for (const outcome of outcomes) {
-        if (outcome.actorId === this._myPlayer?.id()) {
-          this._nationalFoundingOutcome = outcome;
-        }
-      }
+      this._nationalFoundingOutcome =
+        this._nationalFoundingResults[
+          this._nationalFoundingResults.length - 1
+        ] ?? null;
     }
 
     this.updatedTiles = [];
