@@ -146,16 +146,18 @@ const probe = `(() => {
   // Instrument real MessagePort reception BEFORE the application starts.
   // The instrumentation never mutates a game message or injects an outcome.
   const packets = [];
+  let sequence = 0;
   const scrub = (data) => {
     if (!data || typeof data !== 'object') return;
     const type = typeof data.type === 'string' ? data.type : undefined;
     const info = {
+      sequence: ++sequence,
       type, tick: Number.isFinite(data.tick) ? data.tick : undefined,
       keys: Object.keys(data).filter((k) =>
         ['type','tick','gameUpdates','nationalPolitics','nationalCommandResults','updates','error','snapshot'].includes(k)
       ),
     };
-    const updateCandidates = [data, ...(Array.isArray(data.gameUpdates) ? data.gameUpdates : [])];
+    const updateCandidates = [data, ...(data.gameUpdate ? [data.gameUpdate] : []), ...(Array.isArray(data.gameUpdates) ? data.gameUpdates : [])];
     for (const candidate of updateCandidates) {
       if (!candidate || typeof candidate !== 'object') continue;
       if (candidate.nationalPolitics) info.publicPolitics = candidate.nationalPolitics;
@@ -171,6 +173,13 @@ const probe = `(() => {
       seen.add(event);
       scrub(event.data);
     }
+  };
+  // WorkerClient receives real GameRunner packets via a Worker, not only a MessagePort.
+  // Observe both; never mutate a delivered game packet.
+  const nativeWorkerAdd = Worker.prototype.addEventListener;
+  Worker.prototype.addEventListener = function(type, listener, options) {
+    if (type === 'message') nativeWorkerAdd.call(this, type, track, false);
+    return nativeWorkerAdd.call(this, type, listener, options);
   };
   const originalAdd = MessagePort.prototype.addEventListener;
   MessagePort.prototype.addEventListener = function(type, listener, options) {
@@ -289,11 +298,14 @@ async function main() {
       Buffer.from(data.data, "base64"),
     );
   };
+  let lastWorkerSeq = 0;
   const worker = async () => {
     const evidence = await evaluate("window.__nationalQaWorkerEvidence || []");
     if (Array.isArray(evidence)) {
-      for (const packet of evidence.slice(observed.length))
-        observed.push(packet);
+      for (const packet of evidence) {
+        if (packet.sequence > lastWorkerSeq) observed.push(packet);
+      }
+      lastWorkerSeq = evidence[evidence.length - 1]?.sequence ?? lastWorkerSeq;
     }
     return observed;
   };
