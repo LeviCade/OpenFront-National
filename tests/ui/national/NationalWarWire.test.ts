@@ -276,10 +276,11 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       ).toBe(true);
     }
     const { panel } = await setup();
-    await choose(panel, "#national-war-scope", "imperial");
-    await choose(panel, "#national-war-target", "nation-b");
+    // A non-emperor cannot select the disabled imperial authority option.
     expect(
-      panel.querySelector<HTMLButtonElement>("#national-declare-war")!.disabled,
+      panel.querySelector<HTMLOptionElement>(
+        '#national-war-scope option[value="imperial"]',
+      )?.disabled,
     ).toBe(true);
     expect(intents()).toHaveLength(0);
   });
