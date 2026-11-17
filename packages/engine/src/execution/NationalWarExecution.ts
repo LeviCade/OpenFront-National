@@ -143,27 +143,41 @@ export function interceptNationalAttack(
   // Until E1 installs its authenticated donor roster, fail CLOSED.
   if (typeof port.nationalMdaAllies !== "function")
     throw new Error("NATIONAL: missing authoritative MDA contributors");
-  const candidateIds = [...new Set(port.nationalMdaAllies(defenderId))]
-    .sort()
-    .filter(
-      (id) =>
-        id !== defenderId &&
-        id !== attackerId &&
-        politics.nationAlive(id) &&
-        game.hasPlayer(id) &&
-        game.player(id).isAlive(),
-    );
-  const eligible = candidateIds.flatMap((id) => {
+  const candidateIds = port.nationalMdaAllies(defenderId);
+  // The E1 port promises a COMPLETE, sorted, unique live MDA roster. Never
+  // silently drop a contributor: that would evade a treaty's defensive duty.
+  if (!Array.isArray(candidateIds))
+    throw new Error("NATIONAL: invalid authoritative MDA roster");
+  for (let i = 0; i < candidateIds.length; i++) {
+    const id = candidateIds[i];
+    if (
+      typeof id !== "string" ||
+      id.length === 0 ||
+      id === defenderId ||
+      id === attackerId ||
+      (i > 0 && candidateIds[i - 1] >= id) ||
+      !politics.nationAlive(id) ||
+      !game.hasPlayer(id) ||
+      !game.player(id).isAlive() ||
+      !game.player(id).hasSpawned()
+    )
+      throw new Error("NATIONAL: invalid authoritative MDA donor identity");
+  }
+  const eligible = candidateIds.map((id) => {
     const source = port.nationalLevySource?.(id);
-    if (!source) return [];
-    return [
-      {
-        source,
-        troopCapacity: Math.floor(game.config().maxTroops(game.player(id))),
-        maximumFraction: 0.1,
-        protectedCapacityFraction: 0.3,
-      },
-    ];
+    if (
+      !source ||
+      source.nationId !== id ||
+      !Number.isSafeInteger(source.troops()) ||
+      source.troops() !== game.player(id).troops()
+    )
+      throw new Error("NATIONAL: missing authoritative MDA troop source");
+    return {
+      source,
+      troopCapacity: Math.floor(game.config().maxTroops(game.player(id))),
+      maximumFraction: 0.1,
+      protectedCapacityFraction: 0.3,
+    };
   });
   const request: IncomingDefense = {
     attackId,
