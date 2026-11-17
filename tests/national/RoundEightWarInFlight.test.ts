@@ -4,6 +4,7 @@ import {
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
+import { MirvExecution } from "@openfront/engine/execution/MIRVExecution";
 import { NukeExecution } from "@openfront/engine/execution/NukeExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { TransportShipExecution } from "@openfront/engine/execution/TransportShipExecution";
@@ -173,6 +174,30 @@ describe("Round Eight actual WAR-09–12 in-flight combat", () => {
     expect(airborne.isActive()).toBe(false);
     expect(bombLand).toHaveBeenCalled();
     bombLand.mockRestore();
+  });
+
+  it("WAR-10: an airborne MIRV survives peace; a newly ordered MIRV is rejected before build", async () => {
+    const game = await spawnOnPlains();
+    const attacker = game.player(A);
+    const dst = game.ref(70, 70);
+    attacker.buildUnit(UnitType.MissileSilo, game.ref(25, 25), {});
+    declare(game);
+    const committed = new MirvExecution(attacker, dst);
+    committed.init(game, game.ticks());
+    committed.tick(game.ticks());
+    expect(committed.isActive()).toBe(true);
+    expect(attacker.units(UnitType.MIRV)).toHaveLength(1);
+
+    makePeace(game);
+    const denied = new MirvExecution(attacker, dst);
+    denied.init(game, game.ticks());
+    const builds = vi.spyOn(attacker, "canBuild");
+    denied.tick(game.ticks());
+    expect(denied.isActive()).toBe(false);
+    expect(builds).not.toHaveBeenCalled();
+    expect(attacker.units(UnitType.MIRV)).toHaveLength(1);
+    expect(committed.isActive()).toBe(true);
+    builds.mockRestore();
   });
 
   it("WAR-11: post-peace transport launch spends zero troops and builds no ship", async () => {
