@@ -12,13 +12,27 @@ import { describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
-const north = new PlayerInfo("North", PlayerType.Human, "r8-north-client", "r8-north");
-const south = new PlayerInfo("South", PlayerType.Human, "r8-south-client", "r8-south");
+const north = new PlayerInfo(
+  "North",
+  PlayerType.Human,
+  "r8-north-client",
+  "r8-north",
+);
+const south = new PlayerInfo(
+  "South",
+  PlayerType.Human,
+  "r8-south-client",
+  "r8-south",
+);
 
 async function spawned(): Promise<Game> {
   const game = await setup("plains", { nationalMode: true }, [north, south]);
-  game.addExecution(new SpawnExecution("r8-war-request", north, game.ref(25, 25)));
-  game.addExecution(new SpawnExecution("r8-war-request", south, game.ref(75, 75)));
+  game.addExecution(
+    new SpawnExecution("r8-war-request", north, game.ref(25, 25)),
+  );
+  game.addExecution(
+    new SpawnExecution("r8-war-request", south, game.ref(75, 75)),
+  );
   game.executeNextTick();
   game.executeNextTick();
   expect(game.player(north.id).hasSpawned()).toBe(true);
@@ -41,14 +55,29 @@ describe("E2 Round Eight WAR/peace authenticated correlation transport", () => {
   it("rejects empty, oversized and nonopaque click IDs on all three wire intents, allowing historical no-ID clicks", () => {
     const schemas = [
       [NationalDeclareWarIntentSchema, declare()],
-      [NationalProposePeaceIntentSchema, { type: "national_propose_peace", warId: "r8-war" }],
-      [NationalAcceptPeaceIntentSchema, { type: "national_accept_peace", motionId: "r8-motion" }],
+      [
+        NationalProposePeaceIntentSchema,
+        { type: "national_propose_peace", warId: "r8-war" },
+      ],
+      [
+        NationalAcceptPeaceIntentSchema,
+        { type: "national_accept_peace", motionId: "r8-motion" },
+      ],
     ] as const;
     for (const [schema, intent] of schemas) {
       expect(schema.safeParse(intent).success).toBe(true);
-      expect(schema.safeParse({ ...intent, requestId: "r8_click_ABC-01" }).success).toBe(true);
-      for (const invalid of ["", "spaces cannot be IDs", "bad.dot", "x".repeat(129)]) {
-        expect(schema.safeParse({ ...intent, requestId: invalid }).success).toBe(false);
+      expect(
+        schema.safeParse({ ...intent, requestId: "r8_click_ABC-01" }).success,
+      ).toBe(true);
+      for (const invalid of [
+        "",
+        "spaces cannot be IDs",
+        "bad.dot",
+        "x".repeat(129),
+      ]) {
+        expect(
+          schema.safeParse({ ...intent, requestId: invalid }).success,
+        ).toBe(false);
       }
     }
   });
@@ -60,7 +89,9 @@ describe("E2 Round Eight WAR/peace authenticated correlation transport", () => {
       ...declare("r8_declare_1"),
       clientID: north.clientID,
     });
-    const exec = new Executor(game, "r8-war-request", undefined).createExec(authenticated);
+    const exec = new Executor(game, "r8-war-request", undefined).createExec(
+      authenticated,
+    );
     game.addExecution(exec);
     game.executeNextTick();
     game.executeNextTick();
@@ -84,7 +115,9 @@ describe("E2 Round Eight WAR/peace authenticated correlation transport", () => {
       ...declare("r8_resumable_click"),
       clientID: north.clientID,
     });
-    game.addExecution(new Executor(game, "r8-war-request", undefined).createExec(command));
+    game.addExecution(
+      new Executor(game, "r8-war-request", undefined).createExec(command),
+    );
     game.executeNextTick(); // initialized pending execution
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
@@ -97,7 +130,9 @@ describe("E2 Round Eight WAR/peace authenticated correlation transport", () => {
         requestId: "r8_resumable_click",
       }),
     );
-    expect(restored.nationalWarAuthority()?.atWar(north.id, south.id)).toBe(true);
+    expect(restored.nationalWarAuthority()?.atWar(north.id, south.id)).toBe(
+      true,
+    );
     forwarded.mockRestore();
   });
 
@@ -108,7 +143,9 @@ describe("E2 Round Eight WAR/peace authenticated correlation transport", () => {
       ...declare("r8_forged_claim"),
       clientID: south.clientID,
     });
-    game.addExecution(new Executor(game, "r8-war-request", undefined).createExec(rejected));
+    game.addExecution(
+      new Executor(game, "r8-war-request", undefined).createExec(rejected),
+    );
     game.executeNextTick();
     game.executeNextTick();
     expect(game.nationalWarState()).toEqual(before);
