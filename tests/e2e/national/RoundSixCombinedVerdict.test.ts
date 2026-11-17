@@ -1,9 +1,3 @@
-/**
- * Engineer #5 Round Six — independent tests against actual combined Game,
- * GameRunner, Executor and live Player troop balances. Deliberately fail if
- * any E1/E2/E3 contract disappears; no forged success or synthetic donors.
- */
-import { createHash } from "node:crypto";
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
@@ -12,6 +6,12 @@ import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { snapshotGame } from "@openfront/engine/snapshot/GameSnapshot";
+/**
+ * Engineer #5 Round Six — independent tests against actual combined Game,
+ * GameRunner, Executor and live Player troop balances. Deliberately fail if
+ * any E1/E2/E3 contract disappears; no forged success or synthetic donors.
+ */
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { setup } from "../../util/Setup";
 import { roundTrip } from "../../util/Snapshot";
@@ -21,21 +21,35 @@ const info = [
   new PlayerInfo("R6 South", PlayerType.Human, "r6-south-client", "r6-south"),
   new PlayerInfo("R6 East", PlayerType.Human, "r6-east-client", "r6-east"),
   new PlayerInfo("R6 West", PlayerType.Human, "r6-west-client", "r6-west"),
-  new PlayerInfo("R6 Center", PlayerType.Human, "r6-center-client", "r6-center"),
+  new PlayerInfo(
+    "R6 Center",
+    PlayerType.Human,
+    "r6-center-client",
+    "r6-center",
+  ),
 ];
 const [A, B, C, D, E] = info.map((p) => p.id);
 
 async function live(): Promise<Game> {
   const game = await setup("plains", { nationalMode: true }, info);
-  const coords = [[20, 20], [70, 20], [20, 70], [70, 70], [50, 50]];
+  const coords = [
+    [20, 20],
+    [70, 20],
+    [20, 70],
+    [70, 70],
+    [50, 50],
+  ];
   for (const [i, player] of info.entries()) {
     const [x, y] = coords[i];
-    game.addExecution(new SpawnExecution("r6-independent", player, game.ref(x, y)));
+    game.addExecution(
+      new SpawnExecution("r6-independent", player, game.ref(x, y)),
+    );
   }
   game.executeNextTick();
   game.executeNextTick();
   game.endSpawnPhase();
-  for (const player of info) expect(game.player(player.id).hasSpawned()).toBe(true);
+  for (const player of info)
+    expect(game.player(player.id).hasSpawned()).toBe(true);
   return game;
 }
 
@@ -61,10 +75,13 @@ function pact(game: Game, donors: readonly string[]) {
   });
   for (const id of donors) {
     game.performNationalCommand(game.player(B), {
-      kind: "invite-pact", pactId: "r6-full-mda", candidateId: id,
+      kind: "invite-pact",
+      pactId: "r6-full-mda",
+      candidateId: id,
     });
     game.performNationalCommand(game.player(id), {
-      kind: "accept-pact", pactId: "r6-full-mda",
+      kind: "accept-pact",
+      pactId: "r6-full-mda",
     });
   }
 }
@@ -97,21 +114,29 @@ describe("E5 R6 combined game acceptance — real donors and exact journal corre
 
       // A synthetically incomplete donor list must be rejected BEFORE
       // any reserve debit, despite a real war and fully authenticated actor.
-      const forged = [{
-        source: game.nationalLevySource(donors[0])!,
-        troopCapacity: Math.floor(game.config().maxTroops(game.player(donors[0]))),
-        maximumFraction: 0.1,
-        protectedCapacityFraction: 0.3,
-      }];
-      expect(() => game.applyNationalDefenseLevy([{
-        attackId: "r6-forged-" + donorCount,
-        confirmedAccepted: true,
-        campaignId: "r6-forged-budget",
-        attackerId: A,
-        defenderId: B,
-        attackingTroops: 100_000,
-        eligible: forged,
-      }])).toThrow(/missing or forged MDA contributor roster/);
+      const forged = [
+        {
+          source: game.nationalLevySource(donors[0])!,
+          troopCapacity: Math.floor(
+            game.config().maxTroops(game.player(donors[0])),
+          ),
+          maximumFraction: 0.1,
+          protectedCapacityFraction: 0.3,
+        },
+      ];
+      expect(() =>
+        game.applyNationalDefenseLevy([
+          {
+            attackId: "r6-forged-" + donorCount,
+            confirmedAccepted: true,
+            campaignId: "r6-forged-budget",
+            attackerId: A,
+            defenderId: B,
+            attackingTroops: 100_000,
+            eligible: forged,
+          },
+        ]),
+      ).toThrow(/missing or forged MDA contributor roster/);
       expect(game.player(A).troops()).toBe(beforeAttacker);
       expect(count(game, donors)).toBe(beforeDonors);
       expect(game.nationalWarState()).toEqual(priorWar);
@@ -127,27 +152,43 @@ describe("E5 R6 combined game acceptance — real donors and exact journal corre
       expect(receipt.contributions).toHaveLength(donorCount);
       const payerIds = receipt.contributions.map((item) => item.nationId);
       expect(payerIds).toEqual(donors);
-      const sum = receipt.contributions.reduce((n, item) => n + item.troopsDebited, 0);
+      const sum = receipt.contributions.reduce(
+        (n, item) => n + item.troopsDebited,
+        0,
+      );
       expect(sum).toBe(receipt.intercepted);
       expect(sum).toBe(beforeDonors - count(game, donors));
       expect(sum).toBeGreaterThan(0);
       expect(receipt.remainingAttackingTroops + sum).toBe(initial);
       expect(game.player(A).troops()).toBe(beforeAttacker - initial);
       expect(game.player(B).troops()).toBe(beforeDefender);
-      const outgoing = game.player(A).outgoingAttacks().reduce((n, item) => n + item.troops(), 0);
+      const outgoing = game
+        .player(A)
+        .outgoingAttacks()
+        .reduce((n, item) => n + item.troops(), 0);
       expect(outgoing).toBe(initial - sum);
-      expect(beforeAttacker + beforeDonors - (game.player(A).troops() + count(game, donors) + outgoing)).toBe(2 * sum);
+      expect(
+        beforeAttacker +
+          beforeDonors -
+          (game.player(A).troops() + count(game, donors) + outgoing),
+      ).toBe(2 * sum);
       const beforeHash = hash(game);
       const { restored, bytes, again } = await roundTrip(game, "plains");
       expect([...bytes]).toEqual([...again]);
       expect(hash(restored)).toBe(beforeHash);
       expect(restored.nationalWarState()).toEqual(ledger);
       expect(count(restored, donors)).toBe(count(game, donors));
-      console.info("QA_R6_MULTIDONOR " + JSON.stringify({
-        donorCount, donorIds: donors, intercepted: sum,
-        payerDebits: receipt.contributions, inFlight: outgoing,
-        canonicalSnapshotSHA256: beforeHash,
-      }));
+      console.info(
+        "QA_R6_MULTIDONOR " +
+          JSON.stringify({
+            donorCount,
+            donorIds: donors,
+            intercepted: sum,
+            payerDebits: receipt.contributions,
+            inFlight: outgoing,
+            canonicalSnapshotSHA256: beforeHash,
+          }),
+      );
     });
   }
 
@@ -157,7 +198,9 @@ describe("E5 R6 combined game acceptance — real donors and exact journal corre
     const runner = new GameRunner(
       game,
       new Executor(game, "r6-actor", info[0].clientID!),
-      (packet) => { if ("updates" in packet) packets.push(packet); },
+      (packet) => {
+        if ("updates" in packet) packets.push(packet);
+      },
       info[0].clientID!,
     );
     const tick = () => {
@@ -167,13 +210,18 @@ describe("E5 R6 combined game acceptance — real donors and exact journal corre
     };
     expect(tick().nationalPolitics?.empires).toEqual([]);
     const cmd = new Executor(game, "r6-actor", info[0].clientID!);
-    for (const [step, requestId] of ["qa_r6_req_first", "qa_r6_req_rejected"].entries()) {
-      game.addExecution(cmd.createExec({
-        type: "national_found_empire",
-        empireId: "r6_kingdom",
-        clientID: info[0].clientID!,
-        requestId,
-      } as Parameters<Executor["createExec"]>[0]));
+    for (const [step, requestId] of [
+      "qa_r6_req_first",
+      "qa_r6_req_rejected",
+    ].entries()) {
+      game.addExecution(
+        cmd.createExec({
+          type: "national_found_empire",
+          empireId: "r6_kingdom",
+          clientID: info[0].clientID!,
+          requestId,
+        } as Parameters<Executor["createExec"]>[0]),
+      );
       const queued = tick();
       expect(queued.nationalCommandResults).toBeUndefined();
       const applied = tick();
@@ -188,21 +236,30 @@ describe("E5 R6 combined game acceptance — real donors and exact journal corre
         requestId,
       });
       expect(Number.isSafeInteger(results![0].sequence)).toBe(true);
-      expect(applied.nationalPolitics?.empires).toEqual([{id: "r6_kingdom", leaderId: A, memberIds: [A]}]);
+      expect(applied.nationalPolitics?.empires).toEqual([
+        { id: "r6_kingdom", leaderId: A, memberIds: [A] },
+      ]);
       expect(tick().nationalCommandResults).toBeUndefined();
-      console.info("QA_R6_FOUNDING_RECEIPT " + JSON.stringify({
-        accepted: step === 0, requestId, sequence: results![0].sequence,
-        actor: results![0].actorId,
-      }));
+      console.info(
+        "QA_R6_FOUNDING_RECEIPT " +
+          JSON.stringify({
+            accepted: step === 0,
+            requestId,
+            sequence: results![0].sequence,
+            actor: results![0].actorId,
+          }),
+      );
     }
     const other: GameUpdateViewData[] = [];
     const foreignRunner = new GameRunner(
       game,
       new Executor(game, "r6-foreign", info[1].clientID!),
-      (packet) => {if ("updates" in packet) other.push(packet);},
+      (packet) => {
+        if ("updates" in packet) other.push(packet);
+      },
       info[1].clientID!,
     );
-    foreignRunner.addTurn({turnNumber: game.ticks(), intents: []});
+    foreignRunner.addTurn({ turnNumber: game.ticks(), intents: [] });
     expect(foreignRunner.executeNextTick()).toBe(true);
     expect(other[other.length - 1].nationalCommandResults).toBeUndefined();
   });
