@@ -425,29 +425,51 @@ async function main() {
     await send("Network.enable");
     await send("Log.enable");
     await send("Emulation.setDeviceMetricsOverride", {
-      width: mobile ? 390 : 1280, height: mobile ? 844 : 800,
-      deviceScaleFactor: 1, mobile,
+      width: mobile ? 390 : 1280,
+      height: mobile ? 844 : 800,
+      deviceScaleFactor: 1,
+      mobile,
     });
-    await send("Page.addScriptToEvaluateOnNewDocument", {source:probe});
-    await send("Page.navigate", {url:base});
+    await send("Page.addScriptToEvaluateOnNewDocument", { source: probe });
+    await send("Page.navigate", { url: base });
     await step("home", async () => {
-      await poll(() => evaluate("document.readyState === 'complete' && document.body.innerText.length > 0"), "homepage body", 80);
+      await poll(
+        () =>
+          evaluate(
+            "document.readyState === 'complete' && document.body.innerText.length > 0",
+          ),
+        "homepage body",
+        80,
+      );
       await capture("home");
     });
     await step("solo", async () => {
       await click("^solo$", "", 80);
-      await poll(() => evaluate("!!document.querySelector('single-player-modal input[aria-label=\"Enable NATIONAL sovereignty in Solo\"]')"), "Solo modal controls");
+      await poll(
+        () =>
+          evaluate(
+            "!!document.querySelector('single-player-modal input[aria-label=\"Enable NATIONAL sovereignty in Solo\"]')",
+          ),
+        "Solo modal controls",
+      );
       await capture("solo-modal");
     });
     if (legacy) {
       await step("legacy-ffa", async () => {
-        const national = await locate("Enable NATIONAL sovereignty in Solo", "single-player-modal", false);
+        const national = await locate(
+          "Enable NATIONAL sovereignty in Solo",
+          "single-player-modal",
+          false,
+        );
         if (!national || national.checked) {
-          throw Error("Legacy FFA did not start from an unselected NATIONAL checkbox");
+          throw Error(
+            "Legacy FFA did not start from an unselected NATIONAL checkbox",
+          );
         }
         await click("start|play", "single-player-modal", 65);
         const ffaStatus = await poll(
-          () => evaluate(`(() => {
+          () =>
+            evaluate(`(() => {
             const gate = window.__nationalQaFind('webgl-gate');
             if (gate) return { blocked: true, status: gate.status };
             const loading = /game is starting/i.test(document.body.innerText);
@@ -458,14 +480,26 @@ async function main() {
             return !loading && hud && canvas ? { running: true } : null;
           })()`),
           "real FFA canvas and HUD AFTER loading clears, or WebGL hard blocker",
-          100, 350,
+          100,
+          350,
         );
         if (ffaStatus.blocked) {
-          throw Error("REAL_CHROMIUM_GPU_REQUIRED: legacy FFA blocked by WebGL gate (" + ffaStatus.status + ")");
+          throw Error(
+            "REAL_CHROMIUM_GPU_REQUIRED: legacy FFA blocked by WebGL gate (" +
+              ffaStatus.status +
+              ")",
+          );
         }
-        if (!ffaStatus.running) throw Error("Legacy FFA never reached a running game");
-        if (await evaluate("!!window.__nationalQaFind('national-diplomacy-panel')")) {
-          throw Error("Legacy FFA leaked an active NATIONAL diplomacy component");
+        if (!ffaStatus.running)
+          throw Error("Legacy FFA never reached a running game");
+        if (
+          await evaluate(
+            "!!window.__nationalQaFind('national-diplomacy-panel')",
+          )
+        ) {
+          throw Error(
+            "Legacy FFA leaked an active NATIONAL diplomacy component",
+          );
         }
         await capture("legacy-ffa-game-hud");
         record("legacy-ffa-verified", {
