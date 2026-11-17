@@ -36,6 +36,31 @@ jobs:
           npm audit --omit=dev --json > /tmp/national-r8-audit.json || true
           node -e 'const a=require("/tmp/national-r8-audit.json"); if(a.error){console.error(a.error);process.exit(1)}; const v=a.metadata?.vulnerabilities; console.log("PRODUCTION_AUDIT",JSON.stringify(v)); if(!v || v.total !== 0){console.error(Object.keys(a.vulnerabilities||{}));process.exit(1)}'
       - run: npm run typecheck
+      - name: Regenerate canonical map schema for patched Zod serializer
+        run: |
+          npm run gen-map-schema
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          import assert from "node:assert/strict";
+          const schema = JSON.parse(readFileSync("map-generator/info.schema.json", "utf8"));
+          const tuples = [];
+          function visit(node) {
+            if (!node || typeof node !== "object") return;
+            if (node.properties?.coordinates?.prefixItems) tuples.push(node.properties.coordinates);
+            for (const value of Object.values(node)) {
+              if (Array.isArray(value)) value.forEach(visit);
+              else if (value && typeof value === "object") visit(value);
+            }
+          }
+          visit(schema);
+          assert.ok(tuples.length >= 3, "Expected at least three coordinate tuples");
+          for (const t of tuples) {
+            assert.equal(t.minItems, 2, "Missing minimum coordinate tuple cardinality");
+            assert.equal(t.maxItems, 2, "Missing maximum coordinate tuple cardinality");
+            assert.equal(t.items, false, "Schema must forbid extra tuple coordinates");
+          }
+          console.log("R8_STRICT_ZOD_COORDINATE_TUPLES", tuples.length);
+          NODE
       - run: npm test
       - run: npm run lint
       - name: Apply repository-pinned formatter to E5-owned changes
@@ -49,7 +74,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json scripts/national-qa/gpu-attestation.mjs scripts/national-qa/browser-gameplay.mjs scripts/national-qa/asset-audit.mjs tests/qa/national/HardwareGpuAttestation.test.mjs docs/release/NATIONAL_R8_HARDWARE_RUNBOOK.md
+          git add package-lock.json map-generator/info.schema.json scripts/national-qa/gpu-attestation.mjs scripts/national-qa/browser-gameplay.mjs scripts/national-qa/asset-audit.mjs tests/qa/national/HardwareGpuAttestation.test.mjs docs/release/NATIONAL_R8_HARDWARE_RUNBOOK.md
           if git diff --cached --quiet; then
             echo "Lockfile unchanged"; exit 1
           fi
