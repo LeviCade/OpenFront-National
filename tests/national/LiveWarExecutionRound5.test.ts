@@ -129,8 +129,9 @@ describe("E2 Round Five authenticated WAR execution against actual spawned Game"
       warId: imperial.id,
       clientID: "north-client",
     });
-    const motion = game.nationalWarState()?.wars.motions.find((x) => x.layerId === imperial.id)!;
+    const motion = game.nationalWarState()?.wars.motions.find((x) => x.layerId === imperial.id);
     expect(motion).toBeDefined();
+    if (motion === undefined) throw new Error("expected imperial peace motion");
     enqueue(game, {
       type: "national_accept_peace",
       motionId: motion.id,
@@ -148,7 +149,9 @@ describe("E2 Round Five authenticated WAR execution against actual spawned Game"
       warId: national.id,
       clientID: "north-client",
     });
-    const nextMotion = game.nationalWarState()?.wars.motions.find((x) => x.layerId === national.id)!;
+    const nextMotion = game.nationalWarState()?.wars.motions.find((x) => x.layerId === national.id);
+    expect(nextMotion).toBeDefined();
+    if (nextMotion === undefined) throw new Error("expected national peace motion");
     enqueue(game, {
       type: "national_accept_peace",
       motionId: nextMotion.id,
