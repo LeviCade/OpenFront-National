@@ -1,3 +1,5 @@
+import type { PlayerID } from "@openfront/engine-api/game/GameTypes";
+import type { ClientID } from "@openfront/engine-api/Schemas";
 /**
  * Server-side NATIONAL save primitive.
  *
@@ -10,15 +12,13 @@
  * snapshot, private politics, troop state or intelligence is returned here.
  */
 import { createHash, randomUUID } from "node:crypto";
-import type { ClientID } from "@openfront/engine-api/Schemas";
-import type { PlayerID } from "@openfront/engine-api/game/GameTypes";
 /**
  * A minimal structural port: the trusted host injects the engine snapshot
  * callback. The server layer MUST NOT import engine internals directly.
  */
 export interface TrustedHostGamePort {
   config(): { nationalMode(): boolean };
-  playerByClientID(clientID: ClientID): { id(): PlayerID } | undefined;
+  playerByClientID(clientID: ClientID): { id(): PlayerID } | null | undefined;
   ticks(): number;
 }
 

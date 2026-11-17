@@ -1,13 +1,19 @@
-import { execFileSync } from "node:child_process";
-import { PlayerInfo, PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
+import {
+  PlayerInfo,
+  PlayerType,
+  UnitType,
+} from "@openfront/engine-api/game/GameTypes";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { NationalFoundEmpireExecution } from "@openfront/engine/execution/NationalFoundEmpireExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { WinCheckExecution } from "@openfront/engine/execution/WinCheckExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
-import { snapshotGame, snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { METRIC_KEYS } from "@openfront/engine/national/politics/sovereignty";
+import {
+  snapshotGame,
+  snapshotGameData,
+} from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
 import { TrustedNationalSaveStore } from "../../src/server/national/TrustedNationalSaveStore";
 import { setup } from "../util/Setup";
@@ -26,7 +32,10 @@ const spots = [
   [25, 70],
   [70, 25],
 ] as const;
-const leaderTerms = { admission: "leader" as const, expulsion: "forbidden" as const };
+const leaderTerms = {
+  admission: "leader" as const,
+  expulsion: "forbidden" as const,
+};
 const unanimousTerms = {
   admission: "unanimous" as const,
   expulsion: "forbidden" as const,
@@ -36,16 +45,20 @@ async function spawned(): Promise<Game> {
   const game = await setup("plains", { nationalMode: true }, players);
   for (let i = 0; i < players.length; i++) {
     const [x, y] = spots[i];
-    game.addExecution(new SpawnExecution("r8-actual-game", players[i], game.map().ref(x, y)));
+    game.addExecution(
+      new SpawnExecution("r8-actual-game", players[i], game.map().ref(x, y)),
+    );
   }
   game.executeNextTick();
   game.executeNextTick();
-  for (const player of players) expect(game.player(player.id).hasSpawned()).toBe(true);
+  for (const player of players)
+    expect(game.player(player.id).hasSpawned()).toBe(true);
   return game;
 }
 
 function state(game: Game) {
-  return readVersioned(GameSnapshot, snapshotGameData(game).game).national?.politics;
+  return readVersioned(GameSnapshot, snapshotGameData(game).game).national
+    ?.politics;
 }
 
 function pact(game: Game, id: string) {
@@ -72,7 +85,12 @@ function addEmpireMember(game: Game, id: string): void {
   });
 }
 
-function makePact(game: Game, id: string, founderId: string, targets: string[]): void {
+function makePact(
+  game: Game,
+  id: string,
+  founderId: string,
+  targets: string[],
+): void {
   game.performNationalCommand(game.player(founderId), {
     kind: "found-pact",
     pactId: id,
@@ -94,7 +112,8 @@ function makePact(game: Game, id: string, founderId: string, targets: string[]):
 }
 
 function eliminate(game: Game, id: string): void {
-  for (const tile of [...game.player(id).tiles()]) game.player(id).relinquish(tile);
+  for (const tile of [...game.player(id).tiles()])
+    game.player(id).relinquish(tile);
   game.executeNextTick();
 }
 
@@ -104,7 +123,11 @@ describe("Round Eight real Game sovereignty and constitutional voting", () => {
     foundEmpire(game);
     addEmpireMember(game, B);
     addEmpireMember(game, C);
-    expect(game.nationalPoliticalAuthority()?.membersOf("r8-empire")).toEqual([A, B, C]);
+    expect(game.nationalPoliticalAuthority()?.membersOf("r8-empire")).toEqual([
+      A,
+      B,
+      C,
+    ]);
     expect(game.nationalVictoryRoster()).toBeNull();
     game.performNationalCommand(game.player(A), {
       kind: "transfer-crown",
@@ -113,7 +136,9 @@ describe("Round Eight real Game sovereignty and constitutional voting", () => {
     });
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
-    expect(restored.nationalPoliticalAuthority()?.emperorOf("r8-empire")).toBe(C);
+    expect(restored.nationalPoliticalAuthority()?.emperorOf("r8-empire")).toBe(
+      C,
+    );
     for (const g of [game, restored]) {
       eliminate(g, D);
       expect(g.nationalVictoryRoster()?.prizes).toEqual([
@@ -138,7 +163,9 @@ describe("Round Eight real Game sovereignty and constitutional voting", () => {
     const { restored } = await roundTrip(game, "plains");
     for (const g of [game, restored]) {
       eliminate(g, A);
-      expect(g.nationalPoliticalAuthority()?.empireExists("r8-empire")).toBe(false);
+      expect(g.nationalPoliticalAuthority()?.empireExists("r8-empire")).toBe(
+        false,
+      );
       expect(g.nationalPoliticalAuthority()?.empireOf(B)).toBeNull();
       expect(g.nationalPoliticalAuthority()?.empireOf(C)).toBeNull();
       expect(g.nationalVictoryRoster()).toBeNull();
@@ -161,7 +188,9 @@ describe("Round Eight real Game sovereignty and constitutional voting", () => {
       administratorId: B,
     });
     expect(pact(game, "r8-constitution")?.terms).toEqual(leaderTerms);
-    expect(pact(game, "r8-constitution")?.pendingAmendment?.approvedBy).toEqual([A]);
+    expect(pact(game, "r8-constitution")?.pendingAmendment?.approvedBy).toEqual(
+      [A],
+    );
     expect(() =>
       game.performNationalCommand(game.player(D), {
         kind: "approve-pact-amendment",
@@ -180,7 +209,10 @@ describe("Round Eight real Game sovereignty and constitutional voting", () => {
         pactId: "r8-constitution",
       });
       expect(pact(g, "r8-constitution")?.terms).toEqual(leaderTerms);
-      expect(pact(g, "r8-constitution")?.pendingAmendment?.approvedBy).toEqual([A, B]);
+      expect(pact(g, "r8-constitution")?.pendingAmendment?.approvedBy).toEqual([
+        A,
+        B,
+      ]);
       g.performNationalCommand(g.player(C), {
         kind: "approve-pact-amendment",
         pactId: "r8-constitution",
@@ -342,13 +374,11 @@ describe("Round Eight full-scale real sovereign winners and strict crisis", () =
       empireId: "r8-eight-empire",
     });
     expect(prizes.slice(1)).toEqual(
-      eight
-        .slice(1)
-        .map((p) => ({
-          kind: "EmpireVictor",
-          nationId: p.id,
-          empireId: "r8-eight-empire",
-        })),
+      eight.slice(1).map((p) => ({
+        kind: "EmpireVictor",
+        nationId: p.id,
+        empireId: "r8-eight-empire",
+      })),
     );
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
@@ -380,9 +410,10 @@ describe("Round Eight full-scale real sovereign winners and strict crisis", () =
     const ruler = nations.find((n) => n.id === A)!;
     const rival = nations.find((n) => n.id === B)!;
     for (const metric of METRIC_KEYS) {
-      expect(ruler.metrics[metric], "strict Ungovernable: " + metric).toBeLessThan(
-        rival.metrics[metric],
-      );
+      expect(
+        ruler.metrics[metric],
+        "strict Ungovernable: " + metric,
+      ).toBeLessThan(rival.metrics[metric]);
     }
     const start = game.nationalUngovernableWarnings();
     expect(start).toHaveLength(1);
@@ -398,7 +429,10 @@ describe("Round Eight full-scale real sovereign winners and strict crisis", () =
       const tied = await restoreTestGame(baseline, "plains");
       tied.player(B).units(type)[0].delete();
       tied.executeNextTick();
-      expect(tied.nationalUngovernableWarnings(), "one strict tie: " + type).toEqual([]);
+      expect(
+        tied.nationalUngovernableWarnings(),
+        "one strict tie: " + type,
+      ).toEqual([]);
     }
     const { restored } = await roundTrip(game, "plains");
     for (let tick = 0; tick < 98; tick++) {
@@ -547,23 +581,37 @@ describe("Round Eight trusted-host private NATIONAL save primitive", () => {
     const handle = store.save("r8-host-game", "verified-alice", game);
     expect(Object.keys(handle).sort()).toEqual(["gameID", "id", "tick"]);
     expect(JSON.stringify(handle)).not.toContain("r8-empire");
-    expect(() => store.save("r8-host-game", "verified-alice", game)).toThrow(/quota/);
-    expect(() => store.save("r8-host-game", "forged-player", game)).toThrow(/unauthorized/);
+    expect(() => store.save("r8-host-game", "verified-alice", game)).toThrow(
+      /quota/,
+    );
+    expect(() => store.save("r8-host-game", "forged-player", game)).toThrow(
+      /unauthorized/,
+    );
     let restores = 0;
     const restore = async (bytes: Uint8Array) => {
       restores++;
       return restoreTestGame(bytes, "plains");
     };
-    await expect(store.restore(handle.id, "verified-bob", restore)).rejects.toThrow(/unauthorized/);
-    await expect(store.restore(handle.id, "no-session", restore)).rejects.toThrow(/unauthorized/);
+    await expect(
+      store.restore(handle.id, "verified-bob", restore),
+    ).rejects.toThrow(/unauthorized/);
+    await expect(
+      store.restore(handle.id, "no-session", restore),
+    ).rejects.toThrow(/unauthorized/);
     expect(restores).toBe(0);
     const recovered = await store.restore(handle.id, "verified-alice", restore);
     expect(restores).toBe(1);
-    expect(recovered.nationalPoliticalAuthority()?.membersOf("r8-empire")).toEqual([A, B]);
+    expect(
+      recovered.nationalPoliticalAuthority()?.membersOf("r8-empire"),
+    ).toEqual([A, B]);
     expect(snapshotGameData(recovered)).toEqual(snapshotGameData(game));
-    expect(() => store.delete(handle.id, "verified-bob")).toThrow(/unauthorized/);
+    expect(() => store.delete(handle.id, "verified-bob")).toThrow(
+      /unauthorized/,
+    );
     store.delete(handle.id, "verified-alice");
-    await expect(store.restore(handle.id, "verified-alice", restore)).rejects.toThrow(/not found/);
+    await expect(
+      store.restore(handle.id, "verified-alice", restore),
+    ).rejects.toThrow(/not found/);
   });
 
   it("refuses legacy FFA and any session without a Game-registered player binding", async () => {
@@ -573,29 +621,14 @@ describe("Round Eight trusted-host private NATIONAL save primitive", () => {
       resolveServerSession,
       (hostGame: Game, gameID: string) => snapshotGame(hostGame, { gameID }),
     );
-    expect(() => store.save("r8-host-game", "no-session", game)).toThrow(/unauthorized/);
-    expect(() => store.save("r8-host-game", "verified-alice", legacy)).toThrow(/legacy/);
-    expect(() => store.save("different-game", "verified-alice", game)).toThrow(/unauthorized/);
-  });
-});
-
-/**
- * TEMPORARY E1 DIAGNOSTIC ONLY — delete before final PR handoff.
- * Captures the exact pinned oxfmt source diff in CI, not a gameplay check.
- */
-describe("E1 R8 TEMP PINNED FORMAT DIAGNOSTIC — REMOVE", () => {
-  it("prints the exact oxfmt diff of E1-owned files", () => {
-    const paths = [
-      "packages/engine/src/game/GameImpl.ts",
-      "packages/engine/src/national/politics/NationalGovernanceState.ts",
-      "src/server/national/TrustedNationalSaveStore.ts",
-      "tests/national/RoundEightSovereigntyGame.test.ts",
-    ];
-    execFileSync("node_modules/.bin/oxfmt", ["--write", ...paths]);
-    const diff = execFileSync("git", ["diff", "--", ...paths], {
-      encoding: "utf8",
-      maxBuffer: 2_000_000,
-    });
-    console.log("E1_R8_FORMAT_DIFF_BEGIN\\n" + diff + "\\nE1_R8_FORMAT_DIFF_END");
+    expect(() => store.save("r8-host-game", "no-session", game)).toThrow(
+      /unauthorized/,
+    );
+    expect(() => store.save("r8-host-game", "verified-alice", legacy)).toThrow(
+      /legacy/,
+    );
+    expect(() => store.save("different-game", "verified-alice", game)).toThrow(
+      /unauthorized/,
+    );
   });
 });

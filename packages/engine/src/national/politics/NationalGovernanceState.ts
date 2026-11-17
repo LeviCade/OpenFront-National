@@ -195,7 +195,9 @@ export class NationalGovernanceState {
   }
 
   /** Future E3 delivery: private non-founder outcomes from this ONE journal. */
-  politicalResultsFor(actorId: PlayerID): readonly NationalPoliticalCommandResult[] {
+  politicalResultsFor(
+    actorId: PlayerID,
+  ): readonly NationalPoliticalCommandResult[] {
     return this.results
       .filter(
         (r): r is NationalPoliticalCommandResult =>

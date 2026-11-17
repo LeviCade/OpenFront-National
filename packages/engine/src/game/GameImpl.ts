@@ -940,7 +940,9 @@ export class GameImpl implements Game {
       throw new Error("NATIONAL command journal: forged actor");
     const targetId = "pactId" in command ? command.pactId : command.empireId;
     const recordedTargetId =
-      typeof targetId === "string" && targetId.length > 0 && targetId.length <= 256
+      typeof targetId === "string" &&
+      targetId.length > 0 &&
+      targetId.length <= 256
         ? targetId
         : "<invalid-target-id>";
     return this._nationalGovernance.recordPoliticalCommand(
