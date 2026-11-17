@@ -1,3 +1,5 @@
+import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
+import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 /**
  * Round Seven real engine -> worker contract certification.
  *
@@ -11,12 +13,10 @@
  * authenticated actor's bounded result receipts only.
  */
 import { NationalFoundEmpireIntentSchema } from "@openfront/engine-api/Schemas";
-import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
-import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
-import { GameRunner } from "@openfront/engine/GameRunner";
 import type { Game, Player } from "@openfront/engine/game/Game";
+import { GameRunner } from "@openfront/engine/GameRunner";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
@@ -209,9 +209,7 @@ describe("Round Seven authentic E1 -> E2 -> E3 GameRunner worker receipts", () =
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
     expect(
-      (restored as R7Game).nationalCommandResults!(
-        restored.player(founder.id),
-      ),
+      (restored as R7Game).nationalCommandResults!(restored.player(founder.id)),
     ).toEqual(truth);
     const restoredView = viewer(restored, founder.clientID!).next();
     expect(restoredView.nationalPolitics?.empires).toEqual(
@@ -251,13 +249,16 @@ describe("Round Seven authentic E1 -> E2 -> E3 GameRunner worker receipts", () =
     const packet = viewer(game, founder.clientID!).next();
     const politicalJson = JSON.stringify(packet.nationalPolitics);
     const fullJson = serialized(packet);
-    for (const canary of ["8765432", "123456789", "sightMemory", "privateTerms"]) {
+    for (const canary of [
+      "8765432",
+      "123456789",
+      "sightMemory",
+      "privateTerms",
+    ]) {
       expect(politicalJson).not.toContain(canary);
       expect(fullJson).not.toContain(canary);
     }
-    expect(packet.nationalPolitics).toEqual(
-      game.nationalPublicPoliticalView(),
-    );
+    expect(packet.nationalPolitics).toEqual(game.nationalPublicPoliticalView());
   });
 
   it("keeps legacy FFA worker packets free of NATIONAL political and recipient fields", async () => {
