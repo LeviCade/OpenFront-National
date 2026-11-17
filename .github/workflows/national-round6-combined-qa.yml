@@ -66,7 +66,14 @@ jobs:
             typecheck) npm run typecheck ;;
             all-tests) npm test ;;
             lint) npm run lint ;;
-            pinned-format) npm run format:check ;;
+            pinned-format)
+              if ! npm run format:check; then
+                echo "::error::Pinned oxfmt discrepancies; exact E5-owned diff follows"
+                npx --no-install oxfmt --write tests/e2e/national/RoundSixCombinedVerdict.test.ts scripts/national-qa/browser-gameplay.mjs scripts/national-qa/mutation-gate.mjs .github/workflows/national-round6-combined-qa.yml
+                git diff -- tests/e2e/national/RoundSixCombinedVerdict.test.ts scripts/national-qa/browser-gameplay.mjs scripts/national-qa/mutation-gate.mjs .github/workflows/national-round6-combined-qa.yml
+                exit 1
+              fi
+              ;;
             production-build) npm run build-prod ;;
             injected-defects) node scripts/national-qa/mutation-gate.mjs ;;
             production-dependencies)
