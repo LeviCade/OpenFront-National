@@ -123,6 +123,19 @@ const NationalFoundEmpireStateSchema = z.object({
         candidateId: z.string(),
       }),
       z.object({ kind: z.literal("accept-pact"), pactId: z.string() }),
+      z.object({
+        kind: z.literal("propose-pact-amendment"),
+        pactId: z.string(),
+        terms: z.object({
+          admission: z.enum(["leader", "unanimous"]),
+          expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+        }),
+        administratorId: z.string().nullable(),
+      }),
+      z.object({
+        kind: z.literal("approve-pact-amendment"),
+        pactId: z.string(),
+      }),
       z.object({ kind: z.literal("betray-pact"), pactId: z.string() }),
       z.object({
         kind: z.literal("expel-pact"),
