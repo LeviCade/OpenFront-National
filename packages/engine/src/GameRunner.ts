@@ -39,8 +39,18 @@ import { createGame } from "./game/GameImpl";
 import { humanDisconnects, humanStatsSnapshot } from "./game/HumanStats";
 import { placeName, placeSpawnName } from "./game/NameBoxCalculator";
 import { createNationsForGame } from "./game/NationCreation";
+import {
+  persistNationalHumanSight,
+  restoreNationalHumanSight,
+} from "./national/observation/HumanSightPersistence";
 import { collectLiveNationalObservation } from "./national/observation/LiveObservation";
 import { NationalOutboundFilter } from "./national/observation/NationalOutbound";
+import {
+  actorNationalResults,
+  emptyNationalResultDeliveryState,
+  initialNationalResultDeliveryState,
+  type NationalResultDeliveryState,
+} from "./national/observation/NationalPoliticalPacket";
 import {
   readSnapshotHeader,
   restoreGame,
@@ -166,6 +176,9 @@ export class GameRunner {
 
   private readonly nationalObserverId: string | null;
   private readonly nationalOutbound: NationalOutboundFilter | null;
+  /** Per authenticated recipient; tracks E1's requestId and sequence. */
+  private nationalResultDelivery: NationalResultDeliveryState =
+    emptyNationalResultDeliveryState();
 
   constructor(
     public game: Game,
@@ -185,6 +198,19 @@ export class GameRunner {
         game,
         this.nationalObserverId,
       );
+      if (this.nationalObserverId !== null) {
+        // Fresh reconnect/restore reads only the Game-owned E1 snapshot hook.
+        // Principal identity was resolved from the actual clientID registry.
+        this.nationalOutbound.restoreSightMemory(
+          restoreNationalHumanSight(game, this.nationalObserverId),
+        );
+        // Do not replay old success/rejection toasts when reconnecting.
+        // Reconnected clients reconstruct truth from nationalPolitics.
+        this.nationalResultDelivery = initialNationalResultDeliveryState(
+          game,
+          game.player(this.nationalObserverId),
+        );
+      }
     } else {
       this.nationalObserverId = null;
       this.nationalOutbound = null;
@@ -395,7 +421,13 @@ export class GameRunner {
       updates[GameUpdateType.Unit] = [];
     }
 
+    // E1's detached public political view is the sole source for NATIONAL
+    // roster, crisis and victory UI. A queued intent is never an acceptance.
+    const nationalPolitics = this.game.config().nationalMode()
+      ? this.game.nationalPublicPoliticalView()
+      : null;
     const fullPacket: GameUpdateViewData = {
+      ...(nationalPolitics === null ? {} : { nationalPolitics }),
       tick: this.game.ticks(),
       packedTileUpdates,
       ...(packedMotionPlans ? { packedMotionPlans } : {}),
@@ -429,9 +461,37 @@ export class GameRunner {
           this.game,
           this.nationalObserverId!,
         );
-        this.callBack(
-          this.nationalOutbound.project(this.game, fullPacket, verified),
+        const results = actorNationalResults(
+          this.game,
+          this.game.player(this.nationalObserverId!),
+          this.nationalResultDelivery,
         );
+        const authenticatedPacket = results.length
+          ? { ...fullPacket, nationalCommandResults: results }
+          : fullPacket;
+        const projected = this.nationalOutbound.project(
+          this.game,
+          authenticatedPacket,
+          verified,
+        );
+        // Advance and persist this authenticated human's sight at the
+        // canonical tick boundary before delivery or a subsequent snapshot.
+        const currentViewer = this.game.player(this.nationalObserverId!);
+        // E1's canonical snapshot writer admits only a living, spawned human.
+        // Pre-spawn packets and eliminated players must never throw or
+        // re-create a revoked human memory entry.
+        if (
+          currentViewer.type() === PlayerType.Human &&
+          currentViewer.hasSpawned() &&
+          currentViewer.isAlive()
+        ) {
+          persistNationalHumanSight(
+            this.game,
+            currentViewer.id(),
+            this.nationalOutbound.snapshotSightMemory(),
+          );
+        }
+        this.callBack(projected);
       }
     } else {
       this.callBack(fullPacket);

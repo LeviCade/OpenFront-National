@@ -595,6 +595,14 @@ export const NationalFoundEmpireIntentSchema = z.object({
     .min(1)
     .max(64)
     .regex(/^[A-Za-z0-9_-]+$/),
+  // Untrusted correlation token, NEVER an actor identity or authorization.
+  // Optional for legacy intents. Wire-bounded to E4's opaque per-click ID.
+  requestId: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .optional(),
 });
 
 /**

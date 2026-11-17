@@ -1,0 +1,120 @@
+name: NATIONAL Round Five — Strict Game Acceptance
+
+on:
+  pull_request:
+    branches: [stage3/integration-20261115]
+    paths:
+      - "tests/e2e/national/**"
+      - "tests/qa/national/**"
+      - "scripts/national-qa/**"
+      - "docs/release/**"
+      - ".github/workflows/national-round5-qa.yml"
+      - "packages/engine/**"
+      - "packages/engine-api/**"
+      - "src/client/**"
+  workflow_dispatch:
+
+concurrency:
+  group: national-r5-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  real-war-levy:
+    name: Real WAR MDA CAS + replay must pass
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Record exact source and toolchain
+        run: |
+          mkdir -p national-qa-artifacts
+          git rev-parse HEAD | tee national-qa-artifacts/round5-head.txt
+          node --version | tee national-qa-artifacts/round5-node.txt
+      - name: Run actual live WAR MDA AttackExecution and double-debit detectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --no-install vitest run --project node tests/e2e/national/IntegratedAcceptance.test.ts tests/qa/national/PacketCanaries.test.ts tests/e2e/national/RoundFiveWarLevy.test.ts tests/qa/national/RoundFiveFogRevocation.test.ts tests/e2e/national/RoundSixCombinedVerdict.test.ts 2>&1 | tee national-qa-artifacts/round5-war-levy.log
+      - name: Typecheck
+        if: always()
+        run: npm run typecheck
+      - name: Lint and formatting with exact QA-only diff on failure
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint
+          if ! npm run format:check; then
+            echo "::error::QA file formatting mismatch"
+            npx --no-install oxfmt --write tests/e2e/national/RoundFiveWarLevy.test.ts tests/qa/national/RoundFiveFogRevocation.test.ts scripts/national-qa/browser-gameplay.mjs docs/release/NATIONAL_ROUND5_ACCEPTANCE.md .github/workflows/national-round5-qa.yml
+            git diff -- tests/e2e/national/RoundFiveWarLevy.test.ts tests/qa/national/RoundFiveFogRevocation.test.ts scripts/national-qa/browser-gameplay.mjs docs/release/NATIONAL_ROUND5_ACCEPTANCE.md .github/workflows/national-round5-qa.yml
+            exit 1
+          fi
+      - name: Audit independent license baseline
+        if: always()
+        run: node scripts/national-qa/asset-audit.mjs
+      - name: Reconcile inherited production dependency security
+        if: always()
+        shell: bash
+        run: |
+          npm audit --json > national-qa-artifacts/round5-audit-all.json || true
+          npm audit --omit=dev --json > national-qa-artifacts/round5-audit-prod.json || true
+          node scripts/national-qa/audit-summary.mjs             national-qa-artifacts/round5-audit-all.json             national-qa-artifacts/round5-audit-prod.json             | tee national-qa-artifacts/round5-audit.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: national-r5-war-levy-${{ github.sha }}
+          path: national-qa-artifacts/
+          retention-days: 30
+
+  strict-real-chromium:
+    name: "Strict browser: ${{ matrix.viewport }} ${{ matrix.scenario }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        viewport: [desktop, mobile]
+        scenario: [national, legacy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Verify actual browser test script compiles
+        run: node --check scripts/national-qa/browser-gameplay.mjs
+      - name: Chromium Solo NATIONAL FULL acceptance (nonzero until genuinely playable)
+        shell: bash
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+          SKIP_BROWSER_OPEN: "true"
+          # Hosted runner has no GPU: collect genuine gate failure diagnostics.
+          # This NEVER satisfies the separate hardware acceptance gate.
+          NATIONAL_QA_SOFTWARE_CDP: "1"
+        run: |
+          set -euo pipefail
+          mkdir -p national-qa-artifacts
+          git rev-parse HEAD | tee national-qa-artifacts/browser-head.txt
+          node scripts/national-qa/browser-gameplay.mjs ${{ matrix.viewport == 'mobile' && '--mobile' || '' }} ${{ matrix.scenario == 'legacy' && '--legacy' || '' }} 2>&1 | tee national-qa-artifacts/round5-browser-${{ matrix.viewport }}-${{ matrix.scenario }}.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: national-r5-chromium-${{ matrix.viewport }}-${{ matrix.scenario }}-${{ github.sha }}
+          path: national-qa-artifacts/
+          retention-days: 30

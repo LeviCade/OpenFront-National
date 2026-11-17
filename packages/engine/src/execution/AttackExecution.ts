@@ -216,6 +216,16 @@ export class AttackExecution implements Execution {
             this.target.id(),
             Math.floor(projected),
           );
+          if (receipt?.application === "replay") {
+            // A replay is NOT a second accepted attack. Otherwise reusing a
+            // processed attack ID would evade the MDA interception entirely.
+            // Cancel this fresh shell; it must neither damage the target nor
+            // spend/return any donor troops a second time.
+            this.attack.delete();
+            if (this.removeTroops) this._owner.addTroops(this.startTroops ?? 0);
+            this.active = false;
+            return;
+          }
           if (receipt?.application === "applied") {
             nationalInterception = receipt.intercepted;
           }
@@ -406,6 +416,19 @@ export class AttackExecution implements Execution {
 
     if (targetPlayer && this._owner.isFriendly(targetPlayer)) {
       // In this case a new alliance was created AFTER the attack started.
+      this.retreat();
+      return;
+    }
+
+    // WAR-04: a completed bilateral peace removes the legal basis for
+    // continued damage. Recheck EACH real combat tick, not only launch time.
+    // This uses the ordinary existing attacker retreat path. No third-party
+    // MDA donor refund is invented (P2 remains an explicit unresolved policy).
+    if (
+      targetPlayer &&
+      this.mg.nationalPoliticalAuthority() !== null &&
+      !authorizeNationalAttack(this.mg, this._owner.id(), targetPlayer.id())
+    ) {
       this.retreat();
       return;
     }

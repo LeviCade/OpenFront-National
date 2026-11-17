@@ -208,10 +208,16 @@ export function planNationalInterest(
     };
   }
 
-  // Unowned land is a legitimate, immediately verified opportunity and
-  // requires no declaration of war. Prefer it over any foreign expansion,
-  // which remains unexecutable until the canonical E2 war ledger is wired.
-  if (observation.unownedFrontier === true) {
+  // Defend an existing legally scoped war front before grabbing neutral
+  // territory. Only an actually observed neighboring opponent qualifies;
+  // same-side members and unobserved remote belligerents do not. This is a
+  // preference in the planner, NOT an attack authorization.
+  const adjacentWarEnemy = observation.frontiers.some((frontier) =>
+    enemiesAtWar.has(frontier.targetId),
+  );
+  // Neutral terrain remains the default when no real enemy war front is
+  // observed. The final AttackExecution still enforces E2's live ledger.
+  if (observation.unownedFrontier === true && !adjacentWarEnemy) {
     const decision: NationalDecision = {
       objective: "expand",
       targetId: null,

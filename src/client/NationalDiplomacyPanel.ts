@@ -3,9 +3,12 @@ import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import {
+  createNationalFoundingRequestId,
   empireForMember,
   foundingUnavailableReason,
+  reconcileNationalFounding,
   validEmpireId,
+  type NationalFoundingAttempt,
 } from "./NationalDiplomacyState";
 import { SendNationalFoundEmpireIntentEvent } from "./Transport";
 import type { GameView } from "./view";
@@ -23,6 +26,14 @@ export class NationalDiplomacyPanel extends LitElement {
   @state() private expanded = false;
   @state() private draftEmpireId = "";
   @state() private pendingEmpireId: string | null = null;
+  private pendingAttempt: NationalFoundingAttempt | null = null;
+  private lastConfirmedEmpireId: string | null = null;
+  @state() private phase:
+    | "idle"
+    | "pending"
+    | "accepted"
+    | "rejected"
+    | "unknown" = "idle";
   @state() private message: string | null = null;
   @state() private error: string | null = null;
 
@@ -30,29 +41,92 @@ export class NationalDiplomacyPanel extends LitElement {
     return this;
   }
 
-  /** Called by the live sidebar controller after the worker applies a tick. */
+  /**
+   * Only an accepted E1 journal result AND current E3 public roster can
+   * confirm this button click; a restored roster by itself proves membership.
+   */
   public refresh(): void {
-    const player = this.game?.myPlayer();
-    const politics = this.game?.nationalPolitics() ?? null;
-    const empire = player ? empireForMember(politics, player.id()) : null;
-    if (this.pendingEmpireId && empire) {
-      // Membership from the game packet, NOT an acknowledgement of enqueue.
+    const game = this.game;
+    const player = game?.myPlayer();
+    const politics = game?.nationalPolitics() ?? null;
+    const member = player ? empireForMember(politics, player.id()) : null;
+    if (
+      this.lastConfirmedEmpireId &&
+      member?.id !== this.lastConfirmedEmpireId
+    ) {
+      this.lastConfirmedEmpireId = null;
+      this.message = null;
+      this.phase = "idle";
+    }
+
+    const attempt = this.pendingAttempt;
+    if (attempt && game?.config().isReplay()) {
+      this.pendingAttempt = null;
       this.pendingEmpireId = null;
-      this.message = `Confirmed by game: your nation belongs to ${empire.id}.`;
+      this.phase = "unknown";
+      this.message =
+        "Replay is read-only. The previous founding request is not confirmed.";
       this.error = null;
-    } else if (this.pendingEmpireId && player) {
-      const outcome = this.game?.nationalFoundingOutcome();
-      if (
-        outcome?.actorId === player.id() &&
-        outcome.empireId === this.pendingEmpireId &&
-        outcome.accepted === false
-      ) {
+    } else if (attempt && game && player) {
+      const tick = typeof game.ticks === "function" ? game.ticks() : 0;
+      const results =
+        typeof game.nationalFoundingResults === "function"
+          ? game.nationalFoundingResults()
+          : game.nationalFoundingOutcome()
+            ? [game.nationalFoundingOutcome()!]
+            : [];
+      const decision = reconcileNationalFounding(attempt, {
+        gameId: game.gameID?.() ?? "",
+        actorId: player.id(),
+        tick,
+        politics,
+        results,
+      });
+      if (decision.phase === "pending") {
+        this.pendingAttempt = {
+          ...attempt,
+          acceptedResultSeen: decision.acceptedResultSeen,
+        };
+      } else {
+        this.pendingAttempt = null;
         this.pendingEmpireId = null;
-        this.message = null;
-        this.error = outcome.reason ?? "The game rejected empire founding.";
+        this.phase = decision.phase;
+        if (
+          decision.phase === "accepted" &&
+          (game.isSpectator() || !player.isAlive() || game.inSpawnPhase())
+        ) {
+          // The command receipt is real, but a now-inactive principal cannot
+          // receive a player-facing active founding success toast.
+          this.phase = "unknown";
+          this.message =
+            "Founding was accepted previously, but the active nation has changed. Check the current roster.";
+          this.error = null;
+        } else if (decision.phase === "accepted") {
+          this.lastConfirmedEmpireId = attempt.empireId;
+          this.message = `Confirmed by game: your nation founded ${attempt.empireId}.`;
+          this.error = null;
+        } else if (decision.phase === "rejected") {
+          this.message = null;
+          this.error = decision.reason;
+        } else {
+          this.message = decision.reason;
+          this.error = null;
+        }
       }
     }
     if (this.expanded) this.requestUpdate();
+  }
+
+  /** A dropped or replaced session must never retain optimistic success. */
+  public connectionInterrupted(): void {
+    if (this.pendingAttempt === null) return;
+    this.pendingAttempt = null;
+    this.pendingEmpireId = null;
+    this.phase = "unknown";
+    this.message =
+      "Connection interrupted. Founding is unconfirmed; check the game roster after reconnecting.";
+    this.error = null;
+    this.requestUpdate();
   }
 
   private get memberEmpire() {
@@ -99,18 +173,47 @@ export class NationalDiplomacyPanel extends LitElement {
       return;
     }
 
-    // Set the latch BEFORE emitting so duplicate clicks/key activation cannot
-    // enqueue two commands in the same frame. Transport's normal sendIntent
-    // passes through the existing intent gate and stamped game pipeline.
-    this.pendingEmpireId = empireId;
-    this.error = null;
-    this.message = "Founding request sent. Awaiting authoritative game state…";
+    const game = this.game;
+    const player = game?.myPlayer();
+    if (!game || !player) {
+      this.error = "There is no active player to authorize founding.";
+      return;
+    }
+    // Cryptographic uniqueness is required; if the browser cannot generate
+    // a secure token the command is NOT sent and no pending receipt is set.
+    let requestId: string;
     try {
-      this.eventBus.emit(new SendNationalFoundEmpireIntentEvent(empireId));
+      requestId = createNationalFoundingRequestId();
+    } catch {
+      this.error =
+        "Secure command identification is unavailable. Founding was not sent.";
+      this.phase = "unknown";
+      return;
+    }
+    this.pendingAttempt = {
+      requestId,
+      gameId: game.gameID?.() ?? "",
+      actorId: player.id(),
+      empireId,
+      issuedTick: typeof game.ticks === "function" ? game.ticks() : 0,
+      acceptedResultSeen: false,
+    };
+    this.pendingEmpireId = empireId;
+    this.lastConfirmedEmpireId = null;
+    this.phase = "pending";
+    this.error = null;
+    this.message =
+      "Request sent to game. Awaiting its accepted or rejected result…";
+    try {
+      this.eventBus.emit(
+        new SendNationalFoundEmpireIntentEvent(empireId, requestId),
+      );
     } catch {
       // Only a synchronous producer failure may clear the local latch.
       // An enqueued command is never equated with a successful execution.
+      this.pendingAttempt = null;
       this.pendingEmpireId = null;
+      this.phase = "unknown";
       this.message = null;
       this.error = "Could not send the founding command to the game.";
     }
@@ -138,18 +241,22 @@ export class NationalDiplomacyPanel extends LitElement {
     const game = this.game;
     if (
       game?.config().gameConfig().nationalMode !== true ||
-      game.config().gameConfig().gameType !== GameType.Singleplayer ||
-      game.config().isReplay()
+      game.config().gameConfig().gameType !== GameType.Singleplayer
     ) {
       return nothing;
     }
     const politics = game.nationalPolitics();
     const ownEmpire = this.memberEmpire;
-    const canFound = this.unavailableReason === null;
+    const canFound =
+      this.unavailableReason === null &&
+      politics !== null &&
+      !game.config().isReplay();
+    const readonlyReplay = game.config().isReplay();
     return html`
       <section
         class="text-white w-[min(25rem,calc(100vw-1rem))] max-w-full rounded-xl border border-amber-400/50 bg-slate-950/95 shadow-xl backdrop-blur-sm overflow-hidden"
         aria-label="NATIONAL diplomacy"
+        data-national-phase=${this.phase}
         @keydown=${this.handlePanelKeyDown}
       >
         <button
@@ -208,6 +315,31 @@ export class NationalDiplomacyPanel extends LitElement {
                       </p>`
                 }
                 ${
+                  politics?.warnings.length
+                    ? html`<div
+                        class="rounded-lg border border-orange-400/60 bg-orange-900/30 p-3 space-y-2"
+                        role="alert"
+                      >
+                        <h2 class="font-semibold text-orange-200">
+                          Ungovernable warnings
+                        </h2>
+                        ${politics.warnings.map(
+                          (warning) =>
+                            html`<p class="text-sm text-orange-100">
+                              Empire <strong>${warning.empireId}</strong>:
+                              ${Math.ceil(warning.remainingMs / 1000)} seconds
+                              to the recorded deadline.
+                              ${
+                                warning.blockedByAssetDisposition
+                                  ? "Dissolution is deferred pending asset-disposition rules."
+                                  : "Review imperial control and succession."
+                              }
+                            </p>`,
+                        )}
+                      </div>`
+                    : nothing
+                }
+                ${
                   ownEmpire
                     ? html`<p
                         class="rounded-lg bg-emerald-900/35 p-3 text-emerald-200"
@@ -219,55 +351,62 @@ export class NationalDiplomacyPanel extends LitElement {
                             : `Emperor: ${this.playerName(ownEmpire.leaderId)}.`
                         }
                       </p>`
-                    : html`<form
-                        class="space-y-2"
-                        @submit=${this.submitFounding}
-                      >
-                        <label
-                          for="national-empire-id"
-                          class="block font-semibold"
+                    : readonlyReplay
+                      ? html`<p class="text-xs text-slate-300" role="status">
+                          Replay is read-only. Empire founding is unavailable.
+                        </p>`
+                      : html`<form
+                          class="space-y-2"
+                          @submit=${this.submitFounding}
                         >
-                          Found an empire
-                        </label>
-                        <input
-                          id="national-empire-id"
-                          name="empireId"
-                          type="text"
-                          required
-                          minlength="1"
-                          maxlength="64"
-                          pattern="[A-Za-z0-9_-]+"
-                          autocomplete="off"
-                          autocapitalize="off"
-                          spellcheck="false"
-                          class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-white focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50"
-                          placeholder="e.g. Atlas_Empire"
-                          aria-describedby="national-id-help"
-                          .value=${this.draftEmpireId}
-                          @input=${(e: Event) =>
-                            (this.draftEmpireId = (
-                              e.target as HTMLInputElement
-                            ).value)}
-                          ?disabled=${!canFound}
-                        />
-                        <p id="national-id-help" class="text-xs text-slate-400">
-                          1–64 letters, digits, underscores or hyphens.
-                        </p>
-                        <button
-                          type="submit"
-                          class="rounded-lg bg-amber-400 px-4 py-2 font-bold text-slate-950 hover:bg-amber-300 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
-                          ?disabled=${!canFound || !this.eventBus}
-                        >
-                          ${this.pendingEmpireId ? "Founding requested…" : "Found Empire"}
-                        </button>
-                        ${
-                          this.unavailableReason
-                            ? html`<p class="text-xs text-slate-300">
-                                ${this.unavailableReason}
-                              </p>`
-                            : nothing
-                        }
-                      </form>`
+                          <label
+                            for="national-empire-id"
+                            class="block font-semibold"
+                          >
+                            Found an empire
+                          </label>
+                          <input
+                            id="national-empire-id"
+                            name="empireId"
+                            type="text"
+                            required
+                            minlength="1"
+                            maxlength="64"
+                            pattern="[A-Za-z0-9_-]+"
+                            autocomplete="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                            class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-white focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50"
+                            placeholder="e.g. Atlas_Empire"
+                            aria-describedby="national-id-help"
+                            .value=${this.draftEmpireId}
+                            @input=${(e: Event) =>
+                              (this.draftEmpireId = (
+                                e.target as HTMLInputElement
+                              ).value)}
+                            ?disabled=${!canFound}
+                          />
+                          <p
+                            id="national-id-help"
+                            class="text-xs text-slate-400"
+                          >
+                            1–64 letters, digits, underscores or hyphens.
+                          </p>
+                          <button
+                            type="submit"
+                            class="rounded-lg bg-amber-400 px-4 py-2 font-bold text-slate-950 hover:bg-amber-300 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
+                            ?disabled=${!canFound || !this.eventBus}
+                          >
+                            ${this.pendingEmpireId ? "Awaiting game result…" : "Found Empire"}
+                          </button>
+                          ${
+                            this.unavailableReason
+                              ? html`<p class="text-xs text-slate-300">
+                                  ${this.unavailableReason}
+                                </p>`
+                              : nothing
+                          }
+                        </form>`
                 }
 
                 <div

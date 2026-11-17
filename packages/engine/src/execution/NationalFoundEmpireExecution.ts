@@ -23,6 +23,7 @@ export class NationalFoundEmpireExecution implements Execution {
     private empireId: string,
     /** Optional E1-owned political command; legacy founding remains valid. */
     private politicalCommand: NationalCommand | null = null,
+    private requestId: string | null = null,
   ) {}
 
   init(game: Game): void {
@@ -33,13 +34,20 @@ export class NationalFoundEmpireExecution implements Execution {
     this.active = false;
     if (this.game === null) throw new Error("NATIONAL command not initialized");
     try {
-      this.game.performNationalCommand(
-        this.actor,
-        this.politicalCommand ?? {
-          kind: "found-empire",
-          empireId: this.empireId,
-        },
-      );
+      if (
+        this.politicalCommand === null ||
+        this.politicalCommand.kind === "found-empire"
+      ) {
+        const result = this.game.performNationalFoundEmpireWithOutcome(
+          this.actor,
+          this.politicalCommand?.empireId ?? this.empireId,
+          this.requestId,
+        );
+        if (!result.accepted)
+          console.warn("NATIONAL founding rejected:", result.reason);
+      } else {
+        this.game.performNationalCommand(this.actor, this.politicalCommand);
+      }
     } catch (err) {
       // A malicious, duplicate or now-illegal command is a deterministic
       // rejection, not a fatal worker crash and never a partial mutation.
@@ -62,6 +70,7 @@ export class NationalFoundEmpireExecution implements Execution {
       actor: w.player(this.actor),
       empireId: this.empireId,
       politicalCommand: this.politicalCommand,
+      requestId: this.requestId,
     });
   }
 
@@ -71,6 +80,7 @@ export class NationalFoundEmpireExecution implements Execution {
     this.actor = r.player(s.actor);
     this.empireId = s.empireId;
     this.politicalCommand = s.politicalCommand;
+    this.requestId = s.requestId;
   }
 }
 
@@ -114,17 +124,28 @@ const NationalFoundEmpireStateSchema = z.object({
       }),
       z.object({ kind: z.literal("accept-pact"), pactId: z.string() }),
       z.object({ kind: z.literal("betray-pact"), pactId: z.string() }),
+      z.object({
+        kind: z.literal("expel-pact"),
+        pactId: z.string(),
+        memberId: z.string(),
+        approvingIds: z.array(z.string()).optional(),
+      }),
     ])
     .nullable(),
+  requestId: z.string().min(1).max(256).nullable(),
 });
 type NationalFoundEmpireState = z.infer<typeof NationalFoundEmpireStateSchema>;
 
 export const NationalFoundEmpireExecutionSnapshot = execSnapshotType({
   name: "NationalFoundEmpire",
-  version: 2,
+  version: 3,
   schema: NationalFoundEmpireStateSchema,
   migrations: {
     1: (old: { empireId: string }) => ({ ...old, politicalCommand: null }),
+    2: (old: { politicalCommand: NationalCommand | null }) => ({
+      ...old,
+      requestId: null,
+    }),
   },
   cls: () => NationalFoundEmpireExecution,
 });

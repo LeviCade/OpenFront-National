@@ -95,9 +95,15 @@ const UPDATE_TYPE_ROUTING: Record<
  * would record stale values. A new field won't compile until it's routed.
  */
 export const VIEW_DATA_ROUTING: Record<
-  keyof GameUpdateViewData,
+  keyof GameUpdateViewData | "nationalPolitics" | "nationalCommandResults",
   "normalizer" | "events" | "dropped"
 > = {
+  // The v1 binary replay codec has no versioned public sovereignty record.
+  // Do NOT encode transient per-recipient command acknowledgements as replay
+  // events; they could resurrect stale success toasts during seek/restore.
+  // Future historical politics require an explicit codec version migration.
+  nationalPolitics: "dropped",
+  nationalCommandResults: "dropped",
   tick: "normalizer",
   updates: "normalizer",
   packedTileUpdates: "normalizer",
