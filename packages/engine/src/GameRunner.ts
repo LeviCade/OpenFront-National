@@ -40,6 +40,18 @@ import { humanDisconnects, humanStatsSnapshot } from "./game/HumanStats";
 import { placeName, placeSpawnName } from "./game/NameBoxCalculator";
 import { createNationsForGame } from "./game/NationCreation";
 import {
+  persistNationalHumanSight,
+  restoreNationalHumanSight,
+} from "./national/observation/HumanSightPersistence";
+import { collectLiveNationalObservation } from "./national/observation/LiveObservation";
+import { NationalOutboundFilter } from "./national/observation/NationalOutbound";
+import {
+  actorNationalResults,
+  emptyNationalResultDeliveryState,
+  initialNationalResultDeliveryState,
+  type NationalResultDeliveryState,
+} from "./national/observation/NationalPoliticalPacket";
+import {
   readSnapshotHeader,
   restoreGame,
   snapshotGame,
@@ -94,6 +106,7 @@ export async function createGameRunner(
       gameStart.tribes?.map((t) => t.name),
     ),
     callBack,
+    clientID,
   );
   gr.init();
   return gr;
@@ -144,6 +157,7 @@ export async function createGameRunnerFromSnapshot(
       gameStart.tribes?.map((t) => t.name),
     ),
     callBack,
+    clientID,
   );
 }
 
@@ -160,11 +174,110 @@ export class GameRunner {
 
   private lastSpawnTiles = new Map<PlayerID, TileRef>();
 
+  private readonly nationalObserverId: string | null;
+  private readonly nationalOutbound: NationalOutboundFilter | null;
+  /** Per authenticated recipient; tracks E1's requestId and sequence. */
+  private nationalResultDelivery: NationalResultDeliveryState =
+    emptyNationalResultDeliveryState();
+
   constructor(
     public game: Game,
     private execManager: Executor,
     private callBack: (gu: GameUpdateViewData | ErrorUpdate) => void,
-  ) {}
+    private readonly viewerClientID?: ClientID,
+  ) {
+    if (game.config().nationalMode()) {
+      // Principal is resolved from the actual game player registry, NEVER
+      // from an observerId asserted by a client or packet body.
+      const player =
+        this.viewerClientID === undefined
+          ? null
+          : game.playerByClientID(this.viewerClientID);
+      this.nationalObserverId = player?.id() ?? null;
+      this.nationalOutbound = new NationalOutboundFilter(
+        game,
+        this.nationalObserverId,
+      );
+      if (this.nationalObserverId !== null) {
+        // Fresh reconnect/restore reads only the Game-owned E1 snapshot hook.
+        // Principal identity was resolved from the actual clientID registry.
+        this.nationalOutbound.restoreSightMemory(
+          restoreNationalHumanSight(game, this.nationalObserverId),
+        );
+        // Do not replay old success/rejection toasts when reconnecting.
+        // Reconnected clients reconstruct truth from nationalPolitics.
+        this.nationalResultDelivery = initialNationalResultDeliveryState(
+          game,
+          game.player(this.nationalObserverId),
+        );
+      }
+    } else {
+      this.nationalObserverId = null;
+      this.nationalOutbound = null;
+    }
+  }
+
+  /** Principal rights follow the current engine identity, not cached init data. */
+  private isCurrentNationalViewer(): boolean {
+    return (
+      this.nationalObserverId !== null &&
+      this.viewerClientID !== undefined &&
+      this.game.playerByClientID(this.viewerClientID)?.id() ===
+        this.nationalObserverId
+    );
+  }
+
+  /** Only the authenticated game principal may use NATIONAL private RPCs. */
+  isNationalRequesterAuthorized(id: string | number): boolean {
+    if (!this.game.config().nationalMode()) return true;
+    const principal = this.nationalObserverId;
+    if (principal === null || !this.isCurrentNationalViewer()) return false;
+    return typeof id === "string"
+      ? id === principal
+      : this.game.player(principal).smallID() === id;
+  }
+
+  /** Fail closed on target tiles outside the authenticated observer's sight. */
+  isNationalTileVisible(tile: TileRef): boolean {
+    if (!this.game.config().nationalMode()) return true;
+    const principal = this.nationalObserverId;
+    return (
+      principal !== null &&
+      this.isCurrentNationalViewer() &&
+      Number.isSafeInteger(tile) &&
+      tile >= 0 &&
+      tile < this.game.width() * this.game.height() &&
+      collectLiveNationalObservation(this.game, principal).visibleTiles.has(
+        tile,
+      )
+    );
+  }
+
+  /** A coordinate query may not probe another nation's unseen territory. */
+  isNationalCoordinateVisible(x?: number, y?: number): boolean {
+    if (!this.game.config().nationalMode()) return true;
+    const principal = this.nationalObserverId;
+    if (principal === null || !this.isCurrentNationalViewer()) return false;
+    if (x === undefined && y === undefined) return true;
+    if (
+      x === undefined ||
+      y === undefined ||
+      !Number.isSafeInteger(x) ||
+      !Number.isSafeInteger(y) ||
+      !this.game.isValidCoord(x, y)
+    )
+      return false;
+    return collectLiveNationalObservation(
+      this.game,
+      principal,
+    ).visibleTiles.has(this.game.ref(x, y));
+  }
+
+  /** Signed/stamped turn intents must match the authentic NATIONAL player. */
+  isNationalIntentAuthorized(clientID: ClientID): boolean {
+    if (!this.game.config().nationalMode()) return true;
+    return this.isCurrentNationalViewer() && this.viewerClientID === clientID;
+  }
 
   /**
    * Serializes the simulation at the current tick boundary. Turns that were
@@ -308,7 +421,13 @@ export class GameRunner {
       updates[GameUpdateType.Unit] = [];
     }
 
-    this.callBack({
+    // E1's detached public political view is the sole source for NATIONAL
+    // roster, crisis and victory UI. A queued intent is never an acceptance.
+    const nationalPolitics = this.game.config().nationalMode()
+      ? this.game.nationalPublicPoliticalView()
+      : null;
+    const fullPacket: GameUpdateViewData = {
+      ...(nationalPolitics === null ? {} : { nationalPolitics }),
       tick: this.game.ticks(),
       packedTileUpdates,
       ...(packedMotionPlans ? { packedMotionPlans } : {}),
@@ -325,7 +444,58 @@ export class GameRunner {
         : {}),
       tickExecutionDuration: tickExecutionDuration,
       pendingTurns: pendingTurns ?? 0,
-    });
+    };
+    if (this.nationalOutbound !== null) {
+      // A takeover/disconnection may revoke the original player binding.
+      // Do not keep sending the prior principal's private fields or units.
+      if (!this.isCurrentNationalViewer()) {
+        this.callBack(
+          new NationalOutboundFilter(this.game, null).project(
+            this.game,
+            fullPacket,
+            null,
+          ),
+        );
+      } else {
+        const verified = collectLiveNationalObservation(
+          this.game,
+          this.nationalObserverId!,
+        );
+        const results = actorNationalResults(
+          this.game,
+          this.game.player(this.nationalObserverId!),
+          this.nationalResultDelivery,
+        );
+        const authenticatedPacket = results.length
+          ? { ...fullPacket, nationalCommandResults: results }
+          : fullPacket;
+        const projected = this.nationalOutbound.project(
+          this.game,
+          authenticatedPacket,
+          verified,
+        );
+        // Advance and persist this authenticated human's sight at the
+        // canonical tick boundary before delivery or a subsequent snapshot.
+        const currentViewer = this.game.player(this.nationalObserverId!);
+        // E1's canonical snapshot writer admits only a living, spawned human.
+        // Pre-spawn packets and eliminated players must never throw or
+        // re-create a revoked human memory entry.
+        if (
+          currentViewer.type() === PlayerType.Human &&
+          currentViewer.hasSpawned() &&
+          currentViewer.isAlive()
+        ) {
+          persistNationalHumanSight(
+            this.game,
+            currentViewer.id(),
+            this.nationalOutbound.snapshotSightMemory(),
+          );
+        }
+        this.callBack(projected);
+      }
+    } else {
+      this.callBack(fullPacket);
+    }
     this.isExecuting = false;
     return true;
   }

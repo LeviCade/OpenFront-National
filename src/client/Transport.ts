@@ -109,6 +109,22 @@ export class SendSpawnIntentEvent implements GameEvent {
   constructor(public readonly tile: TileRef) {}
 }
 
+/** User-originated NATIONAL founding, stamped by the normal transport. */
+export class SendNationalFoundEmpireIntentEvent implements GameEvent {
+  constructor(
+    public readonly empireId: string,
+    public readonly requestId: string,
+  ) {}
+}
+
+/** Signals loss/reestablishment of a verified game transport session. */
+export class NationalTransportStatusEvent implements GameEvent {
+  constructor(
+    public readonly ready: boolean,
+    public readonly gameID: string,
+  ) {}
+}
+
 export class SendAttackIntentEvent implements GameEvent {
   constructor(
     public readonly targetID: PlayerID | null,
@@ -320,6 +336,9 @@ export class Transport {
     );
     this.subscribe(SetIntentGateEvent, (e) => (this.intentGate = e.gate));
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
+    this.subscribe(SendNationalFoundEmpireIntentEvent, (e) =>
+      this.onSendNationalFoundEmpireIntent(e),
+    );
     this.subscribe(SendAttackIntentEvent, (e) => this.onSendAttackIntent(e));
     this.subscribe(SendUpgradeStructureIntentEvent, (e) =>
       this.onSendUpgradeStructureIntent(e),
@@ -528,6 +547,11 @@ export class Transport {
           }
         }
         this.isSessionReady = true;
+        if (msg.type === "lobby_info" || msg.type === "start") {
+          this.eventBus.emit(
+            new NationalTransportStatusEvent(true, this.lobbyConfig.gameID),
+          );
+        }
         this.flushBuffer();
         this.onmessage(msg);
       } catch (e) {
@@ -559,6 +583,9 @@ export class Transport {
     };
     this.socket.onclose = (event: CloseEvent) => {
       this.isSessionReady = false;
+      this.eventBus.emit(
+        new NationalTransportStatusEvent(false, this.lobbyConfig.gameID),
+      );
       const detail = describeSocketClose(socket.url, event, openedAt);
       if (event.code === CloseCode.Normal) {
         console.log(`Game socket ${detail}`);
@@ -752,6 +779,9 @@ export class Transport {
   }
 
   leaveGame() {
+    this.eventBus.emit(
+      new NationalTransportStatusEvent(false, this.lobbyConfig.gameID),
+    );
     for (const unsubscribe of this.unsubscribers.splice(0)) {
       unsubscribe();
     }
@@ -806,6 +836,22 @@ export class Transport {
       type: "allianceExtension",
       recipient: event.recipient.id(),
     });
+  }
+
+  private onSendNationalFoundEmpireIntent(
+    event: SendNationalFoundEmpireIntentEvent,
+  ) {
+    // The wire schema and engine validate the ID and acting client again.
+    // Do not stamp a player ID here or create political state on the client.
+    // E2 owns the zod wire schema update. A typed variable preserves the
+    // additional optional field before that sibling PR is integrated;
+    // actor authentication remains the server-stamped clientID.
+    const intent = {
+      type: "national_found_empire" as const,
+      empireId: event.empireId,
+      requestId: event.requestId,
+    };
+    this.sendIntent(intent);
   }
 
   private onSendSpawnIntentEvent(event: SendSpawnIntentEvent) {

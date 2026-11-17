@@ -2,7 +2,7 @@ import { GameType } from "@openfront/engine-api/game/GameTypes";
 import { assetUrl } from "@openfront/shared/AssetUrls";
 import { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement } from "lit";
-import { customElement, state } from "lit/decorators.js";
+import { customElement, query, state } from "lit/decorators.js";
 import { createNextLobby } from "../../Api";
 import { ClientEnv } from "../../ClientEnv";
 import "../../components/DoomsdayClockPanel";
@@ -10,9 +10,15 @@ import "../../components/OvertimePanel";
 import { Controller } from "../../Controller";
 import { isDesktopShell } from "../../DesktopShell";
 import { gamePortal } from "../../GamePortal";
+import "../../NationalDiplomacyPanel";
 import { showInGameAlert, showInGameConfirm } from "../../InGameModal";
 import { TogglePauseIntentEvent } from "../../InputHandler";
-import { PauseGameIntentEvent, SendWinnerEvent } from "../../Transport";
+import type { NationalDiplomacyPanel } from "../../NationalDiplomacyPanel";
+import {
+  NationalTransportStatusEvent,
+  PauseGameIntentEvent,
+  SendWinnerEvent,
+} from "../../Transport";
 import { shareGame } from "../../utilities/ShareGame";
 import { homeHref, showToast, translateText } from "../../Utils";
 import { GameView } from "../../view";
@@ -39,6 +45,8 @@ const ONE_MINUTE_WARNING_DURATION_MS = 4_000;
 export class GameRightSidebar extends LitElement implements Controller {
   public game: GameView;
   public eventBus: EventBus;
+  @query("national-diplomacy-panel")
+  private nationalPanel?: NationalDiplomacyPanel;
 
   @state()
   private _isSinglePlayer: boolean = false;
@@ -102,6 +110,14 @@ export class GameRightSidebar extends LitElement implements Controller {
       this.updateParentOffset();
     });
 
+    this.eventBus.on(NationalTransportStatusEvent, (e) => {
+      if (!e.ready && e.gameID === this.game.gameID()) {
+        this.game.invalidateNationalPoliticalView?.();
+        this.nationalPanel?.connectionInterrupted();
+        this.nationalPanel?.refresh();
+      }
+    });
+
     this.eventBus.on(SendWinnerEvent, () => {
       this.hasWinner = true;
       this.requestUpdate();
@@ -141,6 +157,7 @@ export class GameRightSidebar extends LitElement implements Controller {
   }
 
   tick() {
+    this.nationalPanel?.refresh();
     // Timer logic
     // Check if the player is the lobby creator
     if (!this.isLobbyCreator && this.game.myPlayer()?.isLobbyCreator()) {
@@ -457,6 +474,15 @@ export class GameRightSidebar extends LitElement implements Controller {
           <img src=${exitIcon} alt="exit" width="20" height="20" />
         </div>
       </aside>
+      ${
+        this.game.config().gameConfig().nationalMode === true &&
+        this.game.config().gameConfig().gameType === GameType.Singleplayer
+          ? html`<national-diplomacy-panel
+              .game=${this.game}
+              .eventBus=${this.eventBus}
+            ></national-diplomacy-panel>`
+          : ""
+      }
       <doomsday-clock-panel
         .game=${this.game}
         .hasWinner=${this.hasWinner}

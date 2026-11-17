@@ -1,0 +1,809 @@
+/**
+ * NATIONAL political rules — isolated deterministic projection (D-003..D-013).
+ *
+ * This is NOT the conductor-owned PoliticalIdentity, Coalition, wire schema,
+ * command router, or authoritative snapshot. The M0 adapter must map those
+ * canonical objects into/out of this pure projection. No GameImpl edits here.
+ * Every operation is immutable; no clock, random source, combat or treasury I/O.
+ */
+
+export const IMPERIAL_CRISIS_MS = 10_000;
+export const METRIC_KEYS = [
+  "land",
+  "maxPopulation",
+  "activePopulation",
+  "cities",
+  "factories",
+  "ports",
+  "silos",
+  "warships",
+] as const;
+
+export type MetricKey = (typeof METRIC_KEYS)[number];
+export type PoliticsMetrics = Record<MetricKey, number>;
+
+export interface PoliticsNation {
+  id: string;
+  alive: boolean;
+  metrics: PoliticsMetrics;
+}
+
+export type PactKind = "NAP" | "MDA";
+export type VoteRule = "leader" | "unanimous";
+export type ExpulsionRule = VoteRule | "forbidden";
+
+export interface PactTerms {
+  admission: VoteRule;
+  expulsion: ExpulsionRule;
+}
+
+export interface PactInvitation {
+  targetId: string;
+  approvedBy: string[];
+}
+
+export interface PoliticsPact {
+  id: string;
+  name: string;
+  kind: PactKind;
+  memberIds: string[];
+  /** null means a departed administrator has not yet been replaced by unanimity. */
+  administratorId: string | null;
+  terms: PactTerms;
+  invitations: PactInvitation[];
+}
+
+export interface PoliticsEmpire {
+  id: string;
+  leaderId: string;
+  memberIds: string[];
+  /** Deadline in deterministic simulation milliseconds, never wall-clock time. */
+  crisisDeadlineMs: number | null;
+}
+
+export interface EmpireAccessionOffer {
+  empireId: string;
+  candidateId: string;
+  proposerId: string;
+  recipientId: string;
+}
+
+export interface PoliticsProjection {
+  nations: PoliticsNation[];
+  pacts: PoliticsPact[];
+  empires: PoliticsEmpire[];
+  accessionOffers: EmpireAccessionOffer[];
+  simulationMs: number;
+}
+
+export type PoliticalPrize =
+  | { kind: "SovereignVictor"; nationId: string }
+  | { kind: "ImperialVictor"; nationId: string; empireId: string }
+  | { kind: "EmpireVictor"; nationId: string; empireId: string };
+
+export interface LastSovereignResult {
+  sovereignPowerCount: number;
+  resolved: boolean;
+  prizes: PoliticalPrize[];
+}
+
+function requireRule(condition: unknown, message: string): asserts condition {
+  if (!condition) throw new Error("NATIONAL politics: " + message);
+}
+
+function unique(items: string[]): boolean {
+  return new Set(items).size === items.length;
+}
+
+function sorted(items: string[]): string[] {
+  return [...items].sort();
+}
+
+/** Internal immutable transition copy, also used for atomic live sync. */
+export function clonePoliticalProjection(
+  world: PoliticsProjection,
+): PoliticsProjection {
+  return copy(world);
+}
+
+function copy(world: PoliticsProjection): PoliticsProjection {
+  return {
+    nations: world.nations.map((n) => ({ ...n, metrics: { ...n.metrics } })),
+    pacts: world.pacts.map((p) => ({
+      ...p,
+      terms: { ...p.terms },
+      memberIds: [...p.memberIds],
+      invitations: p.invitations.map((i) => ({
+        targetId: i.targetId,
+        approvedBy: [...i.approvedBy],
+      })),
+    })),
+    empires: world.empires.map((e) => ({ ...e, memberIds: [...e.memberIds] })),
+    accessionOffers: world.accessionOffers.map((o) => ({ ...o })),
+    simulationMs: world.simulationMs,
+  };
+}
+
+export function initialPolitics(nations: PoliticsNation[]): PoliticsProjection {
+  const world: PoliticsProjection = {
+    nations: nations.map((n) => ({ ...n, metrics: { ...n.metrics } })),
+    pacts: [],
+    empires: [],
+    accessionOffers: [],
+    simulationMs: 0,
+  };
+  validatePolitics(world);
+  return world;
+}
+
+/** Validate persisted projection boundaries before executing or evaluating rules. */
+export function validatePolitics(world: PoliticsProjection): void {
+  requireRule(
+    Number.isSafeInteger(world.simulationMs) && world.simulationMs >= 0,
+    "invalid simulation clock",
+  );
+  requireRule(unique(world.nations.map((n) => n.id)), "duplicate nation");
+  requireRule(unique(world.pacts.map((p) => p.id)), "duplicate pact");
+  requireRule(unique(world.empires.map((e) => e.id)), "duplicate empire");
+  const nationById = new Map(world.nations.map((n) => [n.id, n]));
+  const empireMemberIds: string[] = [];
+  for (const n of world.nations) {
+    requireRule(n.id.length > 0, "empty nation id");
+    for (const key of METRIC_KEYS) {
+      requireRule(
+        Number.isSafeInteger(n.metrics[key]) && n.metrics[key] >= 0,
+        "invalid " + key,
+      );
+    }
+  }
+  for (const e of world.empires) {
+    requireRule(e.id.length > 0 && e.memberIds.length > 0, "empty empire");
+    requireRule(unique(e.memberIds), "duplicate empire member");
+    requireRule(
+      e.memberIds.includes(e.leaderId),
+      "imperial leader not a member",
+    );
+    requireRule(
+      e.crisisDeadlineMs === null ||
+        (Number.isSafeInteger(e.crisisDeadlineMs) && e.crisisDeadlineMs >= 0),
+      "invalid crisis deadline",
+    );
+    for (const id of e.memberIds) {
+      requireRule(nationById.get(id)?.alive, "empire member does not survive");
+      empireMemberIds.push(id);
+    }
+  }
+  requireRule(unique(empireMemberIds), "nation in multiple empires");
+  for (const p of world.pacts) {
+    requireRule(
+      p.id.length > 0 && p.name.length > 0,
+      "invalid pact identifier",
+    );
+    requireRule(p.kind === "NAP" || p.kind === "MDA", "invalid pact type");
+    requireRule(
+      p.terms.admission === "leader" || p.terms.admission === "unanimous",
+      "invalid admission rule",
+    );
+    requireRule(
+      p.terms.expulsion === "forbidden" ||
+        p.terms.expulsion === "leader" ||
+        p.terms.expulsion === "unanimous",
+      "invalid expulsion rule",
+    );
+    requireRule(
+      p.memberIds.length > 0 && unique(p.memberIds),
+      "invalid pact roster",
+    );
+    requireRule(
+      p.administratorId === null || p.memberIds.includes(p.administratorId),
+      "administrator not a member",
+    );
+    for (const id of p.memberIds) {
+      requireRule(nationById.get(id)?.alive, "pact member does not survive");
+      requireRule(
+        !empireMemberIds.includes(id),
+        "imperial member in outside pact",
+      );
+    }
+    requireRule(
+      unique(p.invitations.map((i) => i.targetId)),
+      "duplicate pact invitation",
+    );
+    for (const invitation of p.invitations) {
+      requireRule(
+        nationById.get(invitation.targetId)?.alive &&
+          !p.memberIds.includes(invitation.targetId) &&
+          !empireMemberIds.includes(invitation.targetId),
+        "invalid pact invitation recipient",
+      );
+      requireRule(
+        unique(invitation.approvedBy) &&
+          invitation.approvedBy.every((id) => p.memberIds.includes(id)),
+        "invalid pact admission votes",
+      );
+    }
+  }
+  requireRule(
+    unique(world.accessionOffers.map((o) => o.empireId + "\0" + o.candidateId)),
+    "duplicate empire accession offer",
+  );
+  for (const offer of world.accessionOffers) {
+    const empire = world.empires.find((e) => e.id === offer.empireId);
+    requireRule(empire !== undefined, "offer references missing empire");
+    requireRule(
+      nationById.get(offer.candidateId)?.alive &&
+        !empireMemberIds.includes(offer.candidateId),
+      "offer candidate not independent",
+    );
+    requireRule(
+      (offer.proposerId === empire.leaderId &&
+        offer.recipientId === offer.candidateId) ||
+        (offer.proposerId === offer.candidateId &&
+          offer.recipientId === empire.leaderId),
+      "invalid accession consent direction",
+    );
+  }
+}
+
+function living(world: PoliticsProjection, id: string): PoliticsNation {
+  const n = world.nations.find((n) => n.id === id);
+  requireRule(n?.alive, "nation is missing or eliminated: " + id);
+  return n;
+}
+
+function pact(world: PoliticsProjection, id: string): PoliticsPact {
+  const p = world.pacts.find((p) => p.id === id);
+  requireRule(p !== undefined, "unknown pact: " + id);
+  return p;
+}
+
+function empire(world: PoliticsProjection, id: string): PoliticsEmpire {
+  const e = world.empires.find((e) => e.id === id);
+  requireRule(e !== undefined, "unknown empire: " + id);
+  return e;
+}
+
+export function empireOf(
+  world: PoliticsProjection,
+  nationId: string,
+): string | null {
+  return world.empires.find((e) => e.memberIds.includes(nationId))?.id ?? null;
+}
+
+function independent(world: PoliticsProjection, id: string): void {
+  living(world, id);
+  requireRule(
+    empireOf(world, id) === null,
+    "imperial states have exclusive membership",
+  );
+}
+
+function removePactMember(world: PoliticsProjection, id: string): void {
+  world.pacts = world.pacts.flatMap((p) => {
+    if (!p.memberIds.includes(id)) {
+      p.invitations = p.invitations.filter((i) => i.targetId !== id);
+      return [p];
+    }
+    p.memberIds = p.memberIds.filter((m) => m !== id);
+    p.invitations = p.invitations
+      .filter((i) => i.targetId !== id)
+      .map((i) => ({ ...i, approvedBy: i.approvedBy.filter((v) => v !== id) }));
+    if (p.administratorId === id) p.administratorId = null;
+    // A one-party contract has no second signatory; its last member remains sovereign.
+    return p.memberIds.length >= 2 ? [p] : [];
+  });
+}
+
+function advance(world: PoliticsProjection, simulationMs: number): void {
+  requireRule(
+    Number.isSafeInteger(simulationMs) && simulationMs >= world.simulationMs,
+    "clock must be monotonic",
+  );
+  world.simulationMs = simulationMs;
+}
+
+/** No ordinary pact can merge powers for victory purposes (SOV-01, 02, 03, 07). */
+export function lastSovereignVictory(
+  world: PoliticsProjection,
+): LastSovereignResult {
+  validatePolitics(world);
+  const independentNations = world.nations
+    .filter((n) => n.alive && empireOf(world, n.id) === null)
+    .map((n) => n.id);
+  const count = independentNations.length + world.empires.length;
+  if (count !== 1)
+    return { sovereignPowerCount: count, resolved: false, prizes: [] };
+  if (independentNations.length === 1) {
+    return {
+      sovereignPowerCount: 1,
+      resolved: true,
+      prizes: [{ kind: "SovereignVictor", nationId: independentNations[0] }],
+    };
+  }
+  const e = world.empires[0];
+  return {
+    sovereignPowerCount: 1,
+    resolved: true,
+    prizes: [
+      { kind: "ImperialVictor", nationId: e.leaderId, empireId: e.id },
+      ...sorted(e.memberIds.filter((id) => id !== e.leaderId)).map(
+        (nationId): PoliticalPrize => ({
+          kind: "EmpireVictor",
+          nationId,
+          empireId: e.id,
+        }),
+      ),
+    ],
+  };
+}
+
+export function foundPact(
+  world: PoliticsProjection,
+  input: {
+    id: string;
+    name: string;
+    kind: PactKind;
+    founderId: string;
+    terms: PactTerms;
+  },
+): PoliticsProjection {
+  validatePolitics(world);
+  independent(world, input.founderId);
+  requireRule(
+    !world.pacts.some((p) => p.id === input.id),
+    "pact id already used",
+  );
+  const next = copy(world);
+  next.pacts.push({
+    id: input.id,
+    name: input.name,
+    kind: input.kind,
+    memberIds: [input.founderId],
+    administratorId: input.founderId,
+    terms: { ...input.terms },
+    invitations: [],
+  });
+  validatePolitics(next);
+  return next;
+}
+
+export function inviteToPact(
+  world: PoliticsProjection,
+  pactId: string,
+  proposerId: string,
+  candidateId: string,
+): PoliticsProjection {
+  validatePolitics(world);
+  independent(world, candidateId);
+  const p = pact(world, pactId);
+  requireRule(p.memberIds.includes(proposerId), "not a pact member");
+  requireRule(!p.memberIds.includes(candidateId), "already a member");
+  requireRule(
+    !p.invitations.some((i) => i.targetId === candidateId),
+    "invitation already pending",
+  );
+  if (p.terms.admission === "leader")
+    requireRule(p.administratorId === proposerId, "leader must invite");
+  const next = copy(world);
+  pact(next, pactId).invitations.push({
+    targetId: candidateId,
+    approvedBy: [proposerId],
+  });
+  return next;
+}
+
+export function approvePactInvitation(
+  world: PoliticsProjection,
+  pactId: string,
+  voterId: string,
+  candidateId: string,
+): PoliticsProjection {
+  validatePolitics(world);
+  const p = pact(world, pactId);
+  requireRule(p.memberIds.includes(voterId), "approval requires member");
+  const i = p.invitations.find((i) => i.targetId === candidateId);
+  requireRule(i !== undefined, "invitation missing");
+  if (p.terms.admission === "leader")
+    requireRule(voterId === p.administratorId, "leader approval required");
+  const next = copy(world);
+  const invitation = pact(next, pactId).invitations.find(
+    (i) => i.targetId === candidateId,
+  )!;
+  invitation.approvedBy = sorted([
+    ...new Set([...invitation.approvedBy, voterId]),
+  ]);
+  return next;
+}
+
+export function acceptPactInvitation(
+  world: PoliticsProjection,
+  pactId: string,
+  candidateId: string,
+): PoliticsProjection {
+  validatePolitics(world);
+  independent(world, candidateId);
+  const p = pact(world, pactId);
+  const invitation = p.invitations.find((i) => i.targetId === candidateId);
+  requireRule(invitation !== undefined, "no invitation to accept");
+  const authorized =
+    p.terms.admission === "leader"
+      ? p.administratorId !== null &&
+        invitation.approvedBy.includes(p.administratorId)
+      : p.memberIds.every((id) => invitation.approvedBy.includes(id));
+  requireRule(authorized, "constitutional admission approvals missing");
+  const next = copy(world);
+  const target = pact(next, pactId);
+  target.memberIds = sorted([...target.memberIds, candidateId]);
+  target.invitations = target.invitations.filter(
+    (i) => i.targetId !== candidateId,
+  );
+  validatePolitics(next);
+  return next;
+}
+
+export function amendPact(
+  world: PoliticsProjection,
+  pactId: string,
+  proposed: { terms: PactTerms; administratorId: string | null },
+  consentingMemberIds: string[],
+): PoliticsProjection {
+  validatePolitics(world);
+  const p = pact(world, pactId);
+  requireRule(
+    unique(consentingMemberIds) &&
+      consentingMemberIds.length === p.memberIds.length &&
+      p.memberIds.every((id) => consentingMemberIds.includes(id)),
+    "unanimous constitutional consent required",
+  );
+  requireRule(
+    proposed.administratorId === null ||
+      p.memberIds.includes(proposed.administratorId),
+    "administrator must be a member",
+  );
+  const next = copy(world);
+  const target = pact(next, pactId);
+  target.terms = { ...proposed.terms };
+  target.administratorId = proposed.administratorId;
+  validatePolitics(next);
+  return next;
+}
+
+export function expelPactMember(
+  world: PoliticsProjection,
+  pactId: string,
+  actorId: string,
+  targetId: string,
+  approvingIds: string[] = [],
+): PoliticsProjection {
+  validatePolitics(world);
+  const p = pact(world, pactId);
+  requireRule(p.memberIds.includes(targetId), "target not a pact member");
+  requireRule(p.memberIds.includes(actorId), "actor not a pact member");
+  requireRule(actorId !== targetId, "use Betray for voluntary withdrawal");
+  requireRule(
+    p.terms.expulsion !== "forbidden",
+    "discretionary expulsion forbidden",
+  );
+  if (p.terms.expulsion === "leader") {
+    requireRule(p.administratorId === actorId, "only pact leader may expel");
+  } else {
+    requireRule(
+      unique(approvingIds) &&
+        p.memberIds.every((id) => id === targetId || approvingIds.includes(id)),
+      "remaining members must consent to expulsion",
+    );
+  }
+  const next = copy(world);
+  removeMemberFromOnePact(next, pactId, targetId);
+  validatePolitics(next);
+  return next;
+}
+
+function removeMemberFromOnePact(
+  world: PoliticsProjection,
+  pactId: string,
+  memberId: string,
+): void {
+  const target = pact(world, pactId);
+  target.memberIds = target.memberIds.filter((id) => id !== memberId);
+  target.invitations = target.invitations.map((i) => ({
+    ...i,
+    approvedBy: i.approvedBy.filter((id) => id !== memberId),
+  }));
+  if (target.administratorId === memberId) target.administratorId = null;
+  if (target.memberIds.length < 2)
+    world.pacts = world.pacts.filter((p) => p.id !== pactId);
+}
+
+/** Immediate, nonwaivable sovereign exit even when discretionary expulsion is prohibited. */
+export function betrayPact(
+  world: PoliticsProjection,
+  pactId: string,
+  betrayerId: string,
+): PoliticsProjection {
+  validatePolitics(world);
+  independent(world, betrayerId);
+  requireRule(
+    pact(world, pactId).memberIds.includes(betrayerId),
+    "not a member",
+  );
+  const next = copy(world);
+  removeMemberFromOnePact(next, pactId, betrayerId);
+  validatePolitics(next);
+  return next;
+}
+
+/**
+ * Treaty legality only: caller MUST separately enforce the formal-war rules.
+ * Caller must atomically commit returned state with an authorized game attack.
+ * Without explicit confirmation, no treaty is severed (COAL-05).
+ */
+export function preparePactAttack(
+  world: PoliticsProjection,
+  aggressorId: string,
+  defenderId: string,
+  confirmBetrayal: boolean,
+): { state: PoliticsProjection; betrayedPactIds: string[] } {
+  validatePolitics(world);
+  living(world, aggressorId);
+  living(world, defenderId);
+  requireRule(aggressorId !== defenderId, "cannot attack self");
+  const shared = sorted(
+    world.pacts
+      .filter(
+        (p) =>
+          p.memberIds.includes(aggressorId) && p.memberIds.includes(defenderId),
+      )
+      .map((p) => p.id),
+  );
+  requireRule(
+    shared.length === 0 || confirmBetrayal,
+    "betrayal confirmation required before co-member attack",
+  );
+  let next = world;
+  for (const pactId of shared) next = betrayPact(next, pactId, aggressorId);
+  return { state: next, betrayedPactIds: shared };
+}
+
+export function foundEmpire(
+  world: PoliticsProjection,
+  empireId: string,
+  founderId: string,
+): PoliticsProjection {
+  validatePolitics(world);
+  independent(world, founderId);
+  requireRule(
+    !world.empires.some((e) => e.id === empireId),
+    "empire id already used",
+  );
+  const next = copy(world);
+  removePactMember(next, founderId);
+  next.empires.push({
+    id: empireId,
+    leaderId: founderId,
+    memberIds: [founderId],
+    crisisDeadlineMs: null,
+  });
+  validatePolitics(next);
+  return next;
+}
+
+export function proposeEmpireAccession(
+  world: PoliticsProjection,
+  empireId: string,
+  proposerId: string,
+  candidateId: string,
+): PoliticsProjection {
+  validatePolitics(world);
+  independent(world, candidateId);
+  const e = empire(world, empireId);
+  requireRule(
+    proposerId === e.leaderId || proposerId === candidateId,
+    "only candidate or emperor may propose accession",
+  );
+  requireRule(
+    !world.accessionOffers.some(
+      (o) => o.empireId === empireId && o.candidateId === candidateId,
+    ),
+    "accession offer already pending",
+  );
+  const next = copy(world);
+  next.accessionOffers.push({
+    empireId,
+    proposerId,
+    candidateId,
+    recipientId: proposerId === candidateId ? e.leaderId : candidateId,
+  });
+  validatePolitics(next);
+  return next;
+}
+
+/** Both sides consent. Ordinary pact exits are atomic; individual wars are not changed. */
+export function acceptEmpireAccession(
+  world: PoliticsProjection,
+  empireId: string,
+  recipientId: string,
+  candidateId: string,
+): PoliticsProjection {
+  validatePolitics(world);
+  independent(world, candidateId);
+  const offer = world.accessionOffers.find(
+    (o) => o.empireId === empireId && o.candidateId === candidateId,
+  );
+  requireRule(
+    offer !== undefined && offer.recipientId === recipientId,
+    "recipient consent required",
+  );
+  const next = copy(world);
+  removePactMember(next, candidateId);
+  const e = empire(next, empireId);
+  e.memberIds = sorted([...e.memberIds, candidateId]);
+  next.accessionOffers = next.accessionOffers.filter(
+    (o) => o.candidateId !== candidateId,
+  );
+  validatePolitics(next);
+  return next;
+}
+
+/** Emperor may always transfer to a *surviving constituent*, without changing empire identity. */
+export function transferCrown(
+  world: PoliticsProjection,
+  empireId: string,
+  actorId: string,
+  successorId: string,
+  simulationMs: number = world.simulationMs,
+): PoliticsProjection {
+  validatePolitics(world);
+  const e = empire(world, empireId);
+  requireRule(
+    e.leaderId === actorId,
+    "only the incumbent emperor may transfer the crown",
+  );
+  requireRule(
+    e.memberIds.includes(successorId) && successorId !== actorId,
+    "invalid successor",
+  );
+  requireRule(
+    e.crisisDeadlineMs === null || simulationMs < e.crisisDeadlineMs,
+    "Ungovernable deadline already expired",
+  );
+  const next = copy(world);
+  advance(next, simulationMs);
+  const target = empire(next, empireId);
+  target.leaderId = successorId;
+  target.crisisDeadlineMs = null;
+  // Outstanding accession offers from the old emperor are invalidated.
+  next.accessionOffers = next.accessionOffers.filter(
+    (o) => o.empireId !== empireId,
+  );
+  validatePolitics(next);
+  return next;
+}
+
+function dissolve(world: PoliticsProjection, empireId: string): void {
+  world.empires = world.empires.filter((e) => e.id !== empireId);
+  world.accessionOffers = world.accessionOffers.filter(
+    (o) => o.empireId !== empireId,
+  );
+}
+
+/** Politics-only dissolution. Fiscal/army redistribution awaits conductor M0 accounting. */
+export function dissolveEmpire(
+  world: PoliticsProjection,
+  empireId: string,
+  actorId: string,
+): PoliticsProjection {
+  validatePolitics(world);
+  requireRule(
+    empire(world, empireId).leaderId === actorId,
+    "only emperor may voluntarily dissolve",
+  );
+  const next = copy(world);
+  dissolve(next, empireId);
+  validatePolitics(next);
+  return next;
+}
+
+/** Applies death before victory evaluation, dissolving a leaderless empire atomically. */
+export function eliminatePoliticalNation(
+  world: PoliticsProjection,
+  nationId: string,
+): PoliticsProjection {
+  validatePolitics(world);
+  living(world, nationId);
+  const next = copy(world);
+  next.nations.find((n) => n.id === nationId)!.alive = false;
+  removePactMember(next, nationId);
+  for (const e of [...next.empires]) {
+    if (!e.memberIds.includes(nationId)) continue;
+    if (e.leaderId === nationId) dissolve(next, e.id);
+    else e.memberIds = e.memberIds.filter((id) => id !== nationId);
+  }
+  next.accessionOffers = next.accessionOffers.filter(
+    (o) =>
+      o.candidateId !== nationId &&
+      o.proposerId !== nationId &&
+      o.recipientId !== nationId,
+  );
+  validatePolitics(next);
+  return next;
+}
+
+function strictlyWeakest(
+  world: PoliticsProjection,
+  e: PoliticsEmpire,
+): boolean {
+  const rivals = e.memberIds.filter((id) => id !== e.leaderId);
+  if (rivals.length === 0) return false;
+  const ruler = living(world, e.leaderId);
+  return METRIC_KEYS.every((key) =>
+    rivals.every((id) => ruler.metrics[key] < living(world, id).metrics[key]),
+  );
+}
+
+/** Tick-bound, strict eight-metric, ten-second window. No Date.now() or implicit timers. */
+export function evaluateUngovernable(
+  world: PoliticsProjection,
+  simulationMs: number,
+  /** False until the emperor's pooled assets have a conservation-safe owner. */
+  allowCollapse = true,
+): {
+  state: PoliticsProjection;
+  warnings: { empireId: string; deadlineMs: number }[];
+  collapsed: string[];
+} {
+  validatePolitics(world);
+  const next = copy(world);
+  advance(next, simulationMs);
+  const warnings: { empireId: string; deadlineMs: number }[] = [];
+  const collapsed: string[] = [];
+  for (const e of sorted(next.empires.map((e) => e.id))) {
+    const target = empire(next, e);
+    if (!strictlyWeakest(next, target)) {
+      target.crisisDeadlineMs = null;
+      continue;
+    }
+    target.crisisDeadlineMs ??= simulationMs + IMPERIAL_CRISIS_MS;
+    if (simulationMs >= target.crisisDeadlineMs && allowCollapse) {
+      collapsed.push(e);
+      dissolve(next, e);
+    } else {
+      // When disposition is unapproved, retain the expired deadline as a
+      // durable blocked warning; never dissolve and strand pooled assets.
+      warnings.push({ empireId: e, deadlineMs: target.crisisDeadlineMs });
+    }
+  }
+  validatePolitics(next);
+  return { state: next, warnings, collapsed };
+}
+
+/**
+ * Deliberately whitelisted public view. Never serialize PoliticsProjection
+ * itself as a client payload: it contains private treaty terms and invitations.
+ */
+export function viewPact(
+  world: PoliticsProjection,
+  pactId: string,
+  viewerId: string | null,
+): {
+  id: string;
+  name: string;
+  kind: PactKind;
+  memberIds: string[];
+  administratorId: string | null;
+  terms?: PactTerms;
+} {
+  validatePolitics(world);
+  const p = pact(world, pactId);
+  const invited = p.invitations.some((i) => i.targetId === viewerId);
+  const privileged =
+    viewerId !== null && (p.memberIds.includes(viewerId) || invited);
+  return {
+    id: p.id,
+    name: p.name,
+    kind: p.kind,
+    memberIds: [...p.memberIds],
+    administratorId: p.administratorId,
+    ...(privileged ? { terms: { ...p.terms } } : {}),
+  };
+}

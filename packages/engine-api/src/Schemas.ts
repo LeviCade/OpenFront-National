@@ -46,7 +46,11 @@ export type Intent =
   | KickPlayerIntent
   | TogglePauseIntent
   | UpdateGameConfigIntent
-  | ToggleGameStartTimer;
+  | ToggleGameStartTimer
+  | NationalFoundEmpireIntent
+  | NationalDeclareWarIntent
+  | NationalProposePeaceIntent
+  | NationalAcceptPeaceIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -82,6 +86,20 @@ export type UpdateGameConfigIntent = z.infer<
 >;
 export type ToggleGameStartTimer = z.infer<
   typeof ToggleGameStartTimerIntentSchema
+>;
+
+export type NationalFoundEmpireIntent = z.infer<
+  typeof NationalFoundEmpireIntentSchema
+>;
+
+export type NationalDeclareWarIntent = z.infer<
+  typeof NationalDeclareWarIntentSchema
+>;
+export type NationalProposePeaceIntent = z.infer<
+  typeof NationalProposePeaceIntentSchema
+>;
+export type NationalAcceptPeaceIntent = z.infer<
+  typeof NationalAcceptPeaceIntentSchema
 >;
 
 export type Turn = z.infer<typeof TurnSchema>;
@@ -258,6 +276,8 @@ export type PoolConfig = z.infer<typeof PoolConfigSchema>;
 export const GameConfigSchema = z.object({
   gameMap: z.enum(GameMapType),
   difficulty: z.enum(Difficulty),
+  // Explicit opt-in: absent/false always means legacy behavior.
+  nationalMode: z.boolean().optional(),
   donateGold: z.boolean(), // Configures donations to humans only
   donateTroops: z.boolean(), // Configures donations to humans only
   gameType: z.enum(GameType),
@@ -567,6 +587,46 @@ export const ToggleGameStartTimerIntentSchema = z.object({
   type: z.literal("toggle_game_start_timer"),
 });
 
+// Actor identity is resolved from the trusted stamped clientID.
+export const NationalFoundEmpireIntentSchema = z.object({
+  type: z.literal("national_found_empire"),
+  empireId: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Za-z0-9_-]+$/),
+  // Untrusted correlation token, NEVER an actor identity or authorization.
+  // Optional for legacy intents. Wire-bounded to E4's opaque per-click ID.
+  requestId: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .optional(),
+});
+
+/**
+ * NATIONAL war actions. Actor is ALWAYS resolved from server-stamped clientID.
+ * Neither client-declared authority nor a client-supplied campaign ID exists.
+ * Target nation and political war IDs are references, not permissions.
+ */
+const NationalWarId = z.string().min(1).max(256);
+export const NationalDeclareWarIntentSchema = z.object({
+  type: z.literal("national_declare_war"),
+  scope: z.enum(["national", "imperial"]),
+  nationId: NationalWarId,
+  targetId: NationalWarId,
+  targetKind: z.enum(["nation", "empire"]),
+});
+export const NationalProposePeaceIntentSchema = z.object({
+  type: z.literal("national_propose_peace"),
+  warId: NationalWarId,
+});
+export const NationalAcceptPeaceIntentSchema = z.object({
+  type: z.literal("national_accept_peace"),
+  motionId: NationalWarId,
+});
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -593,6 +653,10 @@ export const IntentSchema = z.discriminatedUnion("type", [
   TogglePauseIntentSchema,
   UpdateGameConfigIntentSchema,
   ToggleGameStartTimerIntentSchema,
+  NationalFoundEmpireIntentSchema,
+  NationalDeclareWarIntentSchema,
+  NationalProposePeaceIntentSchema,
+  NationalAcceptPeaceIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

@@ -1376,6 +1376,50 @@ export class PlayerImpl implements Player {
     return Number(this._troops);
   }
 
+  /**
+   * NATIONAL: real, all-or-none balances transaction. Preflights EVERY player
+   * and converts all numbers to exact BigInts before any private field changes.
+   * After preflight the publish loop is bigint assignment ONLY (no callbacks,
+   * toInt, rounding, logging, Player.removeTroops, or externally supplied code).
+   *
+   * validateForTest exists solely for fault injection. It runs BEFORE the
+   * first mutation, including failures on a second or final contributor.
+   * Normal engine callers must omit this hook.
+   */
+  static commitNationalTroopDebits(
+    debits: readonly {
+      player: PlayerImpl;
+      expectedBalance: number;
+      debit: number;
+      resultingBalance: number;
+    }[],
+    validateForTest?: (index: number, player: PlayerImpl) => void,
+  ): void {
+    const seen = new Set<PlayerImpl>();
+    const changes: { player: PlayerImpl; next: bigint }[] = [];
+    for (const [index, row] of debits.entries()) {
+      if (!(row.player instanceof PlayerImpl) || seen.has(row.player))
+        throw new Error("NATIONAL: duplicate or invalid troop owner");
+      seen.add(row.player);
+      if (
+        !Number.isSafeInteger(row.expectedBalance) ||
+        !Number.isSafeInteger(row.debit) ||
+        !Number.isSafeInteger(row.resultingBalance) ||
+        row.debit <= 0 ||
+        row.expectedBalance < row.debit ||
+        row.resultingBalance !== row.expectedBalance - row.debit
+      )
+        throw new Error("NATIONAL: non-integral or inconsistent troop debit");
+      const expected = BigInt(row.expectedBalance);
+      if (row.player._troops !== expected)
+        throw new Error("NATIONAL: stale troop balance");
+      validateForTest?.(index, row.player);
+      // No arithmetic or callbacks occur after this stage.
+      changes.push({ player: row.player, next: BigInt(row.resultingBalance) });
+    }
+    for (const change of changes) change.player._troops = change.next;
+  }
+
   addTroops(troops: number): void {
     if (troops < 0) {
       this.removeTroops(-1 * troops);

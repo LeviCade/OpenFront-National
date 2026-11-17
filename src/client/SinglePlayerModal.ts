@@ -131,6 +131,7 @@ const TUTORIAL_DISABLED_UNITS: UnitType[] = [
 const DEFAULT_OPTIONS = {
   selectedMap: GameMapType.World,
   selectedDifficulty: Difficulty.Easy,
+  nationalMode: false,
   bots: 400,
   infiniteGold: false,
   infiniteTroops: false,
@@ -205,6 +206,7 @@ export class SinglePlayerModal extends BaseModal {
   @state() private selectedMap: GameMapType = DEFAULT_OPTIONS.selectedMap;
   @state() private selectedDifficulty: Difficulty =
     DEFAULT_OPTIONS.selectedDifficulty;
+  @state() private nationalMode: boolean = DEFAULT_OPTIONS.nationalMode;
   @state() private nations: number = 0;
   @state() private defaultNationCount: number = 0;
   @state() private bots: number = DEFAULT_OPTIONS.bots;
@@ -557,6 +559,25 @@ export class SinglePlayerModal extends BaseModal {
             @open-shared-save=${(e: CustomEvent<string>) =>
               (this.sharedSaveId = e.detail)}
           ></saved-games-panel>
+          <label
+            class="flex items-start gap-3 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 mb-4 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              class="mt-1 accent-yellow-400"
+              aria-label="Enable NATIONAL sovereignty in Solo"
+              .checked=${this.nationalMode}
+              @change=${this.handleNationalModeChanged}
+            />
+            <span class="text-sm text-white">
+              <strong>👑 NATIONAL — Sovereignty Mode (Experimental)</strong>
+              <span class="block text-xs text-white/60 mt-1">
+                Solo Free For All at Impossible difficulty. Spawn, then open the
+                in-game NATIONAL Diplomacy panel to found an empire. Other
+                diplomacy actions unlock only when supported by the game.
+              </span>
+            </span>
+          </label>
           <game-config-settings
             class="block"
             .sectionGapClass=${"space-y-6"}
@@ -684,6 +705,7 @@ export class SinglePlayerModal extends BaseModal {
       this.instantBuild !== DEFAULT_OPTIONS.instantBuild ||
       this.randomSpawn !== DEFAULT_OPTIONS.randomSpawn ||
       this.gameMode !== DEFAULT_OPTIONS.gameMode ||
+      this.nationalMode !== DEFAULT_OPTIONS.nationalMode ||
       this.goldMultiplier !== DEFAULT_OPTIONS.goldMultiplier ||
       this.startingGold !== DEFAULT_OPTIONS.startingGold ||
       this.customAlliances !== DEFAULT_OPTIONS.customAlliances ||
@@ -799,6 +821,7 @@ export class SinglePlayerModal extends BaseModal {
     this.selectedPresetName = "";
     this.selectedMap = DEFAULT_OPTIONS.selectedMap;
     this.selectedDifficulty = DEFAULT_OPTIONS.selectedDifficulty;
+    this.nationalMode = DEFAULT_OPTIONS.nationalMode;
     this.gameMode = DEFAULT_OPTIONS.gameMode;
     this.useRandomMap = DEFAULT_OPTIONS.useRandomMap;
     this.bots = DEFAULT_OPTIONS.bots;
@@ -878,6 +901,7 @@ export class SinglePlayerModal extends BaseModal {
     this.selectedMap = this.useRandomMap ? getRandomMapType() : config.gameMap;
     this.compactMap = config.compactMap ?? false;
     this.selectedDifficulty = config.difficulty;
+    this.nationalMode = false;
     this.gameMode = config.gameMode;
     this.teamCount = config.teamCount;
     this.bots = config.bots;
@@ -977,7 +1001,18 @@ export class SinglePlayerModal extends BaseModal {
 
   private handleDifficultySelection(value: Difficulty) {
     this.selectedDifficulty = value;
+    if (this.nationalMode && value !== Difficulty.Impossible) {
+      this.nationalMode = false;
+    }
   }
+
+  private handleNationalModeChanged = (event: Event) => {
+    this.nationalMode = (event.target as HTMLInputElement).checked;
+    if (this.nationalMode) {
+      this.gameMode = GameMode.FFA;
+      this.selectedDifficulty = Difficulty.Impossible;
+    }
+  };
 
   private handleConfigDifficultySelected = (e: Event) => {
     const customEvent = e as CustomEvent<{ difficulty: Difficulty }>;
@@ -1202,6 +1237,7 @@ export class SinglePlayerModal extends BaseModal {
 
   private handleGameModeSelection(value: GameMode) {
     this.gameMode = value;
+    if (value !== GameMode.FFA) this.nationalMode = false;
   }
 
   private handleTeamCountSelection(value: TeamCountConfig) {
@@ -1339,6 +1375,7 @@ export class SinglePlayerModal extends BaseModal {
             gameMode: this.gameMode,
             playerTeams: this.teamCount,
             difficulty: this.selectedDifficulty,
+            ...(this.nationalMode ? { nationalMode: true } : {}),
             maxTimerValue: finalMaxTimerValue,
             bots: this.bots,
             infiniteGold: this.infiniteGold,

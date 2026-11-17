@@ -167,6 +167,104 @@ function sendMessage(message: WorkerMessage) {
 async function onMessage(e: MessageEvent<MainThreadMessage>) {
   const message = e.data;
 
+  // Replay extraction may be invoked on a standalone worker with NO running
+  // GameRunner. Close this bypass before the session-dependent checks below.
+  if (
+    message.type === "extract_snapshot" &&
+    message.gameStartInfo.config.nationalMode === true
+  ) {
+    sendMessage({
+      type: "extract_snapshot_error",
+      id: message.id,
+      error: "NATIONAL snapshot extraction requires a trusted host",
+    } as ExtractSnapshotErrorMessage);
+    return;
+  }
+
+  // A browser worker cannot provide hostile-client secrecy because the
+  // authoritative game itself lives in the same browser. Nevertheless,
+  // reject every alternate RPC/snapshot bypass before it can return raw data.
+  // The GameRunner already projects ordinary tick and run_turns packets.
+  if (
+    gameRunner !== null &&
+    message.type !== "connect" &&
+    message.type !== "init"
+  ) {
+    const gr = await gameRunner;
+    if (gr.game.config().nationalMode()) {
+      if (message.type === "snapshot") {
+        // Raw authoritative snapshots include enemy state. They must be
+        // retained by a trusted host, never downloaded by a spectator.
+        sendMessage({
+          type: "snapshot_result",
+          id: message.id,
+          snapshot: null,
+        } as SnapshotResultMessage);
+        return;
+      }
+      if (message.type === "extract_snapshot") {
+        sendMessage({
+          type: "extract_snapshot_error",
+          id: message.id,
+          error: "NATIONAL snapshots require trusted-host export",
+        } as ExtractSnapshotErrorMessage);
+        return;
+      }
+      let denied = false;
+      switch (message.type) {
+        case "turn":
+          denied = message.turn.intents.some(
+            (i) => !gr.isNationalIntentAuthorized(i.clientID),
+          );
+          break;
+        case "run_turns":
+          denied = message.turns.some((turn) =>
+            turn.intents.some(
+              (i) => !gr.isNationalIntentAuthorized(i.clientID),
+            ),
+          );
+          break;
+        case "player_actions":
+        case "player_buildables":
+          denied =
+            !gr.isNationalRequesterAuthorized(message.playerID) ||
+            !gr.isNationalCoordinateVisible(message.x, message.y);
+          break;
+        case "transport_ship_spawn":
+          denied =
+            !gr.isNationalRequesterAuthorized(message.playerID) ||
+            !gr.isNationalTileVisible(message.targetTile);
+          break;
+        case "player_border_tiles":
+        case "player_profile":
+        case "attack_clustered_positions":
+          denied = !gr.isNationalRequesterAuthorized(message.playerID);
+          break;
+        case "human_stats":
+        case "human_disconnects":
+          denied = true;
+          break;
+      }
+      if (denied) {
+        // No alternate path may return other principals' troop totals,
+        // border tiles, profiles, attack fronts, unit previews or stats.
+        if (message.type === "player_actions") {
+          sendMessage({
+            type: "player_actions_error",
+            id: message.id,
+            error: "NATIONAL: unauthorized observation",
+          } as PlayerActionsErrorMessage);
+        } else {
+          sendMessage({
+            type: "game_error",
+            error: { errMsg: "NATIONAL: unauthorized observation" },
+          } as WorkerMessage);
+        }
+        return;
+      }
+    }
+  }
+
   switch (message.type) {
     case "connect":
       out = message.port;

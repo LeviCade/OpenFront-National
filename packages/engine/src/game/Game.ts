@@ -47,6 +47,28 @@ import {
 } from "@openfront/engine-api/Schemas";
 import { MotionPlanRecord } from "@openfront/engine-lib/game/MotionPlans";
 import type { EngineConfig } from "../configuration/EngineConfig";
+import type {
+  DefenseResult,
+  IncomingDefense,
+  TroopSource,
+} from "../national/conflict/DefenseLevy";
+import type {
+  NationalCommand,
+  NationalPublicPoliticalView,
+  NationalUngovernableWarning,
+} from "../national/NationalRuntime";
+import type { NationalSightMemory } from "../national/observation/NationalObservation";
+import type { NationalFoundEmpireResult } from "../national/politics/NationalGovernanceState";
+import type {
+  NationalWarAuthority,
+  NationalWarCommand,
+  NationalWarStateSnapshot,
+} from "../national/politics/NationalWarState";
+import type {
+  NationalPoliticalAuthority,
+  NationalConflictPoliticsPort,
+} from "../national/politics/PoliticalAuthorityAdapter";
+import type { LastSovereignResult } from "../national/politics/sovereignty";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { PathFinder } from "../pathfinding/types";
 import type { ExecRecord, SnapshotWriter } from "../snapshot/SnapshotContext";
@@ -576,6 +598,46 @@ export interface Game extends GameLike {
   ): void;
   getWinner(): Player | Team | null;
   config(): EngineConfig;
+  /** Single live NATIONAL political source for conflict/AI; null for legacy games. */
+  nationalPoliticalAuthority(): Readonly<
+    NationalPoliticalAuthority & NationalConflictPoliticsPort
+  > | null;
+  /** Enumerates public empire leaders/members and warning/victory facts only. */
+  nationalPublicPoliticalView(): NationalPublicPoliticalView | null;
+  nationalVictoryRoster(): LastSovereignResult | null;
+  nationalUngovernableWarnings(): readonly NationalUngovernableWarning[];
+  /** Canonical E2 WarLedger-backed live query, never a mutable ledger. */
+  nationalWarAuthority(): Readonly<NationalWarAuthority> | null;
+  /** Durable WAR + LEVY snapshot for honest-client observation and replay. */
+  nationalWarState(): NationalWarStateSnapshot | null;
+  /** Internal trusted actor; E2 owns external schema and command validation. */
+  performNationalWarCommand(actor: Player, command: NationalWarCommand): void;
+  /** Canonical sorted, unique living/spawned MDA donors; E2 never chooses IDs. */
+  nationalMdaAllies(defenderId: PlayerID): readonly PlayerID[];
+  /** Canonical read-only source from a real living Game Player. */
+  nationalLevySource(nationId: PlayerID): TroopSource | null;
+  /** Internal E2 accepted-attack hook; MDA, WAR and atomic debits verified. */
+  applyNationalDefenseLevy(
+    attacks: readonly IncomingDefense[],
+  ): readonly DefenseResult[];
+  /** Trusted execution records real Found Empire acceptance/rejection once. */
+  performNationalFoundEmpireWithOutcome(
+    actor: Player,
+    empireId: string,
+    requestId?: string | null,
+  ): NationalFoundEmpireResult;
+  /** Detached per-actor journal. Never enumerate results for other players. */
+  nationalCommandResults(
+    observer: Player,
+  ): readonly NationalFoundEmpireResult[];
+  /** E3 stores each human observer's verified, principal-bound sightings. */
+  readNationalObserverMemory(observerId: PlayerID): NationalSightMemory | null;
+  writeNationalObserverMemory(
+    observerId: PlayerID,
+    data: NationalSightMemory,
+  ): void;
+  nationalWinner(): PlayerID | null;
+  performNationalCommand(actor: Player, command: NationalCommand): void;
   isPaused(): boolean;
   setPaused(paused: boolean): void;
 

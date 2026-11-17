@@ -22,6 +22,8 @@ import { EmbargoExecution } from "./EmbargoExecution";
 import { EmojiExecution } from "./EmojiExecution";
 import { MarkDisconnectedExecution } from "./MarkDisconnectedExecution";
 import { MoveWarshipExecution } from "./MoveWarshipExecution";
+import { NationalFoundEmpireExecution } from "./NationalFoundEmpireExecution";
+import { NationalWarExecution } from "./NationalWarExecution";
 import { NationExecution } from "./NationExecution";
 import { NoOpExecution } from "./NoOpExecution";
 import { PauseExecution } from "./PauseExecution";
@@ -74,6 +76,40 @@ export class Executor {
           null,
         );
       }
+      case "national_found_empire":
+        // Authenticated actor comes ONLY from the stamped clientID above.
+        // requestId is untrusted correlation metadata, never a principal.
+        return new NationalFoundEmpireExecution(
+          player,
+          intent.empireId,
+          null,
+          intent.requestId ?? null,
+        );
+      case "national_declare_war":
+        return new NationalWarExecution(
+          player,
+          intent.scope === "national"
+            ? {
+                kind: "declare-national",
+                nationId: intent.nationId,
+                targetId: intent.targetId,
+              }
+            : {
+                kind: "declare-imperial",
+                targetKind: intent.targetKind,
+                targetId: intent.targetId,
+              },
+        );
+      case "national_propose_peace":
+        return new NationalWarExecution(player, {
+          kind: "propose-peace",
+          warId: intent.warId,
+        });
+      case "national_accept_peace":
+        return new NationalWarExecution(player, {
+          kind: "accept-peace",
+          motionId: intent.motionId,
+        });
       case "cancel_attack":
         return new RetreatExecution(player, intent.attackID);
       case "cancel_boat":

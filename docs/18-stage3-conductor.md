@@ -1,5 +1,7 @@
 # 18 — Stage 3 conductor protocol and three-engineer ownership
 
+> **Round Three ownership update:** This document remains the Stage 3 governing design and scope statement; however, its initial no-shared-engine-files engineer embargo has been **superseded for Round Three** by [docs/20-stage3-round3-integration.md](20-stage3-round3-integration.md). Engineers #1–3 now hold disjoint real-engine file leases. Conductor reviews, coordinates and merges rather than personally implementing central feature streams. M0 source is now executable; NATIONAL is not complete/playable.
+
 **Status:** Stage 2 accepted. Stage 3 implementation authorized.
 **Integration policy:** one authoritative simulation and one integrated game,
 never three mutually incompatible isolated features.
