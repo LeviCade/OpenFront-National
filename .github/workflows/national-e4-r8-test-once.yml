@@ -1,4 +1,4 @@
-name: NATIONAL E4 R8 — exact-token UI acceptance
+name: NATIONAL E4 R8 — recipient receipt UI acceptance
 
 on:
   push:
@@ -26,17 +26,18 @@ jobs:
       - name: Validate exact player-to-transport UI contract tests
         run: |
           set -euo pipefail
+          npm run typecheck
           npm exec -- vitest run --project node tests/ui/national/NationalWarWire.test.ts tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalFoundingWire.test.ts
       - name: Check pinned source format and apply E4-only correction
         if: always()
         run: |
           set -euo pipefail
-          ./node_modules/.bin/oxfmt --write tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalWarWire.test.ts
-          ./node_modules/.bin/oxfmt --check src/client/NationalDiplomacyPanel.ts src/client/NationalDiplomacyState.ts src/client/Transport.ts tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalWarWire.test.ts
+          ./node_modules/.bin/oxfmt --write src/client/NationalDiplomacyPanel.ts src/client/NationalDiplomacyState.ts src/client/Transport.ts src/client/view/GameView.ts tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalWarWire.test.ts
+          ./node_modules/.bin/oxfmt --check src/client/NationalDiplomacyPanel.ts src/client/NationalDiplomacyState.ts src/client/Transport.ts src/client/view/GameView.ts tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalWarWire.test.ts
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalWarWire.test.ts; then
-            git add tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalWarWire.test.ts
+          if ! git diff --quiet -- src/client/NationalDiplomacyPanel.ts src/client/NationalDiplomacyState.ts src/client/Transport.ts src/client/view/GameView.ts tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalWarWire.test.ts; then
+            git add src/client/NationalDiplomacyPanel.ts src/client/NationalDiplomacyState.ts src/client/Transport.ts src/client/view/GameView.ts tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalWarWire.test.ts
             git commit -m "style(r8 e4): apply pinned oxfmt after targeted regression repairs"
             git push origin HEAD:refs/heads/feature/r8-e4-player-operated-diplomacy
           fi
