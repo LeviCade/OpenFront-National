@@ -62,7 +62,9 @@ describe("Round Five public NATIONAL worker wire DTO", () => {
     };
     expect(packet.nationalCommandResults).toEqual([accepted]);
     expect(packet.nationalCommandResults).not.toContain(rejected);
-    expectTypeOf<NonNullable<GameUpdateViewData["nationalCommandResults"]>[number]>().toEqualTypeOf<NationalCommandResultViewData>();
+    expectTypeOf<
+      NonNullable<GameUpdateViewData["nationalCommandResults"]>[number]
+    >().toEqualTypeOf<NationalCommandResultViewData>();
   });
 
   it("keeps legacy FFA packets optional, not fabricated as NATIONAL data", () => {

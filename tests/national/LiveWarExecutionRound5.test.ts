@@ -16,14 +16,23 @@ const names = [
 
 async function spawned(nationalMode = true): Promise<Game> {
   const game = await setup("plains", { nationalMode }, names);
-  const coords = [[25, 25], [75, 25], [25, 75]];
+  const coords = [
+    [25, 25],
+    [75, 25],
+    [25, 75],
+  ];
   for (let i = 0; i < names.length; i++)
     game.addExecution(
-      new SpawnExecution("round5-war", names[i], game.map().ref(coords[i][0], coords[i][1])),
+      new SpawnExecution(
+        "round5-war",
+        names[i],
+        game.map().ref(coords[i][0], coords[i][1]),
+      ),
     );
   game.executeNextTick();
   game.executeNextTick();
-  for (const info of names) expect(game.player(info.id).hasSpawned()).toBe(true);
+  for (const info of names)
+    expect(game.player(info.id).hasSpawned()).toBe(true);
   return game;
 }
 
@@ -121,15 +130,21 @@ describe("E2 Round Five authenticated WAR execution against actual spawned Game"
     expect(new Set(wars.map((x) => x.id)).size).toBe(2);
     const imperial = wars.find((x) => x.scope === "imperial")!;
     const national = wars.find((x) => x.scope === "national")!;
-    expect(game.nationalWarAuthority()?.atWar("north-id", "south-id")).toBe(true);
-    expect(game.nationalWarAuthority()?.atWar("east-id", "south-id")).toBe(true);
+    expect(game.nationalWarAuthority()?.atWar("north-id", "south-id")).toBe(
+      true,
+    );
+    expect(game.nationalWarAuthority()?.atWar("east-id", "south-id")).toBe(
+      true,
+    );
 
     enqueue(game, {
       type: "national_propose_peace",
       warId: imperial.id,
       clientID: "north-client",
     });
-    const motion = game.nationalWarState()?.wars.motions.find((x) => x.layerId === imperial.id);
+    const motion = game
+      .nationalWarState()
+      ?.wars.motions.find((x) => x.layerId === imperial.id);
     expect(motion).toBeDefined();
     if (motion === undefined) throw new Error("expected imperial peace motion");
     enqueue(game, {
@@ -138,10 +153,18 @@ describe("E2 Round Five authenticated WAR execution against actual spawned Game"
       clientID: "south-client",
     });
     const after = game.nationalWarState()!.wars;
-    expect(after.layers.find((x) => x.id === imperial.id)?.endedTick).not.toBeNull();
-    expect(after.layers.find((x) => x.id === national.id)?.endedTick).toBeNull();
-    expect(game.nationalWarAuthority()?.atWar("north-id", "south-id")).toBe(false);
-    expect(game.nationalWarAuthority()?.atWar("east-id", "south-id")).toBe(true);
+    expect(
+      after.layers.find((x) => x.id === imperial.id)?.endedTick,
+    ).not.toBeNull();
+    expect(
+      after.layers.find((x) => x.id === national.id)?.endedTick,
+    ).toBeNull();
+    expect(game.nationalWarAuthority()?.atWar("north-id", "south-id")).toBe(
+      false,
+    );
+    expect(game.nationalWarAuthority()?.atWar("east-id", "south-id")).toBe(
+      true,
+    );
 
     // The remaining national layer also requires bilateral consent.
     enqueue(game, {
@@ -149,15 +172,20 @@ describe("E2 Round Five authenticated WAR execution against actual spawned Game"
       warId: national.id,
       clientID: "north-client",
     });
-    const nextMotion = game.nationalWarState()?.wars.motions.find((x) => x.layerId === national.id);
+    const nextMotion = game
+      .nationalWarState()
+      ?.wars.motions.find((x) => x.layerId === national.id);
     expect(nextMotion).toBeDefined();
-    if (nextMotion === undefined) throw new Error("expected national peace motion");
+    if (nextMotion === undefined)
+      throw new Error("expected national peace motion");
     enqueue(game, {
       type: "national_accept_peace",
       motionId: nextMotion.id,
       clientID: "south-client",
     });
-    expect(game.nationalWarAuthority()?.atWar("east-id", "south-id")).toBe(false);
+    expect(game.nationalWarAuthority()?.atWar("east-id", "south-id")).toBe(
+      false,
+    );
   });
 
   it("WAR-04 wrong-side peace acceptance cannot close a layer", async () => {
@@ -171,11 +199,23 @@ describe("E2 Round Five authenticated WAR execution against actual spawned Game"
       clientID: "north-client",
     });
     const warId = game.nationalWarState()!.wars.layers[0].id;
-    enqueue(game, { type: "national_propose_peace", warId, clientID: "north-client" });
+    enqueue(game, {
+      type: "national_propose_peace",
+      warId,
+      clientID: "north-client",
+    });
     const motionId = game.nationalWarState()!.wars.motions[0].id;
-    enqueue(game, { type: "national_accept_peace", motionId, clientID: "north-client" });
+    enqueue(game, {
+      type: "national_accept_peace",
+      motionId,
+      clientID: "north-client",
+    });
     expect(game.nationalWarState()!.wars.layers[0].endedTick).toBeNull();
-    enqueue(game, { type: "national_accept_peace", motionId, clientID: "south-client" });
+    enqueue(game, {
+      type: "national_accept_peace",
+      motionId,
+      clientID: "south-client",
+    });
     expect(game.nationalWarState()!.wars.layers[0].endedTick).not.toBeNull();
   });
 
@@ -189,7 +229,9 @@ describe("E2 Round Five authenticated WAR execution against actual spawned Game"
       targetKind: "nation",
       clientID: "north-client",
     };
-    game.addExecution(new Executor(game, "round5-war", undefined).createExec(command));
+    game.addExecution(
+      new Executor(game, "round5-war", undefined).createExec(command),
+    );
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
     for (let i = 0; i < 2; i++) {
@@ -197,7 +239,9 @@ describe("E2 Round Five authenticated WAR execution against actual spawned Game"
       restored.executeNextTick();
     }
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
-    expect(restored.nationalWarAuthority()?.atWar("north-id", "south-id")).toBe(true);
+    expect(restored.nationalWarAuthority()?.atWar("north-id", "south-id")).toBe(
+      true,
+    );
     expect(restored.nationalWarState()?.wars.layers).toHaveLength(1);
   });
 

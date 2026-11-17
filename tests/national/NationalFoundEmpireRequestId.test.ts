@@ -145,9 +145,7 @@ describe("Round Six authenticated Found Empire request IDs", () => {
       empireId: "second-empire",
       accepted: false,
     });
-    expect(aliceJournal[1].sequence).toBeGreaterThan(
-      aliceJournal[0].sequence,
-    );
+    expect(aliceJournal[1].sequence).toBeGreaterThan(aliceJournal[0].sequence);
     expect(game.nationalCommandResults(game.player(bob.id))).toEqual([]);
     expect(game.nationalPublicPoliticalView()?.empires).toEqual([
       { id: "first-empire", leaderId: alice.id, memberIds: [alice.id] },
@@ -157,7 +155,9 @@ describe("Round Six authenticated Found Empire request IDs", () => {
     expect(restored.nationalCommandResults(restored.player(alice.id))).toEqual(
       aliceJournal,
     );
-    expect(restored.nationalCommandResults(restored.player(bob.id))).toEqual([]);
+    expect(restored.nationalCommandResults(restored.player(bob.id))).toEqual(
+      [],
+    );
   });
 
   it("rejects forged client routing, de-duplicates matching requests and cannot borrow another actor's ID", async () => {
@@ -202,6 +202,8 @@ describe("Round Six authenticated Found Empire request IDs", () => {
     expect(game.nationalCommandResults(game.player(bob.id))).toMatchObject([
       { actorId: bob.id, empireId: "bob-empire", requestId: "click-B-own" },
     ]);
-    expect(game.nationalCommandResults(game.player(alice.id))).toEqual(original);
+    expect(game.nationalCommandResults(game.player(alice.id))).toEqual(
+      original,
+    );
   });
 });

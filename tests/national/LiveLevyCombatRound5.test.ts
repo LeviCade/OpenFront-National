@@ -5,8 +5,8 @@
  */
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
-import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { interceptNationalAttack } from "@openfront/engine/execution/NationalWarExecution";
+import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game, Player } from "@openfront/engine/game/Game";
 import { PlayerImpl } from "@openfront/engine/game/PlayerImpl";
 import { describe, expect, it } from "vitest";
@@ -18,14 +18,26 @@ const records = [
   new PlayerInfo("South", PlayerType.Human, "mda-south-client", "mda-south"),
   new PlayerInfo("East", PlayerType.Human, "mda-east-client", "mda-east"),
   new PlayerInfo("West", PlayerType.Human, "mda-west-client", "mda-west"),
-  new PlayerInfo("Central", PlayerType.Human, "mda-center-client", "mda-center"),
+  new PlayerInfo(
+    "Central",
+    PlayerType.Human,
+    "mda-center-client",
+    "mda-center",
+  ),
 ];
-const A = "mda-north", B = "mda-south";
+const A = "mda-north",
+  B = "mda-south";
 const donorIds = ["mda-east", "mda-west", "mda-center"];
 
 async function gameWithPlayers(): Promise<Game> {
   const game = await setup("plains", { nationalMode: true }, records);
-  const coords = [[20, 20], [70, 20], [20, 70], [70, 70], [50, 50]];
+  const coords = [
+    [20, 20],
+    [70, 20],
+    [20, 70],
+    [70, 70],
+    [50, 50],
+  ];
   for (let i = 0; i < records.length; i++) {
     const [x, y] = coords[i];
     game.addExecution(
@@ -71,7 +83,10 @@ function requireCanonicalDonorReader(game: Game): void {
 
 function declareWar(game: Game) {
   game.performNationalWarCommand(game.player(A), {
-    kind: "declare-national", warId: "round5-offensive", aggressorId: A, targetId: B,
+    kind: "declare-national",
+    warId: "round5-offensive",
+    aggressorId: A,
+    targetId: B,
   });
 }
 
@@ -93,7 +108,8 @@ async function scenario(count: 2 | 3, connect = true) {
   const donors = donorIds.slice(0, count).map((id) => game.player(id));
   joinMda(game, donorIds.slice(0, count));
   declareWar(game);
-  const attacker = game.player(A), defender = game.player(B);
+  const attacker = game.player(A),
+    defender = game.player(B);
   attacker.setTroops(500_000);
   defender.setTroops(250_000);
   for (const donor of donors) donor.setTroops(500_000);
@@ -124,16 +140,21 @@ describe("Round Five: real NATIONAL MDA defensive combat conservation", () => {
       expect(intercepted).toBeGreaterThan(0);
       const donorLoss = beforeDonors - total(donors);
       expect(donorLoss).toBe(intercepted);
-      expect(first.contributions.reduce((n, c) => n + c.troopsDebited, 0)).toBe(intercepted);
+      expect(first.contributions.reduce((n, c) => n + c.troopsDebited, 0)).toBe(
+        intercepted,
+      );
       expect(attacker.troops()).toBe(beforeAttacker - initial);
       expect(defender.troops()).toBe(beforeDefender);
-      const inFlight = attacker.outgoingAttacks().reduce((n, a) => n + a.troops(), 0);
+      const inFlight = attacker
+        .outgoingAttacks()
+        .reduce((n, a) => n + a.troops(), 0);
       expect(inFlight).toBe(initial - intercepted);
       // Both sides' casualties are conserved: every MDA troop spent causes
       // exactly one attacker loss. No refund, no duplicate reservation.
       expect(
-        beforeAttacker + beforeDonors -
-        (attacker.troops() + total(donors) + inFlight),
+        beforeAttacker +
+          beforeDonors -
+          (attacker.troops() + total(donors) + inFlight),
       ).toBe(2 * intercepted);
     });
   }
@@ -149,7 +170,9 @@ describe("Round Five: real NATIONAL MDA defensive combat conservation", () => {
       // No fake contributor refund or post-commit compensation is involved.
       const apply = game.applyNationalDefenseLevy.bind(game);
       Object.assign(game, {
-        applyNationalDefenseLevy: (requests: Parameters<Game["applyNationalDefenseLevy"]>[0]) => {
+        applyNationalDefenseLevy: (
+          requests: Parameters<Game["applyNationalDefenseLevy"]>[0],
+        ) => {
           const rows = requests[0].eligible.map((e) => ({
             player: game.player(e.source.nationId) as PlayerImpl,
             expectedBalance: e.source.troops(),
@@ -213,7 +236,8 @@ describe("Round Five: real NATIONAL MDA defensive combat conservation", () => {
     const assault = new AttackExecution(100_000, attacker, defender.id());
     assault.init(game, game.ticks());
     expect(assault.isActive()).toBe(true);
-    const intercepted = game.nationalWarState()!.levy.processed[0].result.intercepted;
+    const intercepted =
+      game.nationalWarState()!.levy.processed[0].result.intercepted;
     expect(intercepted).toBeGreaterThan(0);
     const afterAcceptedDonors = total(donors);
     expect(beforeDonors - afterAcceptedDonors).toBe(intercepted);
@@ -234,9 +258,9 @@ describe("Round Five: real NATIONAL MDA defensive combat conservation", () => {
     expect(defender.troops()).toBe(beforeDefender);
     expect(total(donors)).toBe(afterAcceptedDonors); // P2: no donor refund invented
     expect(attacker.troops()).toBe(initial - intercepted);
-    expect(
-      initial + beforeDonors - (attacker.troops() + total(donors)),
-    ).toBe(2 * intercepted);
+    expect(initial + beforeDonors - (attacker.troops() + total(donors))).toBe(
+      2 * intercepted,
+    );
   });
 
   it("LEVY-06/07 snapshot restores original receipt and duplicate attack is a strict no-op", async () => {
@@ -252,7 +276,11 @@ describe("Round Five: real NATIONAL MDA defensive combat conservation", () => {
     const sources = donors.map((p) => p.id());
     const before = total(sources.map((id) => restored.player(id)));
     const replay = interceptNationalAttack(
-      restored, first.attackId, A, B, first.attackTroopsBefore,
+      restored,
+      first.attackId,
+      A,
+      B,
+      first.attackTroopsBefore,
     );
     expect(replay?.application).toBe("replay");
     expect(replay?.intercepted).toBe(0);
