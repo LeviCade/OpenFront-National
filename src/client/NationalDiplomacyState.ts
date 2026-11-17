@@ -346,7 +346,7 @@ export function retainNationalFoundingReceipts(
       continue;
     }
     seen.set(
-      `${result.actorId}:${result.recipientId}:${result.requestId ?? "missing"}:${result.sequence ?? "missing"}:${result.empireId}:${result.tick}:${result.accepted}`,
+      `${result.actorId}:${result.recipientId}:${result.requestId ?? "missing"}:${result.sequence ?? "missing"}:${result.empireId}:${result.tick}:${result.accepted}:${result.reason ?? "none"}`,
       result,
     );
   }
