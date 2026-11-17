@@ -54,4 +54,14 @@ jobs:
             echo "Lockfile unchanged"; exit 1
           fi
           git commit -m "fix(security): refresh lockfile for seven patched production advisories"
+          git fetch origin feature/r8-e5-browser-release-security
+          git rebase origin/feature/r8-e5-browser-release-security
           git push origin HEAD:feature/r8-e5-browser-release-security
+      - name: Preserve resolved security lockfile even when a later check fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-r8-resolved-lock-${{ github.sha }}
+          path: package-lock.json
+          if-no-files-found: warn
+          retention-days: 14
