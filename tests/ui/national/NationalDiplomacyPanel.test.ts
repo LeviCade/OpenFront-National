@@ -181,7 +181,8 @@ describe("NATIONAL player-facing founding", () => {
       expect.arrayContaining([
         expect.stringContaining("Non-aggression pact"),
         expect.stringContaining("Mutual defense pact"),
-        expect.stringContaining("Offer peace"),
+        expect.stringContaining("Empire accession"),
+        expect.stringContaining("Transfer crown"),
       ]),
     );
     const toggle = element.querySelector<HTMLButtonElement>(
