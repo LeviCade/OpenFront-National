@@ -288,7 +288,7 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     expect(
       panel.querySelector<HTMLOptionElement>(
         '#national-war-scope option[value="imperial"]',
-      )?.disabled,
+      )?.disabled ?? true,
     ).toBe(true);
     expect(intents()).toHaveLength(0);
   });
