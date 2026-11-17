@@ -1,0 +1,52 @@
+# Temporary one-shot lockfile refresh. Remove after reviewed lockfile commit.
+name: NATIONAL R8 — Reviewed security lock refresh (temporary)
+on:
+  push:
+    branches: [feature/r8-e5-browser-release-security]
+    paths:
+      - ".github/workflows/national-r8-lock-refresh.yml"
+permissions:
+  contents: write
+concurrency:
+  group: national-r8-security-refresh
+  cancel-in-progress: false
+jobs:
+  refresh-lock:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Resolve reviewed semver-safe fixes and update lockfile only
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Require pinned install from generated lockfile
+        run: npm run inst
+      - name: Reject any surviving production advisory
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm audit --omit=dev --json > /tmp/national-r8-audit.json || true
+          node -e 'const a=require("/tmp/national-r8-audit.json"); if(a.error){console.error(a.error);process.exit(1)}; const v=a.metadata?.vulnerabilities; console.log("PRODUCTION_AUDIT",JSON.stringify(v)); if(!v || v.total !== 0){console.error(Object.keys(a.vulnerabilities||{}));process.exit(1)}'
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run build-prod
+      - name: Commit ONLY the reviewed lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo "Lockfile unchanged"; exit 1
+          fi
+          git commit -m "fix(security): refresh lockfile for seven patched production advisories"
+          git push origin HEAD:feature/r8-e5-browser-release-security
