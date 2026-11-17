@@ -14,11 +14,27 @@ import type {
 
 const identity = z.string().min(1).max(256);
 const tick = z.number().int().nonnegative();
+const politicalCommandKind = z.enum([
+  "offer-empire",
+  "accept-empire",
+  "transfer-crown",
+  "found-pact",
+  "invite-pact",
+  "accept-pact",
+  "propose-pact-amendment",
+  "approve-pact-amendment",
+  "betray-pact",
+  "expel-pact",
+]);
+export type NationalPoliticalCommandKind = z.infer<typeof politicalCommandKind>;
 const commandOutcome = z.object({
   sequence: tick,
   requestId: identity,
   actorId: identity,
   empireId: z.string().max(256),
+  /** Absent means legacy Found Empire; one canonical receipt list for ALL commands. */
+  commandKind: politicalCommandKind.optional(),
+  commandTargetId: identity.optional(),
   tick,
   accepted: z.boolean(),
   reason: z.enum([
@@ -29,6 +45,10 @@ const commandOutcome = z.object({
   ]),
 });
 export type NationalFoundEmpireResult = z.infer<typeof commandOutcome>;
+export type NationalPoliticalCommandResult = NationalFoundEmpireResult & {
+  commandKind: NationalPoliticalCommandKind;
+  commandTargetId: string;
+};
 const asset = z.object({
   id: identity,
   ownerId: identity,
@@ -79,6 +99,43 @@ export class NationalGovernanceState {
     suppliedRequestId: string | null,
     perform: () => FoundEmpireReason,
   ): NationalFoundEmpireResult {
+    return this.recordCommand(
+      actorId,
+      empireId,
+      gameTick,
+      suppliedRequestId,
+      perform,
+      null,
+    );
+  }
+
+  /** The SAME receipts and sequence used by Found Empire; no second ledger. */
+  recordPoliticalCommand(
+    actorId: PlayerID,
+    commandKind: NationalPoliticalCommandKind,
+    targetId: string,
+    gameTick: number,
+    suppliedRequestId: string | null,
+    perform: () => FoundEmpireReason,
+  ): NationalPoliticalCommandResult {
+    return this.recordCommand(
+      actorId,
+      targetId,
+      gameTick,
+      suppliedRequestId,
+      perform,
+      commandKind,
+    ) as NationalPoliticalCommandResult;
+  }
+
+  private recordCommand(
+    actorId: PlayerID,
+    empireId: string,
+    gameTick: number,
+    suppliedRequestId: string | null,
+    perform: () => FoundEmpireReason,
+    commandKind: NationalPoliticalCommandKind | null,
+  ): NationalFoundEmpireResult {
     if (!Number.isSafeInteger(gameTick) || gameTick < 0)
       throw new Error("NATIONAL command journal: invalid tick");
     identity.parse(actorId);
@@ -99,7 +156,11 @@ export class NationalGovernanceState {
     }
     const existing = this.receipts.find((r) => r.requestId === requestId);
     if (existing) {
-      if (existing.actorId !== actorId || existing.empireId !== empireId)
+      if (
+        existing.actorId !== actorId ||
+        existing.empireId !== empireId ||
+        (existing.commandKind ?? null) !== commandKind
+      )
         throw new Error("NATIONAL command journal: reused foreign request ID");
       return { ...existing };
     }
@@ -111,6 +172,9 @@ export class NationalGovernanceState {
       requestId,
       actorId,
       empireId,
+      ...(commandKind === null
+        ? {}
+        : { commandKind, commandTargetId: empireId }),
       tick: gameTick,
       accepted: reason === "accepted",
       reason,
@@ -126,7 +190,19 @@ export class NationalGovernanceState {
   /** Recipient-facing; unknown or different principals have no access. */
   resultsFor(actorId: PlayerID): readonly NationalFoundEmpireResult[] {
     return this.results
-      .filter((r) => r.actorId === actorId)
+      .filter((r) => r.actorId === actorId && r.commandKind === undefined)
+      .map((r) => ({ ...r }));
+  }
+
+  /** Future E3 delivery: private non-founder outcomes from this ONE journal. */
+  politicalResultsFor(actorId: PlayerID): readonly NationalPoliticalCommandResult[] {
+    return this.results
+      .filter(
+        (r): r is NationalPoliticalCommandResult =>
+          r.actorId === actorId &&
+          r.commandKind !== undefined &&
+          r.commandTargetId !== undefined,
+      )
       .map((r) => ({ ...r }));
   }
 
@@ -226,7 +302,9 @@ export class NationalGovernanceState {
         sequences.has(receipt.sequence) ||
         receipt.tick > gameTick ||
         receipt.sequence >= saved.nextSequence ||
-        receipt.accepted !== (receipt.reason === "accepted")
+        receipt.accepted !== (receipt.reason === "accepted") ||
+        (receipt.commandKind !== undefined &&
+          receipt.commandTargetId !== receipt.empireId)
       )
         throw new Error("NATIONAL journal: invalid or future receipt");
       requests.add(receipt.requestId);
