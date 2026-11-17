@@ -31,6 +31,7 @@ vi.mock("../../../src/client/InGameModal", () => ({
 import "../../../src/client/NationalDiplomacyPanel";
 import type { LobbyConfig } from "../../../src/client/ClientGameRunner";
 import type { NationalDiplomacyPanel } from "../../../src/client/NationalDiplomacyPanel";
+import { validNationalWarReference } from "../../../src/client/NationalDiplomacyState";
 import {
   SendNationalDeclareWarIntentEvent,
   SetIntentGateEvent,
@@ -175,6 +176,14 @@ afterEach(() => {
 });
 
 describe("NATIONAL player-operated WAR/peace through real authenticated wire", () => {
+  it("accepts real deterministic WAR/motion references but rejects control characters", () => {
+    expect(validNationalWarReference("national-10-1-4")).toBe(true);
+    expect(validNationalWarReference("Borealis")).toBe(true);
+    expect(validNationalWarReference("")).toBe(false);
+    expect(validNationalWarReference("x".repeat(257))).toBe(false);
+    expect(validNationalWarReference("bad\\u0000id")).toBe(false);
+  });
+
   it("dispatches a schema-valid national WAR intent for an actual living rival, never an optimistic result", async () => {
     const { panel } = await setup();
     await choose(panel, "#national-war-target", "nation-b");
