@@ -56,6 +56,16 @@ export function createNationalFoundingRequestId(): string {
   return `nf_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
+/** Distinct 128-bit opaque token for ONE NATIONAL WAR/peace click. */
+export function createNationalDiplomacyRequestId(): string {
+  const random = globalThis.crypto?.getRandomValues;
+  if (typeof random !== "function")
+    throw new Error("Secure diplomacy request identity is unavailable.");
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return `nc_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
 export function validNationalFoundingRequestId(
   value: unknown,
 ): value is string {
