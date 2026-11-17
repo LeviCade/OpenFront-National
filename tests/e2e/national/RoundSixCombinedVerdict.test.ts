@@ -96,6 +96,7 @@ describe("E5 R6 combined game acceptance — real donors and exact journal corre
       const game = await live();
       addBorder(game);
       const donors = [C, D, E].slice(0, donorCount);
+      const expectedCanonicalDonors = [...donors].sort();
       pact(game, donors);
       game.performNationalWarCommand(game.player(A), {
         kind: "declare-national",
@@ -103,7 +104,7 @@ describe("E5 R6 combined game acceptance — real donors and exact journal corre
         aggressorId: A,
         targetId: B,
       });
-      expect(game.nationalMdaAllies(B)).toEqual(donors);
+      expect(game.nationalMdaAllies(B)).toEqual(expectedCanonicalDonors);
       game.player(A).setTroops(500_000);
       game.player(B).setTroops(250_000);
       for (const id of donors) game.player(id).setTroops(500_000);
@@ -151,7 +152,7 @@ describe("E5 R6 combined game acceptance — real donors and exact journal corre
       expect(receipt.application).toBe("applied");
       expect(receipt.contributions).toHaveLength(donorCount);
       const payerIds = receipt.contributions.map((item) => item.nationId);
-      expect(payerIds).toEqual(donors);
+      expect(payerIds).toEqual(expectedCanonicalDonors);
       const sum = receipt.contributions.reduce(
         (n, item) => n + item.troopsDebited,
         0,
@@ -182,7 +183,7 @@ describe("E5 R6 combined game acceptance — real donors and exact journal corre
         "QA_R6_MULTIDONOR " +
           JSON.stringify({
             donorCount,
-            donorIds: donors,
+            donorIds: expectedCanonicalDonors,
             intercepted: sum,
             payerDebits: receipt.contributions,
             inFlight: outgoing,
