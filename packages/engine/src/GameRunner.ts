@@ -47,7 +47,9 @@ import { collectLiveNationalObservation } from "./national/observation/LiveObser
 import { NationalOutboundFilter } from "./national/observation/NationalOutbound";
 import {
   actorNationalResults,
-  currentNationalResultCursor,
+  emptyNationalResultDeliveryState,
+  initialNationalResultDeliveryState,
+  type NationalResultDeliveryState,
 } from "./national/observation/NationalPoliticalPacket";
 import {
   readSnapshotHeader,
@@ -174,8 +176,9 @@ export class GameRunner {
 
   private readonly nationalObserverId: string | null;
   private readonly nationalOutbound: NationalOutboundFilter | null;
-  /** Per authenticated recipient, not per world or client-provided ID. */
-  private nationalResultCursor = -1;
+  /** Per authenticated recipient; tracks E1's requestId and sequence. */
+  private nationalResultDelivery: NationalResultDeliveryState =
+    emptyNationalResultDeliveryState();
 
   constructor(
     public game: Game,
@@ -203,7 +206,7 @@ export class GameRunner {
         );
         // Do not replay old success/rejection toasts when reconnecting.
         // Reconnected clients reconstruct truth from nationalPolitics.
-        this.nationalResultCursor = currentNationalResultCursor(
+        this.nationalResultDelivery = initialNationalResultDeliveryState(
           game,
           game.player(this.nationalObserverId),
         );
@@ -458,14 +461,13 @@ export class GameRunner {
           this.game,
           this.nationalObserverId!,
         );
-        const resultStream = actorNationalResults(
+        const results = actorNationalResults(
           this.game,
           this.game.player(this.nationalObserverId!),
-          this.nationalResultCursor,
+          this.nationalResultDelivery,
         );
-        this.nationalResultCursor = resultStream.latestSequence;
-        const authenticatedPacket = resultStream.results.length
-          ? { ...fullPacket, nationalCommandResults: resultStream.results }
+        const authenticatedPacket = results.length
+          ? { ...fullPacket, nationalCommandResults: results }
           : fullPacket;
         const projected = this.nationalOutbound.project(
           this.game,
