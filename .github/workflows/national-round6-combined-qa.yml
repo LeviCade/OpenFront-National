@@ -1,0 +1,133 @@
+name: NATIONAL Round Six — Exact Combined Acceptance Verdict
+
+on:
+  pull_request:
+    branches: [stage3/integration-20261115]
+    paths:
+      - ".github/workflows/national-round6-combined-qa.yml"
+      - "tests/**"
+      - "scripts/national-qa/**"
+      - "docs/release/**"
+      - "packages/engine/**"
+      - "packages/engine-api/**"
+      - "src/client/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r6-combined-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  complete-source:
+    name: "R6 exact SHA: ${{ matrix.check }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          - typecheck
+          - all-tests
+          - lint
+          - pinned-format
+          - production-build
+          - injected-defects
+          - production-dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - name: Checkout EXACT source head (never PR synthetic merge ref)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: false
+      - name: Verify source SHA is the candidate SHA under test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p national-qa-artifacts/r6
+          actual="$(git rev-parse HEAD)"
+          expected="${{ github.event.pull_request.head.sha || github.sha }}"
+          printf '%s\n' "$actual" | tee national-qa-artifacts/r6/candidate-head.txt
+          test "$actual" = "$expected"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Perform exhaustive independent gate without hiding individual failures
+        shell: bash
+        env:
+          SUITE: ${{ matrix.check }}
+        run: |
+          set -euo pipefail
+          case "$SUITE" in
+            typecheck) npm run typecheck ;;
+            all-tests) npm test ;;
+            lint) npm run lint ;;
+            pinned-format) npm run format:check ;;
+            production-build) npm run build-prod ;;
+            injected-defects) node scripts/national-qa/mutation-gate.mjs ;;
+            production-dependencies)
+              npm audit --json > national-qa-artifacts/r6/npm-audit-all.json || true
+              npm audit --omit=dev --json > national-qa-artifacts/r6/npm-audit-production.json || true
+              node scripts/national-qa/audit-summary.mjs national-qa-artifacts/r6/npm-audit-all.json national-qa-artifacts/r6/npm-audit-production.json
+              node -e 'const a=require("./national-qa-artifacts/r6/npm-audit-production.json"); const count=a.metadata?.vulnerabilities?.total??0; console.log("R6 production dependency advisories:",count); if(count>0)process.exit(1)'
+              ;;
+            *) echo "Unknown gate $SUITE" >&2; exit 1 ;;
+          esac 2>&1 | tee national-qa-artifacts/r6/${SUITE}.log
+      - name: Upload failures AND passing evidence, uniquely keyed by checked HEAD
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-r6-${{ matrix.check }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: national-qa-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
+
+  gpu-browser:
+    name: Actual GPU-backed NATIONAL and FFA desktop/mobile
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, linux, x64, gpu]
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Record exact actual graphics capability
+        shell: bash
+        run: |
+          mkdir -p national-qa-artifacts/gpu
+          git rev-parse HEAD | tee national-qa-artifacts/gpu/sha.txt
+          (nvidia-smi -q || true) > national-qa-artifacts/gpu/nvidia-smi.txt
+          (glxinfo -B || true) > national-qa-artifacts/gpu/glxinfo.txt
+          command -v google-chrome
+      - name: Desktop real NATIONAL (no WebGL spoofing)
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+        run: node scripts/national-qa/browser-gameplay.mjs
+      - name: Mobile real NATIONAL
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+        run: node scripts/national-qa/browser-gameplay.mjs --mobile
+      - name: Desktop real FFA
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+        run: node scripts/national-qa/browser-gameplay.mjs --legacy
+      - name: Mobile real FFA
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+        run: node scripts/national-qa/browser-gameplay.mjs --mobile --legacy
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: national-r6-real-gpu-${{ github.sha }}
+          path: national-qa-artifacts/
+          retention-days: 30
