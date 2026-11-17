@@ -103,7 +103,7 @@ describe("Round Six authenticated Found Empire request IDs", () => {
       {
         actorId: alice.id,
         empireId: "legacy-empire",
-        requestId: null,
+        requestId: expect.stringMatching(/^auto:\d+:0$/),
         accepted: true,
       },
     ]);
