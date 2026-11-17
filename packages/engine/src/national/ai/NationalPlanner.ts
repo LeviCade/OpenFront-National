@@ -207,11 +207,13 @@ export function planNationalInterest(
       .filter((a) => a.kind === "army" || a.kind === "warship")
       .map((a) => a.ownerId),
   );
-  const frontlineTargets = [...new Set(
-    observation.frontiers
-      .filter((f) => f.access === "land")
-      .map((f) => f.targetId),
-  )].sort(cmp);
+  const frontlineTargets = [
+    ...new Set(
+      observation.frontiers
+        .filter((f) => f.access === "land")
+        .map((f) => f.targetId),
+    ),
+  ].sort(cmp);
   const localWarTargets = frontlineTargets.filter(
     (id) =>
       enemiesAtWar.has(id) &&
@@ -276,7 +278,10 @@ export function planNationalInterest(
 
   let bestId: string | null = null;
   let bestScore = -Infinity;
-  if (self.status === "independent" && observation.ownResources.troops >= 5_000) {
+  if (
+    self.status === "independent" &&
+    observation.ownResources.troops >= 5_000
+  ) {
     for (const frontier of observation.frontiers) {
       if (frontier.access !== "land") continue;
       const target = publicNations.get(frontier.targetId);
@@ -300,8 +305,7 @@ export function planNationalInterest(
         (memory.targetId === target.id ? 8 : 0);
       if (
         score > bestScore ||
-        (score === bestScore &&
-          (bestId === null || cmp(target.id, bestId) < 0))
+        (score === bestScore && (bestId === null || cmp(target.id, bestId) < 0))
       ) {
         bestId = target.id;
         bestScore = score;

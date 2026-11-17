@@ -20,7 +20,12 @@ const HUMAN = new PlayerInfo(
   "r8-fog-client",
   "r8-fog-human",
 );
-const BOT = new PlayerInfo("AI Observer", PlayerType.Nation, null, "r8-fog-bot");
+const BOT = new PlayerInfo(
+  "AI Observer",
+  PlayerType.Nation,
+  null,
+  "r8-fog-bot",
+);
 const FOREIGN = new PlayerInfo(
   "Foreign",
   PlayerType.Human,
@@ -48,7 +53,10 @@ function workerPacket(
 
 describe("Round Eight real geographic fog FOG-03/04/05/06/07", () => {
   it("FOG-03 structures are seen inside 100 real border tiles, not beyond; hidden units stay out of human packets", async () => {
-    const game = await setup("big_plains", { nationalMode: true }, [HUMAN, FOREIGN]);
+    const game = await setup("big_plains", { nationalMode: true }, [
+      HUMAN,
+      FOREIGN,
+    ]);
     game.addExecution(
       new SpawnExecution("r8-fog", HUMAN, game.ref(20, 100)),
       new SpawnExecution("r8-fog", FOREIGN, game.ref(180, 180)),
@@ -57,18 +65,16 @@ describe("Round Eight real geographic fog FOG-03/04/05/06/07", () => {
     game.executeNextTick();
     expect(game.player(HUMAN.id).hasSpawned()).toBe(true);
     expect(game.player(FOREIGN.id).hasSpawned()).toBe(true);
-    const near = game.player(FOREIGN.id).buildUnit(
-      UnitType.City,
-      game.ref(80, 100),
-      {},
-    );
-    const distant = game.player(FOREIGN.id).buildUnit(
-      UnitType.City,
-      game.ref(195, 100),
-      {},
-    );
+    const near = game
+      .player(FOREIGN.id)
+      .buildUnit(UnitType.City, game.ref(80, 100), {});
+    const distant = game
+      .player(FOREIGN.id)
+      .buildUnit(UnitType.City, game.ref(195, 100), {});
     const seen = collectLiveNationalObservation(game, HUMAN.id).observation;
-    expect(seen.visibleAssets.map((asset) => asset.id)).toContain(String(near.id()));
+    expect(seen.visibleAssets.map((asset) => asset.id)).toContain(
+      String(near.id()),
+    );
     expect(seen.visibleAssets.map((asset) => asset.id)).not.toContain(
       String(distant.id()),
     );
@@ -81,8 +87,10 @@ describe("Round Eight real geographic fog FOG-03/04/05/06/07", () => {
     const { restored, bytes, again } = await roundTrip(game, "big_plains");
     expect([...bytes]).toEqual([...again]);
     expect(
-      collectLiveNationalObservation(restored, HUMAN.id).observation.visibleAssets
-        .some((a) => a.id === String(distant.id())),
+      collectLiveNationalObservation(
+        restored,
+        HUMAN.id,
+      ).observation.visibleAssets.some((a) => a.id === String(distant.id())),
     ).toBe(false);
   });
 
@@ -118,11 +126,9 @@ describe("Round Eight real geographic fog FOG-03/04/05/06/07", () => {
     );
     game.executeNextTick();
     game.executeNextTick();
-    const transport = game.player(FOREIGN.id).buildUnit(
-      UnitType.TransportShip,
-      water!,
-      { troops: 7_654_321 },
-    );
+    const transport = game
+      .player(FOREIGN.id)
+      .buildUnit(UnitType.TransportShip, water!, { troops: 7_654_321 });
     const view = collectLiveNationalObservation(game, HUMAN.id);
     const discovered = view.observation.visibleAssets.find(
       (asset) => asset.id === String(transport.id()),
@@ -159,15 +165,20 @@ describe("Round Eight real geographic fog FOG-03/04/05/06/07", () => {
     game.executeNextTick();
     game.executeNextTick();
     game.endSpawnPhase();
-    const asset = game.player(FOREIGN.id).buildUnit(
-      UnitType.City,
-      game.ref(90, 105),
-      {},
-    );
-    const beforeHuman = collectLiveNationalObservation(game, HUMAN.id).observation;
+    const asset = game
+      .player(FOREIGN.id)
+      .buildUnit(UnitType.City, game.ref(90, 105), {});
+    const beforeHuman = collectLiveNationalObservation(
+      game,
+      HUMAN.id,
+    ).observation;
     const beforeAI = collectLiveNationalObservation(game, BOT.id).observation;
-    expect(beforeHuman.visibleAssets.some((a) => a.id === String(asset.id()))).toBe(false);
-    expect(beforeAI.visibleAssets.some((a) => a.id === String(asset.id()))).toBe(true);
+    expect(
+      beforeHuman.visibleAssets.some((a) => a.id === String(asset.id())),
+    ).toBe(false);
+    expect(
+      beforeAI.visibleAssets.some((a) => a.id === String(asset.id())),
+    ).toBe(true);
 
     game.performNationalCommand(game.player(HUMAN.id), {
       kind: "found-empire",
@@ -183,7 +194,10 @@ describe("Round Eight real geographic fog FOG-03/04/05/06/07", () => {
       empireId: "r8_fog_parity",
       candidateId: BOT.id,
     });
-    const alliedHuman = collectLiveNationalObservation(game, HUMAN.id).observation;
+    const alliedHuman = collectLiveNationalObservation(
+      game,
+      HUMAN.id,
+    ).observation;
     const alliedBot = collectLiveNationalObservation(game, BOT.id).observation;
     const foreignIds = (obs: typeof alliedBot) =>
       obs.visibleAssets
@@ -192,8 +206,9 @@ describe("Round Eight real geographic fog FOG-03/04/05/06/07", () => {
         .sort();
     expect(foreignIds(alliedHuman)).toContain(String(asset.id()));
     expect(foreignIds(alliedHuman)).toEqual(foreignIds(alliedBot));
-    expect(alliedHuman.visibleAssets.find((a) => a.id === String(asset.id())))
-      .not.toHaveProperty("strength");
+    expect(
+      alliedHuman.visibleAssets.find((a) => a.id === String(asset.id())),
+    ).not.toHaveProperty("strength");
 
     // Actual elimination (not a forged treaty grant) removes reciprocal
     // membership; the human immediately loses the bot's 100-tile sight.
@@ -201,11 +216,15 @@ describe("Round Eight real geographic fog FOG-03/04/05/06/07", () => {
       game.player(BOT.id).relinquish(tile);
     game.executeNextTick();
     const revoked = collectLiveNationalObservation(game, HUMAN.id).observation;
-    expect(revoked.visibleAssets.some((a) => a.id === String(asset.id()))).toBe(false);
+    expect(revoked.visibleAssets.some((a) => a.id === String(asset.id()))).toBe(
+      false,
+    );
     const { restored } = await roundTrip(game, "big_plains");
     expect(
-      collectLiveNationalObservation(restored, HUMAN.id).observation.visibleAssets
-        .some((a) => a.id === String(asset.id())),
+      collectLiveNationalObservation(
+        restored,
+        HUMAN.id,
+      ).observation.visibleAssets.some((a) => a.id === String(asset.id())),
     ).toBe(false);
   });
 });

@@ -59,13 +59,11 @@ async function seededNationalRun(targetType: PlayerType = PlayerType.Human) {
   // Actual owned territories, not synthetic frontiers or mocked planner data.
   for (let y = 20; y < 65; y++) {
     for (let x = 15; x < 50; x++) game.player(BOT).conquer(game.ref(x, y));
-    for (let x = 50; x < 85; x++)
-      game.player(NEIGHBOR).conquer(game.ref(x, y));
+    for (let x = 50; x < 85; x++) game.player(NEIGHBOR).conquer(game.ref(x, y));
   }
   // Remote power controls more land, but cannot teleport into this campaign.
   for (let y = 66; y < 97; y++) {
-    for (let x = 2; x < 98; x++)
-      game.player(DISTANT).conquer(game.ref(x, y));
+    for (let x = 2; x < 98; x++) game.player(DISTANT).conquer(game.ref(x, y));
   }
   game.executeNextTick();
   game.player(BOT).setTroops(250_000);
@@ -74,7 +72,10 @@ async function seededNationalRun(targetType: PlayerType = PlayerType.Human) {
   return game;
 }
 
-function runTicks(game: Awaited<ReturnType<typeof seededNationalRun>>, count: number) {
+function runTicks(
+  game: Awaited<ReturnType<typeof seededNationalRun>>,
+  count: number,
+) {
   for (let i = 0; i < count; i++) game.executeNextTick();
 }
 
@@ -90,12 +91,13 @@ describe("Round Eight seeded real NATIONAL strategic matches AI-01/02/04/06", ()
         targetId: NEIGHBOR,
       });
     }
-    const decisions = [againstHuman, againstBot].map((game) =>
-      planNationalInterest(
-        collectLiveNationalObservation(game, BOT).observation,
-        initialNationalPlannerMemory(BOT),
-        30,
-      ).decision,
+    const decisions = [againstHuman, againstBot].map(
+      (game) =>
+        planNationalInterest(
+          collectLiveNationalObservation(game, BOT).observation,
+          initialNationalPlannerMemory(BOT),
+          30,
+        ).decision,
     );
     expect(decisions[0]).toEqual(decisions[1]);
     expect(decisions[0]?.targetId).toBe(NEIGHBOR);
@@ -103,18 +105,19 @@ describe("Round Eight seeded real NATIONAL strategic matches AI-01/02/04/06", ()
       const bot = game.player(BOT);
       const started = bot.troops();
       runTicks(game, 105);
-      expect(
-        bot.troops() < started || bot.outgoingAttacks().length > 0,
-      ).toBe(true);
+      expect(bot.troops() < started || bot.outgoingAttacks().length > 0).toBe(
+        true,
+      );
     }
   });
 
   it("AI-02 does not abandon local WAR campaign because a distant nation has the most land; replay is deterministic", async () => {
     const game = await seededNationalRun();
-    const publicNations = collectLiveNationalObservation(game, BOT).observation.nations;
-    expect(publicNations.find((n) => n.id === DISTANT)!.landPercent).toBeGreaterThan(
-      publicNations.find((n) => n.id === BOT)!.landPercent,
-    );
+    const publicNations = collectLiveNationalObservation(game, BOT).observation
+      .nations;
+    expect(
+      publicNations.find((n) => n.id === DISTANT)!.landPercent,
+    ).toBeGreaterThan(publicNations.find((n) => n.id === BOT)!.landPercent);
     game.performNationalWarCommand(game.player(BOT), {
       kind: "declare-national",
       warId: "r8_persistent_local_war",
@@ -252,17 +255,25 @@ describe("Round Eight seeded real NATIONAL strategic matches AI-01/02/04/06", ()
       30,
     );
     expect(plan.decision?.targetId).toBe(NEIGHBOR);
-    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(BOT, NEIGHBOR)).toBe(true);
-    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(BOT, DISTANT)).toBe(false);
+    expect(
+      game.nationalWarAuthority()?.authorizeOffensiveAction(BOT, NEIGHBOR),
+    ).toBe(true);
+    expect(
+      game.nationalWarAuthority()?.authorizeOffensiveAction(BOT, DISTANT),
+    ).toBe(false);
     const startTroops = game.player(BOT).troops();
     runTicks(game, 135);
     expect(
       game.player(BOT).troops() < startTroops ||
-      game.player(BOT).outgoingAttacks().length > 0,
+        game.player(BOT).outgoingAttacks().length > 0,
     ).toBe(true);
-    expect(game.nationalPoliticalAuthority()?.empireOf(BOT)).toBe("r8_active_empire");
+    expect(game.nationalPoliticalAuthority()?.empireOf(BOT)).toBe(
+      "r8_active_empire",
+    );
     expect(game.nationalWarAuthority()?.atWar(BOT, DISTANT)).toBe(false);
     const { restored } = await roundTrip(game, "plains");
-    expect(restored.nationalPoliticalAuthority()?.empireOf(BOT)).toBe("r8_active_empire");
+    expect(restored.nationalPoliticalAuthority()?.empireOf(BOT)).toBe(
+      "r8_active_empire",
+    );
   });
 });

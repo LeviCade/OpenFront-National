@@ -140,8 +140,9 @@ interface SightAnchor {
 type SightIndex = Map<string, SightAnchor[]>;
 
 function sightBucket(x: number, y: number): string {
-  return Math.floor(x / SIGHT_BUCKET_SIZE) + ":" +
-    Math.floor(y / SIGHT_BUCKET_SIZE);
+  return (
+    Math.floor(x / SIGHT_BUCKET_SIZE) + ":" + Math.floor(y / SIGHT_BUCKET_SIZE)
+  );
 }
 
 function addSightAnchor(
@@ -232,12 +233,7 @@ export function collectLiveNationalObservation(
     for (const tile of member.tiles()) markVisible(tile, memberId);
     for (const tile of member.borderTiles()) {
       markVisible(tile, memberId);
-      addSightAnchor(
-        borderSight,
-        game.x(tile),
-        game.y(tile),
-        memberId,
-      );
+      addSightAnchor(borderSight, game.x(tile), game.y(tile), memberId);
       let coastal = false;
       game.forEachNeighbor(tile, (neighbor) => {
         if (!game.isLand(neighbor)) coastal = true;
@@ -260,12 +256,7 @@ export function collectLiveNationalObservation(
         });
       });
       if (coastal) {
-        addSightAnchor(
-          coastSight,
-          game.x(tile),
-          game.y(tile),
-          memberId,
-        );
+        addSightAnchor(coastSight, game.x(tile), game.y(tile), memberId);
       }
     }
   }
@@ -324,14 +315,10 @@ export function collectLiveNationalObservation(
     if (
       unit.type() !== UnitType.Warship ||
       !allowedPrincipals.has(unit.owner().id())
-    ) continue;
+    )
+      continue;
     const tile = unit.tile();
-    addSightAnchor(
-      warshipSight,
-      game.x(tile),
-      game.y(tile),
-      unit.owner().id(),
-    );
+    addSightAnchor(warshipSight, game.x(tile), game.y(tile), unit.owner().id());
   }
   for (const unit of allUnits) {
     const tile = unit.tile();
@@ -351,12 +338,11 @@ export function collectLiveNationalObservation(
       // hidden transports. FOG-05 forbids granting an unseen invasion
       // force a free 100-tile detection radius just because its tile is
       // near a country's distant frontier.
-      const fromBorder =
-        visibleTiles.has(tile)
-          ? sightOrigin.get(tile) ?? observerId
-          : kind(unit.type()) === "structure"
-            ? nearestSightContributor(borderSight, x, y, BORDER_SIGHT_RADIUS)
-            : null;
+      const fromBorder = visibleTiles.has(tile)
+        ? (sightOrigin.get(tile) ?? observerId)
+        : kind(unit.type()) === "structure"
+          ? nearestSightContributor(borderSight, x, y, BORDER_SIGHT_RADIUS)
+          : null;
       const isShip =
         unit.type() === UnitType.Warship ||
         unit.type() === UnitType.TransportShip ||
