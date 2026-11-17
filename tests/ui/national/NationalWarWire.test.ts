@@ -181,7 +181,7 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     expect(validNationalWarReference("Borealis")).toBe(true);
     expect(validNationalWarReference("")).toBe(false);
     expect(validNationalWarReference("x".repeat(257))).toBe(false);
-    expect(validNationalWarReference("bad\\u0000id")).toBe(false);
+    expect(validNationalWarReference("bad\u0000id")).toBe(false);
   });
 
   it("dispatches a schema-valid national WAR intent for an actual living rival, never an optimistic result", async () => {
