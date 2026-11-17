@@ -117,6 +117,24 @@ export class SendNationalFoundEmpireIntentEvent implements GameEvent {
   ) {}
 }
 
+/** National war authority is always resolved by the trusted execution layer. */
+export class SendNationalDeclareWarIntentEvent implements GameEvent {
+  constructor(
+    public readonly scope: "national" | "imperial",
+    public readonly nationId: string,
+    public readonly targetId: string,
+    public readonly targetKind: "nation" | "empire",
+  ) {}
+}
+
+export class SendNationalProposePeaceIntentEvent implements GameEvent {
+  constructor(public readonly warId: string) {}
+}
+
+export class SendNationalAcceptPeaceIntentEvent implements GameEvent {
+  constructor(public readonly motionId: string) {}
+}
+
 /** Signals loss/reestablishment of a verified game transport session. */
 export class NationalTransportStatusEvent implements GameEvent {
   constructor(
@@ -338,6 +356,15 @@ export class Transport {
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
     this.subscribe(SendNationalFoundEmpireIntentEvent, (e) =>
       this.onSendNationalFoundEmpireIntent(e),
+    );
+    this.subscribe(SendNationalDeclareWarIntentEvent, (e) =>
+      this.onSendNationalDeclareWarIntent(e),
+    );
+    this.subscribe(SendNationalProposePeaceIntentEvent, (e) =>
+      this.onSendNationalProposePeaceIntent(e),
+    );
+    this.subscribe(SendNationalAcceptPeaceIntentEvent, (e) =>
+      this.onSendNationalAcceptPeaceIntent(e),
     );
     this.subscribe(SendAttackIntentEvent, (e) => this.onSendAttackIntent(e));
     this.subscribe(SendUpgradeStructureIntentEvent, (e) =>
@@ -852,6 +879,53 @@ export class Transport {
       requestId: event.requestId,
     };
     this.sendIntent(intent);
+  }
+
+  /**
+   * All NATIONAL diplomatic intents use the existing intent gate and trusted
+   * client-ID stamping. The UI never supplies an actor principal or a war ID
+   * that it invents as authoritative.
+   */
+  private nationalDiplomacyWireEnabled(): boolean {
+    const cfg = this.lobbyConfig.gameStartInfo?.config;
+    return (
+      cfg?.gameType === GameType.Singleplayer &&
+      cfg.nationalMode === true &&
+      this.lobbyConfig.gameRecord === undefined
+    );
+  }
+
+  private onSendNationalDeclareWarIntent(
+    event: SendNationalDeclareWarIntentEvent,
+  ) {
+    if (!this.nationalDiplomacyWireEnabled()) return;
+    this.sendIntent({
+      type: "national_declare_war",
+      scope: event.scope,
+      nationId: event.nationId,
+      targetId: event.targetId,
+      targetKind: event.targetKind,
+    });
+  }
+
+  private onSendNationalProposePeaceIntent(
+    event: SendNationalProposePeaceIntentEvent,
+  ) {
+    if (!this.nationalDiplomacyWireEnabled()) return;
+    this.sendIntent({
+      type: "national_propose_peace",
+      warId: event.warId,
+    });
+  }
+
+  private onSendNationalAcceptPeaceIntent(
+    event: SendNationalAcceptPeaceIntentEvent,
+  ) {
+    if (!this.nationalDiplomacyWireEnabled()) return;
+    this.sendIntent({
+      type: "national_accept_peace",
+      motionId: event.motionId,
+    });
   }
 
   private onSendSpawnIntentEvent(event: SendSpawnIntentEvent) {
