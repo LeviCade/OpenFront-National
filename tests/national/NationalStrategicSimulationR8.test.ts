@@ -235,11 +235,9 @@ describe("Round Eight seeded real NATIONAL strategic matches AI-01/02/04/06", ()
       if (x < 47 || x >= 50 || y < 35 || y >= 60) bot.relinquish(tile);
     }
     bot.setTroops(85_000);
-    game
-      .player(NEIGHBOR)
-      .buildUnit(UnitType.Warship, game.ref(50, 45), {
-        patrolTile: game.ref(50, 45),
-      });
+    game.player(NEIGHBOR).buildUnit(UnitType.Warship, game.ref(50, 45), {
+      patrolTile: game.ref(50, 45),
+    });
     game.performNationalWarCommand(bot, {
       kind: "declare-national",
       warId: "r8_defensive_war",
