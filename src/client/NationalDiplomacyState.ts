@@ -56,7 +56,9 @@ export function createNationalFoundingRequestId(): string {
   return `nf_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
-export function validNationalFoundingRequestId(value: unknown): value is string {
+export function validNationalFoundingRequestId(
+  value: unknown,
+): value is string {
   return typeof value === "string" && FOUNDING_REQUEST_ID.test(value);
 }
 
@@ -296,7 +298,8 @@ export function reconcileNationalFounding(
   ) {
     return {
       phase: "unknown",
-      reason: "The game returned inconsistent founding receipts. No result was confirmed.",
+      reason:
+        "The game returned inconsistent founding receipts. No result was confirmed.",
       acceptedResultSeen: false,
     };
   }
