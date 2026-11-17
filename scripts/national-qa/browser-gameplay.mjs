@@ -30,6 +30,8 @@ const errors = [];
 const observed = [];
 const browserConsole = [];
 const browserNetworkErrors = [];
+const runtimeAssetRequests = [];
+const restrictedRuntimeAssets = [];
 let hardwareCapabilities = null;
 let submittedFounding = null;
 const start = performance.now();
@@ -62,6 +64,8 @@ function persist() {
     workerPackets: observed.slice(-240),
     console: browserConsole.slice(-240),
     networkErrors: browserNetworkErrors.slice(-120),
+    runtimeAssetRequests: runtimeAssetRequests.slice(-500),
+    restrictedRuntimeAssets: restrictedRuntimeAssets.slice(-80),
     actualHardware: hardwareCapabilities,
     submittedFounding,
     elapsedMs: Math.round(performance.now() - start),
@@ -115,6 +119,24 @@ function cdp(webSocket) {
           1200,
         ),
       });
+    }
+    if (packet.method === "Network.requestWillBeSent") {
+      const raw = packet.params?.request?.url;
+      try {
+        const url = new URL(raw);
+        // Drop query/fragment; they may carry tokens. Record origin + path only.
+        if (/^https?:$/.test(url.protocol) &&
+            (/\\.(?:mp3|ogg|flac|wav|woff2?|ttf|svg|png|jpe?g|webp)$/i.test(url.pathname) ||
+             /\\/(?:proprietary|premium|cdn|assets)\\//i.test(url.pathname))) {
+          const evidence = { origin: url.origin, path: url.pathname,
+            type: packet.params?.type ?? "other" };
+          runtimeAssetRequests.push(evidence);
+          if (/\\/proprietary\\//i.test(url.pathname) ||
+              (/\\/cdn\\//i.test(url.pathname) && /(?:\\.|^)openfront\\.(?:io|dev)$/i.test(url.hostname))) {
+            restrictedRuntimeAssets.push(evidence);
+          }
+        }
+      } catch { /* non-URL data requests have no external asset origin */ }
     }
     if (packet.method === "Network.loadingFailed") {
       browserNetworkErrors.push({
@@ -440,8 +462,14 @@ async function main() {
   const capture = async (name) => {
     await worker();
     await screenshot(name);
-    record("screenshot", { name, packetCount: observed.length });
+    record("screenshot", { name, packetCount: observed.length,
+      assetRequests: runtimeAssetRequests.length,
+      restrictedAssets: restrictedRuntimeAssets.length });
     persist();
+    if (restrictedRuntimeAssets.length) {
+      throw new Error("RESTRICTED_RUNTIME_ASSET_REQUEST: " +
+        JSON.stringify(restrictedRuntimeAssets[0]));
+    }
   };
   const step = async (name, fn) => {
     stage = name;
