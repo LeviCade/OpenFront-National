@@ -172,6 +172,57 @@ describe("Round Eight seeded real NATIONAL strategic matches AI-01/02/04/06", ()
     expect(game.nationalWarAuthority()?.atWar(BOT, NEIGHBOR)).toBe(false);
   });
 
+  it("SOV-03 real seeded three-nation accession resolves the authoritative imperial victory roster", async () => {
+    const game = await seededNationalRun();
+    const emperor = game.player(DISTANT);
+    game.performNationalCommand(emperor, {
+      kind: "found-empire",
+      empireId: "r8_shared_sovereignty",
+    });
+    for (const id of [BOT, NEIGHBOR]) {
+      game.performNationalCommand(emperor, {
+        kind: "offer-empire",
+        empireId: "r8_shared_sovereignty",
+        candidateId: id,
+      });
+      game.performNationalCommand(game.player(id), {
+        kind: "accept-empire",
+        empireId: "r8_shared_sovereignty",
+        candidateId: id,
+      });
+    }
+    // Advance the REAL Game-owned political state and evaluate victory.
+    runTicks(game, 2);
+    const truth = game.nationalPublicPoliticalView();
+    expect(truth?.empires).toEqual([
+      {
+        id: "r8_shared_sovereignty",
+        leaderId: DISTANT,
+        memberIds: expect.arrayContaining([BOT, DISTANT, NEIGHBOR]),
+      },
+    ]);
+    expect(truth?.victory?.resolved).toBe(true);
+    expect(truth?.victory?.prizes).toEqual(
+      expect.arrayContaining([
+        {
+          kind: "ImperialVictor",
+          nationId: DISTANT,
+          empireId: "r8_shared_sovereignty",
+        },
+        {
+          kind: "EmpireVictor",
+          nationId: BOT,
+          empireId: "r8_shared_sovereignty",
+        },
+      ]),
+    );
+    const { bytes, again, restored } = await roundTrip(game, "plains");
+    expect([...bytes]).toEqual([...again]);
+    expect(restored.nationalPublicPoliticalView()?.victory).toEqual(
+      truth?.victory,
+    );
+  });
+
   it("AI-06 accession keeps bot militarily active under real imperial WAR, without attacking emperor or peace-side allies", async () => {
     const game = await seededNationalRun();
     game.performNationalCommand(game.player(DISTANT), {
