@@ -288,7 +288,7 @@ describe("NATIONAL player-facing founding", () => {
   });
 
   it("shows actual Ungovernable warnings and allows unknown on lost connection", async () => {
-    const { element, optionsState, requests } = await mount();
+    const { element, optionsState } = await mount();
     optionsState.politics = {
       empires: [{ id: "Atlas", leaderId: "nation-b", memberIds: ["nation-b"] }],
       warnings: [
