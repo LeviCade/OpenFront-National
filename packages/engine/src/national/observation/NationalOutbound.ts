@@ -310,6 +310,7 @@ export class NationalOutboundFilter {
                 item.recipientId === this.observerId &&
                 item.actorId === this.observerId &&
                 item.type === "national_found_empire" &&
+                typeof item.sequence === "number" &&
                 Number.isSafeInteger(item.sequence) &&
                 item.sequence >= 0 &&
                 typeof item.requestId === "string" &&
