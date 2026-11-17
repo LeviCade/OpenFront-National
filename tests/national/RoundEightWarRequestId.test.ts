@@ -12,18 +12,8 @@ import { describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
-const north = new PlayerInfo(
-  "North",
-  PlayerType.Human,
-  "R8NORTH1",
-  "r8-north",
-);
-const south = new PlayerInfo(
-  "South",
-  PlayerType.Human,
-  "R8SOUTH1",
-  "r8-south",
-);
+const north = new PlayerInfo("North", PlayerType.Human, "R8NORTH1", "r8-north");
+const south = new PlayerInfo("South", PlayerType.Human, "R8SOUTH1", "r8-south");
 
 async function spawned(): Promise<Game> {
   const game = await setup("plains", { nationalMode: true }, [north, south]);
