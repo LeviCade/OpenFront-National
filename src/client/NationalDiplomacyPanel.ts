@@ -6,11 +6,18 @@ import {
   createNationalFoundingRequestId,
   empireForMember,
   foundingUnavailableReason,
+  nationalWarActionUnavailableReason,
   reconcileNationalFounding,
   validEmpireId,
+  validNationalWarReference,
   type NationalFoundingAttempt,
 } from "./NationalDiplomacyState";
-import { SendNationalFoundEmpireIntentEvent } from "./Transport";
+import {
+  SendNationalAcceptPeaceIntentEvent,
+  SendNationalDeclareWarIntentEvent,
+  SendNationalFoundEmpireIntentEvent,
+  SendNationalProposePeaceIntentEvent,
+} from "./Transport";
 import type { GameView } from "./view";
 
 /**
@@ -36,6 +43,18 @@ export class NationalDiplomacyPanel extends LitElement {
     | "unknown" = "idle";
   @state() private message: string | null = null;
   @state() private error: string | null = null;
+  @state() private warScope: "national" | "imperial" = "national";
+  @state() private warTargetKind: "nation" | "empire" = "nation";
+  @state() private warTargetId = "";
+  @state() private warIdDraft = "";
+  @state() private motionIdDraft = "";
+  @state() private diplomacyStatus: string | null = null;
+  @state() private diplomacyError: string | null = null;
+  private lastDiplomacySubmission: {
+    gameId: string;
+    actorId: string;
+    tick: number;
+  } | null = null;
 
   createRenderRoot() {
     return this;
@@ -114,12 +133,44 @@ export class NationalDiplomacyPanel extends LitElement {
         }
       }
     }
+    const submission = this.lastDiplomacySubmission;
+    if (submission) {
+      const tick = game?.ticks() ?? -1;
+      if (
+        !game ||
+        !player ||
+        game.gameID() !== submission.gameId ||
+        player.id() !== submission.actorId ||
+        game.config().isReplay() ||
+        game.isSpectator() ||
+        !player.isAlive() ||
+        game.inSpawnPhase() ||
+        tick < submission.tick
+      ) {
+        this.lastDiplomacySubmission = null;
+        this.diplomacyStatus =
+          "The active game or principal changed. Previous diplomacy is unconfirmed.";
+      } else if (tick > submission.tick) {
+        // No verified E1/E3 WAR receipt stream exists in this baseline.
+        // Never upgrade transport submission to accepted at the next tick.
+        this.lastDiplomacySubmission = null;
+      }
+    }
     if (this.expanded) this.requestUpdate();
   }
 
   /** A dropped or replaced session must never retain optimistic success. */
   public connectionInterrupted(): void {
-    if (this.pendingAttempt === null) return;
+    if (this.lastDiplomacySubmission !== null) {
+      this.lastDiplomacySubmission = null;
+      this.diplomacyStatus =
+        "Connection interrupted. Previous diplomacy has no confirmed result.";
+      this.diplomacyError = null;
+    }
+    if (this.pendingAttempt === null) {
+      this.requestUpdate();
+      return;
+    }
     this.pendingAttempt = null;
     this.pendingEmpireId = null;
     this.phase = "unknown";
@@ -217,6 +268,143 @@ export class NationalDiplomacyPanel extends LitElement {
       this.message = null;
       this.error = "Could not send the founding command to the game.";
     }
+  }
+
+  private get warUnavailableReason(): string | null {
+    const game = this.game;
+    const player = game?.myPlayer();
+    return nationalWarActionUnavailableReason({
+      national: game?.config().gameConfig().nationalMode === true,
+      solo: game?.config().gameConfig().gameType === GameType.Singleplayer,
+      replay: game?.config().isReplay() === true,
+      spawned:
+        player !== null &&
+        player !== undefined &&
+        game?.inSpawnPhase() === false &&
+        player.numTilesOwned() > 0,
+      alive: player?.isAlive() === true,
+      spectator: game?.isSpectator() === true,
+      hasPublicPolitics: game?.nationalPolitics() !== null,
+    });
+  }
+
+  /** Only actual living game players or E1-public empires are selectable. */
+  private warTargets(
+    kind: "nation" | "empire",
+  ): readonly { id: string; name: string }[] {
+    const game = this.game;
+    const actor = game?.myPlayer();
+    if (!game || !actor) return [];
+    const ownEmpire = this.memberEmpire;
+    if (kind === "empire") {
+      return (game.nationalPolitics()?.empires ?? [])
+        .filter((empire) => empire.id !== ownEmpire?.id)
+        .map((empire) => ({ id: empire.id, name: empire.id }));
+    }
+    return game
+      .players()
+      .filter(
+        (player) =>
+          player.id() !== actor.id() &&
+          player.isAlive() &&
+          player.numTilesOwned() > 0 &&
+          !ownEmpire?.memberIds.includes(player.id()),
+      )
+      .map((player) => ({ id: player.id(), name: player.name() }));
+  }
+
+  /** No result journal for WAR/peace yet: submission is never success. */
+  private sendDiplomacyCommand(
+    command:
+      | SendNationalDeclareWarIntentEvent
+      | SendNationalProposePeaceIntentEvent
+      | SendNationalAcceptPeaceIntentEvent,
+    description: string,
+  ): void {
+    const reason = this.warUnavailableReason;
+    const game = this.game;
+    const player = game?.myPlayer();
+    if (reason || !game || !player || !this.eventBus) {
+      this.diplomacyError = reason ?? "The authenticated game channel is unavailable.";
+      return;
+    }
+    const tick = game.ticks();
+    if (
+      this.lastDiplomacySubmission?.gameId === game.gameID() &&
+      this.lastDiplomacySubmission.actorId === player.id() &&
+      this.lastDiplomacySubmission.tick === tick
+    ) {
+      this.diplomacyError =
+        "One diplomacy command is already submitted this tick. Await the next game tick.";
+      return;
+    }
+    try {
+      this.eventBus.emit(command);
+      this.lastDiplomacySubmission = {
+        gameId: game.gameID(),
+        actorId: player.id(),
+        tick,
+      };
+      this.diplomacyStatus =
+        `${description} submitted through the game transport. The authoritative result is not yet available; no success is confirmed.`;
+      this.diplomacyError = null;
+    } catch {
+      this.diplomacyError = "The diplomacy command could not be submitted.";
+    }
+  }
+
+  private submitWar(event: SubmitEvent): void {
+    event.preventDefault();
+    const game = this.game;
+    const actor = game?.myPlayer();
+    if (!game || !actor || this.warUnavailableReason) {
+      this.diplomacyError =
+        this.warUnavailableReason ?? "No authorized player is available.";
+      return;
+    }
+    const ownEmpire = this.memberEmpire;
+    if (
+      this.warScope === "imperial" &&
+      (!ownEmpire || ownEmpire.leaderId !== actor.id())
+    ) {
+      this.diplomacyError = "Only the current emperor may declare imperial war.";
+      return;
+    }
+    const kind = this.warScope === "national" ? "nation" : this.warTargetKind;
+    if (
+      !validNationalWarReference(this.warTargetId) ||
+      !this.warTargets(kind).some((target) => target.id === this.warTargetId)
+    ) {
+      this.diplomacyError =
+        "Choose a living, eligible target from the current game roster.";
+      return;
+    }
+    this.sendDiplomacyCommand(
+      new SendNationalDeclareWarIntentEvent(
+        this.warScope,
+        actor.id(),
+        this.warTargetId,
+        kind,
+      ),
+      `${this.warScope === "imperial" ? "Imperial" : "National"} war declaration`,
+    );
+  }
+
+  private submitPeace(event: SubmitEvent, action: "propose" | "accept"): void {
+    event.preventDefault();
+    const reference =
+      action === "propose" ? this.warIdDraft.trim() : this.motionIdDraft.trim();
+    if (!validNationalWarReference(reference)) {
+      this.diplomacyError =
+        "Enter an exact authoritative war or motion ID (1–256 characters).";
+      return;
+    }
+    this.sendDiplomacyCommand(
+      action === "propose"
+        ? new SendNationalProposePeaceIntentEvent(reference)
+        : new SendNationalAcceptPeaceIntentEvent(reference),
+      action === "propose" ? "Peace proposal" : "Peace motion acceptance",
+    );
   }
 
   private playerName(id: string): string {
