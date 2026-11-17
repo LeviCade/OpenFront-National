@@ -102,8 +102,8 @@ the same recipient. The harness captures Chromium console exceptions and
 failed network loads as separate evidence.
 
 Actual `MessagePort` receive events are instrumented **before app load**;
-the test does not alter messages. Evidence contains packet *type, tick,
-allowlisted public politics and command outcomes*, not unrestricted private
+the test does not alter messages. Evidence contains packet _type, tick,
+allowlisted public politics and command outcomes_, not unrestricted private
 network payloads. Full screenshots, stage durations, observed packet metadata
 and failing controls are included in the workflow artifacts.
 
