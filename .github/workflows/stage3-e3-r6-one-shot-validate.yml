@@ -39,7 +39,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
-            .github/workflows/stage3-e3-r6-one-shot-validate.yml \
             packages/engine/src/national/observation/NationalPoliticalPacket.ts \
             packages/engine/src/national/observation/NationalOutbound.ts \
             packages/engine/src/GameRunner.ts \
