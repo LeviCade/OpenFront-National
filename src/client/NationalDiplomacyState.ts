@@ -265,6 +265,104 @@ export function validNationalWarReference(value: string): boolean {
   );
 }
 
+/** E1/E3 recipient-scoped WAR/peace outcomes, NEVER inferred from intent enqueue. */
+export interface NationalDiplomacyResult {
+  readonly type:
+    | "national_declare_war"
+    | "national_propose_peace"
+    | "national_accept_peace";
+  readonly actorId: string;
+  readonly recipientId: string;
+  readonly accepted: boolean;
+  readonly tick: number;
+  readonly sequence: number;
+  readonly requestId: string;
+  readonly warId?: string;
+  readonly motionId?: string;
+  readonly reason?: string;
+}
+
+const DIPLOMACY_REQUEST_ID = /^nc_[0-9a-f]{32}$/;
+
+/** Strictly reject uncorrelated, malformed or foreign-looking receipts. */
+export function readNationalDiplomacyResults(
+  source: unknown,
+): NationalDiplomacyResult[] {
+  if (!Array.isArray(source)) return [];
+  const results: NationalDiplomacyResult[] = [];
+  for (const entry of source) {
+    if (
+      !record(entry) ||
+      ![
+        "national_declare_war",
+        "national_propose_peace",
+        "national_accept_peace",
+      ].includes(String(entry.type)) ||
+      typeof entry.actorId !== "string" ||
+      entry.actorId.length === 0 ||
+      typeof entry.recipientId !== "string" ||
+      entry.recipientId !== entry.actorId ||
+      typeof entry.accepted !== "boolean" ||
+      typeof entry.requestId !== "string" ||
+      !DIPLOMACY_REQUEST_ID.test(entry.requestId) ||
+      !Number.isSafeInteger(entry.sequence) ||
+      (entry.sequence as number) < 0 ||
+      !Number.isSafeInteger(entry.tick) ||
+      (entry.tick as number) < 0 ||
+      (entry.warId !== undefined &&
+        (typeof entry.warId !== "string" ||
+          !validNationalWarReference(entry.warId))) ||
+      (entry.motionId !== undefined &&
+        (typeof entry.motionId !== "string" ||
+          !validNationalWarReference(entry.motionId))) ||
+      (entry.reason !== undefined && typeof entry.reason !== "string")
+    )
+      continue;
+    results.push({
+      type: entry.type as NationalDiplomacyResult["type"],
+      actorId: entry.actorId,
+      recipientId: entry.recipientId,
+      accepted: entry.accepted,
+      tick: entry.tick as number,
+      sequence: entry.sequence as number,
+      requestId: entry.requestId,
+      ...(typeof entry.warId === "string" ? { warId: entry.warId } : {}),
+      ...(typeof entry.motionId === "string" ? { motionId: entry.motionId } : {}),
+      ...(typeof entry.reason === "string"
+        ? { reason: entry.reason.slice(0, 240) }
+        : {}),
+    });
+  }
+  return results;
+}
+
+/** Brief client-only retention compensates for one-shot worker delivery. */
+export function retainNationalDiplomacyResults(
+  previous: readonly NationalDiplomacyResult[],
+  received: readonly NationalDiplomacyResult[],
+  tick: number,
+  reset: boolean,
+): readonly NationalDiplomacyResult[] {
+  const entries = new Map<string, NationalDiplomacyResult>();
+  for (const result of [...(reset ? [] : previous), ...received]) {
+    if (result.tick > tick || result.tick < tick - 240) continue;
+    const key = [
+      result.actorId,
+      result.recipientId,
+      result.requestId,
+      result.sequence,
+      result.type,
+      result.tick,
+      result.accepted,
+      result.reason ?? "",
+      result.warId ?? "",
+      result.motionId ?? "",
+    ].join(":");
+    entries.set(key, result);
+  }
+  return [...entries.values()].slice(-32);
+}
+
 /** Session-scoped, UI-only request bookkeeping. Never a political projection. */
 export interface NationalFoundingAttempt {
   /** Must be the exact opaque request token placed on the engine intent. */
