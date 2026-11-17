@@ -178,9 +178,13 @@ describe("Round Eight seeded real NATIONAL strategic matches AI-01/02/04/06", ()
       motionId: "r8_real_peace_motion",
     });
     expect(game.nationalWarAuthority()?.atWar(BOT, NEIGHBOR)).toBe(false);
-    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(BOT, NEIGHBOR)).toBe(false);
+    expect(
+      game.nationalWarAuthority()?.authorizeOffensiveAction(BOT, NEIGHBOR),
+    ).toBe(false);
     const after = collectLiveNationalObservation(game, BOT).observation;
-    expect(after.wars.some((war) => war.id === "r8_real_peace_war")).toBe(false);
+    expect(after.wars.some((war) => war.id === "r8_real_peace_war")).toBe(
+      false,
+    );
     const decision = planNationalInterest(
       after,
       initialNationalPlannerMemory(BOT),
