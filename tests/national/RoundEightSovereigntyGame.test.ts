@@ -1,11 +1,12 @@
-import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
+import { PlayerInfo, PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { NationalFoundEmpireExecution } from "@openfront/engine/execution/NationalFoundEmpireExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { WinCheckExecution } from "@openfront/engine/execution/WinCheckExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
-import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
+import { snapshotGame, snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
+import { METRIC_KEYS } from "@openfront/engine/national/politics/sovereignty";
 import { describe, expect, it } from "vitest";
 import { TrustedNationalSaveStore } from "../../src/server/national/TrustedNationalSaveStore";
 import { setup } from "../util/Setup";
@@ -278,6 +279,144 @@ describe("Round Eight real Game sovereignty and constitutional voting", () => {
       }),
     ).toThrow(/remaining members/);
     expect(snapshotGameData(game)).toEqual(before);
+  });
+});
+
+describe("Round Eight full-scale real sovereign winners and strict crisis", () => {
+  it("SOV-03: eight actual spawned players join one empire and award precisely one Imperial plus seven Empire winners", async () => {
+    const eight = Array.from(
+      { length: 8 },
+      (_, i) =>
+        new PlayerInfo(
+          "R8 Empire " + i,
+          PlayerType.Human,
+          "r8-eight-client-" + i,
+          "r8-eight-id-" + i,
+        ),
+    );
+    const locations = [
+      [20, 20],
+      [50, 20],
+      [80, 20],
+      [20, 50],
+      [50, 50],
+      [80, 50],
+      [20, 80],
+      [50, 80],
+    ] as const;
+    const game = await setup("plains", { nationalMode: true }, eight);
+    for (let i = 0; i < eight.length; i++) {
+      const [x, y] = locations[i];
+      game.addExecution(
+        new SpawnExecution("r8-eight-actual", eight[i], game.map().ref(x, y)),
+      );
+    }
+    game.executeNextTick();
+    game.executeNextTick();
+    for (const member of eight) {
+      expect(game.player(member.id).hasSpawned()).toBe(true);
+    }
+    const sovereign = eight[0].id;
+    game.performNationalCommand(game.player(sovereign), {
+      kind: "found-empire",
+      empireId: "r8-eight-empire",
+    });
+    for (const entrant of eight.slice(1)) {
+      game.performNationalCommand(game.player(sovereign), {
+        kind: "offer-empire",
+        empireId: "r8-eight-empire",
+        candidateId: entrant.id,
+      });
+      game.performNationalCommand(game.player(entrant.id), {
+        kind: "accept-empire",
+        empireId: "r8-eight-empire",
+        candidateId: entrant.id,
+      });
+    }
+    const prizes = game.nationalVictoryRoster()?.prizes ?? [];
+    expect(prizes).toHaveLength(8);
+    expect(prizes[0]).toEqual({
+      kind: "ImperialVictor",
+      nationId: sovereign,
+      empireId: "r8-eight-empire",
+    });
+    expect(prizes.slice(1)).toEqual(
+      eight
+        .slice(1)
+        .map((p) => ({
+          kind: "EmpireVictor",
+          nationId: p.id,
+          empireId: "r8-eight-empire",
+        })),
+    );
+    const { restored, bytes, again } = await roundTrip(game, "plains");
+    expect([...again]).toEqual([...bytes]);
+    expect(restored.nationalVictoryRoster()?.prizes).toEqual(prizes);
+  });
+
+  it("SOV-05: real eight-metric absolute deficit warns for exactly ten simulated seconds; a crown transfer before deadline survives replay", async () => {
+    const game = await spawned();
+    const north = game.player(A);
+    const south = game.player(B);
+    for (const tile of [...north.tiles()].slice(1)) north.relinquish(tile);
+    north.setTroops(1);
+    south.setTroops(1_000_000);
+    south.addGold(50_000_000n);
+    const tile = [...south.tiles()][0];
+    for (const [type, params] of [
+      [UnitType.City, {}],
+      [UnitType.Factory, {}],
+      [UnitType.Port, {}],
+      [UnitType.MissileSilo, {}],
+      [UnitType.Warship, { patrolTile: tile }],
+    ] as const) {
+      south.buildUnit(type, tile, params).setUnderConstruction(false);
+    }
+    foundEmpire(game);
+    addEmpireMember(game, B);
+    game.executeNextTick();
+    const nations = state(game)!.nations;
+    const ruler = nations.find((n) => n.id === A)!;
+    const rival = nations.find((n) => n.id === B)!;
+    for (const metric of METRIC_KEYS) {
+      expect(ruler.metrics[metric], "strict Ungovernable: " + metric).toBeLessThan(
+        rival.metrics[metric],
+      );
+    }
+    const start = game.nationalUngovernableWarnings();
+    expect(start).toHaveLength(1);
+    expect(start[0].remainingMs).toBe(9_900);
+    const baseline = snapshotGame(game);
+    for (const type of [
+      UnitType.City,
+      UnitType.Factory,
+      UnitType.Port,
+      UnitType.MissileSilo,
+      UnitType.Warship,
+    ]) {
+      const tied = await restoreTestGame(baseline, "plains");
+      tied.player(B).units(type)[0].delete();
+      tied.executeNextTick();
+      expect(tied.nationalUngovernableWarnings(), "one strict tie: " + type).toEqual([]);
+    }
+    const { restored } = await roundTrip(game, "plains");
+    for (let tick = 0; tick < 98; tick++) {
+      game.executeNextTick();
+      restored.executeNextTick();
+    }
+    expect(game.nationalUngovernableWarnings()[0].remainingMs).toBe(100);
+    for (const g of [game, restored]) {
+      g.performNationalCommand(g.player(A), {
+        kind: "transfer-crown",
+        empireId: "r8-empire",
+        successorId: B,
+      });
+      expect(g.nationalUngovernableWarnings()).toEqual([]);
+      expect(g.nationalPoliticalAuthority()?.emperorOf("r8-empire")).toBe(B);
+      g.executeNextTick();
+      expect(g.nationalUngovernableWarnings()).toEqual([]);
+    }
+    expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
   });
 });
 
