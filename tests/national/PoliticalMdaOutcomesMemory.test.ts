@@ -206,6 +206,7 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
     });
     const beforeB = game.player(B).troops();
     const beforeC = game.player(C).troops();
+    const beforeD = game.player(D).troops();
     expect(() => game.applyNationalDefenseLevy([request([])])).toThrow(
       /missing or forged MDA contributor roster/,
     );
@@ -230,7 +231,7 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
     ).toThrow(/missing or forged MDA contributor roster/);
     expect(game.player(B).troops()).toBe(beforeB);
     expect(game.player(C).troops()).toBe(beforeC);
-    expect(game.player(D).troops()).toBeGreaterThanOrEqual(0);
+    expect(game.player(D).troops()).toBe(beforeD);
     expect(game.nationalWarState()?.levy.processed).toEqual([]);
     const eligible = game.nationalMdaAllies(A).map((id) => ({
       source: game.nationalLevySource(id)!,
@@ -536,6 +537,43 @@ describe("R5 real Found Empire outcome journal, principal scope and replay", () 
     expect(snapshotGameData(restored).game).toEqual(
       snapshotGameData(game).game,
     );
+  });
+
+  it("a caller cannot preclaim a deterministic legacy auto receipt for another founder", async () => {
+    const game = await gameWithPlayers(2);
+    const gameTick = game.ticks();
+    // A rejected explicit request deliberately preclaims the token that
+    // would otherwise be generated for the next null-ID legacy execution.
+    const preclaim = game.performNationalFoundEmpireWithOutcome(
+      game.player(B),
+      "not a valid empire",
+      `auto:${gameTick}:1`,
+    );
+    expect(preclaim).toMatchObject({ accepted: false, sequence: 0 });
+    const accepted = game.performNationalFoundEmpireWithOutcome(
+      game.player(A),
+      "legacy-empire",
+    );
+    expect(accepted).toMatchObject({
+      actorId: A,
+      empireId: "legacy-empire",
+      requestId: `auto:${gameTick}:2`,
+      sequence: 2,
+      accepted: true,
+    });
+    expect(game.nationalCommandResults(game.player(B))).toEqual([preclaim]);
+    expect(game.nationalCommandResults(game.player(A))).toEqual([accepted]);
+    expect(game.nationalPublicPoliticalView()?.empires).toEqual([
+      { id: "legacy-empire", leaderId: A, memberIds: [A] },
+    ]);
+    const { restored, bytes, again } = await roundTrip(game, "plains");
+    expect([...again]).toEqual([...bytes]);
+    expect(restored.nationalCommandResults(restored.player(A))).toEqual([
+      accepted,
+    ]);
+    expect(restored.nationalCommandResults(restored.player(B))).toEqual([
+      preclaim,
+    ]);
   });
 
   it("bounded journal retains 128 actor-scoped outcomes with deterministic monotonic sequence", async () => {
