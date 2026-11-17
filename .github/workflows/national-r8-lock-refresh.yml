@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: "24.15.0"
       - run: npm install --global --ignore-scripts npm@12.1.0
-      # DOMPurify 3.4.18 patches critical XSS flaws but is younger than the\n      # repository's 7-day supply-chain delay; exempt THIS audited package only.\n      - name: Resolve reviewed semver-safe fixes and update lockfile only
+      # DOMPurify 3.4.18 patches critical XSS flaws but is younger than the
+      # repository's 7-day supply-chain delay; exempt THIS audited package only.
+      - name: Resolve reviewed semver-safe fixes and update lockfile only
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --min-release-age-exclude=dompurify
       - name: Require pinned install from generated lockfile
         run: npm run inst
@@ -36,15 +38,18 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run lint
+      - name: Apply repository-pinned formatter to E5-owned changes
+        run: |
+          npx --no-install oxfmt --write scripts/national-qa/gpu-attestation.mjs scripts/national-qa/browser-gameplay.mjs scripts/national-qa/asset-audit.mjs tests/qa/national/HardwareGpuAttestation.test.mjs docs/release/NATIONAL_R8_HARDWARE_RUNBOOK.md
       - run: npm run format:check
       - run: npm run build-prod
-      - name: Commit ONLY the reviewed lockfile
+      - name: Commit reviewed lockfile and E5-owned formatting
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
+          git add package-lock.json scripts/national-qa/gpu-attestation.mjs scripts/national-qa/browser-gameplay.mjs scripts/national-qa/asset-audit.mjs tests/qa/national/HardwareGpuAttestation.test.mjs docs/release/NATIONAL_R8_HARDWARE_RUNBOOK.md
           if git diff --cached --quiet; then
             echo "Lockfile unchanged"; exit 1
           fi
