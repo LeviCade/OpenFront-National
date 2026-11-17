@@ -11,6 +11,7 @@ import {
   actorNationalResults,
   emptyNationalResultDeliveryState,
   initialNationalResultDeliveryState,
+  type OutboundFounderResult,
 } from "@openfront/engine/national/observation/NationalPoliticalPacket";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
@@ -27,6 +28,11 @@ const south = new PlayerInfo(
   "r6-south-client",
   "r6-south-id",
 );
+
+type R6Packet = GameUpdateViewData & {
+  nationalPolitics?: NonNullable<ReturnType<Game["nationalPublicPoliticalView"]>>;
+  nationalCommandResults?: readonly OutboundFounderResult[];
+};
 
 interface Receipt {
   readonly sequence: number;
@@ -80,13 +86,13 @@ function mockJournal(game: Game, records: Receipt[]) {
 function runner(
   game: Game,
   clientId: string | undefined,
-): { readonly next: () => GameUpdateViewData } {
-  const packets: GameUpdateViewData[] = [];
+): { readonly next: () => R6Packet } {
+  const packets: R6Packet[] = [];
   const gr = new GameRunner(
     game,
     new Executor(game, "r6-receipts", clientId),
     (message) => {
-      if ("updates" in message) packets.push(message);
+      if ("updates" in message) packets.push(message as R6Packet);
     },
     clientId,
   );
