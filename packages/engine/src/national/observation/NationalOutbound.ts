@@ -260,11 +260,31 @@ export class NationalOutboundFilter {
     const recipientResults =
       this.observerId === null
         ? []
-        : (proposedResults ?? []).filter(
-            (item) =>
-              item.recipientId === this.observerId &&
-              item.actorId === this.observerId,
-          );
+        : (proposedResults ?? [])
+            .filter(
+              (item) =>
+                item.recipientId === this.observerId &&
+                item.actorId === this.observerId &&
+                item.type === "national_found_empire" &&
+                Number.isSafeInteger(item.sequence) &&
+                item.sequence >= 0 &&
+                typeof item.requestId === "string" &&
+                item.requestId.length > 0 &&
+                item.requestId.length <= 256,
+            )
+            .map((item) => ({
+              // A second explicit DTO whitelist: never forward private,
+              // future or accidental extra journal object properties.
+              recipientId: item.recipientId,
+              actorId: item.actorId,
+              type: item.type,
+              accepted: item.accepted,
+              tick: item.tick,
+              sequence: item.sequence,
+              requestId: item.requestId,
+              empireId: item.empireId,
+              reason: item.reason,
+            }));
 
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
