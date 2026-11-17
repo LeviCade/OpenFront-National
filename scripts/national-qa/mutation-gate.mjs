@@ -71,10 +71,7 @@ for (const entry of cases) {
   }
   let result;
   try {
-    writeFileSync(
-      entry.file,
-      original.replace(entry.before, entry.after),
-    );
+    writeFileSync(entry.file, original.replace(entry.before, entry.after));
     result = command("node_modules/.bin/vitest", [
       "run",
       "--project",
@@ -130,9 +127,6 @@ const report = {
   results: outcomes,
   verdict: failed ? "FAIL" : "PASS",
 };
-writeFileSync(
-  dir + "/results.json",
-  JSON.stringify(report, null, 2) + "\n",
-);
+writeFileSync(dir + "/results.json", JSON.stringify(report, null, 2) + "\n");
 console.info("QA_R6_MUTATION_GATE " + JSON.stringify(report));
 if (failed) process.exitCode = 1;
