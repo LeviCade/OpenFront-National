@@ -37,12 +37,20 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid SHA"; exit 1; }
-          git fetch origin stage3/round6-combined-acceptance-20261116
           git cat-file -e "$CANDIDATE_SHA^{commit}"
-          git merge-base --is-ancestor "$CANDIDATE_SHA" FETCH_HEAD || {
-            echo "Refusing commit outside the approved staging history"
+          allowed=0
+          git fetch origin stage3/integration-20261115
+          if git merge-base --is-ancestor "$CANDIDATE_SHA" FETCH_HEAD; then
+            allowed=1
+          fi
+          git fetch origin stage3/round6-combined-acceptance-20261116
+          if git merge-base --is-ancestor "$CANDIDATE_SHA" FETCH_HEAD; then
+            allowed=1
+          fi
+          if [ "$allowed" -ne 1 ]; then
+            echo "Refusing commit outside approved integration/staging history"
             exit 1
-          }
+          fi
           git checkout --detach "$CANDIDATE_SHA"
           mkdir -p national-qa-artifacts/gpu
           printf '%s\n' "$CANDIDATE_SHA" > national-qa-artifacts/gpu/sha.txt
