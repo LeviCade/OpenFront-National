@@ -16,6 +16,7 @@ import { NationalFoundEmpireIntentSchema } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game, Player } from "@openfront/engine/game/Game";
+import { NationalOutboundFilter } from "@openfront/engine/national/observation/NationalOutbound";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
@@ -259,6 +260,68 @@ describe("Round Seven authentic E1 -> E2 -> E3 GameRunner worker receipts", () =
       expect(fullJson).not.toContain(canary);
     }
     expect(packet.nationalPolitics).toEqual(game.nationalPublicPoliticalView());
+  });
+
+  it("drops absent, nonnumeric or invalid optional sequences and foreign recipients at the second worker whitelist", async () => {
+    const game = await spawned();
+    const source = viewer(game, founder.clientID!).next();
+    const authenticActor = founder.id;
+    const fake = {
+      recipientId: authenticActor,
+      actorId: authenticActor,
+      type: "national_found_empire" as const,
+      tick: game.ticks(),
+      accepted: true,
+      empireId: "unapproved_empire",
+      reason: "accepted",
+      requestId: "bad_optional_sequence",
+    };
+    // These are deliberately adversarial mock PACKET INJECTIONS, NOT
+    // authoritative command outcomes. The real engine proof above never
+    // substitutes synthetic acknowledgements for E1 results.
+    const polluted = {
+      ...source,
+      nationalCommandResults: [
+        fake,
+        { ...fake, sequence: undefined },
+        { ...fake, sequence: -1 },
+        { ...fake, sequence: Number.NaN },
+        { ...fake, sequence: "7" },
+        { ...fake, sequence: 8, requestId: undefined },
+        {
+          ...fake,
+          sequence: 9,
+          requestId: "r7_valid_scoped",
+          privateTreasury: "should-not-survive",
+        },
+        {
+          ...fake,
+          recipientId: other.id,
+          actorId: other.id,
+          sequence: 10,
+          requestId: "r7_foreign",
+        },
+      ],
+    } as unknown as GameUpdateViewData;
+    const boundary = new NationalOutboundFilter(game, founder.id);
+    const result = boundary.project(game, polluted, null) as R7Packet;
+    expect(result.nationalCommandResults).toEqual([
+      {
+        recipientId: founder.id,
+        actorId: founder.id,
+        type: "national_found_empire",
+        accepted: true,
+        tick: game.ticks(),
+        sequence: 9,
+        requestId: "r7_valid_scoped",
+        empireId: "unapproved_empire",
+        reason: "accepted",
+      },
+    ]);
+    const output = serialized(result);
+    expect(output).not.toContain("should-not-survive");
+    expect(output).not.toContain("r7_foreign");
+    expect(output).not.toContain("bad_optional_sequence");
   });
 
   it("keeps legacy FFA worker packets free of NATIONAL political and recipient fields", async () => {
