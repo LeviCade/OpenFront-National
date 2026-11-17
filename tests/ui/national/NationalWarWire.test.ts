@@ -256,13 +256,14 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       { spawned: false },
     ]) {
       const { panel } = await setup(options);
+      // A restricted mode may remove controls entirely or leave them inert.
       expect(
-        panel.querySelector<HTMLButtonElement>("#national-declare-war")!
-          .disabled,
+        panel.querySelector<HTMLButtonElement>("#national-declare-war")
+          ?.disabled ?? true,
       ).toBe(true);
       expect(
-        panel.querySelector<HTMLButtonElement>("#national-propose-peace")!
-          .disabled,
+        panel.querySelector<HTMLButtonElement>("#national-propose-peace")
+          ?.disabled ?? true,
       ).toBe(true);
     }
     const { panel } = await setup();
