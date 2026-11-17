@@ -15,13 +15,13 @@ import { roundTrip } from "../util/Snapshot";
 const north = new PlayerInfo(
   "North",
   PlayerType.Human,
-  "r8-north-client",
+  "R8NORTH1",
   "r8-north",
 );
 const south = new PlayerInfo(
   "South",
   PlayerType.Human,
-  "r8-south-client",
+  "R8SOUTH1",
   "r8-south",
 );
 
