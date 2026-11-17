@@ -3,6 +3,7 @@ import {
   Nation,
   PlayerInfo,
   PlayerType,
+  UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { NationExecution } from "@openfront/engine/execution/NationExecution";
@@ -221,6 +222,52 @@ describe("Round Eight seeded real NATIONAL strategic matches AI-01/02/04/06", ()
     runTicks(game, 105);
     expect(game.player(BOT).numTilesOwned()).toBeGreaterThan(ownedBefore);
     expect(game.nationalWarAuthority()?.atWar(BOT, NEIGHBOR)).toBe(false);
+  });
+
+  it("AI-04 active-defense alarm actually executes a lawful local counterattack rather than stalling", async () => {
+    const game = await seededNationalRun();
+    const bot = game.player(BOT);
+    // Constrain the country to a REAL weak border strip. The enemy still
+    // owns the contiguous neighboring tiles; no fabricated frontier used.
+    for (const tile of [...bot.tiles()]) {
+      const x = game.x(tile);
+      const y = game.y(tile);
+      if (x < 47 || x >= 50 || y < 35 || y >= 60) bot.relinquish(tile);
+    }
+    bot.setTroops(85_000);
+    game.player(NEIGHBOR).buildUnit(
+      UnitType.Warship,
+      game.ref(50, 45),
+      { troops: 2_000 },
+    );
+    game.performNationalWarCommand(bot, {
+      kind: "declare-national",
+      warId: "r8_defensive_war",
+      aggressorId: BOT,
+      targetId: NEIGHBOR,
+    });
+    const seen = collectLiveNationalObservation(game, BOT).observation;
+    expect(seen.nations.find((n) => n.id === BOT)?.landPercent).toBeLessThan(3);
+    expect(seen.visibleAssets.some((a) => a.ownerId === NEIGHBOR && a.kind === "warship")).toBe(true);
+    expect(
+      planNationalInterest(
+        seen,
+        initialNationalPlannerMemory(BOT),
+        30,
+      ).decision,
+    ).toMatchObject({ objective: "defend", targetId: null });
+    const originalTroops = bot.troops();
+    const queued: AttackExecution[] = [];
+    const original = game.addExecution.bind(game);
+    const spy = vi.spyOn(game, "addExecution").mockImplementation((...all) => {
+      for (const item of all) if (item instanceof AttackExecution) queued.push(item);
+      return original(...all);
+    });
+    runTicks(game, 120);
+    spy.mockRestore();
+    expect(queued.length).toBeGreaterThan(0);
+    expect(bot.troops() < originalTroops || bot.outgoingAttacks().length > 0).toBe(true);
+    expect(game.nationalWarAuthority()?.atWar(BOT, NEIGHBOR)).toBe(true);
   });
 
   it("SOV-03 real seeded three-nation accession resolves the authoritative imperial victory roster", async () => {
