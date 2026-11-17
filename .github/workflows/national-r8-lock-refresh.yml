@@ -65,7 +65,7 @@ jobs:
       - run: npm run lint
       - name: Apply repository-pinned formatter to E5-owned changes
         run: |
-          npx --no-install oxfmt --write scripts/national-qa/gpu-attestation.mjs scripts/national-qa/browser-gameplay.mjs scripts/national-qa/asset-audit.mjs tests/qa/national/HardwareGpuAttestation.test.mjs docs/release/NATIONAL_R8_HARDWARE_RUNBOOK.md
+          npx --no-install oxfmt --write scripts/national-qa/gpu-attestation.mjs scripts/national-qa/browser-gameplay.mjs scripts/national-qa/asset-audit.mjs tests/qa/national/HardwareGpuAttestation.test.mjs docs/release/NATIONAL_R8_HARDWARE_RUNBOOK.md docs/release/NATIONAL_R8_ASSET_PROVENANCE.md .github/workflows/national-r8-lock-refresh.yml
       - run: npm run format:check
       - run: npm run build-prod
       - name: Commit reviewed lockfile and E5-owned formatting
@@ -74,7 +74,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json map-generator/info.schema.json scripts/national-qa/gpu-attestation.mjs scripts/national-qa/browser-gameplay.mjs scripts/national-qa/asset-audit.mjs tests/qa/national/HardwareGpuAttestation.test.mjs docs/release/NATIONAL_R8_HARDWARE_RUNBOOK.md
+          git add package-lock.json map-generator/info.schema.json scripts/national-qa/gpu-attestation.mjs scripts/national-qa/browser-gameplay.mjs scripts/national-qa/asset-audit.mjs tests/qa/national/HardwareGpuAttestation.test.mjs docs/release/NATIONAL_R8_HARDWARE_RUNBOOK.md docs/release/NATIONAL_R8_ASSET_PROVENANCE.md .github/workflows/national-r8-lock-refresh.yml
           if git diff --cached --quiet; then
             echo "Lockfile unchanged"; exit 1
           fi
