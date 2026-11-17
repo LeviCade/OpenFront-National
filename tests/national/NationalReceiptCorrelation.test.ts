@@ -268,6 +268,98 @@ describe("Round Six authenticated request-correlated NATIONAL receipts", () => {
     expect(after).not.toHaveProperty("nationalCommandResults");
   });
 
+  it("executes three same-tick stamped clicks through E1/E2, debits no foreign receipt and preserves exact request IDs after replay", async () => {
+    const game = await live();
+    const port = game as Game & {
+      performNationalFoundEmpireWithOutcome?: (
+        actor: Player,
+        empireId: string,
+        requestId: string | null,
+      ) => Receipt;
+    };
+    if (typeof port.performNationalFoundEmpireWithOutcome !== "function") {
+      // This end-to-end test is enabled by E1 #31 on the combined staging
+      // SHA; no synthetic Game authority is substituted on standalone E3.
+      expect(game.nationalPublicPoliticalView()?.empires).toEqual([]);
+      return;
+    }
+
+    const northView = runner(game, north.clientID!);
+    const executor = new Executor(game, "r6-receipts", north.clientID!);
+    const queued = (requestId: string) =>
+      executor.createExec({
+        type: "national_found_empire",
+        empireId: "same_tick_empire",
+        requestId,
+        clientID: north.clientID!,
+      } as Parameters<Executor["createExec"]>[0]);
+
+    // E1's replay receipt must collapse the repeated token; the separate
+    // request with the same target must receive its OWN rejected outcome.
+    game.addExecution(
+      queued("same-tick-first"),
+      queued("same-tick-first"),
+      queued("same-tick-third"),
+    );
+    expect(northView.next()).not.toHaveProperty("nationalCommandResults");
+    const executed = northView.next();
+    expect(executed.nationalPolitics?.empires).toEqual([
+      {
+        id: "same_tick_empire",
+        leaderId: north.id,
+        memberIds: [north.id],
+      },
+    ]);
+    expect(executed.nationalCommandResults).toEqual([
+      expect.objectContaining({
+        requestId: "same-tick-first",
+        sequence: expect.any(Number),
+        recipientId: north.id,
+        accepted: true,
+      }),
+      expect.objectContaining({
+        requestId: "same-tick-third",
+        sequence: expect.any(Number),
+        recipientId: north.id,
+        accepted: false,
+      }),
+    ]);
+    const receipts = executed.nationalCommandResults!;
+    expect(receipts[0].sequence).toBeLessThan(receipts[1].sequence);
+    expect(runner(game, south.clientID!).next()).not.toHaveProperty(
+      "nationalCommandResults",
+    );
+
+    const { bytes, again, restored } = await roundTrip(game, "plains");
+    expect([...again]).toEqual([...bytes]);
+    const resumed = runner(restored, north.clientID!);
+    expect(resumed.next().nationalPolitics?.empires).toEqual(
+      executed.nationalPolitics?.empires,
+    );
+    expect(resumed.next()).not.toHaveProperty("nationalCommandResults");
+    const restoredExecutor = new Executor(
+      restored,
+      "r6-receipts",
+      north.clientID!,
+    );
+    restored.addExecution(
+      restoredExecutor.createExec({
+        type: "national_found_empire",
+        empireId: "same_tick_empire",
+        requestId: "post-restore-click",
+        clientID: north.clientID!,
+      } as Parameters<Executor["createExec"]>[0]),
+    );
+    expect(resumed.next()).not.toHaveProperty("nationalCommandResults");
+    expect(resumed.next().nationalCommandResults).toEqual([
+      expect.objectContaining({
+        requestId: "post-restore-click",
+        accepted: false,
+        recipientId: north.id,
+      }),
+    ]);
+  });
+
   it("never serializes extra engine-journal fields, secrets, another actor's result or human sight memory", async () => {
     const game = await live();
     const journal: Receipt[] = [];
