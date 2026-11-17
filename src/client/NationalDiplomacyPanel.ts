@@ -3,6 +3,7 @@ import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import {
+  createNationalDiplomacyRequestId,
   createNationalFoundingRequestId,
   empireForMember,
   foundingUnavailableReason,
@@ -54,6 +55,7 @@ export class NationalDiplomacyPanel extends LitElement {
     gameId: string;
     actorId: string;
     tick: number;
+    requestId: string;
   } | null = null;
 
   createRenderRoot() {
@@ -315,7 +317,9 @@ export class NationalDiplomacyPanel extends LitElement {
 
   /** No result journal for WAR/peace yet: submission is never success. */
   private sendDiplomacyCommand(
-    command:
+    command: (
+      requestId: string,
+    ) =>
       | SendNationalDeclareWarIntentEvent
       | SendNationalProposePeaceIntentEvent
       | SendNationalAcceptPeaceIntentEvent,
@@ -339,14 +343,25 @@ export class NationalDiplomacyPanel extends LitElement {
         "One diplomacy command is already submitted this tick. Await the next game tick.";
       return;
     }
+    let requestId: string;
     try {
-      this.eventBus.emit(command);
+      requestId = createNationalDiplomacyRequestId();
+    } catch {
+      this.diplomacyError =
+        "Secure request identity is unavailable. No diplomacy command was sent.";
+      return;
+    }
+    try {
+      this.eventBus.emit(command(requestId));
       this.lastDiplomacySubmission = {
         gameId: game.gameID(),
         actorId: player.id(),
         tick,
+        requestId,
       };
-      this.diplomacyStatus = `${description} submitted through the game transport. The authoritative result is not yet available; no success is confirmed.`;
+      // An EventBus producer does not prove that an intent gate, worker or
+      // E1 accepted this action. Exact request receipts are still pending E1/E3.
+      this.diplomacyStatus = `${description} handed to the command producer (request ${requestId}). Delivery and authoritative outcome remain unconfirmed; no success is confirmed.`;
       this.diplomacyError = null;
     } catch {
       this.diplomacyError = "The diplomacy command could not be submitted.";
@@ -381,12 +396,14 @@ export class NationalDiplomacyPanel extends LitElement {
       return;
     }
     this.sendDiplomacyCommand(
-      new SendNationalDeclareWarIntentEvent(
-        this.warScope,
-        actor.id(),
-        this.warTargetId,
-        kind,
-      ),
+      (requestId) =>
+        new SendNationalDeclareWarIntentEvent(
+          this.warScope,
+          actor.id(),
+          this.warTargetId,
+          kind,
+          requestId,
+        ),
       `${this.warScope === "imperial" ? "Imperial" : "National"} war declaration`,
     );
   }
@@ -401,9 +418,10 @@ export class NationalDiplomacyPanel extends LitElement {
       return;
     }
     this.sendDiplomacyCommand(
-      action === "propose"
-        ? new SendNationalProposePeaceIntentEvent(reference)
-        : new SendNationalAcceptPeaceIntentEvent(reference),
+      (requestId) =>
+        action === "propose"
+          ? new SendNationalProposePeaceIntentEvent(reference, requestId)
+          : new SendNationalAcceptPeaceIntentEvent(reference, requestId),
       action === "propose" ? "Peace proposal" : "Peace motion acceptance",
     );
   }
