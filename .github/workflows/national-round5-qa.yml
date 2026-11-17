@@ -29,6 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: false
       - uses: actions/setup-node@v4
         with:
@@ -44,7 +45,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --no-install vitest run --project node tests/e2e/national/IntegratedAcceptance.test.ts tests/qa/national/PacketCanaries.test.ts tests/e2e/national/RoundFiveWarLevy.test.ts tests/qa/national/RoundFiveFogRevocation.test.ts 2>&1 | tee national-qa-artifacts/round5-war-levy.log
+          npx --no-install vitest run --project node tests/e2e/national/IntegratedAcceptance.test.ts tests/qa/national/PacketCanaries.test.ts tests/e2e/national/RoundFiveWarLevy.test.ts tests/qa/national/RoundFiveFogRevocation.test.ts tests/e2e/national/RoundSixCombinedVerdict.test.ts 2>&1 | tee national-qa-artifacts/round5-war-levy.log
       - name: Typecheck
         if: always()
         run: npm run typecheck
@@ -89,6 +90,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: false
       - uses: actions/setup-node@v4
         with:
