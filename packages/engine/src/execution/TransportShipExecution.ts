@@ -304,15 +304,24 @@ export class TransportShipExecution implements Execution {
         const nationalMode = this.mg.nationalPoliticalAuthority() !== null;
         const originalTargetAtWar =
           this.target.isPlayer() &&
-          authorizeNationalAttack(this.mg, this.attacker.id(), this.target.id());
+          authorizeNationalAttack(
+            this.mg,
+            this.attacker.id(),
+            this.target.id(),
+          );
         const thirdPartyProtected =
           nationalMode &&
           landingOwner.isPlayer() &&
           landingOwner !== this.target &&
-          !authorizeNationalAttack(this.mg, this.attacker.id(), landingOwner.id());
+          !authorizeNationalAttack(
+            this.mg,
+            this.attacker.id(),
+            landingOwner.id(),
+          );
         if (
           nationalMode &&
-          (thirdPartyProtected || (this.target.isPlayer() && !originalTargetAtWar))
+          (thirdPartyProtected ||
+            (this.target.isPlayer() && !originalTargetAtWar))
         ) {
           if (
             !thirdPartyProtected &&

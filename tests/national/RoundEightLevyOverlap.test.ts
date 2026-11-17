@@ -13,15 +13,26 @@ const records = ids.map(
 
 async function overlappingGame(): Promise<Game> {
   const game = await setup("plains", { nationalMode: true }, records);
-  const coords = [[20, 20], [70, 20], [70, 70], [20, 70], [50, 50]];
+  const coords = [
+    [20, 20],
+    [70, 20],
+    [70, 70],
+    [20, 70],
+    [50, 50],
+  ];
   for (let i = 0; i < records.length; i++) {
     game.addExecution(
-      new SpawnExecution("r8-levy", records[i], game.ref(coords[i][0], coords[i][1])),
+      new SpawnExecution(
+        "r8-levy",
+        records[i],
+        game.ref(coords[i][0], coords[i][1]),
+      ),
     );
   }
   game.executeNextTick();
   game.executeNextTick();
-  for (const info of records) expect(game.player(info.id).hasSpawned()).toBe(true);
+  for (const info of records)
+    expect(game.player(info.id).hasSpawned()).toBe(true);
   const attacker = game.player(ids[0]);
   const b = game.player(ids[1]);
   const c = game.player(ids[2]);
@@ -35,7 +46,11 @@ async function overlappingGame(): Promise<Game> {
   }
   game.executeNextTick();
 
-  const join = (defender: Player, pactId: string, donors: readonly string[]) => {
+  const join = (
+    defender: Player,
+    pactId: string,
+    donors: readonly string[],
+  ) => {
     game.performNationalCommand(defender, {
       kind: "found-pact",
       pactId,
@@ -45,10 +60,13 @@ async function overlappingGame(): Promise<Game> {
     });
     for (const id of donors) {
       game.performNationalCommand(defender, {
-        kind: "invite-pact", pactId, candidateId: id,
+        kind: "invite-pact",
+        pactId,
+        candidateId: id,
       });
       game.performNationalCommand(game.player(id), {
-        kind: "accept-pact", pactId,
+        kind: "accept-pact",
+        pactId,
       });
     }
   };
@@ -93,24 +111,41 @@ describe("Round Eight LEVY-04–07 actual simultaneous MDA conservation", () => 
     expect(second.isActive()).toBe(true);
     const ledger = game.nationalWarState()!.levy;
     expect(ledger.processed).toHaveLength(2);
-    expect(ledger.processed.every((r) => r.result.application === "applied")).toBe(true);
+    expect(
+      ledger.processed.every((r) => r.result.application === "applied"),
+    ).toBe(true);
     expect(ledger.processed.every((r) => r.result.intercepted > 0)).toBe(true);
-    const allContributions = ledger.processed.flatMap((r) => r.result.contributions);
-    expect(allContributions.filter((r) => r.nationId === ids[3])).toHaveLength(2);
-    const intercepted = ledger.processed.reduce((n, r) => n + r.result.intercepted, 0);
-    expect(allContributions.reduce((n, r) => n + r.troopsDebited, 0)).toBe(intercepted);
+    const allContributions = ledger.processed.flatMap(
+      (r) => r.result.contributions,
+    );
+    expect(allContributions.filter((r) => r.nationId === ids[3])).toHaveLength(
+      2,
+    );
+    const intercepted = ledger.processed.reduce(
+      (n, r) => n + r.result.intercepted,
+      0,
+    );
+    expect(allContributions.reduce((n, r) => n + r.troopsDebited, 0)).toBe(
+      intercepted,
+    );
     expect(beforeDonor - sum(donors)).toBe(intercepted);
     expect(attacker.troops()).toBe(beforeAttacker - 120_000);
-    const inFlight = attacker.outgoingAttacks().reduce((n, a) => n + a.troops(), 0);
+    const inFlight = attacker
+      .outgoingAttacks()
+      .reduce((n, a) => n + a.troops(), 0);
     expect(inFlight).toBe(120_000 - intercepted);
-    expect(beforeAttacker + beforeDonor - (attacker.troops() + sum(donors) + inFlight))
-      .toBe(2 * intercepted);
+    expect(
+      beforeAttacker +
+        beforeDonor -
+        (attacker.troops() + sum(donors) + inFlight),
+    ).toBe(2 * intercepted);
 
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
-    expect([ids[3], ids[4]].map((id) => restored.player(id).troops()))
-      .toEqual(donors.map((p) => p.troops()));
+    expect([ids[3], ids[4]].map((id) => restored.player(id).troops())).toEqual(
+      donors.map((p) => p.troops()),
+    );
   });
 
   it("LEVY-04/06/07: twenty repeated attacks share one campaign cap for every donor and never breach protected reserves", async () => {
@@ -119,7 +154,9 @@ describe("Round Eight LEVY-04–07 actual simultaneous MDA conservation", () => 
     const defenders = [game.player(ids[1]), game.player(ids[2])];
     const donors = [game.player(ids[3]), game.player(ids[4])];
     const before = sum(donors);
-    const reserves = donors.map((p) => Math.ceil(game.config().maxTroops(p) * 0.3));
+    const reserves = donors.map((p) =>
+      Math.ceil(game.config().maxTroops(p) * 0.3),
+    );
 
     for (let i = 0; i < 20; i++) {
       const defender = defenders[i % 2];

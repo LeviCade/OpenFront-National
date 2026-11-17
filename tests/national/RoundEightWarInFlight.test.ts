@@ -27,15 +27,24 @@ async function spawnOnPlains(): Promise<Game> {
     { nationalMode: true, infiniteGold: true, instantBuild: true },
     records,
   );
-  const centers = [[25, 25], [70, 70], [25, 70]];
+  const centers = [
+    [25, 25],
+    [70, 70],
+    [25, 70],
+  ];
   for (let i = 0; i < records.length; i++) {
     game.addExecution(
-      new SpawnExecution("r8-war", records[i], game.ref(centers[i][0], centers[i][1])),
+      new SpawnExecution(
+        "r8-war",
+        records[i],
+        game.ref(centers[i][0], centers[i][1]),
+      ),
     );
   }
   game.executeNextTick();
   game.executeNextTick();
-  for (const info of records) expect(game.player(info.id).hasSpawned()).toBe(true);
+  for (const info of records)
+    expect(game.player(info.id).hasSpawned()).toBe(true);
   return game;
 }
 
@@ -57,7 +66,8 @@ async function spawnOnIslands(): Promise<{
     if (game.x(tile) <= 7 && left === undefined) left = tile;
     if (game.x(tile) >= 14 && right === undefined) right = tile;
   });
-  if (left === undefined || right === undefined) throw new Error("island fixture missing land");
+  if (left === undefined || right === undefined)
+    throw new Error("island fixture missing land");
   game.addExecution(new SpawnExecution("r8-islands", records[0], left));
   game.addExecution(new SpawnExecution("r8-islands", records[1], right));
   game.executeNextTick();
@@ -81,7 +91,12 @@ async function spawnOnIslands(): Promise<{
   return { game, attacker, defender, targetTile };
 }
 
-function declare(game: Game, aggressorId = A, targetId = B, warId = "r8-national"): void {
+function declare(
+  game: Game,
+  aggressorId = A,
+  targetId = B,
+  warId = "r8-national",
+): void {
   game.performNationalWarCommand(game.player(aggressorId), {
     kind: "declare-national",
     warId,
@@ -190,7 +205,9 @@ describe("Round Eight actual WAR-09–12 in-flight combat", () => {
     expect(attacker.units(UnitType.TransportShip)).toHaveLength(0);
     expect(troopRefund).toHaveBeenCalledWith(committed);
     expect(attacker.outgoingAttacks()).toHaveLength(0);
-    const lostDefenderTiles = [...defenderAtPeace].filter((tile) => game.owner(tile) !== defender);
+    const lostDefenderTiles = [...defenderAtPeace].filter(
+      (tile) => game.owner(tile) !== defender,
+    );
     expect(lostDefenderTiles.length).toBeLessThanOrEqual(1);
     troopRefund.mockRestore();
   });
@@ -198,12 +215,19 @@ describe("Round Eight actual WAR-09–12 in-flight combat", () => {
   it("WAR-12: national and empire-wide records survive crown transfer, old emperor cannot negotiate", async () => {
     const game = await spawnOnPlains();
     const sovereign = game.player(A);
-    game.performNationalCommand(sovereign, { kind: "found-empire", empireId: "r8-empire" });
     game.performNationalCommand(sovereign, {
-      kind: "offer-empire", empireId: "r8-empire", candidateId: C,
+      kind: "found-empire",
+      empireId: "r8-empire",
+    });
+    game.performNationalCommand(sovereign, {
+      kind: "offer-empire",
+      empireId: "r8-empire",
+      candidateId: C,
     });
     game.performNationalCommand(game.player(C), {
-      kind: "accept-empire", empireId: "r8-empire", candidateId: C,
+      kind: "accept-empire",
+      empireId: "r8-empire",
+      candidateId: C,
     });
     declare(game, C, B, "r8-member-war");
     game.performNationalWarCommand(sovereign, {
@@ -214,18 +238,27 @@ describe("Round Eight actual WAR-09–12 in-flight combat", () => {
     });
     const before = game.nationalWarState()!.wars.layers;
     game.performNationalCommand(sovereign, {
-      kind: "transfer-crown", empireId: "r8-empire", successorId: C,
+      kind: "transfer-crown",
+      empireId: "r8-empire",
+      successorId: C,
     });
     expect(game.nationalPoliticalAuthority()?.emperorOf("r8-empire")).toBe(C);
     expect(game.nationalWarState()!.wars.layers).toEqual(before);
-    expect(() => game.performNationalWarCommand(sovereign, {
-      kind: "propose-peace", warId: "r8-empire-war", motionId: "former-peace",
-    })).toThrow();
+    expect(() =>
+      game.performNationalWarCommand(sovereign, {
+        kind: "propose-peace",
+        warId: "r8-empire-war",
+        motionId: "former-peace",
+      }),
+    ).toThrow();
     game.performNationalWarCommand(game.player(C), {
-      kind: "propose-peace", warId: "r8-empire-war", motionId: "new-peace",
+      kind: "propose-peace",
+      warId: "r8-empire-war",
+      motionId: "new-peace",
     });
     game.performNationalWarCommand(game.player(B), {
-      kind: "accept-peace", motionId: "new-peace",
+      kind: "accept-peace",
+      motionId: "new-peace",
     });
     expect(game.nationalWarAuthority()?.atWar(A, B)).toBe(false);
     expect(game.nationalWarAuthority()?.atWar(C, B)).toBe(true);
