@@ -317,6 +317,7 @@ export class TransportShipExecution implements Execution {
           if (
             !thirdPartyProtected &&
             landingOwner === this.target &&
+            this.target.isPlayer() &&
             !this.attacker.isFriendly(this.target)
           ) {
             this.attacker.conquer(this.dst);
