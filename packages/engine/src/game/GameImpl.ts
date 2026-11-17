@@ -945,12 +945,22 @@ export class GameImpl implements Game {
       targetId.length <= 256
         ? targetId
         : "<invalid-target-id>";
+    // Keep the full command identity private in the Game-owned ledger.
+    // Reusing a request ID for different terms/candidate/successor must reject,
+    // even when actor + kind + pact/empire target happen to match.
+    const commandFingerprint = JSON.stringify(command);
+    if (
+      typeof commandFingerprint !== "string" ||
+      commandFingerprint.length > 4096
+    )
+      throw new Error("NATIONAL command journal: invalid command payload");
     return this._nationalGovernance.recordPoliticalCommand(
       actor.id(),
       command.kind,
       recordedTargetId,
       this._ticks,
       requestId,
+      commandFingerprint,
       () => {
         if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
           return "actor-inactive";

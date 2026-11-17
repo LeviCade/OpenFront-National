@@ -35,6 +35,8 @@ const commandOutcome = z.object({
   /** Absent means legacy Found Empire; one canonical receipt list for ALL commands. */
   commandKind: politicalCommandKind.optional(),
   commandTargetId: identity.optional(),
+  /** Private canonical payload identity; never included in recipient results. */
+  commandFingerprint: z.string().min(1).max(4096).optional(),
   tick,
   accepted: z.boolean(),
   reason: z.enum([
@@ -45,10 +47,32 @@ const commandOutcome = z.object({
   ]),
 });
 export type NationalFoundEmpireResult = z.infer<typeof commandOutcome>;
-export type NationalPoliticalCommandResult = NationalFoundEmpireResult & {
+export type NationalPoliticalCommandResult = Omit<
+  NationalFoundEmpireResult,
+  "commandFingerprint"
+> & {
   commandKind: NationalPoliticalCommandKind;
   commandTargetId: string;
 };
+
+/** Private journal internals never cross to E3's recipient-facing port. */
+function politicalResultView(
+  result: NationalFoundEmpireResult,
+): NationalPoliticalCommandResult {
+  if (result.commandKind === undefined || result.commandTargetId === undefined)
+    throw new Error("NATIONAL journal: missing political result identity");
+  return {
+    sequence: result.sequence,
+    requestId: result.requestId,
+    actorId: result.actorId,
+    empireId: result.empireId,
+    commandKind: result.commandKind,
+    commandTargetId: result.commandTargetId,
+    tick: result.tick,
+    accepted: result.accepted,
+    reason: result.reason,
+  };
+}
 const asset = z.object({
   id: identity,
   ownerId: identity,
@@ -116,16 +140,20 @@ export class NationalGovernanceState {
     targetId: string,
     gameTick: number,
     suppliedRequestId: string | null,
+    commandFingerprint: string,
     perform: () => FoundEmpireReason,
   ): NationalPoliticalCommandResult {
-    return this.recordCommand(
-      actorId,
-      targetId,
-      gameTick,
-      suppliedRequestId,
-      perform,
-      commandKind,
-    ) as NationalPoliticalCommandResult;
+    return politicalResultView(
+      this.recordCommand(
+        actorId,
+        targetId,
+        gameTick,
+        suppliedRequestId,
+        perform,
+        commandKind,
+        commandFingerprint,
+      ),
+    );
   }
 
   private recordCommand(
@@ -135,7 +163,15 @@ export class NationalGovernanceState {
     suppliedRequestId: string | null,
     perform: () => FoundEmpireReason,
     commandKind: NationalPoliticalCommandKind | null,
+    commandFingerprint: string | null = null,
   ): NationalFoundEmpireResult {
+    if (
+      commandKind !== null &&
+      (commandFingerprint === null ||
+        commandFingerprint.length < 1 ||
+        commandFingerprint.length > 4096)
+    )
+      throw new Error("NATIONAL journal: invalid command payload identity");
     if (!Number.isSafeInteger(gameTick) || gameTick < 0)
       throw new Error("NATIONAL command journal: invalid tick");
     identity.parse(actorId);
@@ -159,7 +195,8 @@ export class NationalGovernanceState {
       if (
         existing.actorId !== actorId ||
         existing.empireId !== empireId ||
-        (existing.commandKind ?? null) !== commandKind
+        (existing.commandKind ?? null) !== commandKind ||
+        (existing.commandFingerprint ?? null) !== commandFingerprint
       )
         throw new Error("NATIONAL command journal: reused foreign request ID");
       return { ...existing };
@@ -174,7 +211,11 @@ export class NationalGovernanceState {
       empireId,
       ...(commandKind === null
         ? {}
-        : { commandKind, commandTargetId: empireId }),
+        : {
+            commandKind,
+            commandTargetId: empireId,
+            commandFingerprint: commandFingerprint!,
+          }),
       tick: gameTick,
       accepted: reason === "accepted",
       reason,
@@ -205,7 +246,7 @@ export class NationalGovernanceState {
           r.commandKind !== undefined &&
           r.commandTargetId !== undefined,
       )
-      .map((r) => ({ ...r }));
+      .map((r) => politicalResultView(r));
   }
 
   /**
@@ -306,7 +347,11 @@ export class NationalGovernanceState {
         receipt.sequence >= saved.nextSequence ||
         receipt.accepted !== (receipt.reason === "accepted") ||
         (receipt.commandKind !== undefined &&
-          receipt.commandTargetId !== receipt.empireId)
+          (receipt.commandTargetId !== receipt.empireId ||
+            receipt.commandFingerprint === undefined)) ||
+        (receipt.commandKind === undefined &&
+          (receipt.commandTargetId !== undefined ||
+            receipt.commandFingerprint !== undefined))
       )
         throw new Error("NATIONAL journal: invalid or future receipt");
       requests.add(receipt.requestId);

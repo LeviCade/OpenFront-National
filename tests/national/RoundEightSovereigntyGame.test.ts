@@ -496,6 +496,19 @@ describe("Round Eight one-journal authenticated political outcomes", () => {
       );
       expect(replay).toEqual(first);
       expect(g.nationalPoliticalCommandResults(g.player(A))).toHaveLength(1);
+      // Same actor, same command kind AND same target, but altered terms:
+      // never echo an earlier accepted receipt for a different payload.
+      expect(() =>
+        g.performNationalPoliticalCommandWithOutcome(
+          g.player(A),
+          {
+            ...proposal,
+            terms: { ...unanimousTerms, admission: "leader" },
+          },
+          "r8-command-proposal",
+        ),
+      ).toThrow(/reused foreign request ID/);
+      expect(g.nationalPoliticalCommandResults(g.player(A))).toEqual([first]);
       expect(() =>
         g.performNationalPoliticalCommandWithOutcome(
           g.player(B),
