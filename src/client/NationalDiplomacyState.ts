@@ -222,6 +222,39 @@ export function foundingUnavailableReason(state: {
   return null;
 }
 
+/**
+ * NATIONAL WAR/peace UI is legal only for an active, spawned, authenticated
+ * Solo principal with a current public political projection. An event bus
+ * dispatch is never an authoritative accepted outcome.
+ */
+export function nationalWarActionUnavailableReason(state: {
+  national: boolean;
+  solo: boolean;
+  replay: boolean;
+  spawned: boolean;
+  alive: boolean;
+  spectator: boolean;
+  hasPublicPolitics: boolean;
+}): string | null {
+  if (!state.national || !state.solo || state.replay)
+    return "War and peace commands are available only in live NATIONAL Solo.";
+  if (!state.spawned) return "Spawn before issuing diplomacy commands.";
+  if (!state.alive || state.spectator)
+    return "Only a living, active nation may issue diplomacy commands.";
+  if (!state.hasPublicPolitics)
+    return "Awaiting current authoritative NATIONAL political state.";
+  return null;
+}
+
+/** Engine IDs may contain colon-separated deterministic ordinals. */
+export function validNationalWarReference(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= 256 &&
+    !/[\\u0000-\\u001f\\u007f]/.test(value)
+  );
+}
+
 /** Session-scoped, UI-only request bookkeeping. Never a political projection. */
 export interface NationalFoundingAttempt {
   /** Must be the exact opaque request token placed on the engine intent. */
