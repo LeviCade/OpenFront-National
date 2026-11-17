@@ -31,6 +31,7 @@ import type {
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
 import { AttackExecution } from "./AttackExecution";
+import { authorizeNationalAttack } from "./NationalWarExecution";
 
 const malusForRetreat = 25;
 
@@ -51,6 +52,8 @@ export class TransportShipExecution implements Execution {
   private boat: Unit;
   private motionPlanId = 1;
   private motionPlanDst: TileRef | null = null;
+  /** WAR-11: peace landing is committed at most once; survivors sail home. */
+  private peaceReturn = false;
 
   private originalOwner: Player;
 
@@ -90,6 +93,24 @@ export class TransportShipExecution implements Execution {
         undefined,
         { max: mg.config().boatMaxNumber() },
       );
+      this.active = false;
+      return;
+    }
+
+    // The naval voyage is a new offensive action at departure. Reject an
+    // undeclared or post-peace launch BEFORE building a ship or spending troops.
+    // Once built, the vessel has a separately grandfathered landing rule.
+    if (
+      mg.nationalPoliticalAuthority() !== null &&
+      (!mg.hasPlayer(this.attacker.id()) ||
+        mg.player(this.attacker.id()) !== this.attacker ||
+        !this.attacker.isAlive() ||
+        !authorizeNationalAttack(
+          mg,
+          this.attacker.id(),
+          this.target.isPlayer() ? this.target.id() : null,
+        ))
+    ) {
       this.active = false;
       return;
     }
@@ -249,7 +270,10 @@ export class TransportShipExecution implements Execution {
     switch (result.status) {
       case PathStatus.COMPLETE:
         if (this.mg.owner(this.dst) === this.attacker) {
-          const deaths = this.boat.troops() * (malusForRetreat / 100);
+          // A peace-forced return is not a player's costly tactical retreat.
+          const deaths = this.peaceReturn
+            ? 0
+            : this.boat.troops() * (malusForRetreat / 100);
           const survivors = this.boat.troops() - deaths;
           this.attacker.addTroops(survivors);
           this.boat.delete(false);
@@ -268,6 +292,38 @@ export class TransportShipExecution implements Execution {
               { troops: renderTroops(deaths) },
             );
           }
+          return;
+        }
+        // WAR-11: a vessel launched while at war may finish its committed
+        // journey after peace, seize at most its initial landing tile, then
+        // return the remaining troops by sea. No inland AttackExecution is
+        // created and no second levy/hostility is accidentally triggered.
+        // Also refuse to seize a third party's newly owned landing tile when
+        // no applicable war authorizes it.
+        const landingOwner = this.mg.owner(this.dst);
+        const nationalMode = this.mg.nationalPoliticalAuthority() !== null;
+        const originalTargetAtWar =
+          this.target.isPlayer() &&
+          authorizeNationalAttack(this.mg, this.attacker.id(), this.target.id());
+        const thirdPartyProtected =
+          nationalMode &&
+          landingOwner.isPlayer() &&
+          landingOwner !== this.target &&
+          !authorizeNationalAttack(this.mg, this.attacker.id(), landingOwner.id());
+        if (
+          nationalMode &&
+          (thirdPartyProtected || (this.target.isPlayer() && !originalTargetAtWar))
+        ) {
+          if (
+            !thirdPartyProtected &&
+            landingOwner === this.target &&
+            !this.attacker.isFriendly(this.target)
+          ) {
+            this.attacker.conquer(this.dst);
+          }
+          this.peaceReturn = true;
+          this.boat.updateTransportShipState({ isRetreating: true });
+          this.retreatDst = null;
           return;
         }
         this.attacker.conquer(this.dst);
@@ -365,6 +421,7 @@ export class TransportShipExecution implements Execution {
       boat: this.boat === undefined ? undefined : w.unit(this.boat),
       motionPlanId: this.motionPlanId,
       motionPlanDst: this.motionPlanDst,
+      peaceReturn: this.peaceReturn,
       originalOwner: w.player(this.originalOwner),
       attacker: w.player(this.attacker),
       ref: this.ref,
@@ -387,6 +444,7 @@ export class TransportShipExecution implements Execution {
     if (s.boat !== undefined) this.boat = r.unit(s.boat);
     this.motionPlanId = s.motionPlanId;
     this.motionPlanDst = s.motionPlanDst;
+    this.peaceReturn = s.peaceReturn ?? false;
     this.originalOwner = r.player(s.originalOwner);
     this.attacker = r.player(s.attacker);
     this.ref = s.ref;
@@ -408,6 +466,8 @@ const TransportShipExecutionStateSchema = z.object({
   boat: zRef().optional(),
   motionPlanId: zInt(),
   motionPlanDst: zTile().nullable(),
+  /** Optional so older snapshots restore to the original pre-peace behavior. */
+  peaceReturn: z.boolean().optional(),
   originalOwner: zPlayerRef(),
   attacker: zPlayerRef(),
   // Unvalidated until init() checks it.
