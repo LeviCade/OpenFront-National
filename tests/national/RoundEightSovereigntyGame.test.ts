@@ -539,7 +539,11 @@ describe("Round Eight trusted-host private NATIONAL save primitive", () => {
     const game = await spawned();
     foundEmpire(game);
     addEmpireMember(game, B);
-    const store = new TrustedNationalSaveStore(resolveServerSession, 1);
+    const store = new TrustedNationalSaveStore(
+      resolveServerSession,
+      (hostGame: Game, gameID: string) => snapshotGame(hostGame, { gameID }),
+      1,
+    );
     const handle = store.save("r8-host-game", "verified-alice", game);
     expect(Object.keys(handle).sort()).toEqual(["gameID", "id", "tick"]);
     expect(JSON.stringify(handle)).not.toContain("r8-empire");
@@ -565,7 +569,10 @@ describe("Round Eight trusted-host private NATIONAL save primitive", () => {
   it("refuses legacy FFA and any session without a Game-registered player binding", async () => {
     const game = await spawned();
     const legacy = await setup("plains", { nationalMode: false }, players);
-    const store = new TrustedNationalSaveStore(resolveServerSession);
+    const store = new TrustedNationalSaveStore(
+      resolveServerSession,
+      (hostGame: Game, gameID: string) => snapshotGame(hostGame, { gameID }),
+    );
     expect(() => store.save("r8-host-game", "no-session", game)).toThrow(/unauthorized/);
     expect(() => store.save("r8-host-game", "verified-alice", legacy)).toThrow(/legacy/);
     expect(() => store.save("different-game", "verified-alice", game)).toThrow(/unauthorized/);
