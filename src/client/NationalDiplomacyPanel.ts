@@ -64,7 +64,8 @@ export class NationalDiplomacyPanel extends LitElement {
       this.pendingAttempt = null;
       this.pendingEmpireId = null;
       this.phase = "unknown";
-      this.message = "Replay is read-only. The previous founding request is not confirmed.";
+      this.message =
+        "Replay is read-only. The previous founding request is not confirmed.";
       this.error = null;
     } else if (attempt && game && player) {
       const tick = typeof game.ticks === "function" ? game.ticks() : 0;
@@ -90,12 +91,15 @@ export class NationalDiplomacyPanel extends LitElement {
         this.pendingAttempt = null;
         this.pendingEmpireId = null;
         this.phase = decision.phase;
-        if (decision.phase === "accepted" &&
-          (game.isSpectator() || !player.isAlive() || game.inSpawnPhase())) {
+        if (
+          decision.phase === "accepted" &&
+          (game.isSpectator() || !player.isAlive() || game.inSpawnPhase())
+        ) {
           // The command receipt is real, but a now-inactive principal cannot
           // receive a player-facing active founding success toast.
           this.phase = "unknown";
-          this.message = "Founding was accepted previously, but the active nation has changed. Check the current roster.";
+          this.message =
+            "Founding was accepted previously, but the active nation has changed. Check the current roster.";
           this.error = null;
         } else if (decision.phase === "accepted") {
           this.lastConfirmedEmpireId = attempt.empireId;
@@ -181,7 +185,8 @@ export class NationalDiplomacyPanel extends LitElement {
     try {
       requestId = createNationalFoundingRequestId();
     } catch {
-      this.error = "Secure command identification is unavailable. Founding was not sent.";
+      this.error =
+        "Secure command identification is unavailable. Founding was not sent.";
       this.phase = "unknown";
       return;
     }
@@ -200,7 +205,9 @@ export class NationalDiplomacyPanel extends LitElement {
     this.message =
       "Request sent to game. Awaiting its accepted or rejected result…";
     try {
-      this.eventBus.emit(new SendNationalFoundEmpireIntentEvent(empireId, requestId));
+      this.eventBus.emit(
+        new SendNationalFoundEmpireIntentEvent(empireId, requestId),
+      );
     } catch {
       // Only a synchronous producer failure may clear the local latch.
       // An enqueued command is never equated with a successful execution.
