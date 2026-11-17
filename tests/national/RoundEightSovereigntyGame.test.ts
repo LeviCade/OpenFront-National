@@ -1,5 +1,6 @@
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
+import { NationalFoundEmpireExecution } from "@openfront/engine/execution/NationalFoundEmpireExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { WinCheckExecution } from "@openfront/engine/execution/WinCheckExecution";
 import type { Game } from "@openfront/engine/game/Game";
@@ -277,6 +278,105 @@ describe("Round Eight real Game sovereignty and constitutional voting", () => {
       }),
     ).toThrow(/remaining members/);
     expect(snapshotGameData(game)).toEqual(before);
+  });
+});
+
+describe("Round Eight one-journal authenticated political outcomes", () => {
+  it("exposes actor-only real queued amendment receipts with exact request IDs and cross-kind collision defense across restore", async () => {
+    const game = await spawned();
+    makePact(game, "r8-receipts", A, [B, C]);
+    const proposal = {
+      kind: "propose-pact-amendment" as const,
+      pactId: "r8-receipts",
+      terms: unanimousTerms,
+      administratorId: B,
+    };
+    game.addExecution(
+      new NationalFoundEmpireExecution(
+        game.player(A),
+        "",
+        proposal,
+        "r8-command-proposal",
+      ),
+    );
+    game.executeNextTick();
+    game.executeNextTick();
+    expect(game.nationalPoliticalCommandResults(game.player(A))).toMatchObject([
+      {
+        commandKind: "propose-pact-amendment",
+        commandTargetId: "r8-receipts",
+        requestId: "r8-command-proposal",
+        accepted: true,
+        sequence: 0,
+      },
+    ]);
+    expect(game.nationalCommandResults(game.player(A))).toEqual([]);
+    expect(game.nationalPoliticalCommandResults(game.player(D))).toEqual([]);
+    const { restored } = await roundTrip(game, "plains");
+    for (const g of [game, restored]) {
+      const first = g.nationalPoliticalCommandResults(g.player(A))[0];
+      const replay = g.performNationalPoliticalCommandWithOutcome(
+        g.player(A),
+        proposal,
+        "r8-command-proposal",
+      );
+      expect(replay).toEqual(first);
+      expect(g.nationalPoliticalCommandResults(g.player(A))).toHaveLength(1);
+      expect(() =>
+        g.performNationalPoliticalCommandWithOutcome(
+          g.player(B),
+          { kind: "approve-pact-amendment", pactId: "r8-receipts" },
+          "r8-command-proposal",
+        ),
+      ).toThrow(/reused foreign request ID/);
+      expect(() =>
+        g.performNationalPoliticalCommandWithOutcome(
+          g.player(A),
+          { kind: "approve-pact-amendment", pactId: "r8-receipts" },
+          "r8-command-proposal",
+        ),
+      ).toThrow(/reused foreign request ID/);
+      g.addExecution(
+        new NationalFoundEmpireExecution(
+          g.player(B),
+          "",
+          { kind: "approve-pact-amendment", pactId: "r8-receipts" },
+          "r8-command-b",
+        ),
+      );
+      g.executeNextTick();
+      g.executeNextTick();
+      expect(g.nationalPoliticalCommandResults(g.player(B))).toMatchObject([
+        {
+          commandKind: "approve-pact-amendment",
+          requestId: "r8-command-b",
+          accepted: true,
+          sequence: 1,
+        },
+      ]);
+      expect(pact(g, "r8-receipts")?.terms).toEqual(leaderTerms);
+      g.addExecution(
+        new NationalFoundEmpireExecution(
+          g.player(C),
+          "",
+          { kind: "approve-pact-amendment", pactId: "r8-receipts" },
+          "r8-command-c",
+        ),
+      );
+      g.executeNextTick();
+      g.executeNextTick();
+      expect(g.nationalPoliticalCommandResults(g.player(C))).toMatchObject([
+        {
+          commandKind: "approve-pact-amendment",
+          requestId: "r8-command-c",
+          accepted: true,
+          sequence: 2,
+        },
+      ]);
+      expect(pact(g, "r8-receipts")?.terms).toEqual(unanimousTerms);
+      expect(g.nationalCommandResults(g.player(A))).toEqual([]);
+    }
+    expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
   });
 });
 
