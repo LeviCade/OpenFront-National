@@ -93,7 +93,7 @@ describe("Round Six authenticated Found Empire request IDs", () => {
         type: "national_found_empire",
         empireId: "first-empire",
         requestId: "click-A-1",
-        clientID: alice.clientID,
+        clientID: alice.clientID!,
       }),
     );
     game.addExecution(
@@ -101,7 +101,7 @@ describe("Round Six authenticated Found Empire request IDs", () => {
         type: "national_found_empire",
         empireId: "second-empire",
         requestId: "click-A-2",
-        clientID: alice.clientID,
+        clientID: alice.clientID!,
       }),
     );
     game.executeNextTick();
@@ -142,7 +142,7 @@ describe("Round Six authenticated Found Empire request IDs", () => {
       type: "national_found_empire" as const,
       empireId: "one-empire",
       requestId: "click-A-duplicate",
-      clientID: alice.clientID,
+      clientID: alice.clientID!,
     };
     game.addExecution(executor.createExec(intent));
     game.addExecution(executor.createExec(intent));
@@ -169,7 +169,7 @@ describe("Round Six authenticated Found Empire request IDs", () => {
         type: "national_found_empire",
         empireId: "bob-empire",
         requestId: "click-B-own",
-        clientID: bob.clientID,
+        clientID: bob.clientID!,
       }),
     );
     game.executeNextTick();
