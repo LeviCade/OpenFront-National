@@ -4,7 +4,10 @@ import { EventBus } from "@openfront/shared/EventBus";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NationalDiplomacyPanel } from "../../../src/client/NationalDiplomacyPanel";
 import "../../../src/client/NationalDiplomacyPanel";
-import type { NationalPublicPolitics } from "../../../src/client/NationalDiplomacyState";
+import type {
+  NationalFoundingResult,
+  NationalPublicPolitics,
+} from "../../../src/client/NationalDiplomacyState";
 import { SendNationalFoundEmpireIntentEvent } from "../../../src/client/Transport";
 import type { GameView } from "../../../src/client/view";
 
@@ -29,15 +32,7 @@ async function mount(
         ? { empires: [], warnings: [] }
         : options.politics,
     tick: 10,
-    results: [] as Array<{
-      type: "national_found_empire";
-      recipientId: string;
-      actorId: string;
-      empireId: string;
-      accepted: boolean;
-      tick: number;
-      reason?: string;
-    }>,
+    results: [] as NationalFoundingResult[],
   };
   const player = {
     id: () => "nation-a",
@@ -64,6 +59,8 @@ async function mount(
     players: () => [player],
   } as unknown as GameView;
   const eventBus = new EventBus();
+  const requests: SendNationalFoundEmpireIntentEvent[] = [];
+  eventBus.on(SendNationalFoundEmpireIntentEvent, (event) => requests.push(event));
   const element = document.createElement(
     "national-diplomacy-panel",
   ) as NationalDiplomacyPanel;
@@ -79,7 +76,7 @@ async function mount(
     toggle.click();
     await element.updateComplete;
   }
-  return { element, eventBus, optionsState };
+  return { element, eventBus, optionsState, requests };
 }
 
 afterEach(() => {
@@ -186,7 +183,7 @@ describe("NATIONAL player-facing founding", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
   it("reports the engine rejection reason without claiming an empire", async () => {
-    const { element, optionsState } = await mount();
+    const { element, optionsState, requests } = await mount();
     const input = element.querySelector<HTMLInputElement>(
       "#national-empire-id",
     )!;
@@ -203,6 +200,8 @@ describe("NATIONAL player-facing founding", () => {
         empireId: "Atlas",
         accepted: false,
         tick: 11,
+        requestId: requests[0].requestId,
+        sequence: 1,
         reason: "actor-inactive",
       },
     ];
@@ -224,7 +223,7 @@ describe("NATIONAL player-facing founding", () => {
   });
 
   it("waits for roster after a real accepted result, even when journal entry is no longer on next tick", async () => {
-    const { element, optionsState } = await mount();
+    const { element, optionsState, requests } = await mount();
     const input = element.querySelector<HTMLInputElement>(
       "#national-empire-id",
     )!;
@@ -241,6 +240,8 @@ describe("NATIONAL player-facing founding", () => {
         empireId: "Atlas",
         accepted: true,
         tick: 11,
+        requestId: requests[0].requestId,
+        sequence: 2,
       },
     ];
     element.refresh();
@@ -278,7 +279,7 @@ describe("NATIONAL player-facing founding", () => {
   });
 
   it("shows actual Ungovernable warnings and allows unknown on lost connection", async () => {
-    const { element, optionsState } = await mount();
+    const { element, optionsState, requests } = await mount();
     optionsState.politics = {
       empires: [{ id: "Atlas", leaderId: "nation-b", memberIds: ["nation-b"] }],
       warnings: [
@@ -315,7 +316,7 @@ describe("NATIONAL player-facing founding", () => {
   });
 
   it("never treats a resumed member roster or old accepted result as this click's success", async () => {
-    const { element, optionsState } = await mount();
+    const { element, optionsState, requests } = await mount();
     const input = element.querySelector<HTMLInputElement>(
       "#national-empire-id",
     )!;
@@ -336,6 +337,8 @@ describe("NATIONAL player-facing founding", () => {
         empireId: "Atlas",
         accepted: true,
         tick: 9,
+        requestId: requests[0].requestId,
+        sequence: 3,
       },
     ];
     element.refresh();
