@@ -260,6 +260,10 @@ async function main() {
     throw new Error("NATIONAL_CHROME_ANGLE_BACKEND must be gl or vulkan");
   }
   const hardwareOnly = process.env.NATIONAL_REQUIRE_HARDWARE_GPU === "1";
+  // Hosted CI may opt into a software CDP diagnostic. It cannot pass the
+  // normal game WebGL gate and is forbidden in real hardware acceptance.
+  const softwareDiagnostic =
+    !hardwareOnly && process.env.NATIONAL_QA_SOFTWARE_CDP === "1";
   spawnChild(process.env.CHROME_BIN ?? "google-chrome", [
     "--headless=new",
     "--no-sandbox",
@@ -267,7 +271,11 @@ async function main() {
     "--enable-webgl",
     "--ignore-gpu-blocklist",
     ...(hardwareOnly ? ["--disable-software-rasterizer"] : []),
-    ...(angleBackend ? ["--use-gl=angle", "--use-angle=" + angleBackend] : []),
+    ...(softwareDiagnostic
+      ? ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+      : angleBackend
+        ? ["--use-gl=angle", "--use-angle=" + angleBackend]
+        : []),
     "--no-first-run",
     "--no-default-browser-check",
     "--remote-allow-origins=*",
