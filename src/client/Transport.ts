@@ -124,15 +124,22 @@ export class SendNationalDeclareWarIntentEvent implements GameEvent {
     public readonly nationId: string,
     public readonly targetId: string,
     public readonly targetKind: "nation" | "empire",
+    public readonly requestId: string,
   ) {}
 }
 
 export class SendNationalProposePeaceIntentEvent implements GameEvent {
-  constructor(public readonly warId: string) {}
+  constructor(
+    public readonly warId: string,
+    public readonly requestId: string,
+  ) {}
 }
 
 export class SendNationalAcceptPeaceIntentEvent implements GameEvent {
-  constructor(public readonly motionId: string) {}
+  constructor(
+    public readonly motionId: string,
+    public readonly requestId: string,
+  ) {}
 }
 
 /** Signals loss/reestablishment of a verified game transport session. */
@@ -899,33 +906,39 @@ export class Transport {
     event: SendNationalDeclareWarIntentEvent,
   ) {
     if (!this.nationalDiplomacyWireEnabled()) return;
-    this.sendIntent({
-      type: "national_declare_war",
+    const intent = {
+      type: "national_declare_war" as const,
       scope: event.scope,
       nationId: event.nationId,
       targetId: event.targetId,
       targetKind: event.targetKind,
-    });
+      requestId: event.requestId,
+    };
+    this.sendIntent(intent);
   }
 
   private onSendNationalProposePeaceIntent(
     event: SendNationalProposePeaceIntentEvent,
   ) {
     if (!this.nationalDiplomacyWireEnabled()) return;
-    this.sendIntent({
-      type: "national_propose_peace",
+    const intent = {
+      type: "national_propose_peace" as const,
       warId: event.warId,
-    });
+      requestId: event.requestId,
+    };
+    this.sendIntent(intent);
   }
 
   private onSendNationalAcceptPeaceIntent(
     event: SendNationalAcceptPeaceIntentEvent,
   ) {
     if (!this.nationalDiplomacyWireEnabled()) return;
-    this.sendIntent({
-      type: "national_accept_peace",
+    const intent = {
+      type: "national_accept_peace" as const,
       motionId: event.motionId,
-    });
+      requestId: event.requestId,
+    };
+    this.sendIntent(intent);
   }
 
   private onSendSpawnIntentEvent(event: SendSpawnIntentEvent) {
