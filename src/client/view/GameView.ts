@@ -36,9 +36,12 @@ import { TerraNulliusImpl } from "@openfront/engine-lib/game/TerraNulliusImpl";
 import { UnitGrid } from "@openfront/engine-lib/game/UnitGrid";
 import { PlayerCosmetics, WirePlayer } from "@openfront/shared/WireSchemas";
 import {
+  readNationalDiplomacyResults,
   readNationalFoundingResults,
   readNationalPolitics,
+  retainNationalDiplomacyResults,
   retainNationalFoundingReceipts,
+  type NationalDiplomacyResult,
   type NationalFoundingResult,
   type NationalPublicPolitics,
 } from "../NationalDiplomacyState";
@@ -81,6 +84,7 @@ export class GameView implements GameLike {
   private _nationalPolitics: NationalPublicPolitics | null = null;
   private _nationalFoundingOutcome: NationalFoundingResult | null = null;
   private _nationalFoundingResults: readonly NationalFoundingResult[] = [];
+  private _nationalDiplomacyResults: readonly NationalDiplomacyResult[] = [];
   private _nationalPoliticsTick: number | null = null;
 
   public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
@@ -96,6 +100,11 @@ export class GameView implements GameLike {
     return this._nationalFoundingResults;
   }
 
+  /** A recipient's real, short-lived E1 WAR/peace receipts only. */
+  public nationalDiplomacyResults(): readonly Readonly<NationalDiplomacyResult>[] {
+    return this._nationalDiplomacyResults;
+  }
+
   /** Null means the worker has not delivered a valid public roster. */
   public nationalPoliticsTick(): number | null {
     return this._nationalPoliticsTick;
@@ -106,6 +115,7 @@ export class GameView implements GameLike {
     this._nationalPolitics = null;
     this._nationalPoliticsTick = null;
     this._nationalFoundingResults = [];
+    this._nationalDiplomacyResults = [];
     this._nationalFoundingOutcome = null;
   }
   private startTick: Tick | null = null;
@@ -343,6 +353,23 @@ export class GameView implements GameLike {
         this._nationalFoundingResults[
           this._nationalFoundingResults.length - 1
         ] ?? null;
+      const diplomacyReceived =
+        myActorId === null
+          ? []
+          : readNationalDiplomacyResults(
+              nationalPacket.nationalCommandResults,
+            ).filter(
+              (result) =>
+                result.actorId === myActorId &&
+                result.recipientId === myActorId &&
+                result.tick <= gu.tick,
+            );
+      this._nationalDiplomacyResults = retainNationalDiplomacyResults(
+        this._nationalDiplomacyResults,
+        diplomacyReceived,
+        gu.tick,
+        gu.tick < previousTick || this._nationalPolitics === null,
+      );
     }
 
     this.updatedTiles = [];
