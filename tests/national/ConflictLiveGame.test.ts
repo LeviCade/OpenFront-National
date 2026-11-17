@@ -293,7 +293,11 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
       });
       expect(() =>
         interceptNationalAttack(
-          game, "denied-attack", north.id(), south.id(), 10_000,
+          game,
+          "denied-attack",
+          north.id(),
+          south.id(),
+          10_000,
         ),
       ).toThrow("invalid authoritative MDA donor identity");
       expect([north.troops(), south.troops(), east.troops()]).toEqual([
@@ -324,7 +328,11 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
     });
     expect(() =>
       interceptNationalAttack(
-        game, "no-source", north.id(), south.id(), 10_000,
+        game,
+        "no-source",
+        north.id(),
+        south.id(),
+        10_000,
       ),
     ).toThrow("missing authoritative MDA troop source");
     expect([north.troops(), south.troops(), east.troops()]).toEqual([
