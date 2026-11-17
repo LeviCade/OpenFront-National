@@ -254,7 +254,13 @@ describe("Round Eight actual WAR-09–12 in-flight combat", () => {
 
     // This is the actual engine handoff emitted by TransportShipExecution at
     // arrival: the boat has already paid for these troops (removeTroops=false).
-    const queued = new AttackExecution(paid, attacker, defender.id(), targetTile, false);
+    const queued = new AttackExecution(
+      paid,
+      attacker,
+      defender.id(),
+      targetTile,
+      false,
+    );
     queued.init(game, game.ticks());
     expect(queued.isActive()).toBe(false);
     expect(attacker.troops()).toBe(afterPayment + paid);
