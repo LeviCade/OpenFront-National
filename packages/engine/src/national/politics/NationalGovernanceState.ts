@@ -79,12 +79,24 @@ export class NationalGovernanceState {
     suppliedRequestId: string | null,
     perform: () => FoundEmpireReason,
   ): NationalFoundEmpireResult {
-    const requestId =
-      suppliedRequestId ?? `auto:${gameTick}:${this.nextSequence}`;
-    identity.parse(requestId);
-    identity.parse(actorId);
     if (!Number.isSafeInteger(gameTick) || gameTick < 0)
       throw new Error("NATIONAL command journal: invalid tick");
+    identity.parse(actorId);
+    let requestId =
+      suppliedRequestId ?? `auto:${gameTick}:${this.nextSequence}`;
+    identity.parse(requestId);
+    // Explicit caller tokens and legacy auto-generated IDs share one journal.
+    // An adversary could otherwise preclaim the next predictable auto token
+    // and suppress a different actor's legitimate legacy founding command.
+    // Skip retained collisions deterministically; NEVER reinterpret an
+    // explicit duplicate, which must still be idempotent or rejected.
+    if (suppliedRequestId === null) {
+      while (this.receipts.some((r) => r.requestId === requestId)) {
+        if (this.nextSequence === Number.MAX_SAFE_INTEGER)
+          throw new Error("NATIONAL command journal: sequence exhausted");
+        requestId = `auto:${gameTick}:${++this.nextSequence}`;
+      }
+    }
     const existing = this.receipts.find((r) => r.requestId === requestId);
     if (existing) {
       if (existing.actorId !== actorId || existing.empireId !== empireId)
