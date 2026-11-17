@@ -699,6 +699,7 @@ export class NationalDiplomacyPanel extends LitElement {
                       )}
                     </select>
                     <button
+                      id="national-declare-war"
                       type="submit"
                       class="rounded-lg bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-500 disabled:opacity-50"
                       ?disabled=${!canIssueWar || warTargets.length === 0 || !this.warTargetId}
@@ -743,6 +744,8 @@ export class NationalDiplomacyPanel extends LitElement {
                       ?disabled=${warReason !== null}
                     />
                     <button
+                      id="national-propose-peace"
+                      id="national-accept-peace"
                       type="submit"
                       class="rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 disabled:opacity-50"
                       ?disabled=${warReason !== null || !this.eventBus || !this.warIdDraft.trim()}
