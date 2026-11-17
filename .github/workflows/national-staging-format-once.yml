@@ -1,0 +1,49 @@
+name: NATIONAL staging one-time pinned format repair
+
+on:
+  push:
+    branches:
+      - stage3/round6-combined-acceptance-20261116
+    paths:
+      - .github/workflows/national-staging-format-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format-owned-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - name: Install repository-pinned dependencies
+        run: npm run inst
+      - name: Apply pinned oxfmt to five E2-owned test files only
+        run: |
+          npx --no-install oxfmt --write \
+            tests/national/ConflictLiveGame.test.ts \
+            tests/national/LiveLevyCombatRound5.test.ts \
+            tests/national/LiveWarExecutionRound5.test.ts \
+            tests/national/NationalFoundEmpireRequestId.test.ts \
+            tests/national/NationalPublicWireContract.test.ts
+          git diff --check
+      - name: Commit formatting correction on staging candidate only
+        run: |
+          git config user.name 'National Conductor QA'
+          git config user.email '147657883+LeviCade@users.noreply.github.com'
+          if ! git diff --quiet; then
+            git add \
+              tests/national/ConflictLiveGame.test.ts \
+              tests/national/LiveLevyCombatRound5.test.ts \
+              tests/national/NationalFoundEmpireRequestId.test.ts \
+              tests/national/NationalPublicWireContract.test.ts \
+              tests/national/LiveWarExecutionRound5.test.ts
+            git commit -m 'style(national): apply pinned oxfmt to E2 acceptance tests'
+            git push origin HEAD:stage3/round6-combined-acceptance-20261116
+          fi
