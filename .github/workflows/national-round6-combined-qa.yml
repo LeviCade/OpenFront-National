@@ -69,8 +69,8 @@ jobs:
             pinned-format)
               if ! npm run format:check; then
                 echo "::error::Pinned oxfmt discrepancies; exact E5-owned diff follows"
-                npx --no-install oxfmt --write tests/e2e/national/RoundSixCombinedVerdict.test.ts scripts/national-qa/browser-gameplay.mjs scripts/national-qa/mutation-gate.mjs .github/workflows/national-round6-combined-qa.yml
-                git diff -- tests/e2e/national/RoundSixCombinedVerdict.test.ts scripts/national-qa/browser-gameplay.mjs scripts/national-qa/mutation-gate.mjs .github/workflows/national-round6-combined-qa.yml
+                npx --no-install oxfmt --write tests/e2e/national/RoundSixCombinedVerdict.test.ts scripts/national-qa/browser-gameplay.mjs scripts/national-qa/mutation-gate.mjs docs/release/NATIONAL_ROUND6_COMBINED_VERDICT.md .github/workflows/national-round6-combined-qa.yml
+                git diff -- tests/e2e/national/RoundSixCombinedVerdict.test.ts scripts/national-qa/browser-gameplay.mjs scripts/national-qa/mutation-gate.mjs docs/release/NATIONAL_ROUND6_COMBINED_VERDICT.md .github/workflows/national-round6-combined-qa.yml
                 exit 1
               fi
               ;;
