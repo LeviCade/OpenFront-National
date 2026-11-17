@@ -724,3 +724,17 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
     expect(restored.readNationalObserverMemory(A)).toEqual(original);
   });
 });
+
+// Temporary CI-only formatter diagnostic: removed after recording pinned output.
+import { execFileSync as round6ExecFileSync } from "node:child_process";
+it("round-six formatter diagnostic", () => {
+  const files = [
+    "packages/engine/src/national/politics/NationalGovernanceState.ts",
+    "tests/national/PoliticalMdaOutcomesMemory.test.ts",
+  ];
+  round6ExecFileSync("./node_modules/.bin/oxfmt", ["--write", ...files]);
+  const diff = round6ExecFileSync("git", ["diff", "--", ...files], {
+    encoding: "utf8",
+  });
+  console.log("ROUND6_FORMAT_DIFF_BEGIN\\n" + diff + "\\nROUND6_FORMAT_DIFF_END");
+});
