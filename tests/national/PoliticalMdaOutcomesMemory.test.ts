@@ -224,10 +224,14 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
       protectedCapacityFraction: 0.3,
     });
     expect(() =>
-      game.applyNationalDefenseLevy([request([entry(sourceB), entry(sourceB)])]),
+      game.applyNationalDefenseLevy([
+        request([entry(sourceB), entry(sourceB)]),
+      ]),
     ).toThrow(/missing or forged MDA contributor roster/);
     expect(() =>
-      game.applyNationalDefenseLevy([request([entry(sourceB), entry(sourceD)])]),
+      game.applyNationalDefenseLevy([
+        request([entry(sourceB), entry(sourceD)]),
+      ]),
     ).toThrow(/missing or forged MDA contributor roster/);
     expect(game.player(B).troops()).toBe(beforeB);
     expect(game.player(C).troops()).toBe(beforeC);
@@ -690,9 +694,9 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
     expect(game.readNationalObserverMemory(A)).toBeNull();
     const { restored } = await roundTrip(game, "plains");
     expect(restored.readNationalObserverMemory(A)).toBeNull();
-    expect(JSON.stringify(restored.nationalPublicPoliticalView())).not.toContain(
-      "observed-hostile-unit",
-    );
+    expect(
+      JSON.stringify(restored.nationalPublicPoliticalView()),
+    ).not.toContain("observed-hostile-unit");
   });
 
   it("human sight expires after exactly sixty deterministic simulation ticks and stays expired after restore", async () => {
@@ -725,16 +729,3 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
   });
 });
 
-// Temporary CI-only formatter diagnostic: removed after recording pinned output.
-import { execFileSync as round6ExecFileSync } from "node:child_process";
-it("round-six formatter diagnostic", () => {
-  const files = [
-    "packages/engine/src/national/politics/NationalGovernanceState.ts",
-    "tests/national/PoliticalMdaOutcomesMemory.test.ts",
-  ];
-  round6ExecFileSync("./node_modules/.bin/oxfmt", ["--write", ...files]);
-  const diff = round6ExecFileSync("git", ["diff", "--", ...files], {
-    encoding: "utf8",
-  });
-  console.log("ROUND6_FORMAT_DIFF_BEGIN\\n" + diff + "\\nROUND6_FORMAT_DIFF_END");
-});
