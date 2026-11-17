@@ -482,7 +482,9 @@ async function main() {
           .then((info) => info.gpu ?? { unavailable: true })
           .catch((error) => ({ unavailable: true, reason: String(error) })),
       };
-      record("actual-gpu-webgl2-capabilities", { graphics: hardwareCapabilities });
+      record("actual-gpu-webgl2-capabilities", {
+        graphics: hardwareCapabilities,
+      });
       await capture("home");
     });
     await step("solo", async () => {
@@ -661,7 +663,9 @@ async function main() {
       ) {
         throw Error("REAL_FOUNDING_REQUEST_ID_MISSING_OR_INVALID");
       }
-      record("authentic-click-request-id", { requestId: submittedFounding.requestId });
+      record("authentic-click-request-id", {
+        requestId: submittedFounding.requestId,
+      });
       await capture("founding-request");
       const actorId = await evaluate(
         "window.__nationalQaFind('national-diplomacy-panel')?.game?.myPlayer()?.id() ?? null",
@@ -694,9 +698,14 @@ async function main() {
                 Number.isSafeInteger(e.sequence),
             ),
           );
-          return publicRoster && acceptedReceipt &&
+          return publicRoster &&
+            acceptedReceipt &&
             text.includes("Confirmed by game")
-            ? { text: text.slice(0, 300), actorId, requestId: submittedFounding.requestId }
+            ? {
+                text: text.slice(0, 300),
+                actorId,
+                requestId: submittedFounding.requestId,
+              }
             : null;
         },
         "exact click request ID, actor/recipient scoped E1 acceptance, public roster, and UI confirmation",
