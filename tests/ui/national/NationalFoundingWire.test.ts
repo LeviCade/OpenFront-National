@@ -122,15 +122,16 @@ describe("NATIONAL UI → normal local server command", () => {
     const intents = local.onMessage.mock.calls
       .map(([message]) => message)
       .filter((message) => message?.type === "intent");
-    expect(intents).toEqual([
-      {
-        type: "intent",
-        intent: {
-          type: "national_found_empire",
-          empireId: "Atlas_Empire",
-        },
+    expect(intents).toHaveLength(1);
+    expect(intents[0]).toEqual({
+      type: "intent",
+      intent: {
+        type: "national_found_empire",
+        empireId: "Atlas_Empire",
+        requestId: expect.stringMatching(/^nf_[a-f0-9]{32}$/),
       },
-    ]);
+    });
+    const clickRequestId = intents[0].intent.requestId as string;
     expect(
       NationalFoundEmpireIntentSchema.safeParse(intents[0].intent).success,
     ).toBe(true);
@@ -158,6 +159,8 @@ describe("NATIONAL UI → normal local server command", () => {
         empireId: "Atlas_Empire",
         accepted: true,
         tick: 11,
+        requestId: clickRequestId,
+        sequence: 7,
       },
     ];
     panel.refresh();
