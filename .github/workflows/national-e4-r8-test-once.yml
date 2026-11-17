@@ -1,4 +1,4 @@
-name: NATIONAL E4 R8 — targeted UI acceptance (final)
+name: NATIONAL E4 R8 — exact-token UI acceptance
 
 on:
   push:
