@@ -1,12 +1,9 @@
-import {
-  PlayerInfo,
-  PlayerType,
-} from "@openfront/engine-api/game/GameTypes";
+import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
-import { GameRunner } from "@openfront/engine/GameRunner";
 import type { Game, Player } from "@openfront/engine/game/Game";
+import { GameRunner } from "@openfront/engine/GameRunner";
 import {
   actorNationalResults,
   emptyNationalResultDeliveryState,
@@ -30,7 +27,9 @@ const south = new PlayerInfo(
 );
 
 type R6Packet = GameUpdateViewData & {
-  nationalPolitics?: NonNullable<ReturnType<Game["nationalPublicPoliticalView"]>>;
+  nationalPolitics?: NonNullable<
+    ReturnType<Game["nationalPublicPoliticalView"]>
+  >;
   nationalCommandResults?: readonly OutboundFounderResult[];
 };
 
@@ -230,8 +229,12 @@ describe("Round Six authenticated request-correlated NATIONAL receipts", () => {
       }),
     ]);
     expect(reconnected.next()).not.toHaveProperty("nationalCommandResults");
-    expect(initialNationalResultDeliveryState(game, game.player(north.id))
-      .seenRequests.has("new-rejected")).toBe(true);
+    expect(
+      initialNationalResultDeliveryState(
+        game,
+        game.player(north.id),
+      ).seenRequests.has("new-rejected"),
+    ).toBe(true);
   });
 
   it("canonical E1 snapshot restore does not replay a prior acceptance as a new UI command", async () => {
@@ -243,7 +246,10 @@ describe("Round Six authenticated request-correlated NATIONAL receipts", () => {
         requestId: string,
       ) => Receipt;
     };
-    if (typeof gameWithJournal.performNationalFoundEmpireWithOutcome !== "function") {
+    if (
+      typeof gameWithJournal.performNationalFoundEmpireWithOutcome !==
+      "function"
+    ) {
       // This contract activates when E1 #31 lands on combined staging.
       // No mock snapshot journal is substituted for authoritative Game state.
       expect(game.nationalPublicPoliticalView()?.empires).toEqual([]);
@@ -264,7 +270,9 @@ describe("Round Six authenticated request-correlated NATIONAL receipts", () => {
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
     const after = runner(restored, north.clientID!).next();
-    expect(after.nationalPolitics?.empires).toEqual(before.nationalPolitics?.empires);
+    expect(after.nationalPolitics?.empires).toEqual(
+      before.nationalPolitics?.empires,
+    );
     expect(after).not.toHaveProperty("nationalCommandResults");
   });
 

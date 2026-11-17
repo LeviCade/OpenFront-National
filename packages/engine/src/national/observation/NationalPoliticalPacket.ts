@@ -62,10 +62,7 @@ const VALID_REASONS = new Set([
   "political-rule",
 ]);
 
-function validRecord(
-  record: AuthoritativeFounderOutcome,
-  game: Game,
-): void {
+function validRecord(record: AuthoritativeFounderOutcome, game: Game): void {
   if (
     !Number.isSafeInteger(record.sequence) ||
     record.sequence < 0 ||
@@ -157,8 +154,7 @@ export function actorNationalResults(
     if (
       (existingSequence !== undefined &&
         existingSequence !== record.requestId) ||
-      (existingRequest !== undefined &&
-        existingRequest !== record.sequence) ||
+      (existingRequest !== undefined && existingRequest !== record.sequence) ||
       (batchProofs.has(record.sequence) &&
         batchProofs.get(record.sequence) !== proof)
     ) {
