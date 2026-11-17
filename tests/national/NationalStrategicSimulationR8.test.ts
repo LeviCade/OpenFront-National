@@ -153,6 +153,50 @@ describe("Round Eight seeded real NATIONAL strategic matches AI-01/02/04/06", ()
     ).toBe(NEIGHBOR);
   });
 
+  it("WAR-09 real peace acceptance immediately ends the bot's former local offensive target", async () => {
+    const game = await seededNationalRun();
+    game.performNationalWarCommand(game.player(BOT), {
+      kind: "declare-national",
+      warId: "r8_real_peace_war",
+      aggressorId: BOT,
+      targetId: NEIGHBOR,
+    });
+    expect(
+      planNationalInterest(
+        collectLiveNationalObservation(game, BOT).observation,
+        initialNationalPlannerMemory(BOT),
+        30,
+      ).decision?.targetId,
+    ).toBe(NEIGHBOR);
+    game.performNationalWarCommand(game.player(BOT), {
+      kind: "propose-peace",
+      motionId: "r8_real_peace_motion",
+      warId: "r8_real_peace_war",
+    });
+    game.performNationalWarCommand(game.player(NEIGHBOR), {
+      kind: "accept-peace",
+      motionId: "r8_real_peace_motion",
+    });
+    expect(game.nationalWarAuthority()?.atWar(BOT, NEIGHBOR)).toBe(false);
+    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(BOT, NEIGHBOR)).toBe(false);
+    const after = collectLiveNationalObservation(game, BOT).observation;
+    expect(after.wars.some((war) => war.id === "r8_real_peace_war")).toBe(false);
+    const decision = planNationalInterest(
+      after,
+      initialNationalPlannerMemory(BOT),
+      30,
+    );
+    expect(decision.decision?.targetId).not.toBe(NEIGHBOR);
+    const { bytes, again, restored } = await roundTrip(game, "plains");
+    expect([...bytes]).toEqual([...again]);
+    expect(restored.nationalWarAuthority()?.atWar(BOT, NEIGHBOR)).toBe(false);
+    expect(
+      collectLiveNationalObservation(restored, BOT).observation.wars.some(
+        (war) => war.id === "r8_real_peace_war",
+      ),
+    ).toBe(false);
+  });
+
   it("AI-04 weak independent nation preserves survival choices instead of attacking a publicly superior neighbor", async () => {
     const game = await seededNationalRun();
     // Initial own territory is weak and resource-limited, but adjoining
