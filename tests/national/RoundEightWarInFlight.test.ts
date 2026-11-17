@@ -162,7 +162,8 @@ describe("Round Eight actual WAR-09–12 in-flight combat", () => {
     const oldCount = attacker.units(UnitType.AtomBomb).length;
     const afterPeace = new NukeExecution(UnitType.AtomBomb, attacker, dst);
     game.addExecution(afterPeace);
-    game.executeNextTick();
+    game.executeNextTick(); // enqueue/initialize
+    game.executeNextTick(); // execute the prohibited post-peace launch
     expect(afterPeace.isActive()).toBe(false);
     expect(afterPeace.getNuke()).toBeNull();
     expect(attacker.units(UnitType.AtomBomb)).toHaveLength(oldCount);
@@ -177,11 +178,16 @@ describe("Round Eight actual WAR-09–12 in-flight combat", () => {
   it("WAR-11: post-peace transport launch spends zero troops and builds no ship", async () => {
     const { game, attacker, targetTile } = await spawnOnIslands();
     const original = attacker.troops();
+    const spend = vi.spyOn(attacker, "removeTroops");
     const launch = new TransportShipExecution(attacker, targetTile, 10_000);
     game.addExecution(launch);
     game.executeNextTick();
     expect(launch.isActive()).toBe(false);
-    expect(attacker.troops()).toBe(original);
+    // The normal per-tick regeneration may increase the treasury's real
+    // troops; an illegal naval departure itself must debit nothing.
+    expect(spend).not.toHaveBeenCalled();
+    expect(attacker.troops()).toBeGreaterThanOrEqual(original);
+    spend.mockRestore();
     expect(attacker.units(UnitType.TransportShip)).toHaveLength(0);
   });
 
@@ -229,7 +235,14 @@ describe("Round Eight actual WAR-09–12 in-flight combat", () => {
       empireId: "r8-empire",
       candidateId: C,
     });
-    declare(game, C, B, "r8-member-war");
+    // Member war delegation is not enabled: only the sitting emperor may
+    // start a constituent's national war in the default policy.
+    game.performNationalWarCommand(sovereign, {
+      kind: "declare-national",
+      warId: "r8-member-war",
+      aggressorId: C,
+      targetId: B,
+    });
     game.performNationalWarCommand(sovereign, {
       kind: "declare-imperial",
       warId: "r8-empire-war",
