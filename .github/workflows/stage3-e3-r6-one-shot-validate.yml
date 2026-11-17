@@ -1,0 +1,54 @@
+name: NATIONAL E3 R6 One-Shot Pinned Source Validation
+on:
+  push:
+    branches:
+      - stage3/e3-round5-political-packets-fog-20261116
+    paths:
+      - .github/workflows/stage3-e3-r6-one-shot-validate.yml
+permissions:
+  contents: write
+jobs:
+  format-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stage3/e3-round5-political-packets-fog-20261116
+          submodules: false
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+      - name: Install pinned npm
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Install pinned dependencies
+        run: npm run inst
+      - name: Format only E3-owned source and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm exec -- oxfmt --write \
+            packages/engine/src/national/observation/NationalPoliticalPacket.ts \
+            packages/engine/src/national/observation/NationalOutbound.ts \
+            packages/engine/src/GameRunner.ts \
+            tests/national/NationalReceiptCorrelation.test.ts
+          npm run format:check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            packages/engine/src/national/observation/NationalPoliticalPacket.ts \
+            packages/engine/src/national/observation/NationalOutbound.ts \
+            packages/engine/src/GameRunner.ts \
+            tests/national/NationalReceiptCorrelation.test.ts
+          if ! git diff --cached --quiet; then
+            git commit -m "style(national): exact pinned E3 R6 formatter"
+            git push origin HEAD:refs/heads/stage3/e3-round5-political-packets-fog-20261116
+          fi
+      - name: Typecheck exact branch
+        run: npm run typecheck
+      - name: Targeted genuine GameRunner and receipt tests
+        run: npm exec -- vitest run tests/national/NationalReceiptCorrelation.test.ts tests/national/NationalPoliticalPackets.test.ts tests/national/NationalHumanMemoryPackets.test.ts tests/national/NationalAIRealWar.test.ts tests/national/NationalLiveObservation.test.ts
+      - name: Lint
+        run: npm run lint
