@@ -48,6 +48,17 @@ owner were non-overlapping. E5 never patched another owner's gameplay code.
 | npm dependency audit                                                    | **BLOCKED #6**                                     | 17 total advisories (4 critical / 7 high / 6 moderate), 7 production (2 critical / 3 high / 2 moderate)                                                                                                    |
 | Hostile-browser confidentiality                                         | **BLOCKED by architecture**                        | Honest recipient-filtered worker packets do not protect authoritative game memory from a modified browser                                                                                                  |
 
+## Full-suite and mutation follow-up on combined `f2abef10`
+
+- [Exact-source full Vitest run 43991007886](https://github.com/LeviCade/OpenFront-National/actions/runs/43991007886) completed **11,497 passed, two failed, one skipped** across 776 test files.
+- **E2-owned failure:** `tests/national/NationalFoundEmpireRequestId.test.ts:102` expected a null token for a legacy authenticated founding intent, whereas E1's canonical journal deterministically returned `auto:3:0`. The expectation must be reconciled by E2 with E1's proven backward-compatible issuance and actor scope. E5 cannot rewrite it.
+- **E5-owned test assumption repaired:** 3-donor roster was assumed to follow invitation order `east,west,center`; E1 canonical `nationalMdaAllies` correctly returned `center,east,west`. E5 now asserts a separate alphabetically sorted expected donor roster and matching receipt order, leaving conservation unchanged. The three-donor receipt still requires an exact-head successful rerun before PASS can be recorded.
+- **Two-donor real MDA scenario PASS:** `r6-east` and `r6-west` each debited exactly 50,000, 100,000 attacking troops intercepted, no phantom in-flight troops. Snapshot SHA-256 `bf98d58f4b186de5b486e8c71cf48ef38cd216c11453f3eb813e2e405c54640f`.
+- **Exact actor/recipient request receipts PASS:** `qa_r6_req_first` accepted sequence 0; `qa_r6_req_rejected` rejected sequence 1, actor `r6-north`. These are real GameRunner worker-facing packet tests, **not browser click acceptance**.
+- [Mutation controls 43991007886](https://github.com/LeviCade/OpenFront-National/actions/runs/43991007886): **3/3 PASS**, proven failures from real unauthorized WAR bypass, stale-CAS bypass and hidden-player packet leak. Disposable modified production files were restored byte for byte after each case.
+- [Strict Chromium 43991007795](https://github.com/LeviCade/OpenFront-National/actions/runs/43991007795): all four browser modes failed the *actual* WebGL gate. Chrome 157 WebGL2 context exists but ANGLE/Vulkan renderer is SwiftShader Device (Subzero), max texture 8192. No GPU-backed gameplay success. Report explicitly distinguishes hardware insufficiency from gameplay mechanics.
+- Current source blocking E3 `NationalOutbound.ts:314` TS18048, E2 unsafe optional chains, E2/E4 pinned format, and seven production dependency advisories. Source-owner reports posted on their own PRs.
+
 ## Round Six acceptance extensions
 
 Owned QA source adds independent real two- and three-donor MDA conservation,
