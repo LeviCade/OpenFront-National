@@ -214,7 +214,12 @@ describe("NATIONAL Ungovernable public warning packets", () => {
 
 describe("exact E1 request identity under same-tick races", () => {
   it("never accepts an identical actor/empire command from another request on the same tick", () => {
-    const unrelated = { ...accepted, tick: 10, requestId: otherRequestId, sequence: 2 };
+    const unrelated = {
+      ...accepted,
+      tick: 10,
+      requestId: otherRequestId,
+      sequence: 2,
+    };
     expect(
       reconcileNationalFounding(attempt, {
         ...view,
@@ -239,7 +244,10 @@ describe("exact E1 request identity under same-tick races", () => {
       accepted: false,
       reason: "political-rule",
     };
-    for (const results of [[rejection, accepted], [accepted, rejection]]) {
+    for (const results of [
+      [rejection, accepted],
+      [accepted, rejection],
+    ]) {
       expect(
         reconcileNationalFounding(attempt, {
           ...view,
