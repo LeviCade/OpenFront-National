@@ -100,7 +100,7 @@ for (const entry of cases) {
       verdict: targetFailed ? "PASS (gate rejected mutation)" : "FAIL",
       targetedAssertionFailed: targetFailed,
       exitCode: result.status,
-      timedOut: Boolean(result.error || result.signal),
+      timedOut: Boolean(result.error ?? result.signal),
       test: entry.name,
     });
     if (!targetFailed) failed = true;
