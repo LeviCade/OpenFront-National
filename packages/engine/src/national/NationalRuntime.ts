@@ -12,6 +12,7 @@ import { PoliticalAuthorityAdapter } from "./politics/PoliticalAuthorityAdapter"
 import {
   acceptEmpireAccession,
   acceptPactInvitation,
+  approvePactAmendment,
   betrayPact,
   clonePoliticalProjection,
   eliminatePoliticalNation,
@@ -24,6 +25,7 @@ import {
   lastSovereignVictory,
   METRIC_KEYS,
   proposeEmpireAccession,
+  proposePactAmendment,
   transferCrown,
   validatePolitics,
   type LastSovereignResult,
@@ -70,6 +72,14 @@ const politicsSchema = z.object({
           approvedBy: z.array(z.string()),
         }),
       ),
+      // Absent in older v1 snapshots. No authority is inferred from absence.
+      pendingAmendment: z
+        .object({
+          terms: pactTerms,
+          administratorId: z.string().nullable(),
+          approvedBy: z.array(z.string()),
+        })
+        .optional(),
     }),
   ),
   empires: z.array(
@@ -115,6 +125,13 @@ export type NationalCommand =
     }
   | { kind: "invite-pact"; pactId: string; candidateId: PlayerID }
   | { kind: "accept-pact"; pactId: string }
+  | {
+      kind: "propose-pact-amendment";
+      pactId: string;
+      terms: PactTerms;
+      administratorId: PlayerID | null;
+    }
+  | { kind: "approve-pact-amendment"; pactId: string }
   | { kind: "betray-pact"; pactId: string }
   | {
       kind: "expel-pact";
@@ -393,12 +410,29 @@ export class NationalRuntime {
         requireCommandId(command.pactId);
         next = acceptPactInvitation(this.politics, command.pactId, actorId);
         break;
+      case "propose-pact-amendment":
+        requireCommandId(command.pactId);
+        next = proposePactAmendment(this.politics, command.pactId, actorId, {
+          terms: command.terms,
+          administratorId: command.administratorId,
+        });
+        break;
+      case "approve-pact-amendment":
+        requireCommandId(command.pactId);
+        next = approvePactAmendment(this.politics, command.pactId, actorId);
+        break;
       case "betray-pact":
         requireCommandId(command.pactId);
         next = betrayPact(this.politics, command.pactId, actorId);
         break;
       case "expel-pact":
         requireCommandId(command.pactId);
+        // A single command cannot forge other members' unanimous consent.
+        // Separate authenticated expulsion ballots must be implemented before
+        // a unanimous-expulsion pact may be enforced through this port.
+        if (command.approvingIds?.some((id) => id !== actorId)) {
+          throw new Error("NATIONAL: other members cannot be impersonated");
+        }
         next = expelPactMember(
           this.politics,
           command.pactId,
