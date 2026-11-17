@@ -235,11 +235,9 @@ describe("Round Eight seeded real NATIONAL strategic matches AI-01/02/04/06", ()
       if (x < 47 || x >= 50 || y < 35 || y >= 60) bot.relinquish(tile);
     }
     bot.setTroops(85_000);
-    game.player(NEIGHBOR).buildUnit(
-      UnitType.Warship,
-      game.ref(50, 45),
-      { troops: 2_000 },
-    );
+    game
+      .player(NEIGHBOR)
+      .buildUnit(UnitType.Warship, game.ref(50, 45), { troops: 2_000 });
     game.performNationalWarCommand(bot, {
       kind: "declare-national",
       warId: "r8_defensive_war",
@@ -248,25 +246,29 @@ describe("Round Eight seeded real NATIONAL strategic matches AI-01/02/04/06", ()
     });
     const seen = collectLiveNationalObservation(game, BOT).observation;
     expect(seen.nations.find((n) => n.id === BOT)?.landPercent).toBeLessThan(3);
-    expect(seen.visibleAssets.some((a) => a.ownerId === NEIGHBOR && a.kind === "warship")).toBe(true);
     expect(
-      planNationalInterest(
-        seen,
-        initialNationalPlannerMemory(BOT),
-        30,
-      ).decision,
+      seen.visibleAssets.some(
+        (a) => a.ownerId === NEIGHBOR && a.kind === "warship",
+      ),
+    ).toBe(true);
+    expect(
+      planNationalInterest(seen, initialNationalPlannerMemory(BOT), 30)
+        .decision,
     ).toMatchObject({ objective: "defend", targetId: null });
     const originalTroops = bot.troops();
     const queued: AttackExecution[] = [];
     const original = game.addExecution.bind(game);
     const spy = vi.spyOn(game, "addExecution").mockImplementation((...all) => {
-      for (const item of all) if (item instanceof AttackExecution) queued.push(item);
+      for (const item of all)
+        if (item instanceof AttackExecution) queued.push(item);
       return original(...all);
     });
     runTicks(game, 120);
     spy.mockRestore();
     expect(queued.length).toBeGreaterThan(0);
-    expect(bot.troops() < originalTroops || bot.outgoingAttacks().length > 0).toBe(true);
+    expect(
+      bot.troops() < originalTroops || bot.outgoingAttacks().length > 0,
+    ).toBe(true);
     expect(game.nationalWarAuthority()?.atWar(BOT, NEIGHBOR)).toBe(true);
   });
 

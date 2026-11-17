@@ -281,10 +281,7 @@ export function planNationalInterest(
 
   let bestId: string | null = null;
   let bestScore = -Infinity;
-  if (
-    self.status === "independent" &&
-    observation.ownResources.troops >= 500
-  ) {
+  if (self.status === "independent" && observation.ownResources.troops >= 500) {
     for (const frontier of observation.frontiers) {
       if (frontier.access !== "land") continue;
       const target = publicNations.get(frontier.targetId);
