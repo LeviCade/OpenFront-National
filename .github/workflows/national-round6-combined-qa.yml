@@ -94,8 +94,13 @@ jobs:
           retention-days: 30
 
   gpu-browser:
-    name: Actual GPU-backed NATIONAL and FFA desktop/mobile
+    name: "Actual GPU-backed ${{ matrix.viewport }} ${{ matrix.scenario }}"
     if: github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        viewport: [desktop, mobile]
+        scenario: [national, legacy]
     runs-on: [self-hosted, linux, x64, gpu]
     timeout-minutes: 50
     steps:
@@ -116,25 +121,16 @@ jobs:
           (nvidia-smi -q || true) > national-qa-artifacts/gpu/nvidia-smi.txt
           (glxinfo -B || true) > national-qa-artifacts/gpu/glxinfo.txt
           command -v google-chrome
-      - name: Desktop real NATIONAL (no WebGL spoofing)
+      - name: Real hardware Chromium game acceptance (no WebGL spoofing)
+        shell: bash
         env:
           CHROME_BIN: /usr/bin/google-chrome
-        run: node scripts/national-qa/browser-gameplay.mjs
-      - name: Mobile real NATIONAL
-        env:
-          CHROME_BIN: /usr/bin/google-chrome
-        run: node scripts/national-qa/browser-gameplay.mjs --mobile
-      - name: Desktop real FFA
-        env:
-          CHROME_BIN: /usr/bin/google-chrome
-        run: node scripts/national-qa/browser-gameplay.mjs --legacy
-      - name: Mobile real FFA
-        env:
-          CHROME_BIN: /usr/bin/google-chrome
-        run: node scripts/national-qa/browser-gameplay.mjs --mobile --legacy
+        run: |
+          set -euo pipefail
+          node scripts/national-qa/browser-gameplay.mjs ${{ matrix.viewport == 'mobile' && '--mobile' || '' }} ${{ matrix.scenario == 'legacy' && '--legacy' || '' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: national-r6-real-gpu-${{ github.sha }}
+          name: national-r6-real-gpu-${{ matrix.viewport }}-${{ matrix.scenario }}-${{ github.sha }}
           path: national-qa-artifacts/
           retention-days: 30
