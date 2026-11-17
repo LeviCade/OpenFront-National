@@ -29,6 +29,8 @@ const errors = [];
 const observed = [];
 const browserConsole = [];
 const browserNetworkErrors = [];
+let hardwareCapabilities = null;
+let submittedFounding = null;
 const start = performance.now();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let stage = "boot";
@@ -59,6 +61,8 @@ function persist() {
     workerPackets: observed.slice(-240),
     console: browserConsole.slice(-240),
     networkErrors: browserNetworkErrors.slice(-120),
+    actualHardware: hardwareCapabilities,
+    submittedFounding,
     elapsedMs: Math.round(performance.now() - start),
   };
   writeFileSync(
@@ -441,6 +445,32 @@ async function main() {
         "homepage body",
         80,
       );
+      hardwareCapabilities = {
+        browser: await send("Browser.getVersion").catch((error) => ({
+          error: String(error),
+        })),
+        webgl: await evaluate(`(() => {
+          const canvas = document.createElement("canvas");
+          const gl = canvas.getContext("webgl2");
+          if (!gl) return { supported: false, userAgent: navigator.userAgent };
+          const debug = gl.getExtension("WEBGL_debug_renderer_info");
+          return {
+            supported: true,
+            vendor: gl.getParameter(gl.VENDOR),
+            renderer: gl.getParameter(gl.RENDERER),
+            unmaskedVendor: debug ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) : null,
+            unmaskedRenderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : null,
+            maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+            maxRenderbufferSize: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
+            contextLost: gl.isContextLost(),
+            userAgent: navigator.userAgent,
+          };
+        })()`),
+        systemGpu: await send("SystemInfo.getInfo")
+          .then((info) => info.gpu ?? { unavailable: true })
+          .catch((error) => ({ unavailable: true, reason: String(error) })),
+      };
+      record("actual-gpu-webgl2-capabilities", { graphics: hardwareCapabilities });
       await capture("home");
     });
     await step("solo", async () => {
