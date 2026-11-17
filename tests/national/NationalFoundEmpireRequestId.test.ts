@@ -12,16 +12,18 @@ import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
+const ALICE_CLIENT_ID = "round6-alice-client";
+const BOB_CLIENT_ID = "round6-bob-client";
 const alice = new PlayerInfo(
   "Alice",
   PlayerType.Human,
-  "round6-alice-client",
+  ALICE_CLIENT_ID,
   "round6-alice",
 );
 const bob = new PlayerInfo(
   "Bob",
   PlayerType.Human,
-  "round6-bob-client",
+  BOB_CLIENT_ID,
   "round6-bob",
 );
 
@@ -85,6 +87,29 @@ describe("Round Six authenticated Found Empire request IDs", () => {
     }
   });
 
+  it("executes an old authenticated founding intent without a request ID", async () => {
+    const game = await spawned();
+    const executor = new Executor(game, "round6-request", undefined);
+    game.addExecution(
+      executor.createExec({
+        type: "national_found_empire",
+        empireId: "legacy-empire",
+        clientID: ALICE_CLIENT_ID,
+      }),
+    );
+    game.executeNextTick();
+    game.executeNextTick();
+    expect(game.nationalCommandResults(game.player(alice.id))).toMatchObject([
+      {
+        actorId: alice.id,
+        empireId: "legacy-empire",
+        requestId: null,
+        accepted: true,
+      },
+    ]);
+    expect(game.nationalCommandResults(game.player(bob.id))).toEqual([]);
+  });
+
   it("routes same-tick unique IDs to E1 outcomes with increasing sequences and actor-only receipt privacy", async () => {
     const game = await spawned();
     const executor = new Executor(game, "round6-request", undefined);
@@ -93,7 +118,7 @@ describe("Round Six authenticated Found Empire request IDs", () => {
         type: "national_found_empire",
         empireId: "first-empire",
         requestId: "click-A-1",
-        clientID: alice.clientID!,
+        clientID: ALICE_CLIENT_ID,
       }),
     );
     game.addExecution(
@@ -101,7 +126,7 @@ describe("Round Six authenticated Found Empire request IDs", () => {
         type: "national_found_empire",
         empireId: "second-empire",
         requestId: "click-A-2",
-        clientID: alice.clientID!,
+        clientID: ALICE_CLIENT_ID,
       }),
     );
     game.executeNextTick();
@@ -142,7 +167,7 @@ describe("Round Six authenticated Found Empire request IDs", () => {
       type: "national_found_empire" as const,
       empireId: "one-empire",
       requestId: "click-A-duplicate",
-      clientID: alice.clientID!,
+      clientID: ALICE_CLIENT_ID,
     };
     game.addExecution(executor.createExec(intent));
     game.addExecution(executor.createExec(intent));
@@ -169,7 +194,7 @@ describe("Round Six authenticated Found Empire request IDs", () => {
         type: "national_found_empire",
         empireId: "bob-empire",
         requestId: "click-B-own",
-        clientID: bob.clientID!,
+        clientID: BOB_CLIENT_ID,
       }),
     );
     game.executeNextTick();
