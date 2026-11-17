@@ -18,6 +18,7 @@ async function mount(
     national?: boolean;
     spawned?: boolean;
     alive?: boolean;
+    spectator?: boolean;
     replay?: boolean;
     politics?: NationalPublicPolitics | null;
   } = {},
@@ -26,6 +27,7 @@ async function mount(
     national: options.national ?? true,
     spawned: options.spawned ?? true,
     alive: options.alive ?? true,
+    spectator: options.spectator ?? false,
     replay: options.replay ?? false,
     politics:
       options.politics === undefined
@@ -49,7 +51,8 @@ async function mount(
       isReplay: () => optionsState.replay,
     }),
     myPlayer: () => player,
-    isSpectator: () => !optionsState.alive || optionsState.replay,
+    isSpectator: () =>
+      optionsState.spectator || !optionsState.alive || optionsState.replay,
     inSpawnPhase: () => !optionsState.spawned,
     nationalPolitics: () => optionsState.politics,
     nationalFoundingOutcome: () => null,
@@ -106,6 +109,12 @@ describe("NATIONAL player-facing founding", () => {
       dead.element.querySelector<HTMLButtonElement>('button[type="submit"]')!
         .disabled,
     ).toBe(true);
+    const spectator = await mount({ spectator: true });
+    expect(
+      spectator.element.querySelector<HTMLButtonElement>('button[type="submit"]')!
+        .disabled,
+    ).toBe(true);
+    expect(spectator.element.textContent).toContain("Only an active, living nation");
   });
 
   it("clicking Found Empire enqueues exactly one real intent, not local success", async () => {
