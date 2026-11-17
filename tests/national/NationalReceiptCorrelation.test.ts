@@ -360,6 +360,65 @@ describe("Round Six authenticated request-correlated NATIONAL receipts", () => {
     ]);
   });
 
+  it("deep-whitelists authoritative public politics instead of forwarding accidental private nested fields", async () => {
+    const game = await live();
+    game.performNationalCommand(game.player(north.id), {
+      kind: "found-empire",
+      empireId: "roster_safe",
+    });
+    const original = game.nationalPublicPoliticalView()!;
+    Object.defineProperty(game, "nationalPublicPoliticalView", {
+      configurable: true,
+      value: () => ({
+        ...original,
+        secretPacts: "unannounced treaty 987654321",
+        sightMemory: [{ id: "hidden-scout" }],
+        empires: original.empires.map((e) => ({
+          ...e,
+          treasury: "foreign-gold-9999",
+          privateTerms: { admission: "unanimous" },
+        })),
+        victory: {
+          sovereignPowerCount: 1,
+          resolved: true,
+          prizes: [
+            {
+              kind: "ImperialVictor",
+              nationId: north.id,
+              empireId: "roster_safe",
+              hiddenTroops: 87654321,
+            },
+          ],
+          secretResource: 12345678,
+        },
+      }),
+    });
+    const packet = runner(game, north.clientID!).next();
+    expect(packet.nationalPolitics?.empires).toEqual([
+      { id: "roster_safe", leaderId: north.id, memberIds: [north.id] },
+    ]);
+    expect(packet.nationalPolitics?.victory?.prizes).toEqual([
+      {
+        kind: "ImperialVictor",
+        nationId: north.id,
+        empireId: "roster_safe",
+      },
+    ]);
+    const json = JSON.stringify(packet.nationalPolitics);
+    for (const canary of [
+      "987654321",
+      "hidden-scout",
+      "foreign-gold-9999",
+      "privateTerms",
+      "hiddenTroops",
+      "87654321",
+      "secretResource",
+      "12345678",
+    ]) {
+      expect(json).not.toContain(canary);
+    }
+  });
+
   it("never serializes extra engine-journal fields, secrets, another actor's result or human sight memory", async () => {
     const game = await live();
     const journal: Receipt[] = [];
