@@ -12,8 +12,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { ClientID } from "@openfront/engine-api/Schemas";
 import type { PlayerID } from "@openfront/engine-api/game/GameTypes";
-import type { Game } from "@openfront/engine/game/Game";
-import { snapshotGame } from "@openfront/engine/snapshot/GameSnapshot";
+/**
+ * A minimal structural port: the trusted host injects the engine snapshot
+ * callback. The server layer MUST NOT import engine internals directly.
+ */
+export interface TrustedHostGamePort {
+  config(): { nationalMode(): boolean };
+  playerByClientID(clientID: ClientID): { id(): PlayerID } | undefined;
+  ticks(): number;
+}
 
 export interface AuthenticatedNationalOwner {
   /** Verified by the host account/session middleware, never packet content. */
@@ -44,7 +51,7 @@ interface StoredNationalGame {
  * The resolver must obtain identity from a validated server session and
  * roster, not from request JSON or a caller-selected player ID.
  */
-export class TrustedNationalSaveStore {
+export class TrustedNationalSaveStore<GameType extends TrustedHostGamePort> {
   private readonly saves = new Map<string, StoredNationalGame>();
 
   constructor(
@@ -52,6 +59,11 @@ export class TrustedNationalSaveStore {
       session: unknown,
       gameID: string,
     ) => AuthenticatedNationalOwner | null,
+    /** Host-provided canonical capture, invoked only inside trusted runtime. */
+    private readonly snapshotOnHost: (
+      game: GameType,
+      gameID: string,
+    ) => Uint8Array,
     private readonly perOwnerLimit = 8,
   ) {
     if (!Number.isSafeInteger(perOwnerLimit) || perOwnerLimit < 1) {
@@ -62,7 +74,7 @@ export class TrustedNationalSaveStore {
   private authorize(
     session: unknown,
     gameID: string,
-    game: Game,
+    game: GameType,
   ): AuthenticatedNationalOwner {
     if (!game.config().nationalMode()) {
       throw new Error("NATIONAL host save: legacy game not permitted");
@@ -85,7 +97,7 @@ export class TrustedNationalSaveStore {
   save(
     gameID: string,
     session: unknown,
-    game: Game,
+    game: GameType,
   ): PrivateNationalSaveHandle {
     const principal = this.authorize(session, gameID, game);
     const count = [...this.saves.values()].filter(
@@ -96,7 +108,7 @@ export class TrustedNationalSaveStore {
     if (count >= this.perOwnerLimit) {
       throw new Error("NATIONAL host save: owner quota exceeded");
     }
-    const bytes = snapshotGame(game, { gameID });
+    const bytes = this.snapshotOnHost(game, gameID);
     const digest = createHash("sha256").update(bytes).digest("hex");
     const id = randomUUID();
     this.saves.set(id, {
@@ -119,8 +131,8 @@ export class TrustedNationalSaveStore {
   async restore(
     handleId: string,
     session: unknown,
-    restoreGameOnHost: (bytes: Uint8Array) => Promise<Game>,
-  ): Promise<Game> {
+    restoreGameOnHost: (bytes: Uint8Array) => Promise<GameType>,
+  ): Promise<GameType> {
     const record = this.saves.get(handleId);
     if (!record) throw new Error("NATIONAL host save: not found");
     const principal = this.resolveSession(session, record.gameID);
