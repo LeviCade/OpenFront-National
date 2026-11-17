@@ -237,7 +237,10 @@ export function planNationalInterest(
     const defend = enemyNearby && self.landPercent <= 3;
     const decision: NationalDecision = {
       objective: defend ? "defend" : "expand",
-      targetId: preferred,
+      // A defensive alarm is NOT an offensive campaign order. The live
+      // NationExecution selects an actually observed, E2-authorized local
+      // combatant when it executes defense; the planner returns no target.
+      targetId: defend ? null : preferred,
       score: defend ? 100 : 80,
       rationale: defend ? "active-defense" : "reachable-opportunity",
     };
@@ -280,7 +283,7 @@ export function planNationalInterest(
   let bestScore = -Infinity;
   if (
     self.status === "independent" &&
-    observation.ownResources.troops >= 1_000
+    observation.ownResources.troops >= 500
   ) {
     for (const frontier of observation.frontiers) {
       if (frontier.access !== "land") continue;
@@ -292,7 +295,9 @@ export function planNationalInterest(
       const seenMilitary = visibleMilitary.has(target.id);
       if (
         target.landPercent > Math.max(6, self.landPercent * 2.5) ||
-        (self.landPercent <= 2 && seenMilitary)
+        (self.landPercent <= 2 &&
+          seenMilitary &&
+          target.landPercent > Math.max(1, self.landPercent * 1.5))
       ) {
         continue;
       }
