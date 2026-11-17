@@ -95,7 +95,7 @@ describe("NATIONAL player-facing founding", () => {
     expect(element.querySelector("button")).toBeNull();
     const replay = await mount({ replay: true });
     expect(replay.element.textContent).toContain("Replay is read-only");
-    expect(replay.element.querySelector('button[type="submit"]')).toBeNull();
+    expect(replay.element.querySelector("#national-empire-id")).toBeNull();
   });
 
   it("disables founding until the real player has spawned and remains alive", async () => {
@@ -169,7 +169,7 @@ describe("NATIONAL player-facing founding", () => {
     expect(element.textContent).toContain("You are the emperor.");
     expect(element.textContent).not.toContain("Confirmed by game");
     expect(element.textContent).toMatch(/Leader:\s+A Nation/);
-    expect(element.querySelector('button[type="submit"]')).toBeNull();
+    expect(element.querySelector("#national-empire-id")).toBeNull();
   });
 
   it("keeps unavailable diplomacy actions disabled and the panel keyboard accessible", async () => {
@@ -458,7 +458,7 @@ describe("NATIONAL player-facing founding", () => {
         ?.getAttribute("data-national-phase"),
     ).toBe("unknown");
     expect(element.textContent).not.toContain("Confirmed by game");
-    expect(element.querySelector('button[type="submit"]')).toBeNull();
+    expect(element.querySelector("#national-empire-id")).toBeNull();
   });
 
   it("never shows active-player acceptance after spectator transition or elimination", async () => {
