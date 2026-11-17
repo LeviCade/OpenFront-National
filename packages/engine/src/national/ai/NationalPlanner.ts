@@ -280,7 +280,7 @@ export function planNationalInterest(
   let bestScore = -Infinity;
   if (
     self.status === "independent" &&
-    observation.ownResources.troops >= 5_000
+    observation.ownResources.troops >= 1_000
   ) {
     for (const frontier of observation.frontiers) {
       if (frontier.access !== "land") continue;
