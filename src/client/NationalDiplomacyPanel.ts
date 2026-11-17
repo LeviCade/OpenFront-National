@@ -60,7 +60,13 @@ export class NationalDiplomacyPanel extends LitElement {
     }
 
     const attempt = this.pendingAttempt;
-    if (attempt && game && player) {
+    if (attempt && game?.config().isReplay()) {
+      this.pendingAttempt = null;
+      this.pendingEmpireId = null;
+      this.phase = "unknown";
+      this.message = "Replay is read-only. The previous founding request is not confirmed.";
+      this.error = null;
+    } else if (attempt && game && player) {
       const tick = typeof game.ticks === "function" ? game.ticks() : 0;
       const results =
         typeof game.nationalFoundingResults === "function"
@@ -84,7 +90,14 @@ export class NationalDiplomacyPanel extends LitElement {
         this.pendingAttempt = null;
         this.pendingEmpireId = null;
         this.phase = decision.phase;
-        if (decision.phase === "accepted") {
+        if (decision.phase === "accepted" &&
+          (game.isSpectator() || !player.isAlive() || game.inSpawnPhase())) {
+          // The command receipt is real, but a now-inactive principal cannot
+          // receive a player-facing active founding success toast.
+          this.phase = "unknown";
+          this.message = "Founding was accepted previously, but the active nation has changed. Check the current roster.";
+          this.error = null;
+        } else if (decision.phase === "accepted") {
           this.lastConfirmedEmpireId = attempt.empireId;
           this.message = `Confirmed by game: your nation founded ${attempt.empireId}.`;
           this.error = null;
