@@ -18,7 +18,7 @@ concurrency:
 jobs:
   gpu-browser:
     name: "Real GPU ${{ matrix.viewport }} ${{ matrix.scenario }}"
-    runs-on: [self-hosted, linux, x64, gpu]
+    runs-on: [self-hosted, gpu]
     timeout-minutes: 50
     strategy:
       fail-fast: false
@@ -57,11 +57,21 @@ jobs:
         run: |
           (nvidia-smi -q || true) > national-qa-artifacts/gpu/nvidia-smi.txt
           (glxinfo -B || true) > national-qa-artifacts/gpu/glxinfo.txt
-          command -v google-chrome
+          (system_profiler SPDisplaysDataType || true) > national-qa-artifacts/gpu/macos-displays.txt
+          if command -v google-chrome >/dev/null 2>&1; then
+            BROWSER="$(command -v google-chrome)"
+          elif [ -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ]; then
+            BROWSER="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+          elif command -v chromium >/dev/null 2>&1; then
+            BROWSER="$(command -v chromium)"
+          else
+            echo "GPU runner must have Google Chrome or Chromium" >&2
+            exit 1
+          fi
+          printf 'CHROME_BIN=%s\\n' "$BROWSER" >> "$GITHUB_ENV"
       - name: Run real browser through WebGL game gate
         shell: bash
         env:
-          CHROME_BIN: /usr/bin/google-chrome
           NATIONAL_REQUIRE_HARDWARE_GPU: "1"
         run: |
           set -euo pipefail
