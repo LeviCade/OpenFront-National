@@ -16,8 +16,8 @@ import { NationalFoundEmpireIntentSchema } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game, Player } from "@openfront/engine/game/Game";
-import { NationalOutboundFilter } from "@openfront/engine/national/observation/NationalOutbound";
 import { GameRunner } from "@openfront/engine/GameRunner";
+import { NationalOutboundFilter } from "@openfront/engine/national/observation/NationalOutbound";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
