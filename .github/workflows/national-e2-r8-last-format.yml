@@ -1,0 +1,55 @@
+name: NATIONAL E2 R8 final one-file source acceptance
+on:
+  push:
+    branches: [stage3/e2-round8-war-levy-conservation-20261117]
+    paths: [.github/workflows/national-e2-r8-last-format.yml]
+permissions:
+  contents: write
+jobs:
+  exact-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stage3/e2-round8-war-levy-conservation-20261117
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Install required npm
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Pinned install
+        run: npm run inst
+      - name: Format exactly one remaining E2 test
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/oxfmt --write tests/national/RoundEightWarRequestId.test.ts
+          ./node_modules/.bin/oxfmt --check tests/national/RoundEightWarRequestId.test.ts
+          git diff --check
+          git diff --stat -- tests/national/RoundEightWarRequestId.test.ts
+      - name: Publish one-file formatting and remove temporary runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- tests/national/RoundEightWarRequestId.test.ts
+          rm .github/workflows/national-e2-r8-last-format.yml
+          git add -u -- .github/workflows/national-e2-r8-last-format.yml
+          git commit -m "style(national): finalize E2 request correlation format"
+          git push origin HEAD:refs/heads/stage3/e2-round8-war-levy-conservation-20261117
+          echo "EXACT_SOURCE_SHA=$(git rev-parse HEAD)"
+      - name: Full repository TypeScript
+        run: npm run typecheck
+      - name: All Round Eight actual spawned-game scenarios
+        run: ./node_modules/.bin/vitest run --project node tests/national/RoundEightWarInFlight.test.ts tests/national/RoundEightLevyOverlap.test.ts tests/national/RoundEightWarRequestId.test.ts
+      - name: Full repository tests
+        run: npm test
+      - name: Full repository lint
+        run: npm run lint
+      - name: Pinned full-repository format gate
+        run: npm run format:check
+      - name: Production build
+        run: npm run build-prod
