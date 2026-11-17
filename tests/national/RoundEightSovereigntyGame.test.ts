@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { PlayerInfo, PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { NationalFoundEmpireExecution } from "@openfront/engine/execution/NationalFoundEmpireExecution";
@@ -568,5 +569,26 @@ describe("Round Eight trusted-host private NATIONAL save primitive", () => {
     expect(() => store.save("r8-host-game", "no-session", game)).toThrow(/unauthorized/);
     expect(() => store.save("r8-host-game", "verified-alice", legacy)).toThrow(/legacy/);
     expect(() => store.save("different-game", "verified-alice", game)).toThrow(/unauthorized/);
+  });
+});
+
+/**
+ * TEMPORARY E1 DIAGNOSTIC ONLY — delete before final PR handoff.
+ * Captures the exact pinned oxfmt source diff in CI, not a gameplay check.
+ */
+describe("E1 R8 TEMP PINNED FORMAT DIAGNOSTIC — REMOVE", () => {
+  it("prints the exact oxfmt diff of E1-owned files", () => {
+    const paths = [
+      "packages/engine/src/game/GameImpl.ts",
+      "packages/engine/src/national/politics/NationalGovernanceState.ts",
+      "src/server/national/TrustedNationalSaveStore.ts",
+      "tests/national/RoundEightSovereigntyGame.test.ts",
+    ];
+    execFileSync("node_modules/.bin/oxfmt", ["--write", ...paths]);
+    const diff = execFileSync("git", ["diff", "--", ...paths], {
+      encoding: "utf8",
+      maxBuffer: 2_000_000,
+    });
+    console.log("E1_R8_FORMAT_DIFF_BEGIN\\n" + diff + "\\nE1_R8_FORMAT_DIFF_END");
   });
 });
