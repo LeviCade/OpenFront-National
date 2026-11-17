@@ -248,15 +248,26 @@ async function main() {
   }, "Vite HTTP");
   record("vite-http-ready");
 
+  // Never force SwiftShader: doing so makes even a GPU-backed QA runner
+  // report a software renderer and fail OpenFront's legitimate WebGL gate.
+  // Optional hardware backend may be selected on an actual GPU machine.
+  const angleBackend = process.env.NATIONAL_CHROME_ANGLE_BACKEND;
+  if (
+    angleBackend !== undefined &&
+    angleBackend !== "gl" &&
+    angleBackend !== "vulkan"
+  ) {
+    throw new Error("NATIONAL_CHROME_ANGLE_BACKEND must be gl or vulkan");
+  }
+  const hardwareOnly = process.env.NATIONAL_REQUIRE_HARDWARE_GPU === "1";
   spawnChild(process.env.CHROME_BIN ?? "google-chrome", [
     "--headless=new",
     "--no-sandbox",
     "--disable-dev-shm-usage",
     "--enable-webgl",
     "--ignore-gpu-blocklist",
-    "--use-gl=angle",
-    "--use-angle=swiftshader",
-    "--enable-unsafe-swiftshader",
+    ...(hardwareOnly ? ["--disable-software-rasterizer"] : []),
+    ...(angleBackend ? ["--use-gl=angle", "--use-angle=" + angleBackend] : []),
     "--no-first-run",
     "--no-default-browser-check",
     "--remote-allow-origins=*",
