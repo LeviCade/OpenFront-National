@@ -745,7 +745,6 @@ export class NationalDiplomacyPanel extends LitElement {
                     />
                     <button
                       id="national-propose-peace"
-                      id="national-accept-peace"
                       type="submit"
                       class="rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 disabled:opacity-50"
                       ?disabled=${warReason !== null || !this.eventBus || !this.warIdDraft.trim()}
@@ -772,6 +771,7 @@ export class NationalDiplomacyPanel extends LitElement {
                       ?disabled=${warReason !== null}
                     />
                     <button
+                      id="national-accept-peace"
                       type="submit"
                       class="rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 disabled:opacity-50"
                       ?disabled=${warReason !== null || !this.eventBus || !this.motionIdDraft.trim()}
