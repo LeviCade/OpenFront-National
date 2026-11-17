@@ -214,24 +214,43 @@ describe("E5 Round Five independent real-game WAR + MDA acceptance", () => {
       restored.executeNextTick();
       expect(digest(restored)).toBe(digest(game));
     }
-    console.info("QA_R5_LEVY_REPLAY " + JSON.stringify({ first: byteHash, final: digest(game), ticks: 5, intercepted: receipt.intercepted }));
+    console.info(
+      "QA_R5_LEVY_REPLAY " +
+        JSON.stringify({
+          first: byteHash,
+          final: digest(game),
+          ticks: 5,
+          intercepted: receipt.intercepted,
+        }),
+    );
   });
 
   it("LEVY-05/06 actual CAS rejects stale and duplicate funding; conservation oracle detects injected second debit", async () => {
     const game = await live();
     const donor = game.player(C) as PlayerImpl;
     donor.setTroops(100_000);
-    const rows = [{ player: donor, expectedBalance: 100_000, debit: 10_000, resultingBalance: 90_000 }];
+    const rows = [
+      {
+        player: donor,
+        expectedBalance: 100_000,
+        debit: 10_000,
+        resultingBalance: 90_000,
+      },
+    ];
     PlayerImpl.commitNationalTroopDebits(rows);
     expect(donor.troops()).toBe(90_000);
     expect(() => PlayerImpl.commitNationalTroopDebits(rows)).toThrow();
     expect(donor.troops()).toBe(90_000);
     const checked = [A, B, C].map((id) => game.player(id).troops());
     donor.setTroops(80_000); // explicit double-charge mutation
-    expect(() => assertResources(game, checked, [0, 0, 0])).toThrow(/resource conservation failure/);
+    expect(() => assertResources(game, checked, [0, 0, 0])).toThrow(
+      /resource conservation failure/,
+    );
     donor.setTroops(90_000);
     assertResources(game, checked, [0, 0, 0]);
-    expect(() => PlayerImpl.commitNationalTroopDebits([rows[0], rows[0]])).toThrow();
+    expect(() =>
+      PlayerImpl.commitNationalTroopDebits([rows[0], rows[0]]),
+    ).toThrow();
     expect(donor.troops()).toBe(90_000);
   });
 
@@ -269,7 +288,10 @@ describe("E5 Round Five independent real-game WAR + MDA acceptance", () => {
 
   it("WAR-04 independent peace layers and source snapshot hash survive restore", async () => {
     const game = await live();
-    game.performNationalCommand(game.player(A), { kind: "found-empire", empireId: "r5_empire" });
+    game.performNationalCommand(game.player(A), {
+      kind: "found-empire",
+      empireId: "r5_empire",
+    });
     game.performNationalWarCommand(game.player(A), {
       kind: "declare-imperial",
       warId: "r5-imperial-war",
