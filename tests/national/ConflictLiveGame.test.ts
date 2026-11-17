@@ -217,6 +217,9 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
         authorizeOffensiveAction: () => true,
         atWar: () => true,
       }),
+      // This fixture intentionally removes the canonical service, rather than
+      // mistaking an authoritative empty (no-treaty) roster for a missing port.
+      nationalMdaAllies: undefined,
       applyNationalDefenseLevy: () => {
         throw new Error("must never debit without the MDA roster");
       },
@@ -232,6 +235,36 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
     ).toThrow("missing authoritative MDA contributors");
     expect(north.troops()).toBe(50_000);
     expect(south.troops()).toBe(50_000);
+  });
+
+  it("LEVY-07 a present authoritative roster may legitimately be empty when no MDA treaty exists", async () => {
+    const game = await spawned();
+    const north = game.player("north-id");
+    const south = game.player("south-id");
+    north.setTroops(100_000);
+    south.setTroops(100_000);
+    // No pact was created. The real Game service must return an empty list,
+    // not an absent service or a synthetic donor reader.
+    expect(typeof game.nationalMdaAllies).toBe("function");
+    expect(game.nationalMdaAllies(south.id())).toEqual([]);
+    game.performNationalWarCommand(north, {
+      kind: "declare-national",
+      warId: "no-mda-war",
+      aggressorId: north.id(),
+      targetId: south.id(),
+    });
+    expect(authorizeNationalAttack(game, north.id(), south.id())).toBe(true);
+    const before = [north.troops(), south.troops()];
+    const receipt = interceptNationalAttack(
+      game,
+      "accepted-without-treaty",
+      north.id(),
+      south.id(),
+      10_000,
+    );
+    expect(receipt?.contributions).toEqual([]);
+    expect(receipt?.intercepted).toBe(0);
+    expect([north.troops(), south.troops()]).toEqual(before);
   });
 
   it("LEVY-07 rejects an invalid, duplicated or incomplete authoritative MDA roster without a debit", async () => {

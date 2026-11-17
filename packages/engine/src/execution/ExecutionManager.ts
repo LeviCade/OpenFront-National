@@ -77,7 +77,14 @@ export class Executor {
         );
       }
       case "national_found_empire":
-        return new NationalFoundEmpireExecution(player, intent.empireId);
+        // Authenticated actor comes ONLY from the stamped clientID above.
+        // requestId is untrusted correlation metadata, never a principal.
+        return new NationalFoundEmpireExecution(
+          player,
+          intent.empireId,
+          null,
+          intent.requestId ?? null,
+        );
       case "national_declare_war":
         return new NationalWarExecution(
           player,
