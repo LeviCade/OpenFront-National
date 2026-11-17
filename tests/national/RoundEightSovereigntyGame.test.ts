@@ -193,7 +193,7 @@ describe("Round Eight real Game sovereignty and constitutional voting", () => {
           kind: "expel-pact",
           pactId: "r8-constitution",
           memberId: C,
-          approvingIds: [A, B],
+          approvingIds: [A],
         }),
       ).toThrow(/forbidden/);
     }
