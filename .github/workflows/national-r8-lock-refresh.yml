@@ -23,8 +23,8 @@ jobs:
         with:
           node-version: "24.15.0"
       - run: npm install --global --ignore-scripts npm@12.1.0
-      - name: Resolve reviewed semver-safe fixes and update lockfile only
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      # DOMPurify 3.4.18 patches critical XSS flaws but is younger than the\n      # repository's 7-day supply-chain delay; exempt THIS audited package only.\n      - name: Resolve reviewed semver-safe fixes and update lockfile only
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --min-release-age-exclude=dompurify
       - name: Require pinned install from generated lockfile
         run: npm run inst
       - name: Reject any surviving production advisory
