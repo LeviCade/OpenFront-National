@@ -1,0 +1,75 @@
+name: NATIONAL — Real GPU browser gameplay acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: "Exact 40-character staging commit SHA (do not use moving branch names)"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: national-hardware-${{ inputs.candidate_sha }}
+  cancel-in-progress: false
+
+jobs:
+  gpu-browser:
+    name: "Real GPU ${{ matrix.viewport }} ${{ matrix.scenario }}"
+    runs-on: [self-hosted, linux, x64, gpu]
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        viewport: [desktop, mobile]
+        scenario: [national, legacy]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject unreviewed or unstaged source commit
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid SHA"; exit 1; }
+          git fetch origin stage3/round6-combined-acceptance-20261116
+          git cat-file -e "$CANDIDATE_SHA^{commit}"
+          git merge-base --is-ancestor "$CANDIDATE_SHA" FETCH_HEAD || {
+            echo "Refusing commit outside the approved staging history"
+            exit 1
+          }
+          git checkout --detach "$CANDIDATE_SHA"
+          mkdir -p national-qa-artifacts/gpu
+          printf '%s\n' "$CANDIDATE_SHA" > national-qa-artifacts/gpu/sha.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Install pinned dependencies
+        run: npm run inst
+      - name: Capture actual GPU driver capabilities
+        shell: bash
+        run: |
+          (nvidia-smi -q || true) > national-qa-artifacts/gpu/nvidia-smi.txt
+          (glxinfo -B || true) > national-qa-artifacts/gpu/glxinfo.txt
+          command -v google-chrome
+      - name: Run real browser through WebGL game gate
+        shell: bash
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+          NATIONAL_REQUIRE_HARDWARE_GPU: "1"
+        run: |
+          set -euo pipefail
+          node scripts/national-qa/browser-gameplay.mjs ${{ matrix.viewport == 'mobile' && '--mobile' || '' }} ${{ matrix.scenario == 'legacy' && '--legacy' || '' }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: national-hardware-${{ matrix.viewport }}-${{ matrix.scenario }}-${{ inputs.candidate_sha }}
+          path: national-qa-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
