@@ -124,19 +124,24 @@ function cdp(webSocket) {
       const raw = packet.params?.request?.url;
       try {
         const url = new URL(raw);
-        // Drop query/fragment; they may carry tokens. Record origin + path only.
-        if (/^https?:$/.test(url.protocol) &&
-            (/\\.(?:mp3|ogg|flac|wav|woff2?|ttf|svg|png|jpe?g|webp)$/i.test(url.pathname) ||
-             /\\/(?:proprietary|premium|cdn|assets)\\//i.test(url.pathname))) {
-          const evidence = { origin: url.origin, path: url.pathname,
-            type: packet.params?.type ?? "other" };
+        // Drop query and fragment: URLs can contain authentication tokens.
+        const mediaAsset = /[.](?:mp3|ogg|flac|wav|woff2?|ttf|svg|png|jpe?g|webp)$/i.test(url.pathname);
+        const assetFolder = /[/](?:proprietary|premium|cdn|assets)[/]/i.test(url.pathname);
+        if (/^https?:$/.test(url.protocol) && (mediaAsset || assetFolder)) {
+          const evidence = {
+            origin: url.origin,
+            path: url.pathname,
+            type: packet.params?.type ?? "other",
+          };
           runtimeAssetRequests.push(evidence);
-          if (/\\/proprietary\\//i.test(url.pathname) ||
-              (/\\/cdn\\//i.test(url.pathname) && /(?:\\.|^)openfront\\.(?:io|dev)$/i.test(url.hostname))) {
-            restrictedRuntimeAssets.push(evidence);
-          }
+          const forbiddenLocal = /[/]proprietary[/]/i.test(url.pathname);
+          const upstreamCdn = /[/]cdn[/]/i.test(url.pathname) &&
+            /(?:[.]|^)openfront[.](?:io|dev)$/i.test(url.hostname);
+          if (forbiddenLocal || upstreamCdn) restrictedRuntimeAssets.push(evidence);
         }
-      } catch { /* non-URL data requests have no external asset origin */ }
+      } catch {
+        // Non-URL data requests have no external asset origin.
+      }
     }
     if (packet.method === "Network.loadingFailed") {
       browserNetworkErrors.push({
