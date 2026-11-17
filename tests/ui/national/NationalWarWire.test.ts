@@ -31,7 +31,11 @@ vi.mock("../../../src/client/InGameModal", () => ({
 import "../../../src/client/NationalDiplomacyPanel";
 import type { LobbyConfig } from "../../../src/client/ClientGameRunner";
 import type { NationalDiplomacyPanel } from "../../../src/client/NationalDiplomacyPanel";
-import { validNationalWarReference } from "../../../src/client/NationalDiplomacyState";
+import {
+  readNationalDiplomacyResults,
+  validNationalWarReference,
+  type NationalDiplomacyResult,
+} from "../../../src/client/NationalDiplomacyState";
 import {
   SendNationalDeclareWarIntentEvent,
   SetIntentGateEvent,
@@ -54,6 +58,7 @@ async function setup(
 ) {
   const state = {
     tick: 10,
+    diplomacyResults: [] as NationalDiplomacyResult[],
     national: options.national ?? true,
     replay: options.replay ?? false,
     spawned: options.spawned ?? true,
@@ -119,6 +124,7 @@ async function setup(
     nationalPolitics: () => state.politics,
     nationalFoundingResults: () => [],
     nationalFoundingOutcome: () => null,
+    nationalDiplomacyResults: () => state.diplomacyResults,
     ticks: () => state.tick,
     isSpectator: () => state.spectator,
     inSpawnPhase: () => !state.spawned,
@@ -291,6 +297,104 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       )?.disabled ?? true,
     ).toBe(true);
     expect(intents()).toHaveLength(0);
+  });
+
+  it("rejects foreign and mismatched WAR receipts, then displays exact authenticated rejection", async () => {
+    const { panel, state } = await setup();
+    await choose(panel, "#national-war-target", "nation-b");
+    panel.querySelector<HTMLButtonElement>("#national-declare-war")!.click();
+    const sent = intents()[0];
+    const requestId = sent.requestId as string;
+    expect(requestId).toMatch(/^nc_[0-9a-f]{32}$/);
+    state.tick = 11;
+    state.diplomacyResults = [
+      {
+        type: "national_declare_war",
+        actorId: "nation-b",
+        recipientId: "nation-b",
+        requestId,
+        sequence: 1,
+        tick: 11,
+        accepted: true,
+      },
+      {
+        type: "national_declare_war",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        requestId: "nc_00000000000000000000000000000000",
+        sequence: 2,
+        tick: 11,
+        accepted: true,
+      },
+    ];
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).not.toContain("The game rejected");
+    expect(panel.textContent).not.toContain("Confirmed by game");
+
+    state.diplomacyResults = [
+      {
+        type: "national_declare_war",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        requestId,
+        sequence: 3,
+        tick: 11,
+        accepted: false,
+        reason: "political-rule",
+      },
+    ];
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).toContain("The game rejected this diplomacy action");
+    expect(panel.textContent).toContain("political-rule");
+    expect(panel.textContent).not.toContain("Confirmed by game");
+  });
+
+  it("does not claim WAR success from an authenticated positive receipt without current public war state", async () => {
+    const { panel, state } = await setup();
+    await choose(panel, "#national-war-target", "nation-b");
+    panel.querySelector<HTMLButtonElement>("#national-declare-war")!.click();
+    const requestId = intents()[0].requestId as string;
+    state.tick = 11;
+    state.diplomacyResults = [
+      {
+        type: "national_declare_war",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        requestId,
+        sequence: 4,
+        tick: 11,
+        accepted: true,
+        warId: "national-11-1-4",
+      },
+    ];
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).toContain("Authenticated positive command receipt");
+    expect(panel.textContent).toContain("No completed action is confirmed");
+    expect(panel.textContent).not.toContain("War accepted");
+  });
+
+  it("fails closed on malformed, foreign and non-cryptographic receipt IDs", () => {
+    const valid = {
+      type: "national_declare_war",
+      actorId: "nation-a",
+      recipientId: "nation-a",
+      accepted: false,
+      tick: 10,
+      sequence: 1,
+      requestId: "nc_11111111111111111111111111111111",
+      reason: "political-rule",
+    };
+    expect(readNationalDiplomacyResults([
+      { ...valid, recipientId: "nation-b" },
+      { ...valid, sequence: -1 },
+      { ...valid, requestId: "legacy" },
+      { ...valid, tick: -4 },
+      { ...valid, type: "national_found_empire" },
+      valid,
+    ])).toEqual([valid]);
   });
 
   it("preserves legacy FFA isolation and respects the existing intent gate", async () => {
