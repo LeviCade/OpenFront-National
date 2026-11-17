@@ -11,6 +11,7 @@ import {
   reconcileNationalFounding,
   validEmpireId,
   validNationalWarReference,
+  type NationalDiplomacyResult,
   type NationalFoundingAttempt,
 } from "./NationalDiplomacyState";
 import {
@@ -56,6 +57,7 @@ export class NationalDiplomacyPanel extends LitElement {
     actorId: string;
     tick: number;
     requestId: string;
+    commandType: NationalDiplomacyResult["type"];
   } | null = null;
 
   createRenderRoot() {
@@ -152,10 +154,54 @@ export class NationalDiplomacyPanel extends LitElement {
         this.lastDiplomacySubmission = null;
         this.diplomacyStatus =
           "The active game or principal changed. Previous diplomacy is unconfirmed.";
-      } else if (tick > submission.tick) {
-        // No verified E1/E3 WAR receipt stream exists in this baseline.
-        // Never upgrade transport submission to accepted at the next tick.
-        this.lastDiplomacySubmission = null;
+      } else {
+        const results =
+          typeof game.nationalDiplomacyResults === "function"
+            ? game.nationalDiplomacyResults()
+            : [];
+        const matched = results.filter(
+          (result) =>
+            result.requestId === submission.requestId &&
+            result.type === submission.commandType &&
+            result.actorId === submission.actorId &&
+            result.recipientId === submission.actorId &&
+            Number.isSafeInteger(result.sequence) &&
+            result.sequence >= 0 &&
+            result.tick >= submission.tick &&
+            result.tick <= tick,
+        );
+        const result = matched[0];
+        if (
+          result &&
+          matched.some(
+            (entry) =>
+              entry.sequence !== result.sequence ||
+              entry.accepted !== result.accepted ||
+              entry.tick !== result.tick ||
+              entry.warId !== result.warId ||
+              entry.motionId !== result.motionId ||
+              entry.reason !== result.reason,
+          )
+        ) {
+          this.lastDiplomacySubmission = null;
+          this.diplomacyStatus = null;
+          this.diplomacyError =
+            "Conflicting authenticated diplomacy receipts. No action is confirmed.";
+        } else if (result && !result.accepted) {
+          this.lastDiplomacySubmission = null;
+          this.diplomacyStatus = null;
+          this.diplomacyError = `The game rejected this diplomacy action: ${result.reason ?? "political-rule"}.`;
+        } else if (result?.accepted) {
+          // A genuine accepted E1 receipt alone is NOT sufficient to claim
+          // a war, peace motion or agreement took effect. E1/E3 must also
+          // publish the actual current public conflict projection.
+          this.diplomacyStatus =
+            "Authenticated positive command receipt received; authoritative public war/peace state is not yet available. No completed action is confirmed.";
+        } else if (tick - submission.tick >= 200) {
+          this.lastDiplomacySubmission = null;
+          this.diplomacyStatus =
+            "No authenticated diplomacy result arrived. Outcome is unknown; inspect the game before resubmitting.";
+        }
       }
     }
     if (this.expanded) this.requestUpdate();
@@ -324,6 +370,7 @@ export class NationalDiplomacyPanel extends LitElement {
       | SendNationalProposePeaceIntentEvent
       | SendNationalAcceptPeaceIntentEvent,
     description: string,
+    commandType: NationalDiplomacyResult["type"],
   ): void {
     const reason = this.warUnavailableReason;
     const game = this.game;
@@ -358,6 +405,7 @@ export class NationalDiplomacyPanel extends LitElement {
         actorId: player.id(),
         tick,
         requestId,
+        commandType,
       };
       // An EventBus producer does not prove that an intent gate, worker or
       // E1 accepted this action. Exact request receipts are still pending E1/E3.
@@ -405,6 +453,7 @@ export class NationalDiplomacyPanel extends LitElement {
           requestId,
         ),
       `${this.warScope === "imperial" ? "Imperial" : "National"} war declaration`,
+      "national_declare_war",
     );
   }
 
@@ -423,6 +472,7 @@ export class NationalDiplomacyPanel extends LitElement {
           ? new SendNationalProposePeaceIntentEvent(reference, requestId)
           : new SendNationalAcceptPeaceIntentEvent(reference, requestId),
       action === "propose" ? "Peace proposal" : "Peace motion acceptance",
+      action === "propose" ? "national_propose_peace" : "national_accept_peace",
     );
   }
 
