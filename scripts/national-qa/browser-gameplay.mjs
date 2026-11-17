@@ -14,6 +14,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { verifyHardwareWebgl } from "./gpu-attestation.mjs";
 
 const mobile = process.argv.includes("--mobile");
 const legacy = process.argv.includes("--legacy");
@@ -508,6 +509,13 @@ async function main() {
       record("actual-gpu-webgl2-capabilities", {
         graphics: hardwareCapabilities,
       });
+      if (hardwareOnly) {
+        const attestation = verifyHardwareWebgl(hardwareCapabilities);
+        record("strict-hardware-renderer-attestation", attestation);
+        if (!attestation.accepted) {
+          throw new Error("REAL_CHROMIUM_GPU_REQUIRED: " + attestation.reason);
+        }
+      }
       await capture("home");
     });
     await step("solo", async () => {
