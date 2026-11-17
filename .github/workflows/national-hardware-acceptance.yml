@@ -68,7 +68,7 @@ jobs:
             echo "GPU runner must have Google Chrome or Chromium" >&2
             exit 1
           fi
-          printf 'CHROME_BIN=%s\\n' "$BROWSER" >> "$GITHUB_ENV"
+          printf 'CHROME_BIN=%s\n' "$BROWSER" >> "$GITHUB_ENV"
       - name: Run real browser through WebGL game gate
         shell: bash
         env:
