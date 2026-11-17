@@ -29,6 +29,8 @@ const errors = [];
 const observed = [];
 const browserConsole = [];
 const browserNetworkErrors = [];
+let hardwareCapabilities = null;
+let submittedFounding = null;
 const start = performance.now();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let stage = "boot";
@@ -59,6 +61,8 @@ function persist() {
     workerPackets: observed.slice(-240),
     console: browserConsole.slice(-240),
     networkErrors: browserNetworkErrors.slice(-120),
+    actualHardware: hardwareCapabilities,
+    submittedFounding,
     elapsedMs: Math.round(performance.now() - start),
   };
   writeFileSync(
@@ -142,16 +146,18 @@ const probe = `(() => {
   // Instrument real MessagePort reception BEFORE the application starts.
   // The instrumentation never mutates a game message or injects an outcome.
   const packets = [];
+  let sequence = 0;
   const scrub = (data) => {
     if (!data || typeof data !== 'object') return;
     const type = typeof data.type === 'string' ? data.type : undefined;
     const info = {
+      sequence: ++sequence,
       type, tick: Number.isFinite(data.tick) ? data.tick : undefined,
       keys: Object.keys(data).filter((k) =>
         ['type','tick','gameUpdates','nationalPolitics','nationalCommandResults','updates','error','snapshot'].includes(k)
       ),
     };
-    const updateCandidates = [data, ...(Array.isArray(data.gameUpdates) ? data.gameUpdates : [])];
+    const updateCandidates = [data, ...(data.gameUpdate ? [data.gameUpdate] : []), ...(Array.isArray(data.gameUpdates) ? data.gameUpdates : [])];
     for (const candidate of updateCandidates) {
       if (!candidate || typeof candidate !== 'object') continue;
       if (candidate.nationalPolitics) info.publicPolitics = candidate.nationalPolitics;
@@ -167,6 +173,13 @@ const probe = `(() => {
       seen.add(event);
       scrub(event.data);
     }
+  };
+  // WorkerClient receives real GameRunner packets via a Worker, not only a MessagePort.
+  // Observe both; never mutate a delivered game packet.
+  const nativeWorkerAdd = Worker.prototype.addEventListener;
+  Worker.prototype.addEventListener = function(type, listener, options) {
+    if (type === 'message') nativeWorkerAdd.call(this, type, track, false);
+    return nativeWorkerAdd.call(this, type, listener, options);
   };
   const originalAdd = MessagePort.prototype.addEventListener;
   MessagePort.prototype.addEventListener = function(type, listener, options) {
@@ -285,11 +298,14 @@ async function main() {
       Buffer.from(data.data, "base64"),
     );
   };
+  let lastWorkerSeq = 0;
   const worker = async () => {
     const evidence = await evaluate("window.__nationalQaWorkerEvidence || []");
     if (Array.isArray(evidence)) {
-      for (const packet of evidence.slice(observed.length))
-        observed.push(packet);
+      for (const packet of evidence) {
+        if (packet.sequence > lastWorkerSeq) observed.push(packet);
+      }
+      lastWorkerSeq = evidence[evidence.length - 1]?.sequence ?? lastWorkerSeq;
     }
     return observed;
   };
@@ -441,6 +457,34 @@ async function main() {
         "homepage body",
         80,
       );
+      hardwareCapabilities = {
+        browser: await send("Browser.getVersion").catch((error) => ({
+          error: String(error),
+        })),
+        webgl: await evaluate(`(() => {
+          const canvas = document.createElement("canvas");
+          const gl = canvas.getContext("webgl2");
+          if (!gl) return { supported: false, userAgent: navigator.userAgent };
+          const debug = gl.getExtension("WEBGL_debug_renderer_info");
+          return {
+            supported: true,
+            vendor: gl.getParameter(gl.VENDOR),
+            renderer: gl.getParameter(gl.RENDERER),
+            unmaskedVendor: debug ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) : null,
+            unmaskedRenderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : null,
+            maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+            maxRenderbufferSize: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
+            contextLost: gl.isContextLost(),
+            userAgent: navigator.userAgent,
+          };
+        })()`),
+        systemGpu: await send("SystemInfo.getInfo")
+          .then((info) => info.gpu ?? { unavailable: true })
+          .catch((error) => ({ unavailable: true, reason: String(error) })),
+      };
+      record("actual-gpu-webgl2-capabilities", {
+        graphics: hardwareCapabilities,
+      });
       await capture("home");
     });
     await step("solo", async () => {
@@ -591,27 +635,80 @@ async function main() {
     });
     await step("found-empire", async () => {
       const empireId = "R5_Browser_QA";
+      const attached = await evaluate(`(async () => {
+        const panel = window.__nationalQaFind("national-diplomacy-panel");
+        if (!panel?.eventBus || !panel.game?.myPlayer()) return false;
+        const { SendNationalFoundEmpireIntentEvent } = await import("/src/client/Transport.ts");
+        window.__nationalQaRequests = [];
+        panel.eventBus.on(SendNationalFoundEmpireIntentEvent, (event) => {
+          window.__nationalQaRequests.push({
+            empireId: event.empireId,
+            requestId: event.requestId,
+          });
+        });
+        return true;
+      })()`);
+      if (!attached) {
+        throw Error("Cannot observe authentic per-click EventBus request ID");
+      }
       await fill("#national-empire-id", empireId);
       await click("^Found Empire$", "national-diplomacy-panel", 40);
+      submittedFounding = await evaluate(
+        "window.__nationalQaRequests?.[0] ?? null",
+      );
+      if (
+        submittedFounding?.empireId !== empireId ||
+        typeof submittedFounding.requestId !== "string" ||
+        !/^[A-Za-z0-9_-]{1,128}$/.test(submittedFounding.requestId)
+      ) {
+        throw Error("REAL_FOUNDING_REQUEST_ID_MISSING_OR_INVALID");
+      }
+      record("authentic-click-request-id", {
+        requestId: submittedFounding.requestId,
+      });
       await capture("founding-request");
+      const actorId = await evaluate(
+        "window.__nationalQaFind('national-diplomacy-panel')?.game?.myPlayer()?.id() ?? null",
+      );
+      if (typeof actorId !== "string" || actorId.length === 0) {
+        throw Error("No authenticated spawned player at founding acceptance");
+      }
       const result = await poll(
         async () => {
           const text = await evaluate(
             "window.__nationalQaFind('national-diplomacy-panel')?.innerText ?? ''",
           );
           const pkts = await worker();
-          const truth = pkts.some(
-            (p) =>
-              p.publicPolitics?.empires?.some((e) => e.id === empireId) &&
-              p.commandResults?.some(
-                (e) => e.empireId === empireId && e.accepted === true,
-              ),
+          const publicRoster = pkts.some((p) =>
+            p.publicPolitics?.empires?.some(
+              (e) =>
+                e.id === empireId &&
+                e.leaderId === actorId &&
+                e.memberIds?.includes(actorId),
+            ),
           );
-          return truth && text.includes("Confirmed by game")
-            ? { text: text.slice(0, 300) }
+          const acceptedReceipt = pkts.some((p) =>
+            p.commandResults?.some(
+              (e) =>
+                e.empireId === empireId &&
+                e.requestId === submittedFounding.requestId &&
+                e.recipientId === actorId &&
+                e.actorId === actorId &&
+                e.accepted === true &&
+                Number.isSafeInteger(e.sequence),
+            ),
+          );
+          return publicRoster &&
+            acceptedReceipt &&
+            text.includes("Confirmed by game")
+            ? {
+                text: text.slice(0, 300),
+                actorId,
+                requestId: submittedFounding.requestId,
+              }
             : null;
         },
-        "E1-authoritative accepted result AND worker public roster AND UI confirmation",
+        "exact click request ID, actor/recipient scoped E1 acceptance, public roster, and UI confirmation",
         65,
         350,
       );
@@ -623,13 +720,19 @@ async function main() {
       // real EventBus and Transport, NOT by faking any game/worker state.
       // The UI correctly hides its form after founding; the authenticated
       // engine must still reject a malicious duplicate command.
+      const duplicateRequestId = "qa_r6_duplicate_" + Date.now().toString(36);
       const request = await evaluate(`(async () => {
         const panel = window.__nationalQaFind('national-diplomacy-panel');
         if (!panel?.eventBus) return 'missing live EventBus';
         const transport = await import('/src/client/Transport.ts');
-        panel.eventBus.emit(new transport.SendNationalFoundEmpireIntentEvent('R5_Browser_QA'));
+        panel.eventBus.emit(
+          new transport.SendNationalFoundEmpireIntentEvent(
+            'R5_Browser_QA', ${JSON.stringify(duplicateRequestId)}
+          )
+        );
         return 'existing authenticated transport emitted duplicate';
       })()`);
+      record("duplicate-command-request-id", { requestId: duplicateRequestId });
       if (request !== "existing authenticated transport emitted duplicate") {
         throw Error(
           "Could not trigger actual duplicate founding via live event bus: " +
@@ -644,6 +747,7 @@ async function main() {
               (r) =>
                 r.type === "national_found_empire" &&
                 r.empireId === "R5_Browser_QA" &&
+                r.requestId === duplicateRequestId &&
                 r.accepted === false,
             ),
           );
