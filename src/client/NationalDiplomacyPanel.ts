@@ -440,6 +440,16 @@ export class NationalDiplomacyPanel extends LitElement {
       politics !== null &&
       !game.config().isReplay();
     const readonlyReplay = game.config().isReplay();
+    const warReason = this.warUnavailableReason;
+    const isEmperor =
+      ownEmpire !== null && ownEmpire.leaderId === game.myPlayer()?.id();
+    const warKind =
+      this.warScope === "national" ? "nation" : this.warTargetKind;
+    const warTargets = this.warTargets(warKind);
+    const canIssueWar =
+      warReason === null &&
+      this.eventBus !== null &&
+      (this.warScope === "national" || isEmperor);
     return html`
       <section
         class="text-white w-[min(25rem,calc(100vw-1rem))] max-w-full rounded-xl border border-amber-400/50 bg-slate-950/95 shadow-xl backdrop-blur-sm overflow-hidden"
@@ -612,26 +622,199 @@ export class NationalDiplomacyPanel extends LitElement {
                     : nothing
                 }
 
+
+                <div class="border-t border-white/15 pt-3 space-y-3">
+                  <h2 class="font-semibold text-amber-200">
+                    Declare war
+                  </h2>
+                  <p class="text-xs text-slate-300">
+                    Declarations use the real authenticated NATIONAL engine.
+                    Sending a command does not prove that war was accepted.
+                  </p>
+                  <form class="space-y-2" @submit=${this.submitWar}>
+                    <label for="national-war-scope" class="block font-semibold">
+                      War authority
+                    </label>
+                    <select
+                      id="national-war-scope"
+                      class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                      .value=${this.warScope}
+                      @change=${(event: Event) => {
+                        this.warScope = (event.target as HTMLSelectElement)
+                          .value as "national" | "imperial";
+                        this.warTargetId = "";
+                      }}
+                      ?disabled=${warReason !== null}
+                    >
+                      <option value="national">National war</option>
+                      <option value="imperial" ?disabled=${!isEmperor}>
+                        Imperial war (emperor only)
+                      </option>
+                    </select>
+                    ${
+                      this.warScope === "imperial"
+                        ? html`<label
+                            for="national-war-target-kind"
+                            class="block font-semibold"
+                          >
+                            Opposing power
+                          </label>
+                          <select
+                            id="national-war-target-kind"
+                            class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                            .value=${this.warTargetKind}
+                            @change=${(event: Event) => {
+                              this.warTargetKind = (
+                                event.target as HTMLSelectElement
+                              ).value as "nation" | "empire";
+                              this.warTargetId = "";
+                            }}
+                            ?disabled=${!canIssueWar}
+                          >
+                            <option value="nation">Nation</option>
+                            <option value="empire">Empire</option>
+                          </select>`
+                        : nothing
+                    }
+                    <label for="national-war-target" class="block font-semibold">
+                      Target
+                    </label>
+                    <select
+                      id="national-war-target"
+                      required
+                      class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                      .value=${this.warTargetId}
+                      @change=${(event: Event) =>
+                        (this.warTargetId = (
+                          event.target as HTMLSelectElement
+                        ).value)}
+                      ?disabled=${!canIssueWar || warTargets.length === 0}
+                    >
+                      <option value="">Choose an eligible target</option>
+                      ${warTargets.map(
+                        (target) =>
+                          html`<option value=${target.id}>
+                            ${target.name} (${target.id})
+                          </option>`,
+                      )}
+                    </select>
+                    <button
+                      type="submit"
+                      class="rounded-lg bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-500 disabled:opacity-50"
+                      ?disabled=${!canIssueWar || warTargets.length === 0 || !this.warTargetId}
+                    >
+                      Declare ${this.warScope === "imperial" ? "imperial" : "national"} war
+                    </button>
+                    ${
+                      warReason || (this.warScope === "imperial" && !isEmperor)
+                        ? html`<p class="text-xs text-slate-300">
+                            ${warReason ??
+                            "Only the current emperor may declare imperial war."}
+                          </p>`
+                        : nothing
+                    }
+                  </form>
+                </div>
+
+                <div class="border-t border-white/15 pt-3 space-y-3">
+                  <h2 class="font-semibold text-amber-200">Peace</h2>
+                  <p class="text-xs text-slate-300">
+                    The authoritative public war/motion list is not yet
+                    available. These advanced commands require an exact ID
+                    recorded by the engine; no acceptance is inferred from
+                    submitting them.
+                  </p>
+                  <form class="space-y-2" @submit=${(event: SubmitEvent) => this.submitPeace(event, "propose")}>
+                    <label for="national-peace-war-id" class="block font-semibold">
+                      Engine war ID
+                    </label>
+                    <input
+                      id="national-peace-war-id"
+                      type="text"
+                      required
+                      maxlength="256"
+                      autocomplete="off"
+                      class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                      .value=${this.warIdDraft}
+                      @input=${(event: Event) =>
+                        (this.warIdDraft = (
+                          event.target as HTMLInputElement
+                        ).value)}
+                      ?disabled=${warReason !== null}
+                    />
+                    <button
+                      type="submit"
+                      class="rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 disabled:opacity-50"
+                      ?disabled=${warReason !== null || !this.eventBus || !this.warIdDraft.trim()}
+                    >
+                      Propose peace
+                    </button>
+                  </form>
+                  <form class="space-y-2" @submit=${(event: SubmitEvent) => this.submitPeace(event, "accept")}>
+                    <label for="national-peace-motion-id" class="block font-semibold">
+                      Engine peace motion ID
+                    </label>
+                    <input
+                      id="national-peace-motion-id"
+                      type="text"
+                      required
+                      maxlength="256"
+                      autocomplete="off"
+                      class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                      .value=${this.motionIdDraft}
+                      @input=${(event: Event) =>
+                        (this.motionIdDraft = (
+                          event.target as HTMLInputElement
+                        ).value)}
+                      ?disabled=${warReason !== null}
+                    />
+                    <button
+                      type="submit"
+                      class="rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 disabled:opacity-50"
+                      ?disabled=${warReason !== null || !this.eventBus || !this.motionIdDraft.trim()}
+                    >
+                      Accept peace
+                    </button>
+                  </form>
+                  <p
+                    class="text-xs text-amber-200"
+                    role="status"
+                    aria-live="polite"
+                    data-national-diplomacy-status
+                  >
+                    ${this.diplomacyStatus ?? nothing}
+                  </p>
+                  ${
+                    this.diplomacyError
+                      ? html`<p role="alert" class="text-xs text-red-300">
+                          ${this.diplomacyError}
+                        </p>`
+                      : nothing
+                  }
+                </div>
+
                 <div class="border-t border-white/15 pt-3 space-y-2">
                   <h2 class="font-semibold text-amber-200">
-                    Diplomatic actions
+                    Other diplomatic actions
                   </h2>
                   <p class="text-xs text-slate-400">
-                    Further actions require authenticated game command
-                    contracts.
+                    Membership, succession and treaty actions are blocked
+                    until authenticated execution and recipient-visible result
+                    contracts are available.
                   </p>
                   ${[
                     "Invite nation",
                     "Non-aggression pact",
                     "Mutual defense pact",
-                    "Offer peace",
+                    "Empire accession",
+                    "Transfer crown",
                   ].map(
                     (label) =>
                       html`<button
                         type="button"
                         disabled
                         aria-label="${label} (not yet available)"
-                        title="Awaiting authenticated engine command"
+                        title="Awaiting authenticated engine command and receipt"
                         class="mr-2 mb-2 rounded-md border border-white/20 px-3 py-1.5 text-xs text-slate-500 cursor-not-allowed"
                       >
                         ${label} · Unavailable
