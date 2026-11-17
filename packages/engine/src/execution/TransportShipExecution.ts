@@ -268,7 +268,7 @@ export class TransportShipExecution implements Execution {
 
     const result = this.pathFinder.next(this.boat.tile(), this.dst);
     switch (result.status) {
-      case PathStatus.COMPLETE:
+      case PathStatus.COMPLETE: {
         if (this.mg.owner(this.dst) === this.attacker) {
           // A peace-forced return is not a player's costly tactical retreat.
           const deaths = this.peaceReturn
@@ -358,6 +358,7 @@ export class TransportShipExecution implements Execution {
           .stats()
           .boatArriveTroops(this.attacker, this.target, this.boat.troops());
         return;
+      }
       case PathStatus.NEXT:
         this.boat.move(result.node);
         break;
