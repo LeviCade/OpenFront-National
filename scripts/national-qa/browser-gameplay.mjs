@@ -125,8 +125,13 @@ function cdp(webSocket) {
       try {
         const url = new URL(raw);
         // Drop query and fragment: URLs can contain authentication tokens.
-        const mediaAsset = /[.](?:mp3|ogg|flac|wav|woff2?|ttf|svg|png|jpe?g|webp)$/i.test(url.pathname);
-        const assetFolder = /[/](?:proprietary|premium|cdn|assets)[/]/i.test(url.pathname);
+        const mediaAsset =
+          /[.](?:mp3|ogg|flac|wav|woff2?|ttf|svg|png|jpe?g|webp)$/i.test(
+            url.pathname,
+          );
+        const assetFolder = /[/](?:proprietary|premium|cdn|assets)[/]/i.test(
+          url.pathname,
+        );
         if (/^https?:$/.test(url.protocol) && (mediaAsset || assetFolder)) {
           const evidence = {
             origin: url.origin,
@@ -135,9 +140,11 @@ function cdp(webSocket) {
           };
           runtimeAssetRequests.push(evidence);
           const forbiddenLocal = /[/]proprietary[/]/i.test(url.pathname);
-          const upstreamCdn = /[/]cdn[/]/i.test(url.pathname) &&
+          const upstreamCdn =
+            /[/]cdn[/]/i.test(url.pathname) &&
             /(?:[.]|^)openfront[.](?:io|dev)$/i.test(url.hostname);
-          if (forbiddenLocal || upstreamCdn) restrictedRuntimeAssets.push(evidence);
+          if (forbiddenLocal || upstreamCdn)
+            restrictedRuntimeAssets.push(evidence);
         }
       } catch {
         // Non-URL data requests have no external asset origin.
@@ -467,13 +474,18 @@ async function main() {
   const capture = async (name) => {
     await worker();
     await screenshot(name);
-    record("screenshot", { name, packetCount: observed.length,
+    record("screenshot", {
+      name,
+      packetCount: observed.length,
       assetRequests: runtimeAssetRequests.length,
-      restrictedAssets: restrictedRuntimeAssets.length });
+      restrictedAssets: restrictedRuntimeAssets.length,
+    });
     persist();
     if (restrictedRuntimeAssets.length) {
-      throw new Error("RESTRICTED_RUNTIME_ASSET_REQUEST: " +
-        JSON.stringify(restrictedRuntimeAssets[0]));
+      throw new Error(
+        "RESTRICTED_RUNTIME_ASSET_REQUEST: " +
+          JSON.stringify(restrictedRuntimeAssets[0]),
+      );
     }
   };
   const step = async (name, fn) => {

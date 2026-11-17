@@ -91,12 +91,17 @@ const musicSources = [
   "src/client/sound/SoundManager.ts",
   "src/client/sound/MenuMusic.ts",
 ];
-const referencedMusic = [...new Set(
-  musicSources.flatMap((source) => {
-    const text = readFileSync(source, "utf8");
-    return Array.from(text.matchAll(/sounds[/]music[/][a-z0-9-]+[.]mp3/g), (match) => match[0]);
-  }),
-)].sort();
+const referencedMusic = [
+  ...new Set(
+    musicSources.flatMap((source) => {
+      const text = readFileSync(source, "utf8");
+      return Array.from(
+        text.matchAll(/sounds[/]music[/][a-z0-9-]+[.]mp3/g),
+        (match) => match[0],
+      );
+    }),
+  ),
+].sort();
 const missingMusic = referencedMusic.filter(
   (path) => !existsSync(join("resources", path)),
 );
@@ -105,12 +110,18 @@ const result = {
   status: failed.length ? "FAIL" : "PASS",
   checks: records,
   inventoryReviewRequired: sample.sort(),
-  resourceMediaProvenance: provenance.sort((a, b) => a.path.localeCompare(b.path)),
+  resourceMediaProvenance: provenance.sort((a, b) =>
+    a.path.localeCompare(b.path),
+  ),
   originReviewStatus: "PENDING",
   referencedMusic,
   missingMusic,
-  publicReleaseReady: failed.length === 0 && missingMusic.length === 0 && provenance.length === 0,
-  originReviewCounts: { fonts: provenance.filter((r) => r.category === "font").length, audio: provenance.filter((r) => r.category === "audio").length },
+  publicReleaseReady:
+    failed.length === 0 && missingMusic.length === 0 && provenance.length === 0,
+  originReviewCounts: {
+    fonts: provenance.filter((r) => r.category === "font").length,
+    audio: provenance.filter((r) => r.category === "audio").length,
+  },
   limitations: [
     "This is not a comprehensive third-party rights clearance.",
     "Referenced assets, network CDN content, fonts and sound playback require browser and manual origin review.",
@@ -134,4 +145,9 @@ console.log(
     failures: failed,
   }),
 );
-if (failed.length || (process.argv.includes("--strict-release") && (missingMusic.length || provenance.length))) process.exitCode = 1;
+if (
+  failed.length ||
+  (process.argv.includes("--strict-release") &&
+    (missingMusic.length || provenance.length))
+)
+  process.exitCode = 1;

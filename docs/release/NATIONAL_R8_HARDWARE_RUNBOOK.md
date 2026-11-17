@@ -4,14 +4,14 @@
 
 ## Why hosted Chrome cannot certify this build
 
-GitHub-hosted Chrome 157 reported WebGL2 via `ANGLE Vulkan SwiftShader Device (Subzero)` and the game's actual WebGL gate correctly refused to start. WebGL2 *presence*, a homepage screenshot, or `--enable-unsafe-swiftshader` is not hardware evidence. Never pass `--use-angle=swiftshader` or bypass the application's WebGL gate. E5 additionally fails hardware QA if Chromium's unmasked renderer is absent/generic or identifies SwiftShader, llvmpipe, lavapipe, softpipe or software rasterization. This attestation is diagnostic, not a cryptographic attestation of the host.
+GitHub-hosted Chrome 157 reported WebGL2 via `ANGLE Vulkan SwiftShader Device (Subzero)` and the game's actual WebGL gate correctly refused to start. WebGL2 _presence_, a homepage screenshot, or `--enable-unsafe-swiftshader` is not hardware evidence. Never pass `--use-angle=swiftshader` or bypass the application's WebGL gate. E5 additionally fails hardware QA if Chromium's unmasked renderer is absent/generic or identifies SwiftShader, llvmpipe, lavapipe, softpipe or software rasterization. This attestation is diagnostic, not a cryptographic attestation of the host.
 
 ## Provision a real runner (macOS or Linux)
 
 1. Provide an actual physically/virtually passed-through GPU, correct OS graphics drivers, headless-compatible EGL/Metal/X11 display, Google Chrome or Chromium, Git, Node 24.15.0, npm 12.1.0, and renderer introspection utilities (`glxinfo` on Linux, `system_profiler SPDisplaysDataType` on macOS; `nvidia-smi` for NVIDIA).
 2. In GitHub repository **Settings → Actions → Runners → New self-hosted runner**, select the matching OS/architecture and execute GitHub's generated **download, configure and start** commands **on the hardware host**, using GitHub's current ephemeral registration token. Never commit the token. Add the custom label `gpu` (the installed default-branch workflow selects `[self-hosted, gpu]`). Linux service users must have access to the actual display/GPU; macOS users need an active graphics session.
 3. Verify that the runner appears **Online** with `self-hosted` and `gpu` labels. GitHub's runner registry was not exposed through the available audit integration, so E5 does not claim an online runner without separate evidence.
-4. From **Actions → NATIONAL — Real GPU browser gameplay acceptance → Run workflow**, enter the **40-character merged or staging candidate SHA**. The default-branch workflow rejects commit hashes outside approved integration/staging ancestry. A new *unmerged* E5 feature-branch commit cannot be used until Conductor integrates it into approved ancestry; locally test the branch directly before merge.
+4. From **Actions → NATIONAL — Real GPU browser gameplay acceptance → Run workflow**, enter the **40-character merged or staging candidate SHA**. The default-branch workflow rejects commit hashes outside approved integration/staging ancestry. A new _unmerged_ E5 feature-branch commit cannot be used until Conductor integrates it into approved ancestry; locally test the branch directly before merge.
 5. For local branch testing on the hardware host:
    ```sh
    git checkout feature/r8-e5-browser-release-security

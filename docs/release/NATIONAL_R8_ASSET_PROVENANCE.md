@@ -12,6 +12,7 @@
 ## Exact resource candidates requiring origin verification
 
 From exact merged-SHA [independent release QA run #44020170176](https://github.com/LeviCade/OpenFront-National/actions/runs/44020170176), archived asset artifact `14301220256`:
+
 - **2 font files:** `resources/fonts/overpass.woff`, `resources/fonts/overpass-bold.woff`.
 - **4 ambience MP3s:** city, factory, missile-silo, sam-silo.
 - **34 effects MP3s:** alliance and warfare UI cues, explosions, construction, impact, train/ship, victory/defeat and other game audio under `resources/sounds/effects`.

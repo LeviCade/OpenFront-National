@@ -37,8 +37,12 @@ describe("NATIONAL R8 real hardware renderer attestation", () => {
 
   it("rejects no WebGL2, context lost, and unreported or generic renderer", () => {
     expect(verifyHardwareWebgl(null).accepted).toBe(false);
-    expect(verifyHardwareWebgl(reported("NVIDIA", { supported: false })).accepted).toBe(false);
-    expect(verifyHardwareWebgl(reported("NVIDIA", { contextLost: true })).accepted).toBe(false);
+    expect(
+      verifyHardwareWebgl(reported("NVIDIA", { supported: false })).accepted,
+    ).toBe(false);
+    expect(
+      verifyHardwareWebgl(reported("NVIDIA", { contextLost: true })).accepted,
+    ).toBe(false);
     expect(verifyHardwareWebgl(reported(null)).accepted).toBe(false);
     expect(verifyHardwareWebgl(reported("WebKit WebGL")).accepted).toBe(false);
   });
