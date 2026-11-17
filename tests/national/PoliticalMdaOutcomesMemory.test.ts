@@ -212,6 +212,26 @@ describe("R5 canonical live MDA contributor enumeration (COAL-05/06, LEVY-01/07)
     expect(game.player(B).troops()).toBe(beforeB);
     expect(game.player(C).troops()).toBe(beforeC);
     expect(game.nationalWarState()?.levy.processed).toEqual([]);
+    // An attacker cannot duplicate a legitimate donor or substitute a real
+    // nonmember source; neither malformed roster may partially charge B.
+    const sourceB = game.nationalLevySource(B)!;
+    const sourceD = game.nationalLevySource(D)!;
+    const entry = (source: typeof sourceB) => ({
+      source,
+      troopCapacity: 500_000,
+      maximumFraction: 0.1,
+      protectedCapacityFraction: 0.3,
+    });
+    expect(() =>
+      game.applyNationalDefenseLevy([request([entry(sourceB), entry(sourceB)])]),
+    ).toThrow(/missing or forged MDA contributor roster/);
+    expect(() =>
+      game.applyNationalDefenseLevy([request([entry(sourceB), entry(sourceD)])]),
+    ).toThrow(/missing or forged MDA contributor roster/);
+    expect(game.player(B).troops()).toBe(beforeB);
+    expect(game.player(C).troops()).toBe(beforeC);
+    expect(game.player(D).troops()).toBeGreaterThanOrEqual(0);
+    expect(game.nationalWarState()?.levy.processed).toEqual([]);
     const eligible = game.nationalMdaAllies(A).map((id) => ({
       source: game.nationalLevySource(id)!,
       troopCapacity: Math.floor(game.config().maxTroops(game.player(id))),
@@ -423,6 +443,101 @@ describe("R5 real Found Empire outcome journal, principal scope and replay", () 
     expect(restored.nationalCommandResults(restored.player(A))).toHaveLength(1);
   });
 
+  it("same-tick duplicate queued intents produce one authoritative receipt across restore", async () => {
+    const game = await gameWithPlayers(3);
+    for (let i = 0; i < 2; i++)
+      game.addExecution(
+        new NationalFoundEmpireExecution(
+          game.player(A),
+          "one-empire",
+          null,
+          "same-tick-request",
+        ),
+      );
+    // A mismatched empire must not reuse an otherwise valid receipt.
+    game.addExecution(
+      new NationalFoundEmpireExecution(
+        game.player(A),
+        "forged-second-empire",
+        null,
+        "same-tick-request",
+      ),
+    );
+    const { restored } = await roundTrip(game, "plains");
+    for (let i = 0; i < 2; i++) {
+      game.executeNextTick();
+      restored.executeNextTick();
+    }
+    for (const run of [game, restored]) {
+      expect(run.nationalPublicPoliticalView()?.empires).toEqual([
+        { id: "one-empire", leaderId: A, memberIds: [A] },
+      ]);
+      expect(run.nationalCommandResults(run.player(A))).toHaveLength(1);
+      const receipt = run.nationalCommandResults(run.player(A))[0];
+      expect(receipt).toMatchObject({
+        actorId: A,
+        empireId: "one-empire",
+        requestId: "same-tick-request",
+        sequence: 0,
+        accepted: true,
+      });
+      expect(() =>
+        run.performNationalFoundEmpireWithOutcome(
+          run.player(A),
+          "different-empire",
+          "same-tick-request",
+        ),
+      ).toThrow(/foreign request ID/);
+      expect(() =>
+        run.performNationalFoundEmpireWithOutcome(
+          run.player(B),
+          "other-empire",
+          "same-tick-request",
+        ),
+      ).toThrow(/foreign request ID/);
+      expect(run.nationalCommandResults(run.player(B))).toEqual([]);
+      expect(run.nationalCommandResults(run.player(A))).toEqual([receipt]);
+    }
+    expect(snapshotGameData(restored).game).toEqual(
+      snapshotGameData(game).game,
+    );
+  });
+
+  it("rejected same-tick request replay survives restore without new sequence or empire", async () => {
+    const game = await gameWithPlayers(2);
+    const rejected = game.performNationalFoundEmpireWithOutcome(
+      game.player(A),
+      "not a valid empire",
+      "rejected-request",
+    );
+    expect(rejected).toMatchObject({
+      accepted: false,
+      reason: "invalid-empire-id",
+      sequence: 0,
+    });
+    const { restored } = await roundTrip(game, "plains");
+    for (const run of [game, restored]) {
+      const replay = run.performNationalFoundEmpireWithOutcome(
+        run.player(A),
+        "not a valid empire",
+        "rejected-request",
+      );
+      expect(replay).toEqual(rejected);
+      expect(run.nationalCommandResults(run.player(A))).toEqual([rejected]);
+      expect(run.nationalPublicPoliticalView()?.empires).toEqual([]);
+      const fresh = run.performNationalFoundEmpireWithOutcome(
+        run.player(B),
+        "other-empire",
+        "new-request",
+      );
+      expect(fresh.sequence).toBe(1);
+      expect(fresh.accepted).toBe(true);
+    }
+    expect(snapshotGameData(restored).game).toEqual(
+      snapshotGameData(game).game,
+    );
+  });
+
   it("bounded journal retains 128 actor-scoped outcomes with deterministic monotonic sequence", async () => {
     const game = await gameWithPlayers(2);
     for (let i = 0; i < 132; i++) {
@@ -524,6 +639,22 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
     expect(game.readNationalObserverMemory(A)?.assets).toEqual([]);
     const { restored } = await roundTrip(game, "plains");
     expect(restored.readNationalObserverMemory(A)?.assets).toEqual([]);
+  });
+
+  it("eliminating the observer purges private sight from snapshots and public politics", async () => {
+    const game = await gameWithPlayers(3);
+    game.writeNationalObserverMemory(A, memory(A, game.ticks()));
+    expect(game.readNationalObserverMemory(A)?.assets).toHaveLength(1);
+    expect(JSON.stringify(game.nationalPublicPoliticalView())).not.toContain(
+      "observed-hostile-unit",
+    );
+    eliminate(game, A);
+    expect(game.readNationalObserverMemory(A)).toBeNull();
+    const { restored } = await roundTrip(game, "plains");
+    expect(restored.readNationalObserverMemory(A)).toBeNull();
+    expect(JSON.stringify(restored.nationalPublicPoliticalView())).not.toContain(
+      "observed-hostile-unit",
+    );
   });
 
   it("human sight expires after exactly sixty deterministic simulation ticks and stays expired after restore", async () => {
