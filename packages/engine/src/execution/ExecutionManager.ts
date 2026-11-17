@@ -99,17 +99,20 @@ export class Executor {
                 targetKind: intent.targetKind,
                 targetId: intent.targetId,
               },
+          intent.requestId ?? null,
         );
       case "national_propose_peace":
-        return new NationalWarExecution(player, {
-          kind: "propose-peace",
-          warId: intent.warId,
-        });
+        return new NationalWarExecution(
+          player,
+          { kind: "propose-peace", warId: intent.warId },
+          intent.requestId ?? null,
+        );
       case "national_accept_peace":
-        return new NationalWarExecution(player, {
-          kind: "accept-peace",
-          motionId: intent.motionId,
-        });
+        return new NationalWarExecution(
+          player,
+          { kind: "accept-peace", motionId: intent.motionId },
+          intent.requestId ?? null,
+        );
       case "cancel_attack":
         return new RetreatExecution(player, intent.attackID);
       case "cancel_boat":
