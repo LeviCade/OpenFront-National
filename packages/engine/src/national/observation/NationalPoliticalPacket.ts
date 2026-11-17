@@ -46,6 +46,8 @@ export interface OutboundFounderResult {
 export interface NationalResultDeliveryState {
   readonly seenSequences: Map<number, string>;
   readonly seenRequests: Map<string, number>;
+  /** Detect contradictory accepted/rejected payloads for the same receipt. */
+  readonly seenProofs: Map<number, string>;
   maxSequence: number;
 }
 
@@ -101,6 +103,7 @@ export function emptyNationalResultDeliveryState(): NationalResultDeliveryState 
   return {
     seenSequences: new Map(),
     seenRequests: new Map(),
+    seenProofs: new Map(),
     maxSequence: -1,
   };
 }
@@ -133,19 +136,31 @@ export function actorNationalResults(
   const ordered: AuthoritativeFounderOutcome[] = [];
   const batchSequences = new Map<number, string>();
   const batchRequests = new Map<string, number>();
+  const batchProofs = new Map<number, string>();
 
   for (const record of journal) {
     // E1's resultsFor(actor) already scopes the journal. Recheck here so a
     // future engine change cannot send a foreign actor's private receipt.
     if (record.actorId !== actor.id()) continue;
     validRecord(record, game);
+    const proof = JSON.stringify([
+      record.sequence,
+      record.requestId,
+      record.actorId,
+      record.empireId,
+      record.accepted,
+      record.tick,
+      record.reason,
+    ]);
     const existingSequence = batchSequences.get(record.sequence);
     const existingRequest = batchRequests.get(record.requestId);
     if (
       (existingSequence !== undefined &&
         existingSequence !== record.requestId) ||
       (existingRequest !== undefined &&
-        existingRequest !== record.sequence)
+        existingRequest !== record.sequence) ||
+      (batchProofs.has(record.sequence) &&
+        batchProofs.get(record.sequence) !== proof)
     ) {
       throw new Error("NATIONAL conflicting authoritative founder receipts");
     }
@@ -153,6 +168,7 @@ export function actorNationalResults(
     if (existingSequence !== undefined) continue;
     batchSequences.set(record.sequence, record.requestId);
     batchRequests.set(record.requestId, record.sequence);
+    batchProofs.set(record.sequence, proof);
     ordered.push(record);
   }
   ordered.sort((a, b) => a.sequence - b.sequence);
@@ -165,7 +181,10 @@ export function actorNationalResults(
     const usedSequence = state.seenSequences.get(record.sequence);
     if (
       (usedRequest !== undefined && usedRequest !== record.sequence) ||
-      (usedSequence !== undefined && usedSequence !== record.requestId)
+      (usedSequence !== undefined && usedSequence !== record.requestId) ||
+      (state.seenProofs.has(record.sequence) &&
+        state.seenProofs.get(record.sequence) !==
+          batchProofs.get(record.sequence))
     ) {
       throw new Error("NATIONAL conflicting delivered founder receipt");
     }
@@ -194,6 +213,7 @@ export function actorNationalResults(
     });
     state.seenSequences.set(record.sequence, record.requestId);
     state.seenRequests.set(record.requestId, record.sequence);
+    state.seenProofs.set(record.sequence, batchProofs.get(record.sequence)!);
     state.maxSequence = Math.max(state.maxSequence, record.sequence);
   }
 
@@ -202,6 +222,7 @@ export function actorNationalResults(
     if (seq > floor) continue;
     state.seenSequences.delete(seq);
     state.seenRequests.delete(requestId);
+    state.seenProofs.delete(seq);
   }
   return results;
 }
