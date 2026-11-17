@@ -334,7 +334,15 @@ export class NationExecution implements Execution {
       30,
     );
     this.nationalPlannerMemory = result.memory;
-    if (!result.planned || result.decision?.objective !== "expand") return;
+    // A small nation under an observed active-war threat must still defend.
+    // The old branch discarded every "defend" decision and left a real
+    // front idle. Both attack and defense use the same E2 validator.
+    if (
+      !result.planned ||
+      result.decision === null ||
+      result.decision.objective === "consolidate"
+    )
+      return;
     const targetId = result.decision.targetId;
 
     // The planner knows only verified frontier IDs. Confirm adjacency again
