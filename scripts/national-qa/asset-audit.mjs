@@ -62,6 +62,7 @@ if (existsSync("LICENSE-ASSETS")) {
 // an optional upstream directory. Source-code references require manual audit.
 const noDistribute = [".mp3", ".flac", ".woff", ".woff2", ".ttf"];
 const sample = [];
+const provenance = [];
 function scan(dir) {
   if (!existsSync(dir)) return;
   for (const item of readdirSync(dir, { withFileTypes: true })) {
@@ -71,6 +72,15 @@ function scan(dir) {
         scan(p);
     } else if (noDistribute.some((suffix) => item.name.endsWith(suffix))) {
       sample.push(p);
+      const bytes = readFileSync(p);
+      provenance.push({
+        path: p,
+        category: /\\.(woff2?|ttf)$/i.test(p) ? "font" : "audio",
+        bytes: bytes.length,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+        resourceDirectoryLicense: "CC BY-SA 4.0 / resources/LICENSE",
+        independentOriginReview: "PENDING",
+      });
     }
   }
 }
@@ -79,7 +89,10 @@ const result = {
   gate: "known-shell-assets-and-restricted-subtree",
   status: failed.length ? "FAIL" : "PASS",
   checks: records,
-  inventoryReviewRequired: sample,
+  inventoryReviewRequired: sample.sort(),
+  resourceMediaProvenance: provenance.sort((a, b) => a.path.localeCompare(b.path)),
+  originReviewStatus: "PENDING",
+  originReviewCounts: { fonts: provenance.filter((r) => r.category === "font").length, audio: provenance.filter((r) => r.category === "audio").length },
   limitations: [
     "This is not a comprehensive third-party rights clearance.",
     "Referenced assets, network CDN content, fonts and sound playback require browser and manual origin review.",
@@ -96,6 +109,8 @@ console.log(
     status: result.status,
     checked: records.length,
     reviewInventory: sample.length,
+    fontsPending: provenance.filter((r) => r.category === "font").length,
+    audioPending: provenance.filter((r) => r.category === "audio").length,
     failures: failed,
   }),
 );
