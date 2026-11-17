@@ -113,8 +113,9 @@ describe("NATIONAL player-facing founding", () => {
     ).toBe(true);
     const spectator = await mount({ spectator: true });
     expect(
-      spectator.element.querySelector<HTMLButtonElement>('button[type="submit"]')!
-        .disabled,
+      spectator.element.querySelector<HTMLButtonElement>(
+        'button[type="submit"]',
+      )!.disabled,
     ).toBe(true);
     expect(spectator.element.textContent).toContain(
       "Only an active, living nation",
