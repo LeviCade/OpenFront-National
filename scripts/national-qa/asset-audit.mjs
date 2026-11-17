@@ -85,6 +85,21 @@ function scan(dir) {
   }
 }
 scan("resources");
+// Audit all literal game music paths rather than assuming they were copied
+// from a restricted upstream package. Never auto-fetch proprietary music.
+const musicSources = [
+  "src/client/sound/SoundManager.ts",
+  "src/client/sound/MenuMusic.ts",
+];
+const referencedMusic = [...new Set(
+  musicSources.flatMap((source) => {
+    const text = readFileSync(source, "utf8");
+    return Array.from(text.matchAll(/sounds\\/music\\/[\w-]+\\.mp3/g), (match) => match[0]);
+  }),
+)].sort();
+const missingMusic = referencedMusic.filter(
+  (path) => !existsSync(join("resources", path)),
+);
 const result = {
   gate: "known-shell-assets-and-restricted-subtree",
   status: failed.length ? "FAIL" : "PASS",
@@ -92,6 +107,9 @@ const result = {
   inventoryReviewRequired: sample.sort(),
   resourceMediaProvenance: provenance.sort((a, b) => a.path.localeCompare(b.path)),
   originReviewStatus: "PENDING",
+  referencedMusic,
+  missingMusic,
+  publicReleaseReady: failed.length === 0 && missingMusic.length === 0 && provenance.length === 0,
   originReviewCounts: { fonts: provenance.filter((r) => r.category === "font").length, audio: provenance.filter((r) => r.category === "audio").length },
   limitations: [
     "This is not a comprehensive third-party rights clearance.",
@@ -111,7 +129,9 @@ console.log(
     reviewInventory: sample.length,
     fontsPending: provenance.filter((r) => r.category === "font").length,
     audioPending: provenance.filter((r) => r.category === "audio").length,
+    referencedMusic: referencedMusic.length,
+    missingMusic,
     failures: failed,
   }),
 );
-if (failed.length) process.exitCode = 1;
+if (failed.length || (process.argv.includes("--strict-release") && (missingMusic.length || provenance.length))) process.exitCode = 1;
