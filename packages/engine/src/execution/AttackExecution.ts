@@ -114,6 +114,25 @@ export class AttackExecution implements Execution {
           this.target.isPlayer() ? this.target.id() : null,
         ))
     ) {
+      // WAR-09/11 handoff race: the real transport already paid for these
+      // troops and made its single lawful coastal landing on a previous tick.
+      // If peace was accepted before its queued inland AttackExecution could
+      // initialize, reject the new offensive action AND return the undamaged
+      // landed survivors. This is NOT a donor refund or fresh attack treasury
+      // debit. Only trusted ship-created attacks set removeTroops=false with
+      // an owned sourceTile. Mark the refund consumed to prevent replay minting.
+      if (
+        !this.removeTroops &&
+        this.sourceTile !== null &&
+        mg.owner(this.sourceTile) === this._owner &&
+        this._owner.isAlive() &&
+        this.startTroops !== null &&
+        Number.isSafeInteger(this.startTroops) &&
+        this.startTroops > 0
+      ) {
+        this._owner.addTroops(this.startTroops);
+        this.startTroops = 0;
+      }
       this.active = false;
       return;
     }
