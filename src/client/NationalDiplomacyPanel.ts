@@ -325,7 +325,8 @@ export class NationalDiplomacyPanel extends LitElement {
     const game = this.game;
     const player = game?.myPlayer();
     if (reason || !game || !player || !this.eventBus) {
-      this.diplomacyError = reason ?? "The authenticated game channel is unavailable.";
+      this.diplomacyError =
+        reason ?? "The authenticated game channel is unavailable.";
       return;
     }
     const tick = game.ticks();
@@ -345,8 +346,7 @@ export class NationalDiplomacyPanel extends LitElement {
         actorId: player.id(),
         tick,
       };
-      this.diplomacyStatus =
-        `${description} submitted through the game transport. The authoritative result is not yet available; no success is confirmed.`;
+      this.diplomacyStatus = `${description} submitted through the game transport. The authoritative result is not yet available; no success is confirmed.`;
       this.diplomacyError = null;
     } catch {
       this.diplomacyError = "The diplomacy command could not be submitted.";
@@ -367,7 +367,8 @@ export class NationalDiplomacyPanel extends LitElement {
       this.warScope === "imperial" &&
       (!ownEmpire || ownEmpire.leaderId !== actor.id())
     ) {
-      this.diplomacyError = "Only the current emperor may declare imperial war.";
+      this.diplomacyError =
+        "Only the current emperor may declare imperial war.";
       return;
     }
     const kind = this.warScope === "national" ? "nation" : this.warTargetKind;
@@ -622,11 +623,8 @@ export class NationalDiplomacyPanel extends LitElement {
                     : nothing
                 }
 
-
                 <div class="border-t border-white/15 pt-3 space-y-3">
-                  <h2 class="font-semibold text-amber-200">
-                    Declare war
-                  </h2>
+                  <h2 class="font-semibold text-amber-200">Declare war</h2>
                   <p class="text-xs text-slate-300">
                     Declarations use the real authenticated NATIONAL engine.
                     Sending a command does not prove that war was accepted.
@@ -654,29 +652,32 @@ export class NationalDiplomacyPanel extends LitElement {
                     ${
                       this.warScope === "imperial"
                         ? html`<label
-                            for="national-war-target-kind"
-                            class="block font-semibold"
-                          >
-                            Opposing power
-                          </label>
-                          <select
-                            id="national-war-target-kind"
-                            class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
-                            .value=${this.warTargetKind}
-                            @change=${(event: Event) => {
-                              this.warTargetKind = (
-                                event.target as HTMLSelectElement
-                              ).value as "nation" | "empire";
-                              this.warTargetId = "";
-                            }}
-                            ?disabled=${!canIssueWar}
-                          >
-                            <option value="nation">Nation</option>
-                            <option value="empire">Empire</option>
-                          </select>`
+                              for="national-war-target-kind"
+                              class="block font-semibold"
+                            >
+                              Opposing power
+                            </label>
+                            <select
+                              id="national-war-target-kind"
+                              class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                              .value=${this.warTargetKind}
+                              @change=${(event: Event) => {
+                                this.warTargetKind = (
+                                  event.target as HTMLSelectElement
+                                ).value as "nation" | "empire";
+                                this.warTargetId = "";
+                              }}
+                              ?disabled=${!canIssueWar}
+                            >
+                              <option value="nation">Nation</option>
+                              <option value="empire">Empire</option>
+                            </select>`
                         : nothing
                     }
-                    <label for="national-war-target" class="block font-semibold">
+                    <label
+                      for="national-war-target"
+                      class="block font-semibold"
+                    >
                       Target
                     </label>
                     <select
@@ -704,13 +705,17 @@ export class NationalDiplomacyPanel extends LitElement {
                       class="rounded-lg bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-500 disabled:opacity-50"
                       ?disabled=${!canIssueWar || warTargets.length === 0 || !this.warTargetId}
                     >
-                      Declare ${this.warScope === "imperial" ? "imperial" : "national"} war
+                      Declare
+                      ${this.warScope === "imperial" ? "imperial" : "national"}
+                      war
                     </button>
                     ${
                       warReason || (this.warScope === "imperial" && !isEmperor)
                         ? html`<p class="text-xs text-slate-300">
-                            ${warReason ??
-                            "Only the current emperor may declare imperial war."}
+                            ${
+                              warReason ??
+                              "Only the current emperor may declare imperial war."
+                            }
                           </p>`
                         : nothing
                     }
@@ -725,8 +730,14 @@ export class NationalDiplomacyPanel extends LitElement {
                     recorded by the engine; no acceptance is inferred from
                     submitting them.
                   </p>
-                  <form class="space-y-2" @submit=${(event: SubmitEvent) => this.submitPeace(event, "propose")}>
-                    <label for="national-peace-war-id" class="block font-semibold">
+                  <form
+                    class="space-y-2"
+                    @submit=${(event: SubmitEvent) => this.submitPeace(event, "propose")}
+                  >
+                    <label
+                      for="national-peace-war-id"
+                      class="block font-semibold"
+                    >
                       Engine war ID
                     </label>
                     <input
@@ -752,8 +763,14 @@ export class NationalDiplomacyPanel extends LitElement {
                       Propose peace
                     </button>
                   </form>
-                  <form class="space-y-2" @submit=${(event: SubmitEvent) => this.submitPeace(event, "accept")}>
-                    <label for="national-peace-motion-id" class="block font-semibold">
+                  <form
+                    class="space-y-2"
+                    @submit=${(event: SubmitEvent) => this.submitPeace(event, "accept")}
+                  >
+                    <label
+                      for="national-peace-motion-id"
+                      class="block font-semibold"
+                    >
                       Engine peace motion ID
                     </label>
                     <input
@@ -801,8 +818,8 @@ export class NationalDiplomacyPanel extends LitElement {
                     Other diplomatic actions
                   </h2>
                   <p class="text-xs text-slate-400">
-                    Membership, succession and treaty actions are blocked
-                    until authenticated execution and recipient-visible result
+                    Membership, succession and treaty actions are blocked until
+                    authenticated execution and recipient-visible result
                     contracts are available.
                   </p>
                   ${[

@@ -229,9 +229,9 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     expect(intents()).toEqual([
       { type: "national_propose_peace", warId: "national-10-1-4" },
     ]);
-    expect(NationalProposePeaceIntentSchema.safeParse(intents()[0]).success).toBe(
-      true,
-    );
+    expect(
+      NationalProposePeaceIntentSchema.safeParse(intents()[0]).success,
+    ).toBe(true);
     state.tick = 11;
     panel.refresh();
     await panel.updateComplete;
@@ -241,9 +241,9 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       type: "national_accept_peace",
       motionId: "national-11-1-5",
     });
-    expect(NationalAcceptPeaceIntentSchema.safeParse(intents()[1]).success).toBe(
-      true,
-    );
+    expect(
+      NationalAcceptPeaceIntentSchema.safeParse(intents()[1]).success,
+    ).toBe(true);
     expect(panel.textContent).not.toContain("Peace accepted");
     expect(panel.textContent).toContain("no success is confirmed");
   });
