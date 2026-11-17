@@ -22,12 +22,56 @@ import {
   unpackUnitUpdates,
 } from "@openfront/engine-lib/game/PackedUnitUpdates";
 import type { Game } from "../../game/Game";
+import type { NationalPublicPoliticalView } from "../NationalRuntime";
 import type { LiveNationalObservation } from "./LiveObservation";
 import {
   advanceLastKnown,
   type NationalSightMemory,
 } from "./NationalObservation";
 import type { OutboundFounderResult } from "./NationalPoliticalPacket";
+
+/**
+ * Explicit PUBLIC political whitelist. Even an accidentally extended E1
+ * projection object must not carry private pacts, treasury, war motions or
+ * sight history through the worker. Clone nested arrays before delivery.
+ */
+function publicPolitics(
+  packet: GameUpdateViewData,
+): NationalPublicPoliticalView | undefined {
+  const source = (
+    "nationalPolitics" in packet ? packet.nationalPolitics : undefined
+  ) as NationalPublicPoliticalView | null | undefined;
+  if (source === null || source === undefined) return undefined;
+  return {
+    empires: source.empires.map((empire) => ({
+      id: empire.id,
+      leaderId: empire.leaderId,
+      memberIds: [...empire.memberIds],
+    })),
+    warnings: source.warnings.map((warning) => ({
+      empireId: warning.empireId,
+      deadlineMs: warning.deadlineMs,
+      remainingMs: warning.remainingMs,
+      blockedByAssetDisposition: warning.blockedByAssetDisposition,
+    })),
+    victory:
+      source.victory === null
+        ? null
+        : {
+            sovereignPowerCount: source.victory.sovereignPowerCount,
+            resolved: source.victory.resolved,
+            prizes: source.victory.prizes.map((prize) =>
+              prize.kind === "SovereignVictor"
+                ? { kind: prize.kind, nationId: prize.nationId }
+                : {
+                    kind: prize.kind,
+                    nationId: prize.nationId,
+                    empireId: prize.empireId,
+                  },
+            ),
+          },
+  };
+}
 
 function publicPlayer(u: PlayerUpdate): PlayerUpdate {
   // Enumerate allowed fields explicitly. The full internal PlayerUpdate
@@ -260,12 +304,33 @@ export class NationalOutboundFilter {
     const recipientResults =
       this.observerId === null
         ? []
-        : (proposedResults ?? []).filter(
-            (item) =>
-              item.recipientId === this.observerId &&
-              item.actorId === this.observerId,
-          );
+        : (proposedResults ?? [])
+            .filter(
+              (item) =>
+                item.recipientId === this.observerId &&
+                item.actorId === this.observerId &&
+                item.type === "national_found_empire" &&
+                Number.isSafeInteger(item.sequence) &&
+                item.sequence >= 0 &&
+                typeof item.requestId === "string" &&
+                item.requestId.length > 0 &&
+                item.requestId.length <= 256,
+            )
+            .map((item) => ({
+              // A second explicit DTO whitelist: never forward private,
+              // future or accidental extra journal object properties.
+              recipientId: item.recipientId,
+              actorId: item.actorId,
+              type: item.type,
+              accepted: item.accepted,
+              tick: item.tick,
+              sequence: item.sequence,
+              requestId: item.requestId,
+              empireId: item.empireId,
+              reason: item.reason,
+            }));
 
+    const publicPoliticalView = publicPolitics(data);
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
     return {
@@ -275,9 +340,9 @@ export class NationalOutboundFilter {
       // E1's public detached DTO is allowed to every honest-client NATIONAL
       // viewer, including reconnect. It must never be synthesized from
       // outbound private PlayerUpdate fields.
-      ...("nationalPolitics" in data && data.nationalPolitics !== null
-        ? { nationalPolitics: data.nationalPolitics }
-        : {}),
+      ...(publicPoliticalView === undefined
+        ? {}
+        : { nationalPolitics: publicPoliticalView }),
       tick: data.tick,
       updates,
       packedTileUpdates: new Uint32Array(packedTile),

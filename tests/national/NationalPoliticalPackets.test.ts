@@ -41,7 +41,10 @@ function runnerFor(game: Game, clientId: string | undefined) {
     game,
     new Executor(game, "e3-r5-politics", clientId),
     (packet) => {
-      if ("updates" in packet) packets.push(packet);
+      // E1 public politics and E2's wire DTO intentionally use different
+      // mutability boundaries. The worker callback supplies the real E2
+      // GameUpdateViewData; tests project only E3-observed public fields.
+      if ("updates" in packet) packets.push(packet as PoliticalPacket);
     },
     clientId,
   );
