@@ -88,6 +88,7 @@ import {
   NationalGovernanceState,
   NationalGovernanceSnapshotSchema,
   type NationalFoundEmpireResult,
+  type NationalPoliticalCommandResult,
 } from "../national/politics/NationalGovernanceState";
 import {
   NationalWarStateService,
@@ -920,6 +921,58 @@ export class GameImpl implements Game {
     )
       return [];
     return this._nationalGovernance.resultsFor(observer.id());
+  }
+
+  /**
+   * Single E1 Game-owned journal: authenticated non-founder transitions now
+   * receive the same sequence/idempotence guarantees as Found Empire.
+   * E2 supplies the server-stamped actor; E3 will expose a separate typed
+   * recipient packet so these cannot masquerade as founding receipts.
+   */
+  performNationalPoliticalCommandWithOutcome(
+    actor: Player,
+    command: Exclude<NationalCommand, { kind: "found-empire" }>,
+    requestId: string | null = null,
+  ): NationalPoliticalCommandResult {
+    if (this._national === null || this._nationalGovernance === null)
+      throw new Error("NATIONAL command journal: mode not enabled");
+    if (this._players.get(actor.id()) !== actor)
+      throw new Error("NATIONAL command journal: forged actor");
+    const targetId = "pactId" in command ? command.pactId : command.empireId;
+    const recordedTargetId =
+      typeof targetId === "string" && targetId.length > 0 && targetId.length <= 256
+        ? targetId
+        : "<invalid-target-id>";
+    return this._nationalGovernance.recordPoliticalCommand(
+      actor.id(),
+      command.kind,
+      recordedTargetId,
+      this._ticks,
+      requestId,
+      () => {
+        if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
+          return "actor-inactive";
+        try {
+          this.performNationalCommand(actor, command);
+          return "accepted";
+        } catch {
+          // Do not transmit internal pact terms, engine state or stack traces.
+          return "political-rule";
+        }
+      },
+    );
+  }
+
+  nationalPoliticalCommandResults(
+    observer: Player,
+  ): readonly NationalPoliticalCommandResult[] {
+    if (
+      this._nationalGovernance === null ||
+      this._players.get(observer.id()) !== observer ||
+      observer.type() !== PlayerType.Human
+    )
+      return [];
+    return this._nationalGovernance.politicalResultsFor(observer.id());
   }
 
   /** Same live reciprocal empire membership check used by E3 sight. */
