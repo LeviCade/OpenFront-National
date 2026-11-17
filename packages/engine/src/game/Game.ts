@@ -58,7 +58,10 @@ import type {
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
-import type { NationalFoundEmpireResult } from "../national/politics/NationalGovernanceState";
+import type {
+  NationalFoundEmpireResult,
+  NationalPoliticalCommandResult,
+} from "../national/politics/NationalGovernanceState";
 import type {
   NationalWarAuthority,
   NationalWarCommand,
@@ -630,6 +633,16 @@ export interface Game extends GameLike {
   nationalCommandResults(
     observer: Player,
   ): readonly NationalFoundEmpireResult[];
+  /** E1-owned journal for authenticated non-founder commands; E3 wires it. */
+  performNationalPoliticalCommandWithOutcome(
+    actor: Player,
+    command: Exclude<NationalCommand, { kind: "found-empire" }>,
+    requestId?: string | null,
+  ): NationalPoliticalCommandResult;
+  /** Detached private outcomes; never mixed into Found Empire result packets. */
+  nationalPoliticalCommandResults(
+    observer: Player,
+  ): readonly NationalPoliticalCommandResult[];
   /** E3 stores each human observer's verified, principal-bound sightings. */
   readNationalObserverMemory(observerId: PlayerID): NationalSightMemory | null;
   writeNationalObserverMemory(
