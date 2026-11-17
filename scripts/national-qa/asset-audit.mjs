@@ -94,7 +94,7 @@ const musicSources = [
 const referencedMusic = [...new Set(
   musicSources.flatMap((source) => {
     const text = readFileSync(source, "utf8");
-    return Array.from(text.matchAll(/sounds\\/music\\/[\w-]+\\.mp3/g), (match) => match[0]);
+    return Array.from(text.matchAll(/sounds[/]music[/][a-z0-9-]+[.]mp3/g), (match) => match[0]);
   }),
 )].sort();
 const missingMusic = referencedMusic.filter(
