@@ -27,6 +27,7 @@ import {
   advanceLastKnown,
   type NationalSightMemory,
 } from "./NationalObservation";
+import type { OutboundFounderResult } from "./NationalPoliticalPacket";
 
 function publicPlayer(u: PlayerUpdate): PlayerUpdate {
   // Enumerate allowed fields explicitly. The full internal PlayerUpdate
@@ -122,10 +123,30 @@ export class NationalOutboundFilter {
     // Human observers use the SAME verified sight history as AI, including
     // sourceNationId for instant expulsion/split revocation. The record is
     // deliberately private to this recipient until E1 snapshots it in Game.
-    this.sightMemory =
-      verified === null
-        ? null
-        : advanceLastKnown(verified.observation, this.sightMemory, 60).memory;
+    if (verified === null) {
+      this.sightMemory = null;
+    } else {
+      const advanced = advanceLastKnown(
+        verified.observation,
+        this.sightMemory,
+        60,
+      ).memory;
+      // E1's canonical GameSnapshot limits one principal to 4096 last-known
+      // assets. Favor fresh observations, then stable IDs; never allow a large
+      // empire or bot world to crash worker delivery with an oversized write.
+      const retained = [...advanced.assets]
+        .sort(
+          (a, b) =>
+            b.lastSeenTick - a.lastSeenTick ||
+            (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+        )
+        .slice(0, 4096)
+        .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      this.sightMemory = {
+        observerId: advanced.observerId,
+        assets: retained,
+      };
+    }
     const visibleTiles = verified?.visibleTiles ?? new Set<number>();
     const visibleAssets = new Map(
       (verified?.observation.visibleAssets ?? []).map((asset) => [
@@ -229,9 +250,34 @@ export class NationalOutboundFilter {
         ? { [ownID]: data.playerNameViewData[ownID] }
         : undefined;
 
+    const proposedResults = (
+      data as GameUpdateViewData & {
+        nationalCommandResults?: readonly OutboundFounderResult[];
+      }
+    ).nationalCommandResults;
+    // A second independent scope check prevents an accidental caller from
+    // attaching the E1 journal for another actor to this viewer's packet.
+    const recipientResults =
+      this.observerId === null
+        ? []
+        : (proposedResults ?? []).filter(
+            (item) =>
+              item.recipientId === this.observerId &&
+              item.actorId === this.observerId,
+          );
+
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
     return {
+      ...(recipientResults.length
+        ? { nationalCommandResults: recipientResults }
+        : {}),
+      // E1's public detached DTO is allowed to every honest-client NATIONAL
+      // viewer, including reconnect. It must never be synthesized from
+      // outbound private PlayerUpdate fields.
+      ...("nationalPolitics" in data && data.nationalPolitics !== null
+        ? { nationalPolitics: data.nationalPolitics }
+        : {}),
       tick: data.tick,
       updates,
       packedTileUpdates: new Uint32Array(packedTile),
