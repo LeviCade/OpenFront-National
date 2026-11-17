@@ -272,7 +272,11 @@ async function main() {
     "--ignore-gpu-blocklist",
     ...(hardwareOnly ? ["--disable-software-rasterizer"] : []),
     ...(softwareDiagnostic
-      ? ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+      ? [
+          "--use-gl=angle",
+          "--use-angle=swiftshader",
+          "--enable-unsafe-swiftshader",
+        ]
       : angleBackend
         ? ["--use-gl=angle", "--use-angle=" + angleBackend]
         : []),
