@@ -9,7 +9,11 @@ import {
   type NationalFoundingResult,
 } from "../../../src/client/NationalDiplomacyState";
 
+const requestId = "nf_" + "a".repeat(32);
+const otherRequestId = "nf_" + "b".repeat(32);
+
 const attempt: NationalFoundingAttempt = {
+  requestId,
   gameId: "solo-one",
   actorId: "nation-a",
   empireId: "Atlas",
@@ -29,6 +33,8 @@ const accepted: NationalFoundingResult = {
   empireId: "Atlas",
   accepted: true,
   tick: 11,
+  requestId,
+  sequence: 3,
 };
 const view = {
   gameId: "solo-one",
@@ -87,6 +93,9 @@ describe("NATIONAL confirmed founding decisions from authoritative DTOs", () => 
       { ...accepted, empireId: "Other" },
       { ...accepted, actorId: "nation-b" },
       { ...accepted, recipientId: "nation-b" },
+      { ...accepted, requestId: otherRequestId },
+      { ...accepted, requestId: undefined },
+      { ...accepted, sequence: undefined },
     ];
     for (const result of wrong) {
       expect(
@@ -200,6 +209,110 @@ describe("NATIONAL Ungovernable public warning packets", () => {
   it("never synthesizes warnings from absent packets", () => {
     expect(readNationalPolitics(null)).toBeNull();
     expect(readNationalPolitics({ empires: [] })?.warnings).toEqual([]);
+  });
+});
+
+describe("exact E1 request identity under same-tick races", () => {
+  it("never accepts an identical actor/empire command from another request on the same tick", () => {
+    const unrelated = { ...accepted, tick: 10, requestId: otherRequestId, sequence: 2 };
+    expect(
+      reconcileNationalFounding(attempt, {
+        ...view,
+        politics: roster,
+        results: [unrelated],
+      }).phase,
+    ).toBe("pending");
+    expect(
+      reconcileNationalFounding(attempt, {
+        ...view,
+        politics: roster,
+        results: [unrelated, { ...accepted, tick: 10 }],
+      }).phase,
+    ).toBe("accepted");
+  });
+
+  it("reorders repeated records safely and ignores an unrelated rejection", () => {
+    const rejection = {
+      ...accepted,
+      requestId: otherRequestId,
+      sequence: 1,
+      accepted: false,
+      reason: "political-rule",
+    };
+    for (const results of [[rejection, accepted], [accepted, rejection]]) {
+      expect(
+        reconcileNationalFounding(attempt, {
+          ...view,
+          politics: roster,
+          results,
+        }).phase,
+      ).toBe("accepted");
+    }
+    expect(
+      reconcileNationalFounding(attempt, {
+        ...view,
+        politics: roster,
+        results: [rejection],
+      }).phase,
+    ).toBe("pending");
+  });
+
+  it("never chooses an outcome from contradictory E1 receipts for one request", () => {
+    const rejection = {
+      ...accepted,
+      accepted: false,
+      reason: "political-rule",
+    };
+    expect(
+      reconcileNationalFounding(attempt, {
+        ...view,
+        politics: roster,
+        results: [accepted, rejection],
+      }).phase,
+    ).toBe("unknown");
+    expect(
+      reconcileNationalFounding(attempt, {
+        ...view,
+        politics: roster,
+        results: [accepted, { ...accepted, sequence: 999 }],
+      }).phase,
+    ).toBe("unknown");
+  });
+
+  it("only applies an exact matching rejected engine result, never a past success", () => {
+    const pastSuccess = { ...accepted, requestId: otherRequestId, sequence: 1 };
+    const realRejection = {
+      ...accepted,
+      accepted: false,
+      reason: "actor-inactive",
+      sequence: 4,
+    };
+    expect(
+      reconcileNationalFounding(attempt, {
+        ...view,
+        politics: roster,
+        results: [pastSuccess, realRejection],
+      }),
+    ).toEqual({
+      phase: "rejected",
+      reason: "actor-inactive",
+      acceptedResultSeen: false,
+    });
+  });
+
+  it("keeps one-shot identical same-tick receipts distinct by requestId and sequence", () => {
+    const first = { ...accepted, tick: 10, sequence: 1 };
+    const second = {
+      ...accepted,
+      tick: 10,
+      sequence: 2,
+      requestId: otherRequestId,
+      accepted: false,
+      reason: "political-rule",
+    };
+    expect(
+      retainNationalFoundingReceipts([], [first, second], 11, false),
+    ).toHaveLength(2);
   });
 });
 
