@@ -104,6 +104,9 @@ jobs:
         env:
           CHROME_BIN: /usr/bin/google-chrome
           SKIP_BROWSER_OPEN: "true"
+          # Hosted runner has no GPU: collect genuine gate failure diagnostics.
+          # This NEVER satisfies the separate hardware acceptance gate.
+          NATIONAL_QA_SOFTWARE_CDP: "1"
         run: |
           set -euo pipefail
           mkdir -p national-qa-artifacts
