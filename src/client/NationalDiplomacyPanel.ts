@@ -3,6 +3,7 @@ import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import {
+  createNationalFoundingRequestId,
   empireForMember,
   foundingUnavailableReason,
   reconcileNationalFounding,
@@ -59,7 +60,14 @@ export class NationalDiplomacyPanel extends LitElement {
     }
 
     const attempt = this.pendingAttempt;
-    if (attempt && game && player) {
+    if (attempt && game?.config().isReplay()) {
+      this.pendingAttempt = null;
+      this.pendingEmpireId = null;
+      this.phase = "unknown";
+      this.message =
+        "Replay is read-only. The previous founding request is not confirmed.";
+      this.error = null;
+    } else if (attempt && game && player) {
       const tick = typeof game.ticks === "function" ? game.ticks() : 0;
       const results =
         typeof game.nationalFoundingResults === "function"
@@ -83,7 +91,17 @@ export class NationalDiplomacyPanel extends LitElement {
         this.pendingAttempt = null;
         this.pendingEmpireId = null;
         this.phase = decision.phase;
-        if (decision.phase === "accepted") {
+        if (
+          decision.phase === "accepted" &&
+          (game.isSpectator() || !player.isAlive() || game.inSpawnPhase())
+        ) {
+          // The command receipt is real, but a now-inactive principal cannot
+          // receive a player-facing active founding success toast.
+          this.phase = "unknown";
+          this.message =
+            "Founding was accepted previously, but the active nation has changed. Check the current roster.";
+          this.error = null;
+        } else if (decision.phase === "accepted") {
           this.lastConfirmedEmpireId = attempt.empireId;
           this.message = `Confirmed by game: your nation founded ${attempt.empireId}.`;
           this.error = null;
@@ -161,7 +179,19 @@ export class NationalDiplomacyPanel extends LitElement {
       this.error = "There is no active player to authorize founding.";
       return;
     }
+    // Cryptographic uniqueness is required; if the browser cannot generate
+    // a secure token the command is NOT sent and no pending receipt is set.
+    let requestId: string;
+    try {
+      requestId = createNationalFoundingRequestId();
+    } catch {
+      this.error =
+        "Secure command identification is unavailable. Founding was not sent.";
+      this.phase = "unknown";
+      return;
+    }
     this.pendingAttempt = {
+      requestId,
       gameId: game.gameID?.() ?? "",
       actorId: player.id(),
       empireId,
@@ -175,7 +205,9 @@ export class NationalDiplomacyPanel extends LitElement {
     this.message =
       "Request sent to game. Awaiting its accepted or rejected result…";
     try {
-      this.eventBus.emit(new SendNationalFoundEmpireIntentEvent(empireId));
+      this.eventBus.emit(
+        new SendNationalFoundEmpireIntentEvent(empireId, requestId),
+      );
     } catch {
       // Only a synchronous producer failure may clear the local latch.
       // An enqueued command is never equated with a successful execution.

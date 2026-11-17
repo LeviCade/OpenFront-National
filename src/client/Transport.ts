@@ -111,7 +111,10 @@ export class SendSpawnIntentEvent implements GameEvent {
 
 /** User-originated NATIONAL founding, stamped by the normal transport. */
 export class SendNationalFoundEmpireIntentEvent implements GameEvent {
-  constructor(public readonly empireId: string) {}
+  constructor(
+    public readonly empireId: string,
+    public readonly requestId: string,
+  ) {}
 }
 
 /** Signals loss/reestablishment of a verified game transport session. */
@@ -840,10 +843,15 @@ export class Transport {
   ) {
     // The wire schema and engine validate the ID and acting client again.
     // Do not stamp a player ID here or create political state on the client.
-    this.sendIntent({
-      type: "national_found_empire",
+    // E2 owns the zod wire schema update. A typed variable preserves the
+    // additional optional field before that sibling PR is integrated;
+    // actor authentication remains the server-stamped clientID.
+    const intent = {
+      type: "national_found_empire" as const,
       empireId: event.empireId,
-    });
+      requestId: event.requestId,
+    };
+    this.sendIntent(intent);
   }
 
   private onSendSpawnIntentEvent(event: SendSpawnIntentEvent) {
