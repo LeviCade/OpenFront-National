@@ -63,7 +63,9 @@ async function mount(
   } as unknown as GameView;
   const eventBus = new EventBus();
   const requests: SendNationalFoundEmpireIntentEvent[] = [];
-  eventBus.on(SendNationalFoundEmpireIntentEvent, (event) => requests.push(event));
+  eventBus.on(SendNationalFoundEmpireIntentEvent, (event) =>
+    requests.push(event),
+  );
   const element = document.createElement(
     "national-diplomacy-panel",
   ) as NationalDiplomacyPanel;
@@ -114,7 +116,9 @@ describe("NATIONAL player-facing founding", () => {
       spectator.element.querySelector<HTMLButtonElement>('button[type="submit"]')!
         .disabled,
     ).toBe(true);
-    expect(spectator.element.textContent).toContain("Only an active, living nation");
+    expect(spectator.element.textContent).toContain(
+      "Only an active, living nation",
+    );
   });
 
   it("clicking Found Empire enqueues exactly one real intent, not local success", async () => {
@@ -326,12 +330,16 @@ describe("NATIONAL player-facing founding", () => {
 
   it("generates a unique request token for two real clicks in the same engine tick", async () => {
     const { element, optionsState, requests } = await mount();
-    const input = element.querySelector<HTMLInputElement>("#national-empire-id")!;
+    const input = element.querySelector<HTMLInputElement>(
+      "#national-empire-id",
+    )!;
     input.value = "Atlas";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await element.updateComplete;
 
-    const submit = element.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    const submit = element.querySelector<HTMLButtonElement>(
+      'button[type="submit"]',
+    )!;
     submit.click();
     submit.click();
     await element.updateComplete;
@@ -339,20 +347,26 @@ describe("NATIONAL player-facing founding", () => {
     expect(requests[0].requestId).toMatch(/^nf_[0-9a-f]{32}$/);
 
     // E1 rejects first attempt but the UI remains in the same game tick.
-    optionsState.results = [{
-      type: "national_found_empire",
-      actorId: "nation-a",
-      recipientId: "nation-a",
-      empireId: "Atlas",
-      accepted: false,
-      tick: 10,
-      sequence: 1,
-      requestId: requests[0].requestId,
-      reason: "political-rule",
-    }];
+    optionsState.results = [
+      {
+        type: "national_found_empire",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        empireId: "Atlas",
+        accepted: false,
+        tick: 10,
+        sequence: 1,
+        requestId: requests[0].requestId,
+        reason: "political-rule",
+      },
+    ];
     element.refresh();
     await element.updateComplete;
-    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("rejected");
+    expect(
+      element
+        .querySelector("[data-national-phase]")
+        ?.getAttribute("data-national-phase"),
+    ).toBe("rejected");
 
     element.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
     await element.updateComplete;
@@ -366,19 +380,25 @@ describe("NATIONAL player-facing founding", () => {
       empires: [{ id: "Atlas", leaderId: "nation-a", memberIds: ["nation-a"] }],
       warnings: [],
     };
-    optionsState.results = [{
-      type: "national_found_empire",
-      actorId: "nation-a",
-      recipientId: "nation-a",
-      empireId: "Atlas",
-      accepted: true,
-      tick: 10,
-      sequence: 3,
-      requestId: requests[0].requestId,
-    }];
+    optionsState.results = [
+      {
+        type: "national_found_empire",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        empireId: "Atlas",
+        accepted: true,
+        tick: 10,
+        sequence: 3,
+        requestId: requests[0].requestId,
+      },
+    ];
     element.refresh();
     await element.updateComplete;
-    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("pending");
+    expect(
+      element
+        .querySelector("[data-national-phase]")
+        ?.getAttribute("data-national-phase"),
+    ).toBe("pending");
     expect(element.textContent).not.toContain("Confirmed by game");
 
     optionsState.results.push({
@@ -393,13 +413,19 @@ describe("NATIONAL player-facing founding", () => {
     });
     element.refresh();
     await element.updateComplete;
-    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("accepted");
+    expect(
+      element
+        .querySelector("[data-national-phase]")
+        ?.getAttribute("data-national-phase"),
+    ).toBe("accepted");
     expect(element.textContent).toContain("Confirmed by game");
   });
 
   it("never confirms a pending request after switching to replay", async () => {
     const { element, optionsState, requests } = await mount();
-    const input = element.querySelector<HTMLInputElement>("#national-empire-id")!;
+    const input = element.querySelector<HTMLInputElement>(
+      "#national-empire-id",
+    )!;
     input.value = "Atlas";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await element.updateComplete;
@@ -410,26 +436,34 @@ describe("NATIONAL player-facing founding", () => {
       empires: [{ id: "Atlas", leaderId: "nation-a", memberIds: ["nation-a"] }],
       warnings: [],
     };
-    optionsState.results = [{
-      type: "national_found_empire",
-      actorId: "nation-a",
-      recipientId: "nation-a",
-      empireId: "Atlas",
-      accepted: true,
-      tick: 10,
-      sequence: 1,
-      requestId: requests[0].requestId,
-    }];
+    optionsState.results = [
+      {
+        type: "national_found_empire",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        empireId: "Atlas",
+        accepted: true,
+        tick: 10,
+        sequence: 1,
+        requestId: requests[0].requestId,
+      },
+    ];
     element.refresh();
     await element.updateComplete;
-    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("unknown");
+    expect(
+      element
+        .querySelector("[data-national-phase]")
+        ?.getAttribute("data-national-phase"),
+    ).toBe("unknown");
     expect(element.textContent).not.toContain("Confirmed by game");
     expect(element.querySelector('button[type="submit"]')).toBeNull();
   });
 
   it("never shows active-player acceptance after spectator transition or elimination", async () => {
     const { element, optionsState, requests } = await mount();
-    const input = element.querySelector<HTMLInputElement>("#national-empire-id")!;
+    const input = element.querySelector<HTMLInputElement>(
+      "#national-empire-id",
+    )!;
     input.value = "Atlas";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await element.updateComplete;
@@ -440,19 +474,25 @@ describe("NATIONAL player-facing founding", () => {
       empires: [{ id: "Atlas", leaderId: "nation-a", memberIds: ["nation-a"] }],
       warnings: [],
     };
-    optionsState.results = [{
-      type: "national_found_empire",
-      actorId: "nation-a",
-      recipientId: "nation-a",
-      empireId: "Atlas",
-      accepted: true,
-      tick: 10,
-      sequence: 1,
-      requestId: requests[0].requestId,
-    }];
+    optionsState.results = [
+      {
+        type: "national_found_empire",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        empireId: "Atlas",
+        accepted: true,
+        tick: 10,
+        sequence: 1,
+        requestId: requests[0].requestId,
+      },
+    ];
     element.refresh();
     await element.updateComplete;
-    expect(element.querySelector("[data-national-phase]")?.getAttribute("data-national-phase")).toBe("unknown");
+    expect(
+      element
+        .querySelector("[data-national-phase]")
+        ?.getAttribute("data-national-phase"),
+    ).toBe("unknown");
     expect(element.textContent).not.toContain("Confirmed by game");
   });
 
