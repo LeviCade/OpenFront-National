@@ -52,12 +52,21 @@ owner were non-overlapping. E5 never patched another owner's gameplay code.
 
 - [Exact-source full Vitest run 43991007886](https://github.com/LeviCade/OpenFront-National/actions/runs/43991007886) completed **11,497 passed, two failed, one skipped** across 776 test files.
 - **E2-owned failure:** `tests/national/NationalFoundEmpireRequestId.test.ts:102` expected a null token for a legacy authenticated founding intent, whereas E1's canonical journal deterministically returned `auto:3:0`. The expectation must be reconciled by E2 with E1's proven backward-compatible issuance and actor scope. E5 cannot rewrite it.
-- **E5-owned test assumption repaired:** 3-donor roster was assumed to follow invitation order `east,west,center`; E1 canonical `nationalMdaAllies` correctly returned `center,east,west`. E5 now asserts a separate alphabetically sorted expected donor roster and matching receipt order, leaving conservation unchanged. The three-donor receipt still requires an exact-head successful rerun before PASS can be recorded.
+- **E5-owned test assumption repaired:** 3-donor roster was assumed to follow invitation order `east,west,center`; E1 canonical `nationalMdaAllies` correctly returned `center,east,west`. E5 now asserts a separate alphabetically sorted expected donor roster and matching receipt order, leaving conservation unchanged. The three-donor receipt **PASSED** the exact-head targeted rerun on updated candidate `51b2ae2d`.
 - **Two-donor real MDA scenario PASS:** `r6-east` and `r6-west` each debited exactly 50,000, 100,000 attacking troops intercepted, no phantom in-flight troops. Snapshot SHA-256 `bf98d58f4b186de5b486e8c71cf48ef38cd216c11453f3eb813e2e405c54640f`.
 - **Exact actor/recipient request receipts PASS:** `qa_r6_req_first` accepted sequence 0; `qa_r6_req_rejected` rejected sequence 1, actor `r6-north`. These are real GameRunner worker-facing packet tests, **not browser click acceptance**.
 - [Mutation controls 43991007886](https://github.com/LeviCade/OpenFront-National/actions/runs/43991007886): **3/3 PASS**, proven failures from real unauthorized WAR bypass, stale-CAS bypass and hidden-player packet leak. Disposable modified production files were restored byte for byte after each case.
 - [Strict Chromium 43991007795](https://github.com/LeviCade/OpenFront-National/actions/runs/43991007795): all four browser modes failed the *actual* WebGL gate. Chrome 157 WebGL2 context exists but ANGLE/Vulkan renderer is SwiftShader Device (Subzero), max texture 8192. No GPU-backed gameplay success. Report explicitly distinguishes hardware insufficiency from gameplay mechanics.
 - Current source blocking E3 `NationalOutbound.ts:314` TS18048, E2 unsafe optional chains, E2/E4 pinned format, and seven production dependency advisories. Source-owner reports posted on their own PRs.
+
+## Updated combined staging: 19/19 targeted PASS
+
+- Updated staging SHA: `51b2ae2de212a35c9cf5880e9bcf27bb4f736e03` (non-force merges incorporating E4 pinned formatting and E5 donor-order correction, original five-source ancestry retained).
+- [Exact-head targeted WAR/MDA/FOG/CAS/receipt run 43992114899](https://github.com/LeviCade/OpenFront-National/actions/runs/43992114899): **19 passed / 0 failed**, five test files. This demonstrates **both genuine two-donor and three-donor MDA defense** using canonical Game/AttackExecution/Player troop balances. Both intercept exactly 100,000 and leave zero in-flight attackers without double charges.
+- Two-donor receipt: `r6-east:50000, r6-west:50000`; deterministic snapshot SHA-256 `bf98d58f4b186de5b486e8c71cf48ef38cd216c11453f3eb813e2e405c54640f`.
+- Three-donor receipt: `r6-center:33334, r6-east:33333, r6-west:33333`; deterministic snapshot SHA-256 `119274c0ecf2865de0888d07edfbf1be329e4e209ffc2beaa1e623eddd9a0cf6`.
+- Accepted founding `qa_r6_req_first` is correlated to journal sequence 0 and actor `r6-north`; distinct rejected `qa_r6_req_rejected` is sequence 1. E3 recipient filtering excludes foreign acknowledgments.
+- The overall job is **RED** despite 19/19 gameplay tests because E3 `NationalOutbound.ts:314` TS18048 and E2 lint/format fail, and the full-suite legacy E2 expectation remains unresolved. These are not waived by green targeted tests.
 
 ## Round Six acceptance extensions
 
