@@ -201,6 +201,7 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
         nationId: "nation-a",
         targetId: "nation-b",
         targetKind: "nation",
+        requestId: expect.stringMatching(/^nc_[0-9a-f]{32}$/),
       },
     ]);
     expect(NationalDeclareWarIntentSchema.safeParse(intents()[0]).success).toBe(
@@ -223,6 +224,7 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
         nationId: "nation-a",
         targetId: "Borealis",
         targetKind: "empire",
+        requestId: expect.stringMatching(/^nc_[0-9a-f]{32}$/),
       },
     ]);
     expect(NationalDeclareWarIntentSchema.safeParse(intents()[0]).success).toBe(
@@ -236,7 +238,11 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     await enter(panel, "#national-peace-war-id", "national-10-1-4");
     panel.querySelector<HTMLButtonElement>("#national-propose-peace")!.click();
     expect(intents()).toEqual([
-      { type: "national_propose_peace", warId: "national-10-1-4" },
+      {
+        type: "national_propose_peace",
+        warId: "national-10-1-4",
+        requestId: expect.stringMatching(/^nc_[0-9a-f]{32}$/),
+      },
     ]);
     expect(
       NationalProposePeaceIntentSchema.safeParse(intents()[0]).success,
@@ -249,7 +255,9 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     expect(intents()[1]).toEqual({
       type: "national_accept_peace",
       motionId: "national-11-1-5",
+      requestId: expect.stringMatching(/^nc_[0-9a-f]{32}$/),
     });
+    expect(intents()[1].requestId).not.toBe(intents()[0].requestId);
     expect(
       NationalAcceptPeaceIntentSchema.safeParse(intents()[1]).success,
     ).toBe(true);
@@ -294,6 +302,7 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
         "nation-a",
         "nation-b",
         "nation",
+        "nc_00000000000000000000000000000001",
       ),
     );
     expect(intents()).toHaveLength(0);
