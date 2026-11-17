@@ -343,7 +343,25 @@ export class NationExecution implements Execution {
       result.decision.objective === "consolidate"
     )
       return;
-    const targetId = result.decision.targetId;
+    const sides = deriveNationalWarSides(observation.wars, player.id());
+    // "defend" is a threat alarm with NO offensive planner target. Choose
+    // only an observed, adjacent, already-hostile E2 WAR combatant at the
+    // actual execution boundary. Never invent a new war during defense.
+    const defensiveFront =
+      observation.frontiers
+        .filter(
+          (f) =>
+            f.access === "land" &&
+            sides.enemies.has(f.targetId) &&
+            !sides.allies.has(f.targetId),
+        )
+        .map((f) => f.targetId)
+        .sort()[0] ?? null;
+    const targetId =
+      result.decision.objective === "defend"
+        ? defensiveFront
+        : result.decision.targetId;
+    if (result.decision.objective === "defend" && targetId === null) return;
 
     // The planner knows only verified frontier IDs. Confirm adjacency again
     // at execution time; neither hidden armies nor off-map enemies are probed.
@@ -396,7 +414,6 @@ export class NationExecution implements Execution {
     )
       return;
 
-    const sides = deriveNationalWarSides(observation.wars, player.id());
     if (sides.allies.has(targetId)) return;
     if (!sides.enemies.has(targetId)) {
       // An independent AI may begin a scoped national war against a real,
