@@ -728,4 +728,3 @@ describe("R5 per-human last-known sight snapshot and empire revocation", () => {
     expect(restored.readNationalObserverMemory(A)).toEqual(original);
   });
 });
-
