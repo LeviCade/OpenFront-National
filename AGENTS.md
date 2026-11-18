@@ -1,5 +1,20 @@
 # Instructions for coding agents and future engineer/conductor sessions
 
+## Owner compute policy — November 17, 2026
+
+This repository is PUBLIC. Keep workloads supported by standard free GitHub-hosted runners on GitHub-hosted compute. A specialized job may use owner-operated Skybot only when the free hosted offering cannot satisfy its required capability/resource class and the exact public repository has an explicitly configured, accepted Skybot profile.
+
+- The existing national-hardware-acceptance.yml is a manual-only specialized GPU workload. Its self-hosted gpu label does NOT mean a Skybot GPU runner is currently registered or that hardware acceptance has passed.
+- Keep normal public CI on GitHub-hosted runners. Do not move the whole repository to Skybot.
+- Do not dispatch or enable the GPU job on Skybot until Skybot-CI issues #238 and #239 pass: exact-repository public admission, actual GPU acceleration, and arbitrary public/fork-code host/LAN isolation.
+- Public repositories are never dynamically auto-onboarded by the private-repository scanner. Never use the persistent skybot-ci-dev runner, host mounts, host sockets, controller credentials, signing keys or private secrets for public code.
+- GitHub Actions does not automatically transfer a queued/failed hosted job to Skybot; specialized Skybot jobs must explicitly select their approved capability label.
+- If this repository becomes PRIVATE, all its GitHub Actions jobs must move to owner-operated Skybot compute only.
+
+Canonical policy: https://github.com/LeviCade/Skybot-CI/blob/main/docs/PRIVATE_PUBLIC_CI_POLICY.md
+Runner guide: https://github.com/LeviCade/Skybot-CI/blob/main/docs/CI_RUNNER_CHOICES.md
+Implementation gates: https://github.com/LeviCade/Skybot-CI/issues/238 and https://github.com/LeviCade/Skybot-CI/issues/239.
+
 ## Current stage
 
 **Stage 1 — VISION COMPLETE. Stage 2 — SOURCE MIGRATION ACCEPTED AND MERGED. Stage 3 — AUTHORIZED, NOT YET IMPLEMENTED.** Read [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md), [docs/17-stage2-acceptance.md](docs/17-stage2-acceptance.md), and [docs/18-stage3-conductor.md](docs/18-stage3-conductor.md) before changing implementation. Use the verified merged source on main. Preserve the vision, upstream notices, original NATIONAL asset replacements, and legacy behavior. Do not ship publicly until remaining pre-release checks are resolved.
