@@ -255,38 +255,49 @@ async function main() {
   if (
     angleBackend !== undefined &&
     angleBackend !== "gl" &&
+    angleBackend !== "gl-egl" &&
     angleBackend !== "vulkan"
   ) {
-    throw new Error("NATIONAL_CHROME_ANGLE_BACKEND must be gl or vulkan");
+    throw new Error(
+      "NATIONAL_CHROME_ANGLE_BACKEND must be gl, gl-egl or vulkan",
+    );
   }
+  // Physical Intel VirGL headless Chrome on Skybot requires ANGLE gl-egl
+  // with EGL surfaceless, never a SwiftShader/software fallback.
+  const virglSurfaceless = angleBackend === "gl-egl";
   const hardwareOnly = process.env.NATIONAL_REQUIRE_HARDWARE_GPU === "1";
   // Hosted CI may opt into a software CDP diagnostic. It cannot pass the
   // normal game WebGL gate and is forbidden in real hardware acceptance.
   const softwareDiagnostic =
     !hardwareOnly && process.env.NATIONAL_QA_SOFTWARE_CDP === "1";
-  spawnChild(process.env.CHROME_BIN ?? "google-chrome", [
-    "--headless=new",
-    "--no-sandbox",
-    "--disable-dev-shm-usage",
-    "--enable-webgl",
-    "--ignore-gpu-blocklist",
-    ...(hardwareOnly ? ["--disable-software-rasterizer"] : []),
-    ...(softwareDiagnostic
-      ? [
-          "--use-gl=angle",
-          "--use-angle=swiftshader",
-          "--enable-unsafe-swiftshader",
-        ]
-      : angleBackend
-        ? ["--use-gl=angle", "--use-angle=" + angleBackend]
-        : []),
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--remote-allow-origins=*",
-    "--user-data-dir=" + profile,
-    "--remote-debugging-port=" + port,
-    "about:blank",
-  ]);
+  spawnChild(
+    process.env.CHROME_BIN ?? "google-chrome",
+    [
+      "--headless=new",
+      ...(virglSurfaceless ? ["--ozone-platform=headless"] : []),
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--enable-webgl",
+      "--ignore-gpu-blocklist",
+      ...(hardwareOnly ? ["--disable-software-rasterizer"] : []),
+      ...(softwareDiagnostic
+        ? [
+            "--use-gl=angle",
+            "--use-angle=swiftshader",
+            "--enable-unsafe-swiftshader",
+          ]
+        : angleBackend
+          ? ["--use-gl=angle", "--use-angle=" + angleBackend]
+          : []),
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--remote-allow-origins=*",
+      "--user-data-dir=" + profile,
+      "--remote-debugging-port=" + port,
+      "about:blank",
+    ],
+    virglSurfaceless ? { EGL_PLATFORM: "surfaceless" } : {},
+  );
   const pages = await poll(async () => {
     const res = await fetch("http://127.0.0.1:" + port + "/json/list", {
       signal: AbortSignal.timeout(1200),
