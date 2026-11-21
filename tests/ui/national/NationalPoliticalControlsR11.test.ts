@@ -298,7 +298,9 @@ describe("R11 NATIONAL political wire authorization", () => {
         ],
       },
     });
-    expect(readNationalAccessionOffers(state.offers, "nation-a")).toMatchObject({
+    expect(
+      readNationalAccessionOffers(state.offers, "nation-a"),
+    ).toMatchObject({
       offers: [{ candidateId: "nation-c", recipientId: "nation-a" }],
     });
     const events: SendNationalAcceptEmpireIntentEvent[] = [];
@@ -315,7 +317,9 @@ describe("R11 NATIONAL political wire authorization", () => {
     ];
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.textContent).not.toContain("Confirmed by game: Nation C joined");
+    expect(panel.textContent).not.toContain(
+      "Confirmed by game: Nation C joined",
+    );
     state.politics = {
       empires: [
         {
