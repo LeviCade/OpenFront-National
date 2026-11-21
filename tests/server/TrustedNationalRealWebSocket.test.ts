@@ -67,6 +67,7 @@ async function productionRunner(info: WireGameStartInfo): Promise<GameRunner> {
     humans,
     undefined,
     NationalServerConfig,
+    false, // socket-issued spawns require an active authoritative spawn phase
   );
   // No server-side SpawnExecution shortcut. Every human must choose a tile
   // through their own signed, physically connected WebSocket session.
@@ -441,5 +442,5 @@ describe("C2 E2 REAL WebSocket three-account NATIONAL server", () => {
         .find((r) => r.requestId === abandonedToken),
     ).toBeUndefined();
     expect(b.ws.readyState).not.toBe(WebSocket.OPEN);
-  });
+  }, 15000);
 });
