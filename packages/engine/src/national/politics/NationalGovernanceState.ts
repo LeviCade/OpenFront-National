@@ -27,16 +27,34 @@ const politicalCommandKind = z.enum([
   "expel-pact",
 ]);
 export type NationalPoliticalCommandKind = z.infer<typeof politicalCommandKind>;
+const warCommandKind = z.enum([
+  "national_declare_war",
+  "national_propose_peace",
+  "national_accept_peace",
+]);
+export type NationalWarCommandKind = z.infer<typeof warCommandKind>;
+const warReason = z.enum([
+  "accepted",
+  "actor-inactive",
+  "invalid-war-command",
+  "war-rule",
+]);
+export type NationalWarCommandReason = z.infer<typeof warReason>;
 const commandOutcome = z.object({
   sequence: tick,
   requestId: identity,
   actorId: identity,
   empireId: z.string().max(256),
   /** Absent means legacy Found Empire; one canonical receipt list for ALL commands. */
-  commandKind: politicalCommandKind.optional(),
+  commandKind: z.union([politicalCommandKind, warCommandKind]).optional(),
   commandTargetId: identity.optional(),
   /** Private canonical payload identity; never included in recipient results. */
   commandFingerprint: z.string().min(1).max(4096).optional(),
+  /** WAR receipts are delivered to the authenticated initiating principal. */
+  recipientId: identity.optional(),
+  /** Safe engine-owned references, only present for accepted WAR commands. */
+  warId: identity.optional(),
+  motionId: identity.optional(),
   tick,
   accepted: z.boolean(),
   reason: z.enum([
@@ -44,9 +62,25 @@ const commandOutcome = z.object({
     "actor-inactive",
     "invalid-empire-id",
     "political-rule",
+    "invalid-war-command",
+    "war-rule",
   ]),
 });
 export type NationalFoundEmpireResult = z.infer<typeof commandOutcome>;
+export type NationalWarCommandOutcome = {
+  sequence: number;
+  requestId: string;
+  actorId: string;
+  /** E3 must match this to the authenticated receiving player, never broadcast. */
+  recipientId: string;
+  commandKind: NationalWarCommandKind;
+  commandTargetId: string;
+  tick: number;
+  accepted: boolean;
+  reason: NationalWarCommandReason;
+  warId?: string;
+  motionId?: string;
+};
 export type NationalPoliticalCommandResult = Omit<
   NationalFoundEmpireResult,
   "commandFingerprint"
@@ -66,11 +100,36 @@ function politicalResultView(
     requestId: result.requestId,
     actorId: result.actorId,
     empireId: result.empireId,
-    commandKind: result.commandKind,
+    commandKind: politicalCommandKind.parse(result.commandKind),
     commandTargetId: result.commandTargetId,
     tick: result.tick,
     accepted: result.accepted,
     reason: result.reason,
+  };
+}
+
+/** Only public-safe data from the shared private journal is exposed to E3. */
+function warResultView(
+  result: NationalFoundEmpireResult,
+): NationalWarCommandOutcome {
+  if (
+    result.commandTargetId === undefined ||
+    result.recipientId === undefined ||
+    result.recipientId !== result.actorId
+  )
+    throw new Error("NATIONAL journal: invalid WAR outcome recipient");
+  return {
+    sequence: result.sequence,
+    requestId: result.requestId,
+    actorId: result.actorId,
+    recipientId: result.recipientId,
+    commandKind: warCommandKind.parse(result.commandKind),
+    commandTargetId: result.commandTargetId,
+    tick: result.tick,
+    accepted: result.accepted,
+    reason: warReason.parse(result.reason),
+    ...(result.warId === undefined ? {} : { warId: result.warId }),
+    ...(result.motionId === undefined ? {} : { motionId: result.motionId }),
   };
 }
 const asset = z.object({
@@ -100,7 +159,11 @@ export type NationalGovernanceSnapshot = z.infer<
   typeof NationalGovernanceSnapshotSchema
 >;
 
-export type FoundEmpireReason = NationalFoundEmpireResult["reason"];
+export type FoundEmpireReason =
+  | "accepted"
+  | "actor-inactive"
+  | "invalid-empire-id"
+  | "political-rule";
 export const NATIONAL_RESULT_RETENTION = 128;
 export const NATIONAL_REQUEST_RETENTION = 1024;
 export const NATIONAL_SIGHT_RETENTION_TICKS = 60;
@@ -156,14 +219,44 @@ export class NationalGovernanceState {
     );
   }
 
+  /** WAR/peace joins the SAME sequence, request receipts, and GameSnapshot. */
+  recordWarCommand(
+    actorId: PlayerID,
+    commandKind: NationalWarCommandKind,
+    targetId: string,
+    gameTick: number,
+    suppliedRequestId: string | null,
+    commandFingerprint: string,
+    references: { warId?: string; motionId?: string },
+    perform: () => NationalWarCommandReason,
+  ): NationalWarCommandOutcome {
+    return warResultView(
+      this.recordCommand(
+        actorId,
+        targetId,
+        gameTick,
+        suppliedRequestId,
+        perform,
+        commandKind,
+        commandFingerprint,
+        { recipientId: actorId, ...references },
+      ),
+    );
+  }
+
   private recordCommand(
     actorId: PlayerID,
     empireId: string,
     gameTick: number,
     suppliedRequestId: string | null,
-    perform: () => FoundEmpireReason,
-    commandKind: NationalPoliticalCommandKind | null,
+    perform: () => NationalFoundEmpireResult["reason"],
+    commandKind: NationalPoliticalCommandKind | NationalWarCommandKind | null,
     commandFingerprint: string | null = null,
+    warReferences: {
+      recipientId: string;
+      warId?: string;
+      motionId?: string;
+    } | null = null,
   ): NationalFoundEmpireResult {
     if (
       commandKind !== null &&
@@ -172,6 +265,15 @@ export class NationalGovernanceState {
         commandFingerprint.length > 4096)
     )
       throw new Error("NATIONAL journal: invalid command payload identity");
+    if (warReferences !== null) {
+      warCommandKind.parse(commandKind);
+      identity.parse(warReferences.recipientId);
+      if (warReferences.recipientId !== actorId)
+        throw new Error("NATIONAL command journal: mismatched WAR recipient");
+      if (warReferences.warId !== undefined) identity.parse(warReferences.warId);
+      if (warReferences.motionId !== undefined)
+        identity.parse(warReferences.motionId);
+    }
     if (!Number.isSafeInteger(gameTick) || gameTick < 0)
       throw new Error("NATIONAL command journal: invalid tick");
     identity.parse(actorId);
@@ -216,6 +318,21 @@ export class NationalGovernanceState {
             commandTargetId: empireId,
             commandFingerprint: commandFingerprint!,
           }),
+      ...(warReferences === null
+        ? {}
+        : {
+            recipientId: warReferences.recipientId,
+            ...(reason === "accepted"
+              ? {
+                  ...(warReferences.warId === undefined
+                    ? {}
+                    : { warId: warReferences.warId }),
+                  ...(warReferences.motionId === undefined
+                    ? {}
+                    : { motionId: warReferences.motionId }),
+                }
+              : {}),
+          }),
       tick: gameTick,
       accepted: reason === "accepted",
       reason,
@@ -235,18 +352,28 @@ export class NationalGovernanceState {
       .map((r) => ({ ...r }));
   }
 
-  /** Future E3 delivery: private non-founder outcomes from this ONE journal. */
+  /** Private constitutional/political results, excluding WAR receipts. */
   politicalResultsFor(
     actorId: PlayerID,
   ): readonly NationalPoliticalCommandResult[] {
     return this.results
       .filter(
-        (r): r is NationalPoliticalCommandResult =>
+        (r) =>
           r.actorId === actorId &&
-          r.commandKind !== undefined &&
-          r.commandTargetId !== undefined,
+          politicalCommandKind.safeParse(r.commandKind).success,
       )
       .map((r) => politicalResultView(r));
+  }
+
+  /** Private WAR results, excluding founding and constitutional receipts. */
+  warResultsFor(actorId: PlayerID): readonly NationalWarCommandOutcome[] {
+    return this.results
+      .filter(
+        (r) =>
+          r.actorId === actorId &&
+          warCommandKind.safeParse(r.commandKind).success,
+      )
+      .map((r) => warResultView(r));
   }
 
   /**
@@ -354,6 +481,27 @@ export class NationalGovernanceState {
             receipt.commandFingerprint !== undefined))
       )
         throw new Error("NATIONAL journal: invalid or future receipt");
+      const isWar = warCommandKind.safeParse(receipt.commandKind).success;
+      if (
+        isWar &&
+        (receipt.recipientId !== receipt.actorId ||
+          !warReason.safeParse(receipt.reason).success ||
+          (receipt.accepted &&
+            (receipt.warId === undefined ||
+              (receipt.commandKind === "national_propose_peace" &&
+                receipt.motionId === undefined) ||
+              (receipt.commandKind === "national_accept_peace" &&
+                receipt.motionId === undefined))) ||
+          (!receipt.accepted &&
+            (receipt.warId !== undefined || receipt.motionId !== undefined)) ||
+          (receipt.commandKind === "national_declare_war" &&
+            receipt.motionId !== undefined)) ||
+        (!isWar &&
+          (receipt.recipientId !== undefined ||
+            receipt.warId !== undefined ||
+            receipt.motionId !== undefined))
+      )
+        throw new Error("NATIONAL journal: invalid WAR receipt");
       requests.add(receipt.requestId);
       sequences.add(receipt.sequence);
       largest = Math.max(largest, receipt.sequence);
