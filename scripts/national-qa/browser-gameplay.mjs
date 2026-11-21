@@ -53,6 +53,9 @@ import {
 
 const mobile = process.argv.includes("--mobile");
 const legacy = process.argv.includes("--legacy");
+// Explicit diagnostic only. The default three-principal path remains strict.
+const soloOnly = process.argv.includes("--solo");
+if (legacy && soloOnly) throw Error("SOLO_DIAGNOSTIC_MODE_CONFLICT");
 const base = "http://127.0.0.1:9000/";
 const reportDir =
   "national-qa-artifacts/browser-" +
@@ -95,6 +98,7 @@ function record(name, extra = {}) {
 
 function persist() {
   const report = {
+    scenarioKind: legacy ? "legacy" : soloOnly ? "national-solo" : "national-three-player",
     exactSource:
       process.env.NATIONAL_GPU_CANDIDATE_SHA ??
       process.env.GITHUB_SHA ??
@@ -666,6 +670,8 @@ async function main() {
       return {
         tick: g.ticks?.() ?? null,
         paused: g.isPaused?.() ?? null,
+        gameId: g.gameID?.() ?? null,
+        gameType: g.config?.()?.gameConfig?.()?.gameType ?? null,
         inSpawnPhase: g.inSpawnPhase?.() ?? null,
         spawned: p?.hasSpawned?.() === true,
         ownedTiles: p?.numTilesOwned?.() ?? 0,
@@ -1196,6 +1202,22 @@ async function main() {
         );
       }
       await capture("game-hud");
+      const live = await gameObservation();
+      const packets = await worker();
+      if (
+        live?.gameType !== "Singleplayer" ||
+        !live.gameId ||
+        !live.actorId ||
+        !Number.isSafeInteger(live.tick)
+      )
+        throw Error("SOLO_TRANSPORT_ADMISSION_NOT_OBSERVED");
+      record("solo-transport-admission-observed", {
+        gameTypeIsSolo: true,
+        actorPresent: true,
+        gameIdPresent: true,
+        tick: live.tick,
+        workerPacketCount: packets.length,
+      });
     });
     await step("spawn", async () => {
       // E4 starts collapsed while the player is pre-spawn. Never open it.
@@ -1219,6 +1241,8 @@ async function main() {
       await capture("diplomacy-before-spawn");
       await setPanelExpanded(false);
       await capture("spawn-unobstructed-map");
+      // Deterministic CDP tap search; the canvas-hit test rejects overlays.
+      // Six fixed samples missed valid mobile land on prior hardware.
       const locations = [
         [0.55, 0.55],
         [0.4, 0.4],
@@ -1226,13 +1250,20 @@ async function main() {
         [0.3, 0.55],
         [0.7, 0.6],
         [0.2, 0.4],
+        ...[0.25, 0.4, 0.55, 0.7, 0.82].flatMap((v) =>
+          [0.2, 0.35, 0.5, 0.65, 0.8].map((u) => [u, v]),
+        ),
       ];
       let actualSpawn = before.spawned && before.ownedTiles > 0 ? before : null;
       let unobstructedInputs = 0;
+      let obstructedSamples = 0;
       for (const fraction of locations) {
         if (actualSpawn) break;
         const point = await mapPoint([fraction]);
-        if (!point) continue;
+        if (!point) {
+          obstructedSamples++;
+          continue;
+        }
         const observedPanel = await panelObservation();
         if (!observedPanel.valid || observedPanel.expanded) {
           throw Error("SPAWN_MAP_OBSCURED_BY_DIPLOMACY");
@@ -1248,12 +1279,31 @@ async function main() {
           5,
           250,
         ).catch(() => null);
+        if (!actualSpawn && unobstructedInputs % 5 === 0) {
+          const state = await gameObservation();
+          record("spawn-real-input-checkpoint", {
+            unobstructedInputs,
+            obstructedSamples,
+            tickBefore: before.tick,
+            tickAfter: state?.tick ?? null,
+            paused: state?.paused ?? null,
+            inSpawnPhase: state?.inSpawnPhase ?? null,
+            workerPacketCount: (await worker()).length,
+          });
+          if (state?.inSpawnPhase === false && state?.spawned !== true)
+            throw Error("SPAWN_PHASE_EXITED_WITHOUT_OWNERSHIP");
+        }
       }
       if (!actualSpawn) {
+        const state = await gameObservation();
         record("spawn-real-input-failed", {
           unobstructedInputs,
+          obstructedSamples,
           tickBefore: before.tick,
-          tickAfter: (await gameObservation())?.tick ?? null,
+          tickAfter: state?.tick ?? null,
+          paused: state?.paused ?? null,
+          inSpawnPhase: state?.inSpawnPhase ?? null,
+          workerPacketCount: (await worker()).length,
         });
         throw Error(
           unobstructedInputs === 0
@@ -1265,6 +1315,7 @@ async function main() {
         source: "GameView.myPlayer.hasSpawned+ownedTiles",
         input: mobile ? "touch" : "mouse",
         unobstructedInputs,
+        obstructedSamples,
         tickBefore: before.tick,
         tickAfter: actualSpawn.tick,
       });
@@ -1434,7 +1485,7 @@ async function main() {
       });
       await capture("confirmed-empire");
     });
-    await step("rejected-founding", async () => {
+    if (!soloOnly) await step("rejected-founding", async () => {
       // Duplicate founding is intentionally injected through the application's
       // real EventBus and Transport, NOT by faking any game/worker state.
       // The UI correctly hides its form after founding; the authenticated
@@ -1480,6 +1531,7 @@ async function main() {
       record("authoritative-duplicate-rejected");
       await capture("founding-rejected");
     });
+    if (!soloOnly) {
     // Only REAL authenticated browser sessions can discharge these stages.
     // A standalone Solo match with a single human cannot fabricate a second.
     const empireId = "R11_Browser_QA";
@@ -1800,6 +1852,7 @@ async function main() {
       await capture("political-crown-former-emperor-revoked");
       // Never publish screenshots of a recipient-only private UI.
     });
+    }
     // Save/restore is a separate protected-server gate. Do not block the
     // concrete WAR→attack→peace slice behind an unavailable browser save UI.
     // Do not treat this separation as a release-security pass.
@@ -1811,8 +1864,9 @@ async function main() {
       // The accession recipient is now in our empire. WAR requires a
       // DIFFERENT genuinely admitted living opponent, not a bot from the
       // first dropdown option or an invented test principal.
-      peacePeer = await openPeer(process.env.NATIONAL_QA_PEACE_CDP_PORT);
-      const founderSession = await primaryPoliticalObservation();
+      if (!soloOnly) {
+        peacePeer = await openPeer(process.env.NATIONAL_QA_PEACE_CDP_PORT);
+        const founderSession = await primaryPoliticalObservation();
       const opposingSession = await peacePeer.observe();
       const recipientSession = await politicalPeer?.observe();
       const legitimate = verifyThreeLivePrincipals(
@@ -1838,6 +1892,7 @@ async function main() {
         sameGameId: true,
         targetNotEmpireMember: true,
       });
+      }
       const hooked = await evaluate(
         "(async () => {" +
           "const panel=window.__nationalQaFind('national-diplomacy-panel');" +
@@ -1851,10 +1906,37 @@ async function main() {
           "})()",
       );
       if (!hooked) throw Error("WAR_EVENTBUS_OBSERVER_NOT_CONNECTED");
+      const expectedOpponentId = soloOnly
+        ? null
+        : (await peacePeer.observe()).actorId;
       const targetId = await chooseNativeSelect(
         "#national-war-target",
-        realWarOpponentId,
+        expectedOpponentId,
       );
+      if (soloOnly) {
+        const target = await evaluate(
+          "(() => {const g=document.querySelector('national-diplomacy-panel')?.game;" +
+            "const id=" + JSON.stringify(targetId) + ";" +
+            "const p=g?.players?.()?.find(x=>x.id?.()===id);" +
+            "const self=g?.myPlayer?.();" +
+            "return p&&self?{alive:p.isAlive?.()===true," +
+            "spawned:p.hasSpawned?.()===true,tiles:p.numTilesOwned?.()??0," +
+            "different:p.id()!==self.id()} : null;})()",
+        );
+        if (
+          !target?.alive ||
+          !target.spawned ||
+          !target.different ||
+          !(target.tiles > 0)
+        )
+          throw Error("SOLO_WAR_TARGET_NOT_LIVING_OPPONENT");
+        record("solo-actual-opponent-selected", {
+          alive: true,
+          spawned: true,
+          opponentHasTiles: true,
+          nativeSelect: true,
+        });
+      }
       const before = await currentConflicts();
       if (!before?.actorId || !Number.isSafeInteger(before.tick)) {
         throw Error("NO_AUTHENTICATED_NATIONAL_ACTOR_FOR_WAR");
@@ -2128,6 +2210,32 @@ async function main() {
       });
       await capture("combat-impact-canonical");
     });
+    if (soloOnly) {
+      await step("solo-playability-complete", async () => {
+        const live = await gameObservation();
+        const packets = await worker();
+        if (
+          live?.gameType !== "Singleplayer" ||
+          !live.spawned ||
+          !(live.ownedTiles > 0) ||
+          !warId ||
+          !warTargetId ||
+          !combatBaseline
+        )
+          throw Error("SOLO_GAMEPLAY_FINAL_AUTHORITY_MISSING");
+        record("authoritative-solo-playability-complete", {
+          founded: true,
+          spawned: true,
+          warDeclared: true,
+          realRadialAttack: true,
+          opponentDamaged: true,
+          liveTick: live.tick,
+          workerPacketCount: packets.length,
+        });
+        await capture("solo-battle-authoritative");
+      });
+      return;
+    }
     await step("propose-peace", async () => {
       if (!warId) throw Error("NO_GAME_ISSUED_WAR_ID_FOR_PEACE");
       await chooseNativeSelect("#national-peace-war-id", warId);
