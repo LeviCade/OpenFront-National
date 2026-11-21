@@ -10,10 +10,12 @@
  */
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
+import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { NationalFoundEmpireExecution } from "@openfront/engine/execution/NationalFoundEmpireExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
+import { GameSnapshot } from "@openfront/engine/game/GameImpl";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import type { NationalCommand } from "@openfront/engine/national/NationalRuntime";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
@@ -55,7 +57,10 @@ function principal(game: Game, clientID: string) {
     (packet) => {
       if ("errMsg" in packet) errors.push(packet.errMsg);
     },
-    clientID,
+    // E3 owns the NEW political-result packet mapping. Until that separate
+    // packet contract lands, exercise authenticated stamped Executor input
+    // without impersonating an E3-verified private browser recipient.
+    undefined,
   );
   return { runner, errors, clientID };
 }
@@ -187,6 +192,7 @@ describe("R11 new live imperial NATIONAL peace delegation (M5/WAR-05)", () => {
     const { restored: withGrant, bytes, again } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
     expect(withGrant.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(true);
+    expect(readVersioned(GameSnapshot, snapshotGameData(withGrant).game).national?.politics.empires.find((e) => e.id === empire)?.delegatedNationalPeace).toEqual([B]);
     expect(withGrant.nationalWarState()).toEqual(game.nationalWarState());
 
     // Old throne appointments expire atomically upon lawful succession.
@@ -194,6 +200,7 @@ describe("R11 new live imperial NATIONAL peace delegation (M5/WAR-05)", () => {
       successorId: B, requestId: "r11-crown" });
     expect(lastPolicy(game, A, "r11-crown").accepted).toBe(true);
     expect(game.nationalPoliticalAuthority()?.emperorOf(empire)).toBe(B);
+    expect(readVersioned(GameSnapshot, snapshotGameData(game).game).national?.politics.empires.find((e) => e.id === empire)?.delegatedNationalPeace).toBeUndefined();
     expect(game.nationalPoliticalAuthority()?.maySettleNational(A)).toBe(false);
     expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(true);
     grant(game, a, B, true, "r11-former-grant");

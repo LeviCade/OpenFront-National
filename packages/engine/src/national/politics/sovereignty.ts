@@ -719,7 +719,6 @@ export function foundEmpire(
     leaderId: founderId,
     memberIds: [founderId],
     crisisDeadlineMs: null,
-    delegatedNationalPeace: [],
   });
   validatePolitics(next);
   return next;
@@ -813,9 +812,12 @@ export function setNationalPeaceDelegation(
   );
   const next = copy(world);
   const target = empire(next, empireId);
-  target.delegatedNationalPeace = enabled
+  const updated = enabled
     ? sorted([...delegates, memberId])
     : delegates.filter((id) => id !== memberId);
+  // Omit the empty policy, preserving the original v1 snapshots exactly.
+  if (updated.length > 0) target.delegatedNationalPeace = updated;
+  else delete target.delegatedNationalPeace;
   validatePolitics(next);
   return next;
 }
@@ -849,7 +851,7 @@ export function transferCrown(
   target.crisisDeadlineMs = null;
   // Grants are appointments of the outgoing crown: NONE survive succession.
   // The successor may issue fresh grants through a new authenticated command.
-  target.delegatedNationalPeace = [];
+  delete target.delegatedNationalPeace;
   // Outstanding accession offers from the old emperor are invalidated.
   next.accessionOffers = next.accessionOffers.filter(
     (o) => o.empireId !== empireId,
