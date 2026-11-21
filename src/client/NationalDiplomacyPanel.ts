@@ -21,8 +21,8 @@ import {
   type NationalFoundingAttempt,
   type NationalPoliticalAction,
 } from "./NationalDiplomacyState";
-import { GoToPlayerEvent } from "./TransformHandler";
 import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
+import { GoToPlayerEvent } from "./TransformHandler";
 import {
   SendNationalAcceptPeaceIntentEvent,
   SendNationalAcceptEmpireIntentEvent,
@@ -1030,8 +1030,8 @@ export class NationalDiplomacyPanel extends LitElement {
         role="status"
         class="max-w-60 rounded-md bg-slate-950/90 px-3 py-2 text-xs text-amber-200"
       >
-        NATIONAL Private controls are locked until the server verifies
-        your current active seat and trusted match.
+        NATIONAL Private controls are locked until the server verifies your
+        current active seat and trusted match.
       </section>`;
     }
     const politics = game.nationalPolitics();

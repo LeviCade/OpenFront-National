@@ -1,19 +1,19 @@
 // @vitest-environment jsdom
 import { GameType } from "@openfront/engine-api/game/GameTypes";
 import { EventBus } from "@openfront/shared/EventBus";
-import { afterEach, describe, expect, it } from "vitest";
+import type { WireGameStartInfo } from "@openfront/shared/WireSchemas";
 import "../../../src/client/NationalDiplomacyPanel";
-import type { NationalDiplomacyPanel } from "../../../src/client/NationalDiplomacyPanel";
+import { afterEach, describe, expect, it } from "vitest";
 import type { LobbyConfig } from "../../../src/client/ClientGameRunner";
-import { Transport } from "../../../src/client/Transport";
+import type { NationalDiplomacyPanel } from "../../../src/client/NationalDiplomacyPanel";
 import {
   acceptTrustedNationalPrivateCapability,
   hasTrustedNationalPrivateCapability,
   type NationalPrivateCapabilityContext,
   type TrustedNationalStartLike,
 } from "../../../src/client/NationalPrivateCapability";
+import { Transport } from "../../../src/client/Transport";
 import type { GameView } from "../../../src/client/view";
-import type { WireGameStartInfo } from "@openfront/shared/WireSchemas";
 
 const elements: HTMLElement[] = [];
 afterEach(() => {
@@ -48,7 +48,9 @@ function session() {
 describe("Class Five E4 real Private NATIONAL human controls", () => {
   it("renders only a read-only status with no commands for legacy unapproved Private", async () => {
     const { bus, start } = session();
-    const panel = document.createElement("national-diplomacy-panel") as NationalDiplomacyPanel;
+    const panel = document.createElement(
+      "national-diplomacy-panel",
+    ) as NationalDiplomacyPanel;
     panel.eventBus = bus;
     panel.game = {
       gameID: () => start.gameID,
@@ -61,7 +63,9 @@ describe("Class Five E4 real Private NATIONAL human controls", () => {
     document.body.append(panel);
     elements.push(panel);
     await panel.updateComplete;
-    expect(panel.querySelector('[data-national-private-capability="blocked"]')).not.toBeNull();
+    expect(
+      panel.querySelector('[data-national-private-capability="blocked"]'),
+    ).not.toBeNull();
     expect(panel.querySelector("button")).toBeNull();
     expect(panel.querySelector("form")).toBeNull();
     expect(panel.textContent).toContain("server verifies");
@@ -83,16 +87,32 @@ describe("Class Five E4 real Private NATIONAL human controls", () => {
       socket: { readyState: WebSocket.OPEN },
     });
     const allowed = () =>
-      (transport as unknown as { nationalDiplomacyWireEnabled: () => boolean })
-        .nationalDiplomacyWireEnabled();
+      (
+        transport as unknown as { nationalDiplomacyWireEnabled: () => boolean }
+      ).nationalDiplomacyWireEnabled();
     expect(allowed()).toBe(false);
-    expect(acceptTrustedNationalPrivateCapability(bus, packet, context)).toBe(true);
+    expect(acceptTrustedNationalPrivateCapability(bus, packet, context)).toBe(
+      true,
+    );
     expect(allowed()).toBe(true);
     Object.assign(transport, { isSessionReady: false });
     expect(allowed()).toBe(false);
-    Object.assign(transport, { isSessionReady: true, lobbyConfig: { gameID: start.gameID, gameStartInfo: start, spectator: true } });
+    Object.assign(transport, {
+      isSessionReady: true,
+      lobbyConfig: {
+        gameID: start.gameID,
+        gameStartInfo: start,
+        spectator: true,
+      },
+    });
     expect(allowed()).toBe(false);
-    Object.assign(transport, { lobbyConfig: { gameID: "other-game", gameStartInfo: start, spectator: false } });
+    Object.assign(transport, {
+      lobbyConfig: {
+        gameID: "other-game",
+        gameStartInfo: start,
+        spectator: false,
+      },
+    });
     expect(allowed()).toBe(false);
   });
 });

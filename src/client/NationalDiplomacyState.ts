@@ -367,7 +367,11 @@ export function foundingUnavailableReason(state: {
   memberEmpire: NationalPublicEmpire | null;
   pending: boolean;
 }): string | null {
-  if (!state.national || !(state.solo || state.trustedPrivate) || state.replay) {
+  if (
+    !state.national ||
+    !(state.solo || state.trustedPrivate) ||
+    state.replay
+  ) {
     return "Empire founding requires a live authorized NATIONAL match.";
   }
   if (!state.spawned) return "Spawn before founding an empire.";

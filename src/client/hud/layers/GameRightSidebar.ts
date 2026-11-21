@@ -11,10 +11,10 @@ import { Controller } from "../../Controller";
 import { isDesktopShell } from "../../DesktopShell";
 import { gamePortal } from "../../GamePortal";
 import "../../NationalDiplomacyPanel";
-import { NationalPrivateCapabilityChangedEvent } from "../../NationalPrivateCapability";
 import { showInGameAlert, showInGameConfirm } from "../../InGameModal";
 import { TogglePauseIntentEvent } from "../../InputHandler";
 import type { NationalDiplomacyPanel } from "../../NationalDiplomacyPanel";
+import { NationalPrivateCapabilityChangedEvent } from "../../NationalPrivateCapability";
 import {
   NationalTransportStatusEvent,
   PauseGameIntentEvent,

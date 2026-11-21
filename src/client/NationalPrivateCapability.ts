@@ -58,8 +58,12 @@ export function eligibleTrustedNationalPrivateSeat(
     context.start.config.nationalMode === true &&
     context.startClientID !== null &&
     packet.myClientID === context.startClientID &&
-    context.start.players.some((player) => player.clientID === packet.myClientID) &&
-    packet.gameStartInfo.players.some((player) => player.clientID === packet.myClientID)
+    context.start.players.some(
+      (player) => player.clientID === packet.myClientID,
+    ) &&
+    packet.gameStartInfo.players.some(
+      (player) => player.clientID === packet.myClientID,
+    )
   );
 }
 
@@ -89,7 +93,10 @@ export function revokeTrustedNationalPrivateCapability(
   const previous = accepted.get(bus);
   accepted.delete(bus);
   bus.emit(
-    new NationalPrivateCapabilityChangedEvent(previous?.gameID ?? gameID, false),
+    new NationalPrivateCapabilityChangedEvent(
+      previous?.gameID ?? gameID,
+      false,
+    ),
   );
 }
 
