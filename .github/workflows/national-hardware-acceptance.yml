@@ -60,18 +60,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p national-qa-artifacts/gpu
-          BASE_SHA=fc6ad9c7b3c142aae0c454d532cd929c13aa8a0f
-          staging=refs/remotes/origin/stage3/class5-trusted-national-vertical-20261121
+          BASE_SHA=2cfe3d4f91f28df61c7ebd7c429c9fdca674daf0
+          staging=refs/remotes/origin/stage3/conductor2-class1-engineering-20261121
           git fetch --no-tags origin \
-            '+refs/heads/stage3/class5-trusted-national-vertical-20261121:'"$staging"
+            '+refs/heads/stage3/conductor2-class1-engineering-20261121:'"$staging"
           git cat-file -e "$NATIONAL_GPU_CANDIDATE_SHA^{commit}"
           git merge-base --is-ancestor "$BASE_SHA" "$NATIONAL_GPU_CANDIDATE_SHA" || {
-            echo 'REFUSED: candidate diverges from accepted Class Five base' >&2
+            echo 'REFUSED: candidate diverges from accepted Second Conductor first-class base' >&2
             exit 1
           }
           # No stale or earlier source: one exact reviewed Conductor staging tip.
           test "$(git rev-parse "$staging")" = "$NATIONAL_GPU_CANDIDATE_SHA" || {
-            echo 'REFUSED: candidate is not the exact Class Five staging HEAD' >&2
+            echo 'REFUSED: candidate is not the exact Second Conductor first-class staging HEAD' >&2
             exit 1
           }
           printf '%s\n' "$staging" > national-qa-artifacts/gpu/approved-staging-ref.txt
