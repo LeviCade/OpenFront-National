@@ -37,11 +37,22 @@ const STAGES = new Set([
   "home",
   "solo",
   "legacy-ffa",
+  "legacy-configuration",
+  "legacy-player-action",
   "national-mode",
   "start",
   "spawn",
   "found-empire",
   "rejected-founding",
+  "offer-accession",
+  "recipient-invitation",
+  "recipient-acceptance",
+  "transfer-crown",
+  "declare-war",
+  "map-assault",
+  "combat-impact",
+  "propose-peace",
+  "accept-peace",
   "save-restore",
   "sovereign-victory",
 ]);
@@ -49,17 +60,57 @@ const SCREENSHOTS = new Set([
   "home",
   "solo-modal",
   "legacy-ffa-game-hud",
+  "legacy-difficulty-restored",
+  "legacy-player-action",
   "national-enabled",
   "game-hud",
   "diplomacy-before-spawn",
+  "spawn-unobstructed-map",
   "player-spawned",
   "founding-request",
   "confirmed-empire",
   "founding-rejected",
+  "political-offer-accepted",
+  "political-member-joined-founders-view",
+  "political-crown-former-emperor-revoked",
+  "declared-war-live",
+  "radial-attack-enabled",
+  "map-assault-confirmed",
+  "combat-impact-canonical",
+  "peace-motion-proposed",
+  "peace-accepted-ended-war",
   "saved-confirmed",
   "restored-roster",
   "sovereign-victory",
 ]);
+// E5 R11's real browser steps supersede R10's synthetic end-of-game labels.
+// Require all checked-in gameplay steps and authoritative receipt checkpoints;
+// merely reaching Found Empire or creating a screenshot is never a pass.
+const R11_NATIONAL_STAGES = [
+  "found-empire",
+  "rejected-founding",
+  "offer-accession",
+  "recipient-invitation",
+  "recipient-acceptance",
+  "transfer-crown",
+  "declare-war",
+  "map-assault",
+  "combat-impact",
+  "propose-peace",
+  "accept-peace",
+];
+const R11_NATIONAL_RECEIPTS = [
+  "authoritative-empire-accepted",
+  "authoritative-duplicate-rejected",
+  "political-offer-engine-accepted",
+  "political-recipient-private-invitation",
+  "political-membership-confirmed-by-both",
+  "political-crown-confirmed-by-both",
+  "authoritative-war-declared",
+  "authoritative-combat-impact",
+  "authoritative-peace-proposal",
+  "authoritative-peace-accepted",
+];
 const PNG_MAGIC = Buffer.from("89504e470d0a1a0a", "hex");
 const PNG_IEND = Buffer.from("0000000049454e44ae426082", "hex");
 const screenshotName = (value) => {
@@ -241,12 +292,13 @@ export function publishEvidence(root, expectedSha, kind = "release") {
     const hasEvent = (name) =>
       historicalEvents.some((event) => event?.name === name);
     const stageComplete = mode.startsWith("legacy-")
-      ? summary.completedStages.includes("legacy-ffa") &&
-        hasEvent("legacy-ffa-verified")
-      : summary.completedStages.includes("sovereign-victory") &&
-        hasEvent("authoritative-empire-accepted") &&
-        hasEvent("authoritative-duplicate-rejected") &&
-        hasEvent("authoritative-sovereign-victory");
+      ? ["legacy-ffa", "legacy-player-action"].every((s) =>
+          summary.completedStages.includes(s),
+        ) &&
+        hasEvent("legacy-ffa-verified") &&
+        hasEvent("legacy-actual-map-interaction-authoritative-update")
+      : R11_NATIONAL_STAGES.every((s) => summary.completedStages.includes(s)) &&
+        R11_NATIONAL_RECEIPTS.every(hasEvent);
     const gl1 = raw?.actualHardware?.webgl1;
     const gl2 = raw?.actualHardware?.webgl;
     const physicalDiagnostic =

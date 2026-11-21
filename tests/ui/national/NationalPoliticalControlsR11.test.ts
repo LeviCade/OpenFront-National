@@ -249,7 +249,7 @@ describe("R11 NATIONAL political wire authorization", () => {
     };
     panel.refresh();
     await panel.updateComplete;
-    await choose(panel, "#national-invitation-empire", "Atlas");
+    await choose(panel, "#national-invitation-empire", "Atlas:nation-a");
     panel
       .querySelector<HTMLButtonElement>("#national-accept-accession")!
       .click();
@@ -280,6 +280,57 @@ describe("R11 NATIONAL political wire authorization", () => {
       "Confirmed by game: your nation joined Atlas",
     );
     expect(panel.querySelector("#national-accept-accession")).toBeNull();
+  });
+
+  it("emperor accepts a candidate-initiated invitation only after the candidate joins the live roster", async () => {
+    const { panel, bus, state } = await mount({
+      emperor: true,
+      offers: {
+        version: 1,
+        recipientId: "nation-a",
+        offers: [
+          {
+            empireId: "Atlas",
+            candidateId: "nation-c",
+            proposerId: "nation-c",
+            recipientId: "nation-a",
+          },
+        ],
+      },
+    });
+    expect(readNationalAccessionOffers(state.offers, "nation-a")).toMatchObject({
+      offers: [{ candidateId: "nation-c", recipientId: "nation-a" }],
+    });
+    const events: SendNationalAcceptEmpireIntentEvent[] = [];
+    bus.on(SendNationalAcceptEmpireIntentEvent, (event) => events.push(event));
+    await choose(panel, "#national-invitation-empire", "Atlas:nation-c");
+    panel
+      .querySelector<HTMLButtonElement>("#national-accept-accession")!
+      .click();
+    await panel.updateComplete;
+    expect(events).toHaveLength(1);
+    expect(events[0].candidateId).toBe("nation-c");
+    state.politicalResults = [
+      politicalReceipt("national_accept_empire", events[0].requestId, "Atlas"),
+    ];
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).not.toContain("Confirmed by game: Nation C joined");
+    state.politics = {
+      empires: [
+        {
+          id: "Atlas",
+          leaderId: "nation-a",
+          memberIds: ["nation-a", "nation-b", "nation-c"],
+        },
+      ],
+      warnings: [],
+    };
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).toContain(
+      "Confirmed by game: Nation C joined Atlas",
+    );
   });
 
   it("crown transfer revokes former emperor's privileged controls on current roster", async () => {

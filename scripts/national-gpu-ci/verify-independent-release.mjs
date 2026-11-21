@@ -232,6 +232,13 @@ export function verifyIndependentRelease({
     if (
       !isObject(report) ||
       report.scenario !== mode ||
+      // A postflight signer must not transform a guest-declared FAIL into PASS.
+      // Guest release outcomes are deliberately UNVERIFIED until this gate;
+      // failed/partial gameplay has a different reason, even if exitCode is 0.
+      report.outcome !== "UNVERIFIED" ||
+      report.reason !== "SIGNED_WITNESS_NOT_VERIFIED" ||
+      report.firstFailedStage !== null ||
+      report.releaseCertified !== false ||
       report.sourceMatches !== true ||
       report.exactSource !== expected.sourceSha ||
       report.reportPresent !== true ||
