@@ -280,14 +280,25 @@ describe("C2 E2 REAL WebSocket three-account NATIONAL server", () => {
     const url = "ws://127.0.0.1:" + port;
     disposers.push(async () => {
       await game.end();
+      // Terminate BOTH ends of every physical WebSocket before closing the
+      // shared HTTP listener. Unlike close(), terminate does not wait for
+      // the peer's CLOSE control-frame response.
       for (const peer of peers) peer.ws.terminate();
       for (const ws of wss.clients) ws.terminate();
-      // ws.Server({server}) may defer its own 'close' event until the
-      // attached HTTP server closes. Start BOTH closures together; awaiting
-      // wss.close() first deadlocks this live TCP integration teardown.
-      await Promise.all([
-        new Promise<void>((resolve) => wss.close(() => resolve())),
-        new Promise<void>((resolve) => server.close(() => resolve())),
+      const websocketClosed = new Promise<void>((resolve) =>
+        wss.close(() => resolve()),
+      );
+      const httpClosed = new Promise<void>((resolve) =>
+        server.close(() => resolve()),
+      );
+      // A server mounted through http.createServer can keep the WS close
+      // callback pending even once the sockets were force-terminated. Bound
+      // only the cleanup wait; the actual test has already asserted wire
+      // delivery, cryptographic admission and the canonical game receipts.
+      server.closeAllConnections();
+      await Promise.race([
+        Promise.all([websocketClosed, httpClosed]),
+        new Promise<void>((resolve) => setTimeout(resolve, 1000)),
       ]);
     });
 
