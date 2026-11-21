@@ -40,7 +40,23 @@ describe("E5 second-wave pinned oxfmt capture (temporary)", () => {
         const dest = resolve("national-qa-artifacts/r6/e5-formatted", file);
         mkdirSync(resolve(dest, ".."), { recursive: true });
         copyFileSync(resolve(scratch, file), dest);
-        expect(readFileSync(dest).length).toBeGreaterThan(0);
+        const bytes = readFileSync(dest);
+        expect(bytes.length).toBeGreaterThan(0);
+        // Reconstruct exact contents from bounded log chunks via the private
+        // GitHub connector. Source only; no secrets, tokens or generated media.
+        const base64 = bytes.toString("base64");
+        const count = Math.ceil(base64.length / 4000);
+        for (let index = 0; index < count; index++) {
+          console.info(
+            "E5_FMT_CHUNK " +
+              JSON.stringify({
+                path: file,
+                index,
+                count,
+                payload: base64.slice(index * 4000, (index + 1) * 4000),
+              }),
+          );
+        }
       }
       console.info("E5_SECOND_WAVE_FORMATTED_FILES_CAPTURED=" + files.length);
     } finally {
