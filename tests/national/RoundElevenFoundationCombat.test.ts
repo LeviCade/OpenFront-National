@@ -275,7 +275,6 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
         .find((r) => r.requestId === "r11_human_found")?.accepted,
     ).toBe(true);
 
-
     let rejected:
       | ReturnType<Game["performNationalWarCommandWithOutcome"]>
       | undefined;
