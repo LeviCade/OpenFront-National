@@ -11,9 +11,11 @@
  *   ... --mobile
  */
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { verifyHardwareWebgl } from "./gpu-attestation.mjs";
 
 const mobile = process.argv.includes("--mobile");
@@ -630,11 +632,24 @@ async function main() {
         // a guest shell. The signer private key must never enter the VM.
         const proofPath = process.env.NATIONAL_GPU_ATTESTATION_FILE;
         const keyPath = process.env.NATIONAL_GPU_PUBLIC_KEY_FILE;
+        const trustedKey = keyPath ? readFileSync(keyPath, "utf8") : null;
+        const approvedKeys = JSON.parse(
+          readFileSync(
+            fileURLToPath(new URL("./trusted-gpu-keys.json", import.meta.url)),
+            "utf8",
+          ),
+        ).trustedEd25519PublicKeySha256;
+        const keyFingerprint = trustedKey
+          ? createHash("sha256").update(trustedKey, "utf8").digest("hex")
+          : null;
+        if (!Array.isArray(approvedKeys) || !approvedKeys.includes(keyFingerprint)) {
+          throw Error("GPU_RELEASE_TRUST_ROOT_NOT_ENROLLED_OR_MISMATCH");
+        }
         const attestation = verifyHardwareWebgl(hardwareCapabilities, {
           signedProof: proofPath
             ? JSON.parse(readFileSync(proofPath, "utf8"))
             : null,
-          trustedPublicKey: keyPath ? readFileSync(keyPath, "utf8") : null,
+          trustedPublicKey: trustedKey,
           expected: {
             sourceSha:
               process.env.NATIONAL_GPU_CANDIDATE_SHA ?? process.env.GITHUB_SHA,
