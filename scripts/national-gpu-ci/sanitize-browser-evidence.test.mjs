@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 import {
   MODES,
   publishEvidence,
