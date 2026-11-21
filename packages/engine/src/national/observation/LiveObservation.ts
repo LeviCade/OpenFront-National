@@ -52,6 +52,8 @@ export interface LiveWarAuthority {
         };
         readonly startedTick: number;
         readonly endedTick: number | null;
+        /** Public declarer is in the canonical Game-owned WAR layer. */
+        readonly declaredBy: string;
       }[];
     };
   };
@@ -423,6 +425,42 @@ export function collectLiveNationalObservation(
     }
     wars.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   }
+  // Only canonical public WAR *layer* transitions are diplomatic events.
+  // No treaty clauses, peace motions, proposer/acceptor IDs or secret plans
+  // are inspected. A bounded window is enough for event-driven replanning.
+  const diplomaticEvents: NationalWorld["diplomaticEvents"][number][] = [];
+  const DIPLOMACY_WINDOW_TICKS = 120;
+  if (warAuthority) {
+    for (const layer of warAuthority.snapshot().wars.layers) {
+      if (
+        layer.startedTick <= tick &&
+        tick - layer.startedTick <= DIPLOMACY_WINDOW_TICKS
+      ) {
+        diplomaticEvents.push({
+          id: `war-started:${layer.id}`,
+          tick: layer.startedTick,
+          actorId: layer.declaredBy,
+          kind: "war-started",
+          public: true,
+        });
+      }
+      if (
+        layer.endedTick !== null &&
+        layer.endedTick <= tick &&
+        tick - layer.endedTick <= DIPLOMACY_WINDOW_TICKS
+      ) {
+        diplomaticEvents.push({
+          id: `war-ended:${layer.id}`,
+          tick: layer.endedTick,
+          // The declarer identifies the public WAR record, not the
+          // confidential recipient/acceptor of any peace motion.
+          actorId: layer.declaredBy,
+          kind: "war-ended",
+          public: true,
+        });
+      }
+    }
+  }
   const world: NationalWorld = {
     tick,
     nations,
@@ -432,7 +470,7 @@ export function collectLiveNationalObservation(
     assets,
     sightGrants,
     frontiers,
-    diplomaticEvents: [],
+    diplomaticEvents,
     unownedFrontier,
   };
   return {

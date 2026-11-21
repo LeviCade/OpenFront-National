@@ -82,6 +82,9 @@ const weight: Record<PublicDiplomaticEventKind, number> = {
   "treaty-broken": -4,
   "threat-fulfilled": 2,
   "bluff-exposed": -3,
+  // WAR lifecycle is a public replanning trigger, not a reputation judgment.
+  "war-started": 0,
+  "war-ended": 0,
 };
 
 export function initialNationalPlannerMemory(
@@ -119,13 +122,15 @@ export function updateNationalDiplomaticMemory(
       continue;
     cursor = { tick: e.tick, id: e.id };
     sawNewEvent = true;
-    reputation.set(e.actorId, {
-      nationId: e.actorId,
-      credibility: clamp(
-        (reputation.get(e.actorId)?.credibility ?? 0) + weight[e.kind],
-      ),
-      lastObservedTick: e.tick,
-    });
+    if (weight[e.kind] !== 0) {
+      reputation.set(e.actorId, {
+        nationId: e.actorId,
+        credibility: clamp(
+          (reputation.get(e.actorId)?.credibility ?? 0) + weight[e.kind],
+        ),
+        lastObservedTick: e.tick,
+      });
+    }
   }
   const sortedReputation = [...reputation.values()]
     .sort(
