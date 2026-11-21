@@ -1,0 +1,29 @@
+name: Class Five E1+E2 isolated integration proof
+on:
+  push:
+    branches: [tooling/class5-e1-e2-prototype-20261121]
+permissions:
+  contents: read
+jobs:
+  authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 23
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install exact source dependencies
+        run: |
+          npm install -g npm@12.1.0
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Execute E1/E2 real stamped GameRunner queue/snapshot takeover
+        run: npx --no-install vitest run tests/national/ClassFiveStampedExecutionChain.test.ts tests/national/ClassFourTrustedHostAuthority.test.ts tests/national/TrustedNationalServerAuthority.test.ts tests/national/RoundElevenDelegatedPeaceWire.test.ts --reporter=verbose
+      - name: Typecheck source
+        if: always()
+        run: npm run typecheck
+      - name: Emit pinned E1 and E2 formatting diff
+        if: always()
+        run: |
+          npx --no-install oxfmt --write packages/engine/src/game/GameImpl.ts packages/engine/src/execution/ExecutionManager.ts packages/engine/src/execution/NationalFoundEmpireExecution.ts packages/engine/src/execution/NationalWarExecution.ts tests/national/ClassFiveStampedExecutionChain.test.ts
+          git diff -- packages/engine/src/game/GameImpl.ts packages/engine/src/execution/ExecutionManager.ts packages/engine/src/execution/NationalFoundEmpireExecution.ts packages/engine/src/execution/NationalWarExecution.ts tests/national/ClassFiveStampedExecutionChain.test.ts
