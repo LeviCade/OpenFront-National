@@ -8,6 +8,7 @@
  * actual host GPU/VM state, out-of-guest controller telemetry, root-only key.
  * A false/missing input means NO signature, not a best-effort certificate.
  */
+import { execFileSync } from "node:child_process";
 import {
   createHash,
   createPrivateKey,
@@ -23,7 +24,6 @@ import {
   writeFileSync,
   renameSync,
 } from "node:fs";
-import { execFileSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyIndependentRelease } from "./verify-independent-release.mjs";
@@ -53,7 +53,15 @@ const millis = (v) => {
   return result;
 };
 
-export function verifyControllerRun({ expected, repository, run, job, stage, ancestry, permission }) {
+export function verifyControllerRun({
+  expected,
+  repository,
+  run,
+  job,
+  stage,
+  ancestry,
+  permission,
+}) {
   requireTrue(
     expected?.repository === REPOSITORY &&
       same(expected.repositoryId, REPOSITORY_ID) &&
@@ -116,16 +124,23 @@ export function verifyControllerRun({ expected, repository, run, job, stage, anc
 export function checkRootFile(path, uid = 0) {
   const st = lstatSync(path);
   requireTrue(st.isFile() && !st.isSymbolicLink(), "HOST_FILE_SYMLINK_OR_TYPE");
-  requireTrue(st.uid === uid && st.gid === 0 && (st.mode & 0o777) === 0o600,
-    "HOST_FILE_OWNER_OR_MODE");
+  requireTrue(
+    st.uid === uid && st.gid === 0 && (st.mode & 0o777) === 0o600,
+    "HOST_FILE_OWNER_OR_MODE",
+  );
   return st;
 }
 
 export function checkRootDirectory(path, uid = 0) {
   const st = lstatSync(path);
-  requireTrue(st.isDirectory() && !st.isSymbolicLink(), "HOST_DIRECTORY_UNTRUSTED");
-  requireTrue(st.uid === uid && st.gid === 0 && (st.mode & 0o777) === 0o700,
-    "HOST_DIRECTORY_OWNER_OR_MODE");
+  requireTrue(
+    st.isDirectory() && !st.isSymbolicLink(),
+    "HOST_DIRECTORY_UNTRUSTED",
+  );
+  requireTrue(
+    st.uid === uid && st.gid === 0 && (st.mode & 0o777) === 0o700,
+    "HOST_DIRECTORY_OWNER_OR_MODE",
+  );
 }
 const readRoot = (name) => {
   const file = join(HOST_ROOT, name);
@@ -134,17 +149,34 @@ const readRoot = (name) => {
 };
 const readRootJson = (name) => JSON.parse(readRoot(name).toString("utf8"));
 const execHost = (command, args) =>
-  execFileSync(command, args, { encoding: "utf8", timeout: 15000,
-    maxBuffer: 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  execFileSync(command, args, {
+    encoding: "utf8",
+    timeout: 15000,
+    maxBuffer: 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 const gpuIdentity = () => {
-  requireTrue(lstatSync(RENDER).isCharacterDevice() &&
-    !lstatSync(RENDER).isSymbolicLink(), "PHYSICAL_RENDER_NODE_UNAVAILABLE");
-  requireTrue(readFileSync("/sys/class/drm/renderD128/device/vendor", "utf8").trim()
-    === "0x8086", "PHYSICAL_GPU_VENDOR_MISMATCH");
-  requireTrue(readFileSync("/sys/class/drm/renderD128/device/device", "utf8").trim()
-    === "0x0412", "PHYSICAL_GPU_DEVICE_MISMATCH");
-  requireTrue(readlinkSync("/sys/class/drm/renderD128/device/driver").split("/").at(-1)
-    === "i915", "PHYSICAL_GPU_DRIVER_MISMATCH");
+  requireTrue(
+    lstatSync(RENDER).isCharacterDevice() &&
+      !lstatSync(RENDER).isSymbolicLink(),
+    "PHYSICAL_RENDER_NODE_UNAVAILABLE",
+  );
+  requireTrue(
+    readFileSync("/sys/class/drm/renderD128/device/vendor", "utf8").trim() ===
+      "0x8086",
+    "PHYSICAL_GPU_VENDOR_MISMATCH",
+  );
+  requireTrue(
+    readFileSync("/sys/class/drm/renderD128/device/device", "utf8").trim() ===
+      "0x0412",
+    "PHYSICAL_GPU_DEVICE_MISMATCH",
+  );
+  requireTrue(
+    readlinkSync("/sys/class/drm/renderD128/device/driver")
+      .split("/")
+      .at(-1) === "i915",
+    "PHYSICAL_GPU_DRIVER_MISMATCH",
+  );
   return {
     deviceVendorId: "8086",
     deviceId: "0412",
@@ -168,25 +200,48 @@ const physicalDomain = (name) => {
 export function probePhysicalPreflight(expected) {
   const host = gpuIdentity();
   const marker = lstatSync(LEASE);
-  requireTrue(marker.isFile() && !marker.isSymbolicLink() &&
-    marker.uid === 0 && (marker.mode & 0o777) === 0o600,
-  "HOST_GPU_LEASE_NOT_ROOT_OWNED");
-  requireTrue(readFileSync(LEASE, "utf8") ===
-    "node=/dev/dri/renderD128\npci=0000:00:02.0\n",
-  "HOST_GPU_LEASE_CONTENT_MISMATCH");
-  requireTrue(actualACL().includes("user:libvirt-qemu:rw-"),
-    "HOST_GPU_ACL_NOT_GRANTED");
+  requireTrue(
+    marker.isFile() &&
+      !marker.isSymbolicLink() &&
+      marker.uid === 0 &&
+      (marker.mode & 0o777) === 0o600,
+    "HOST_GPU_LEASE_NOT_ROOT_OWNED",
+  );
+  requireTrue(
+    readFileSync(LEASE, "utf8") ===
+      "node=/dev/dri/renderD128\npci=0000:00:02.0\n",
+    "HOST_GPU_LEASE_CONTENT_MISMATCH",
+  );
+  requireTrue(
+    actualACL().includes("user:libvirt-qemu:rw-"),
+    "HOST_GPU_ACL_NOT_GRANTED",
+  );
   physicalDomain(expected.runnerName);
-  return { ...host, virtualization: "kvm", virglTransportVerified: true,
-    physicallyVerified: true, gpuAccessLeaseVerified: true };
+  return {
+    ...host,
+    virtualization: "kvm",
+    virglTransportVerified: true,
+    physicallyVerified: true,
+    gpuAccessLeaseVerified: true,
+  };
 }
 
 /** Read-only postflight probes; protected unrelated VMs are NOT modified. */
 export function probePhysicalPostflight(expected) {
   const host = gpuIdentity();
-  const names = execHost("virsh", ["-c", "qemu:///system", "list", "--all", "--name"])
-    .split("\n").filter(Boolean);
-  requireTrue(!names.includes(expected.runnerName), "GUEST_VM_STILL_REGISTERED");
+  const names = execHost("virsh", [
+    "-c",
+    "qemu:///system",
+    "list",
+    "--all",
+    "--name",
+  ])
+    .split("\n")
+    .filter(Boolean);
+  requireTrue(
+    !names.includes(expected.runnerName),
+    "GUEST_VM_STILL_REGISTERED",
+  );
   // existsSync follows symlinks and would miss a broken, still-present marker.
   let leaseAbsent = false;
   try {
@@ -196,21 +251,33 @@ export function probePhysicalPostflight(expected) {
     else throw error;
   }
   requireTrue(leaseAbsent, "HOST_GPU_LEASE_NOT_RELEASED");
-  requireTrue(!actualACL().some((x) => x.startsWith("user:libvirt-qemu:")),
-    "HOST_GPU_ACL_NOT_REVOKED");
+  requireTrue(
+    !actualACL().some((x) => x.startsWith("user:libvirt-qemu:")),
+    "HOST_GPU_ACL_NOT_REVOKED",
+  );
   const mounts = readFileSync("/proc/self/mountinfo", "utf8").split("\n");
-  requireTrue(mounts.some((line) =>
-    line.split(" - ")[0]?.split(" ")[4] === OVERLAY_DIR &&
-    line.split(" - ")[1]?.startsWith("tmpfs ")),
-  "HOST_OVERLAY_TMPFS_NOT_VERIFIED");
+  requireTrue(
+    mounts.some(
+      (line) =>
+        line.split(" - ")[0]?.split(" ")[4] === OVERLAY_DIR &&
+        line.split(" - ")[1]?.startsWith("tmpfs "),
+    ),
+    "HOST_OVERLAY_TMPFS_NOT_VERIFIED",
+  );
   for (const suffix of [".qcow2", "_VARS.fd"]) {
-    requireTrue(!existsSync(join(OVERLAY_DIR, expected.runnerName + suffix)),
-      "GUEST_OVERLAY_OR_EFI_RETAINED");
+    requireTrue(
+      !existsSync(join(OVERLAY_DIR, expected.runnerName + suffix)),
+      "GUEST_OVERLAY_OR_EFI_RETAINED",
+    );
   }
-  requireTrue(!readdirSync(OVERLAY_DIR).some((name) =>
-    name === expected.runnerName + ".qcow2" ||
-    name === expected.runnerName + "_VARS.fd"),
-  "GUEST_RESIDUE_RETAINED");
+  requireTrue(
+    !readdirSync(OVERLAY_DIR).some(
+      (name) =>
+        name === expected.runnerName + ".qcow2" ||
+        name === expected.runnerName + "_VARS.fd",
+    ),
+    "GUEST_RESIDUE_RETAINED",
+  );
   return host;
 }
 
@@ -279,7 +346,9 @@ export function verifyControllerTeardown(teardown, expected, jobCompletedAtMs) {
 export function signedHostRecord(payload, privateKeyPem, enrolled, hostTrust) {
   const key = createPrivateKey(privateKeyPem);
   requireTrue(key.asymmetricKeyType === "ed25519", "HOST_SIGNER_KEY_INVALID");
-  const pem = createPublicKey(key).export({ type: "spki", format: "pem" }).toString();
+  const pem = createPublicKey(key)
+    .export({ type: "spki", format: "pem" })
+    .toString();
   const fingerprint = digest(Buffer.from(pem, "utf8"));
   requireTrue(
     enrolled?.includes(fingerprint) && hostTrust?.includes(fingerprint),
@@ -287,8 +356,11 @@ export function signedHostRecord(payload, privateKeyPem, enrolled, hostTrust) {
   );
   return {
     payload,
-    signature: sign(null, Buffer.from(JSON.stringify(payload), "utf8"), key)
-      .toString("base64"),
+    signature: sign(
+      null,
+      Buffer.from(JSON.stringify(payload), "utf8"),
+      key,
+    ).toString("base64"),
   };
 }
 const bound = (expected) => ({
@@ -304,10 +376,12 @@ const bound = (expected) => ({
   challenge: expected.challenge,
 });
 export function createHostPreflight(expected, times, physical, guest, now) {
-  requireTrue(Number.isSafeInteger(now) &&
-    now >= times.runStartedAtMs - 30000 &&
-    times.jobCompletedAtMs === null,
-    "HOST_PREFLIGHT_JOB_NOT_RUNNING");
+  requireTrue(
+    Number.isSafeInteger(now) &&
+      now >= times.runStartedAtMs - 30000 &&
+      times.jobCompletedAtMs === null,
+    "HOST_PREFLIGHT_JOB_NOT_RUNNING",
+  );
   return {
     ...bound(expected),
     issuedAtMs: now,
@@ -316,14 +390,24 @@ export function createHostPreflight(expected, times, physical, guest, now) {
     guest,
   };
 }
-export function createHostPostflight(expected, times, physical, cleanup, summaryBytes, now) {
-  requireTrue(Number.isSafeInteger(now) &&
-    Number.isSafeInteger(times.jobCompletedAtMs) &&
-    now >= times.jobCompletedAtMs &&
-    now <= times.jobCompletedAtMs + 3600000 &&
-    Buffer.isBuffer(summaryBytes) &&
-    summaryBytes.length >= 16 && summaryBytes.length <= 1000000,
-    "HOST_POSTFLIGHT_EVIDENCE_OR_TIME_INVALID");
+export function createHostPostflight(
+  expected,
+  times,
+  physical,
+  cleanup,
+  summaryBytes,
+  now,
+) {
+  requireTrue(
+    Number.isSafeInteger(now) &&
+      Number.isSafeInteger(times.jobCompletedAtMs) &&
+      now >= times.jobCompletedAtMs &&
+      now <= times.jobCompletedAtMs + 3600000 &&
+      Buffer.isBuffer(summaryBytes) &&
+      summaryBytes.length >= 16 &&
+      summaryBytes.length <= 1000000,
+    "HOST_POSTFLIGHT_EVIDENCE_OR_TIME_INVALID",
+  );
   return {
     ...bound(expected),
     purpose: "skybot-gpu-postflight-v1",
@@ -354,17 +438,34 @@ async function controllerContext(token, expected) {
     githubGet(token, prefix + "/actions/runs/" + expected.runId),
     githubGet(token, prefix + "/actions/jobs/" + expected.jobId),
     githubGet(token, prefix + "/git/ref/heads/" + APPROVED_STAGING),
-    githubGet(token, prefix + "/compare/" +
-      expected.sourceSha + "..." + expected.approvedStagingSha),
+    githubGet(
+      token,
+      prefix +
+        "/compare/" +
+        expected.sourceSha +
+        "..." +
+        expected.approvedStagingSha,
+    ),
   ]);
   const actor = Number(run.run_attempt) > 1 ? run.triggering_actor : run.actor;
-  requireTrue(typeof actor?.login === "string" &&
-    /^[A-Za-z0-9-]{1,39}$/.test(actor.login),
-  "GITHUB_ACTOR_UNVERIFIED");
-  const permission = await githubGet(token, prefix + "/collaborators/" +
-    actor.login + "/permission");
-  const times = verifyControllerRun({ expected, repository, run, job, stage,
-    ancestry, permission });
+  requireTrue(
+    typeof actor?.login === "string" &&
+      /^[A-Za-z0-9-]{1,39}$/.test(actor.login),
+    "GITHUB_ACTOR_UNVERIFIED",
+  );
+  const permission = await githubGet(
+    token,
+    prefix + "/collaborators/" + actor.login + "/permission",
+  );
+  const times = verifyControllerRun({
+    expected,
+    repository,
+    run,
+    job,
+    stage,
+    ancestry,
+    permission,
+  });
   return { times, prefix };
 }
 const safeWrite = (name, obj) => {
@@ -373,31 +474,42 @@ const safeWrite = (name, obj) => {
   const temporary = join(HOST_ROOT, "." + name + "." + process.pid);
   requireTrue(!existsSync(temporary), "HOST_PROOF_TEMPFILE_COLLISION");
   writeFileSync(temporary, JSON.stringify(obj, null, 2) + "\n", {
-    mode: 0o600, flag: "wx",
+    mode: 0o600,
+    flag: "wx",
   });
   renameSync(temporary, dest);
 };
 const assertHostOnly = () => {
-  requireTrue(process.getuid?.() === 0 &&
-    process.env.GITHUB_ACTIONS !== "true",
-  "HOST_ONLY_ROOT_CONTROLLER_REQUIRED");
+  requireTrue(
+    process.getuid?.() === 0 && process.env.GITHUB_ACTIONS !== "true",
+    "HOST_ONLY_ROOT_CONTROLLER_REQUIRED",
+  );
   checkRootDirectory(HOST_ROOT);
   checkRootFile(fileURLToPath(import.meta.url));
 };
 async function main() {
   assertHostOnly();
   const phase = process.argv[2];
-  requireTrue(["preflight", "postflight"].includes(phase) &&
-    process.argv.length === 3, "UNAPPROVED_HOST_WITNESS_ACTION");
+  requireTrue(
+    ["preflight", "postflight"].includes(phase) && process.argv.length === 3,
+    "UNAPPROVED_HOST_WITNESS_ACTION",
+  );
   const expected = readRootJson("trusted-github-run-context.json");
   const token = readRoot("github-token").toString("utf8").trim();
-  requireTrue(token.length > 20 && !/\s/.test(token),
-    "GITHUB_HOST_READ_TOKEN_NOT_PROVISIONED");
+  requireTrue(
+    token.length > 20 && !/\s/.test(token),
+    "GITHUB_HOST_READ_TOKEN_NOT_PROVISIONED",
+  );
   const { times, prefix } = await controllerContext(token, expected);
   const privateKey = readRoot("controller-ed25519-private.pem");
-  const pinned = JSON.parse(readFileSync(
-    fileURLToPath(new URL("../national-qa/trusted-gpu-keys.json", import.meta.url)),
-    "utf8"));
+  const pinned = JSON.parse(
+    readFileSync(
+      fileURLToPath(
+        new URL("../national-qa/trusted-gpu-keys.json", import.meta.url),
+      ),
+      "utf8",
+    ),
+  );
   const policy = readRootJson("host-trust-policy.json");
   const enrolled = pinned.trustedEd25519PublicKeySha256;
   const hostTrust = policy.trustedEd25519PublicKeySha256;
@@ -406,33 +518,59 @@ async function main() {
     const physical = probePhysicalPreflight(expected);
     const observed = readRootJson("controller-gpu-observation.json");
     const guest = validateControllerObservation(observed, expected);
-    requireTrue(Math.abs(Date.now() - observed.observedAtMs) <= 120000,
-      "OUT_OF_GUEST_WEBGL_OBSERVATION_STALE");
+    requireTrue(
+      Math.abs(Date.now() - observed.observedAtMs) <= 120000,
+      "OUT_OF_GUEST_WEBGL_OBSERVATION_STALE",
+    );
     payload = createHostPreflight(expected, times, physical, guest, Date.now());
-    safeWrite("controller-preflight.json",
-      signedHostRecord(payload, privateKey, enrolled, hostTrust));
+    safeWrite(
+      "controller-preflight.json",
+      signedHostRecord(payload, privateKey, enrolled, hostTrust),
+    );
   } else {
-    requireTrue(times.jobCompletedAtMs !== null,
-      "HOST_POSTFLIGHT_JOB_NOT_COMPLETED");
+    requireTrue(
+      times.jobCompletedAtMs !== null,
+      "HOST_POSTFLIGHT_JOB_NOT_COMPLETED",
+    );
     const physical = probePhysicalPostflight(expected);
-    const runnerRegistry = await githubGet(token, prefix +
-      "/actions/runners?per_page=100");
-    requireTrue(runnerRegistry.total_count <= 100 &&
-      Array.isArray(runnerRegistry.runners) &&
-      runnerRegistry.runners.every((r) => !same(r.id, expected.runnerId)),
-    "GITHUB_EPHEMERAL_RUNNER_NOT_DEREGISTERED");
-    const cleanupEvidence = readRootJson("controller-teardown-observation.json");
+    const runnerRegistry = await githubGet(
+      token,
+      prefix + "/actions/runners?per_page=100",
+    );
+    requireTrue(
+      runnerRegistry.total_count <= 100 &&
+        Array.isArray(runnerRegistry.runners) &&
+        runnerRegistry.runners.every((r) => !same(r.id, expected.runnerId)),
+      "GITHUB_EPHEMERAL_RUNNER_NOT_DEREGISTERED",
+    );
+    const cleanupEvidence = readRootJson(
+      "controller-teardown-observation.json",
+    );
     const cleanup = verifyControllerTeardown(
-      cleanupEvidence, expected, times.jobCompletedAtMs);
+      cleanupEvidence,
+      expected,
+      times.jobCompletedAtMs,
+    );
     const summaryBytes = readRoot("verified-artifacts/summary.json");
-    payload = createHostPostflight(expected, times, physical, cleanup,
-      summaryBytes, Date.now());
-    safeWrite("controller-postflight.json",
-      signedHostRecord(payload, privateKey, enrolled, hostTrust));
+    payload = createHostPostflight(
+      expected,
+      times,
+      physical,
+      cleanup,
+      summaryBytes,
+      Date.now(),
+    );
+    safeWrite(
+      "controller-postflight.json",
+      signedHostRecord(payload, privateKey, enrolled, hostTrust),
+    );
     const pem = createPublicKey(createPrivateKey(privateKey))
-      .export({ type: "spki", format: "pem" }).toString();
-    requireTrue(readRoot("host-public-key.pem").toString("utf8") === pem,
-      "HOST_PUBLIC_KEY_MISMATCH");
+      .export({ type: "spki", format: "pem" })
+      .toString();
+    requireTrue(
+      readRoot("host-public-key.pem").toString("utf8") === pem,
+      "HOST_PUBLIC_KEY_MISMATCH",
+    );
     const verdict = verifyIndependentRelease({
       summaryBytes,
       artifactRoot: join(HOST_ROOT, "verified-artifacts"),
@@ -447,16 +585,25 @@ async function main() {
         jobCompletedAtMs: times.jobCompletedAtMs,
       },
     });
-    requireTrue(verdict.accepted && verdict.releaseCertified,
-      "HOST_SIGNED_PROOF_GAMEPLAY_NOT_RELEASE_CERTIFIED");
+    requireTrue(
+      verdict.accepted && verdict.releaseCertified,
+      "HOST_SIGNED_PROOF_GAMEPLAY_NOT_RELEASE_CERTIFIED",
+    );
   }
-  console.info("SKYBOT_HOST_WITNESS_" + phase.toUpperCase() +
-    "=SIGNED_OUT_OF_GUEST (not a gameplay release verdict)");
+  console.info(
+    "SKYBOT_HOST_WITNESS_" +
+      phase.toUpperCase() +
+      "=SIGNED_OUT_OF_GUEST (not a gameplay release verdict)",
+  );
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
   main().catch((err) => {
     const code = /^[A-Z0-9_]+$/.test(err?.message ?? "")
-      ? err.message : "HOST_WITNESS_DEPENDENCY_UNAVAILABLE";
+      ? err.message
+      : "HOST_WITNESS_DEPENDENCY_UNAVAILABLE";
     console.error("SKYBOT_HOST_WITNESS_BLOCKED=" + code);
     process.exitCode = 1;
   });

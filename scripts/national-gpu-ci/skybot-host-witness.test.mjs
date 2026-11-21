@@ -1,9 +1,5 @@
 import { strict as assert } from "node:assert";
-import {
-  createHash,
-  generateKeyPairSync,
-  verify,
-} from "node:crypto";
+import { createHash, generateKeyPairSync, verify } from "node:crypto";
 import { test } from "vitest";
 import {
   APPROVED_STAGING,
@@ -36,7 +32,11 @@ const expected = Object.freeze({
 });
 const proof = () => ({
   expected: { ...expected },
-  repository: { id: Number(REPOSITORY_ID), full_name: REPOSITORY, private: false },
+  repository: {
+    id: Number(REPOSITORY_ID),
+    full_name: REPOSITORY,
+    private: false,
+  },
   run: {
     id: Number(expected.runId),
     run_attempt: 1,
@@ -119,7 +119,12 @@ test("source, repository ID, workflow attempt, runner ID, stage and writer must 
     ["expected", "sourceSha", "f".repeat(40), "TRUSTED_RUN_CONTEXT_INCOMPLETE"],
     ["run", "run_attempt", 2, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
     ["job", "runner_id", 222, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
-    ["stage", "ref", "refs/heads/feature/unreviewed", "CONDUCTOR_SOURCE_ANCESTRY_UNVERIFIED"],
+    [
+      "stage",
+      "ref",
+      "refs/heads/feature/unreviewed",
+      "CONDUCTOR_SOURCE_ANCESTRY_UNVERIFIED",
+    ],
   ]) {
     const broken = proof();
     broken[section][key] = value;
@@ -128,22 +133,26 @@ test("source, repository ID, workflow attempt, runner ID, stage and writer must 
   const differentRepo = proof();
   differentRepo.repository.id = 1;
   rejectWith("GITHUB_JOB_RUN_RUNNER_MISMATCH", () =>
-    verifyControllerRun(differentRepo));
+    verifyControllerRun(differentRepo),
+  );
   const badPermission = proof();
   badPermission.permission.permission = "read";
   rejectWith("GITHUB_INITIATOR_NOT_AUTHORIZED", () =>
-    verifyControllerRun(badPermission));
+    verifyControllerRun(badPermission),
+  );
   const replay = proof();
   replay.run.run_attempt = 2;
   replay.expected.runAttempt = "2";
   replay.job.run_attempt = 2;
   replay.run.triggering_actor = { id: 10, login: "outsider" };
   rejectWith("GITHUB_INITIATOR_NOT_AUTHORIZED", () =>
-    verifyControllerRun(replay));
+    verifyControllerRun(replay),
+  );
   const staleStage = proof();
   staleStage.ancestry.merge_base_commit.sha = "d".repeat(40);
   rejectWith("CONDUCTOR_SOURCE_ANCESTRY_UNVERIFIED", () =>
-    verifyControllerRun(staleStage));
+    verifyControllerRun(staleStage),
+  );
 });
 
 test("guest-published shader claims cannot replace out-of-guest controller observation", () => {
@@ -159,12 +168,14 @@ test("guest-published shader claims cannot replace out-of-guest controller obser
   ]) {
     const tampered = { ...o, [key]: value };
     rejectWith("OUT_OF_GUEST_WEBGL_OBSERVER_MISSING", () =>
-      validateControllerObservation(tampered, expected));
+      validateControllerObservation(tampered, expected),
+    );
   }
   const noShader = observation();
   noShader.guest.webgl1ShaderPixel = [0, 0, 0, 0];
   rejectWith("CONTROLLER_GPU_SHADER_OBSERVATION_INVALID", () =>
-    validateControllerObservation(noShader, expected));
+    validateControllerObservation(noShader, expected),
+  );
 });
 
 test("host teardown must independently account for private logs, CPU slots and JIT deregistration", () => {
@@ -183,57 +194,92 @@ test("host teardown must independently account for private logs, CPU slots and J
   ]) {
     const invalid = { ...t, [property]: false };
     rejectWith("CONTROLLER_POST_TERMINATION_WITNESS_MISSING", () =>
-      verifyControllerTeardown(invalid, expected, NOW + 90_000));
+      verifyControllerTeardown(invalid, expected, NOW + 90_000),
+    );
   }
   rejectWith("CONTROLLER_POST_TERMINATION_WITNESS_MISSING", () =>
-    verifyControllerTeardown(t, expected, NOW + 120_000));
+    verifyControllerTeardown(t, expected, NOW + 120_000),
+  );
 });
 
 test("synthetic Ed25519 signer respects independent dual enrollment and immutable bytes", () => {
   const keys = generateKeyPairSync("ed25519");
   const privatePem = keys.privateKey.export({ format: "pem", type: "pkcs8" });
-  const publicPem = keys.publicKey.export({ format: "pem", type: "spki" }).toString();
+  const publicPem = keys.publicKey
+    .export({ format: "pem", type: "spki" })
+    .toString();
   const fp = createHash("sha256").update(publicPem).digest("hex");
   const payload = { sourceSha: SHA, runId: expected.runId, nonce: CHALLENGE };
   const signed = signedHostRecord(payload, privatePem, [fp], [fp]);
   assert.equal(
-    verify(null, Buffer.from(JSON.stringify(payload)), keys.publicKey,
-      Buffer.from(signed.signature, "base64")),
+    verify(
+      null,
+      Buffer.from(JSON.stringify(payload)),
+      keys.publicKey,
+      Buffer.from(signed.signature, "base64"),
+    ),
     true,
   );
   assert.equal(
-    verify(null, Buffer.from(JSON.stringify({ ...payload, runId: "1" })),
-      keys.publicKey, Buffer.from(signed.signature, "base64")),
+    verify(
+      null,
+      Buffer.from(JSON.stringify({ ...payload, runId: "1" })),
+      keys.publicKey,
+      Buffer.from(signed.signature, "base64"),
+    ),
     false,
   );
   rejectWith("HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED", () =>
-    signedHostRecord(payload, privatePem, [], [fp]));
+    signedHostRecord(payload, privatePem, [], [fp]),
+  );
   rejectWith("HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED", () =>
-    signedHostRecord(payload, privatePem, [fp], []));
+    signedHostRecord(payload, privatePem, [fp], []),
+  );
 });
 
 test("preflight has bounded freshness and postflight requires job completion plus byte-exact digest", () => {
   const times = { runStartedAtMs: NOW, jobCompletedAtMs: null };
   const host = {
-    deviceVendorId: "8086", deviceId: "0412",
-    driver: "i915", renderNode: "/dev/dri/renderD128",
+    deviceVendorId: "8086",
+    deviceId: "0412",
+    driver: "i915",
+    renderNode: "/dev/dri/renderD128",
     physicallyVerified: true,
   };
-  const preflight = createHostPreflight(expected, times, host,
-    observation().guest, NOW + 1_000);
+  const preflight = createHostPreflight(
+    expected,
+    times,
+    host,
+    observation().guest,
+    NOW + 1_000,
+  );
   assert.equal(preflight.jobId, expected.jobId);
   assert.equal(preflight.expiresAtMs - preflight.issuedAtMs, 120_000);
   rejectWith("HOST_PREFLIGHT_JOB_NOT_RUNNING", () =>
-    createHostPreflight(expected, { ...times, jobCompletedAtMs: NOW + 90_000 },
-      host, observation().guest, NOW));
+    createHostPreflight(
+      expected,
+      { ...times, jobCompletedAtMs: NOW + 90_000 },
+      host,
+      observation().guest,
+      NOW,
+    ),
+  );
   const summaryBytes = Buffer.from('{"lane":"release","proof":false}');
   const complete = { ...times, jobCompletedAtMs: NOW + 90_000 };
-  const postflight = createHostPostflight(expected, complete, host,
+  const postflight = createHostPostflight(
+    expected,
+    complete,
+    host,
     verifyControllerTeardown(teardown(), expected, complete.jobCompletedAtMs),
-    summaryBytes, NOW + 110_000);
+    summaryBytes,
+    NOW + 110_000,
+  );
   assert.equal(postflight.jobId, expected.jobId);
-  assert.equal(postflight.evidenceSha256,
-    createHash("sha256").update(summaryBytes).digest("hex"));
+  assert.equal(
+    postflight.evidenceSha256,
+    createHash("sha256").update(summaryBytes).digest("hex"),
+  );
   rejectWith("HOST_POSTFLIGHT_EVIDENCE_OR_TIME_INVALID", () =>
-    createHostPostflight(expected, times, host, {}, summaryBytes, NOW));
+    createHostPostflight(expected, times, host, {}, summaryBytes, NOW),
+  );
 });
