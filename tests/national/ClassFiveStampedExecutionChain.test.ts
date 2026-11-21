@@ -255,9 +255,9 @@ describe("Class Five E1: ORIGINAL authenticated clientID crosses queued Game exe
     m.host.tick();
     m.host.tick();
     expect(
-      m.game.nationalPublicPoliticalView()?.empires.some(
-        (e) => e.id === EMPIRE && e.leaderId === A,
-      ),
+      m.game
+        .nationalPublicPoliticalView()
+        ?.empires.some((e) => e.id === EMPIRE && e.leaderId === A),
     ).toBe(true);
     join(m, m.b, B, "b");
     join(m, m.c, C, "c");
@@ -323,10 +323,12 @@ describe("Class Five E1: ORIGINAL authenticated clientID crosses queued Game exe
     m.host.tick();
     restored.executeNextTick();
     expect(snapshotGameData(m.game)).toEqual(snapshotGameData(restored));
-    expect(
-      m.game.nationalPoliticalCommandResults(m.game.player(A)),
-    ).toEqual(beforeReceipts);
-    expect(m.game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(true);
+    expect(m.game.nationalPoliticalCommandResults(m.game.player(A))).toEqual(
+      beforeReceipts,
+    );
+    expect(m.game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(
+      true,
+    );
     expect(m.game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(A);
     expect(snapshotGameData(m.game)).not.toEqual(before);
     expect(snapshotGameData(restored)).not.toEqual(beforeRestore);
@@ -354,16 +356,16 @@ describe("Class Five E1: ORIGINAL authenticated clientID crosses queued Game exe
     ).toBe(true);
     successorHost.tick();
     successorHost.tick();
-    expect(political(m.game, A, "c5_legitimate_new_owner").accepted).toBe(
-      true,
-    );
+    expect(political(m.game, A, "c5_legitimate_new_owner").accepted).toBe(true);
     expect(m.game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(
       false,
     );
-    expect(m.host.submit(m.a, {
-      ...delegation(B, true),
-      requestId: "c5_old_after_takeover",
-    })).toBe(false);
+    expect(
+      m.host.submit(m.a, {
+        ...delegation(B, true),
+        requestId: "c5_old_after_takeover",
+      }),
+    ).toBe(false);
   });
 
   it("blocks queued stale NATIONAL/IMPERIAL WAR and peace acceptance without blocking legitimate new controller or deterministic replay", async () => {
@@ -424,9 +426,9 @@ describe("Class Five E1: ORIGINAL authenticated clientID crosses queued Game exe
     restored.executeNextTick();
     expect(snapshotGameData(m.game)).toEqual(snapshotGameData(restored));
     expect(
-      m.game.nationalWarCommandResults(m.game.player(D)).some(
-        (r) => r.requestId === "c5_old_accept",
-      ),
+      m.game
+        .nationalWarCommandResults(m.game.player(D))
+        .some((r) => r.requestId === "c5_old_accept"),
     ).toBe(false);
     expect(
       m.game.nationalWarState()?.wars.layers.find((x) => x.id === nw.warId)
