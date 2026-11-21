@@ -298,11 +298,11 @@ describe("R11 NATIONAL political wire authorization", () => {
         ],
       },
     });
-    expect(
-      readNationalAccessionOffers(state.offers, "nation-a"),
-    ).toMatchObject({
-      offers: [{ candidateId: "nation-c", recipientId: "nation-a" }],
-    });
+    expect(readNationalAccessionOffers(state.offers, "nation-a")).toMatchObject(
+      {
+        offers: [{ candidateId: "nation-c", recipientId: "nation-a" }],
+      },
+    );
     const events: SendNationalAcceptEmpireIntentEvent[] = [];
     bus.on(SendNationalAcceptEmpireIntentEvent, (event) => events.push(event));
     await choose(panel, "#national-invitation-empire", "Atlas:nation-c");
