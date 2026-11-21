@@ -42,3 +42,4 @@ jobs:
         run: npx --no-install vitest run --project node tests/national/ClassFivePrincipalWireFanout.test.ts tests/national/TrustedNationalServerAuthority.test.ts tests/national/NationalServerOutboundClass4.test.ts tests/national/NationalAccessionPacketsR11.test.ts tests/national/RoundElevenDelegatedPeaceWire.test.ts tests/national/NationalBotRejectionRoundtripR11.test.ts
       - name: Pinned full lint
         run: npm run lint
+# Fifth Class E3 final pin/lint verification pass

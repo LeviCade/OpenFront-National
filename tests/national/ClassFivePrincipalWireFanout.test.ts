@@ -16,7 +16,6 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import type { GameConfig } from "@openfront/engine-api/Schemas";
-import { EngineConfig } from "@openfront/engine/configuration/EngineConfig";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
@@ -346,24 +345,36 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
   it("the E3 callback and projector block raw Game, foreign receipts, WAR and credential canaries", async () => {
     const { authority, sockets, game } = await realMatch();
     const [a, b, c] = sockets;
-    expect(authority.submit(a.client, {
-      type: "national_found_empire",
-      empireId: ID,
-      requestId: "found_private_c5",
-    })).toBe(true);
+    expect(
+      authority.submit(a.client, {
+        type: "national_found_empire",
+        empireId: ID,
+        requestId: "found_private_c5",
+      }),
+    ).toBe(true);
     twice(authority);
     const packetB = latest(b.socket);
     const packetC = latest(c.socket);
     expect(packetB.nationalPolitics).toEqual(packetC.nationalPolitics);
     for (const key of [
-      "packedAttackUpdates", "packedMotionPlans", "packedNukeImpacts",
-      "nationalWarState", "gameSnapshot", "privateTreatyTerms",
-    ]) expect(packetB).not.toHaveProperty(key);
+      "packedAttackUpdates",
+      "packedMotionPlans",
+      "packedNukeImpacts",
+      "nationalWarState",
+      "gameSnapshot",
+      "privateTreatyTerms",
+    ])
+      expect(packetB).not.toHaveProperty(key);
     const safeJson = JSON.stringify(packetB);
     for (const secret of [
-      "verified-independent-", "separate-persistent-", "groupToken",
-      "replayDigest", "nationalWarState", "privateTreatyTerms",
-    ]) expect(safeJson).not.toContain(secret);
+      "verified-independent-",
+      "separate-persistent-",
+      "groupToken",
+      "replayDigest",
+      "nationalWarState",
+      "privateTreatyTerms",
+    ])
+      expect(safeJson).not.toContain(secret);
 
     // Host-frame poisoning cannot persuade E3's projectGameUpdate to forward
     // client-supplied private pacts, foreign command receipts or raw attacks.
@@ -380,24 +391,30 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
       privateTreatyTerms: { text: "SECRET_TREATY_C5" },
       nationalWarState: { fullLedger: "SECRET_WAR_C5" },
       packedAttackUpdates: new Float64Array([777777]),
-      nationalCommandResults: [{
-        actorId: A.id,
-        recipientId: A.id,
-        type: "national_found_empire" as const,
-        requestId: "nf_forged",
-        sequence: 999,
-        accepted: true,
-        reason: "accepted",
-        empireId: ID,
-        tick: packetB.tick,
-      }],
+      nationalCommandResults: [
+        {
+          actorId: A.id,
+          recipientId: A.id,
+          type: "national_found_empire" as const,
+          requestId: "nf_forged",
+          sequence: 999,
+          accepted: true,
+          reason: "accepted",
+          empireId: ID,
+          tick: packetB.tick,
+        },
+      ],
     };
     const filtered = e3.projectGameUpdate(raw);
     expect(filtered?.nationalPolitics).toEqual(packetC.nationalPolitics);
     for (const key of [
-      "credentials", "privateTreatyTerms", "nationalWarState",
-      "packedAttackUpdates", "nationalCommandResults",
-    ]) expect(filtered).not.toHaveProperty(key);
+      "credentials",
+      "privateTreatyTerms",
+      "nationalWarState",
+      "packedAttackUpdates",
+      "nationalCommandResults",
+    ])
+      expect(filtered).not.toHaveProperty(key);
     expect(JSON.stringify(filtered)).not.toContain("SECRET_");
   });
 });

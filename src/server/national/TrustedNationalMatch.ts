@@ -210,11 +210,13 @@ export class TrustedNationalMatch {
   /** E2 GameServer host-only disconnect status; never client admin intent. */
   recordServerDisconnect(clientID: ClientID, disconnected: boolean): void {
     if (!this.seats.has(clientID)) return;
-    this.intents.push(StampedIntentSchema.parse({
-      type: "mark_disconnected",
-      clientID,
-      isDisconnected: disconnected,
-    }));
+    this.intents.push(
+      StampedIntentSchema.parse({
+        type: "mark_disconnected",
+        clientID,
+        isDisconnected: disconnected,
+      }),
+    );
   }
 
   currentTick(): number {
@@ -233,7 +235,8 @@ export class TrustedNationalMatch {
       client.ws.readyState !== WebSocket.OPEN ||
       this.runner.game.playerByClientID(client.clientID)?.type() !==
         PlayerType.Human
-    ) return false;
+    )
+      return false;
     this.runner.removeTrustedNationalRecipient(client.clientID);
     this.activeSocket.delete(client.clientID);
     this.registerSeat(client);
