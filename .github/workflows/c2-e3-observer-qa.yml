@@ -42,3 +42,4 @@ jobs:
         run: npx --no-install vitest run --project node tests/national/C2PrivateObserverMapWire.test.ts tests/national/NationalGeographicFogR8.test.ts tests/national/ClassFivePrincipalWireFanout.test.ts tests/national/ClassFiveTrustedLobbyTransport.test.ts tests/national/NationalServerOutboundClass4.test.ts tests/national/NationalAccessionPacketsR11.test.ts
       - name: Full source lint
         run: npm run lint
+# E3 checked explicit extension type and cardinal edge mask
