@@ -559,25 +559,6 @@ export class SinglePlayerModal extends BaseModal {
             @open-shared-save=${(e: CustomEvent<string>) =>
               (this.sharedSaveId = e.detail)}
           ></saved-games-panel>
-          <label
-            class="flex items-start gap-3 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 mb-4 cursor-pointer"
-          >
-            <input
-              type="checkbox"
-              class="mt-1 accent-yellow-400"
-              aria-label="Enable NATIONAL sovereignty in Solo"
-              .checked=${this.nationalMode}
-              @change=${this.handleNationalModeChanged}
-            />
-            <span class="text-sm text-white">
-              <strong>👑 NATIONAL — Sovereignty Mode (Experimental)</strong>
-              <span class="block text-xs text-white/60 mt-1">
-                Solo Free For All at Impossible difficulty. Spawn, then open the
-                in-game NATIONAL Diplomacy panel to found an empire. Other
-                diplomacy actions unlock only when supported by the game.
-              </span>
-            </span>
-          </label>
           <game-config-settings
             class="block"
             .sectionGapClass=${"space-y-6"}
@@ -591,6 +572,8 @@ export class SinglePlayerModal extends BaseModal {
               difficulty: {
                 selected: this.selectedDifficulty,
                 disabled: this.nations === 0,
+                nationalMode: this.nationalMode,
+                nationalAvailable: true,
               },
               gameMode: {
                 selected: this.gameMode,
@@ -652,6 +635,7 @@ export class SinglePlayerModal extends BaseModal {
             @map-selected=${this.handleConfigMapSelected}
             @random-map-selected=${this.handleConfigRandomMapSelected}
             @difficulty-selected=${this.handleConfigDifficultySelected}
+            @national-mode-selected=${this.handleConfigNationalModeSelected}
             @doomsday-clock-speed-selected=${
               this.handleConfigDoomsdayClockSpeedSelected
             }
@@ -1001,13 +985,14 @@ export class SinglePlayerModal extends BaseModal {
 
   private handleDifficultySelection(value: Difficulty) {
     this.selectedDifficulty = value;
-    if (this.nationalMode && value !== Difficulty.Impossible) {
-      this.nationalMode = false;
-    }
+    // The Impossible card remains the ordinary Solo ruleset. NATIONAL is a
+    // distinct, explicit choice and must not silently stay on when changing it.
+    this.nationalMode = false;
   }
 
-  private handleNationalModeChanged = (event: Event) => {
-    this.nationalMode = (event.target as HTMLInputElement).checked;
+  private handleConfigNationalModeSelected = (event: Event) => {
+    const customEvent = event as CustomEvent<{ enabled: boolean }>;
+    this.nationalMode = customEvent.detail.enabled === true;
     if (this.nationalMode) {
       this.gameMode = GameMode.FFA;
       this.selectedDifficulty = Difficulty.Impossible;
