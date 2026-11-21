@@ -98,6 +98,37 @@ export class GameView implements GameLike {
   private _nationalAccessionOffers: NationalAccessionView | null = null;
   private _nationalPoliticalResults: readonly NationalPoliticalResult[] = [];
 
+  /** Strictly a view of the E3 recipient packet, NEVER a browser GameRunner. */
+  public isTrustedNationalProjection(): boolean {
+    return this._trustedNationalProjection;
+  }
+
+  /**
+   * Radial Attack can be offered for a currently sighted opposing tile.
+   * This is UI eligibility ONLY; the authoritative host may reject the intent.
+   * Never infer targets from unsighted tiles, hidden game state or other clients.
+   */
+  public trustedVisibleAttack(playerID: string, tile: TileRef | undefined): boolean {
+    if (
+      !this._trustedNationalProjection ||
+      tile === undefined ||
+      this.inSpawnPhase() ||
+      !this.isValidRef(tile) ||
+      !this.hasOwner(tile)
+    ) return false;
+    const actor = this.myPlayer();
+    const target = this.owner(tile);
+    return (
+      actor !== null &&
+      actor.id() === playerID &&
+      actor.isAlive() &&
+      actor.hasSpawned() &&
+      actor.troops() > 0 &&
+      target.isPlayer() &&
+      target.id() !== playerID
+    );
+  }
+
   public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
     return this._nationalPolitics;
   }
@@ -244,6 +275,7 @@ export class GameView implements GameLike {
     private _gameID: GameID,
     humans: WirePlayer[],
     private _resumedFromSave = false,
+    private readonly _trustedNationalProjection = false,
   ) {
     this._map = this._mapData.gameMap;
     this.lastUpdate = null;

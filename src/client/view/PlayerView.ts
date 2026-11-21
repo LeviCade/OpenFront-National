@@ -320,6 +320,15 @@ export class PlayerView implements PlayerLike {
     tile?: TileRef,
     units?: readonly PlayerBuildableUnitType[] | null,
   ): Promise<PlayerActions> {
+    if (this.game.isTrustedNationalProjection()) {
+      // Existing native radial menu draws its real Attack control from this
+      // recipient-only sight check. Host still validates every attack.
+      return {
+        canAttack: this.game.trustedVisibleAttack(this.id(), tile),
+        buildableUnits: [],
+        canSendEmojiAllPlayers: false,
+      };
+    }
     return this.game.worker.playerInteraction(
       this.id(),
       tile && this.game.x(tile),
@@ -333,6 +342,7 @@ export class PlayerView implements PlayerLike {
     units?: readonly PlayerBuildableUnitType[],
     includeBuildPreview = false,
   ): Promise<BuildableUnit[]> {
+    if (this.game.isTrustedNationalProjection()) return [];
     return this.game.worker.playerBuildables(
       this.id(),
       tile && this.game.x(tile),
