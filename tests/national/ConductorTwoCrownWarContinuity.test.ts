@@ -101,12 +101,7 @@ async function createMatch() {
     seat("C2SEATD01", "acct-d"),
     seat("C2SEATE01", "acct-e"),
   ] as const;
-  const host = new TrustedNationalMatch(
-    MATCH,
-    runner,
-    clients,
-    () => {},
-  );
+  const host = new TrustedNationalMatch(MATCH, runner, clients, () => {});
   return { game, runner, host, clients };
 }
 type Match = Awaited<ReturnType<typeof createMatch>>;
@@ -144,9 +139,9 @@ function founder(m: Match) {
     requestId: "c2_found_a",
   });
   expect(
-    m.game.nationalPublicPoliticalView()?.empires.some(
-      (e) => e.id === EMPIRE && e.leaderId === A,
-    ),
+    m.game
+      .nationalPublicPoliticalView()
+      ?.empires.some((e) => e.id === EMPIRE && e.leaderId === A),
   ).toBe(true);
 }
 function join(m: Match, index: 1 | 2) {
@@ -217,8 +212,8 @@ async function atWar(m: Match) {
   expect(imperial.accepted).toBe(true);
   expect(m.game.nationalWarAuthority()?.atWar(A, D)).toBe(true);
   expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(true);
-  expect(layer(m.game, national.warId).scope).toBe("national");
-  expect(layer(m.game, imperial.warId).scope).toBe("imperial");
+  expect(layer(m.game, national.warId!).scope).toBe("national");
+  expect(layer(m.game, imperial.warId!).scope).toBe("imperial");
   expect(national.warId).toBeDefined();
   expect(imperial.warId).toBeDefined();
   return { nationalId: national.warId!, imperialId: imperial.warId! };
@@ -274,17 +269,23 @@ describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host auth
     expect(canonical(m.game)).toEqual(canonical(restored));
     expect(political(m.game, A, "c2_transfer_to_c").accepted).toBe(true);
     expect(m.game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(C);
-    expect(m.game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(false);
-    expect(military(m.game, A, "c2_queued_old_imperial_accept").accepted).toBe(false);
-    expect(military(m.game, A, "c2_queued_old_imperial_war").accepted).toBe(false);
+    expect(m.game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(
+      false,
+    );
+    expect(military(m.game, A, "c2_queued_old_imperial_accept").accepted).toBe(
+      false,
+    );
+    expect(military(m.game, A, "c2_queued_old_imperial_war").accepted).toBe(
+      false,
+    );
     expect(political(m.game, A, "c2_queued_old_revoke").accepted).toBe(false);
     expect(m.game.nationalWarState()?.wars.layers).toEqual(warsBefore);
     expect(layer(m.game, nationalId).endedTick).toBeNull();
     expect(layer(m.game, imperialId).endedTick).toBeNull();
     expect(
-      m.game.nationalWarState()?.wars.motions.find(
-        (x) => x.id === motion.motionId!,
-      )?.acceptedTick,
+      m.game
+        .nationalWarState()
+        ?.wars.motions.find((x) => x.id === motion.motionId!)?.acceptedTick,
     ).toBeNull();
 
     act(m, 2, {
@@ -394,7 +395,9 @@ describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host auth
     expect(political(m.game, D, "c2_foreign_crown").accepted).toBe(false);
     // Request ID belonged to A's already accepted imperial war; D cannot
     // recycle its receipt to execute a different command or see acceptance.
-    const receiptCount = m.game.nationalWarCommandResults(m.game.player(D)).length;
+    const receiptCount = m.game.nationalWarCommandResults(
+      m.game.player(D),
+    ).length;
     act(m, 3, {
       type: "national_propose_peace",
       warId: imperialId,

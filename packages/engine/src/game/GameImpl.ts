@@ -1129,13 +1129,17 @@ export class GameImpl implements Game {
   ): boolean {
     const authority = this.nationalPoliticalAuthority();
     if (!authority?.alive(actorId)) return false;
-    if (command.kind === "transfer-crown" ||
-        command.kind === "set-national-peace-delegation")
+    if (
+      command.kind === "transfer-crown" ||
+      command.kind === "set-national-peace-delegation"
+    )
       return authority.emperorOf(command.empireId) === actorId;
     if (command.kind === "offer-empire" || command.kind === "accept-empire") {
       if (actorId === command.candidateId)
-        return command.kind === "accept-empire" ||
-          authority.empireOf(actorId) === null;
+        return (
+          command.kind === "accept-empire" ||
+          authority.empireOf(actorId) === null
+        );
       return authority.emperorOf(command.empireId) === actorId;
     }
     return true;
