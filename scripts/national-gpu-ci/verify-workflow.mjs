@@ -9,7 +9,7 @@ const source = readFileSync(
   "utf8",
 );
 
-test("workflow is manual-only and uses exactly one trusted GPU slot", () => {
+void test("workflow is manual-only and uses exactly one trusted GPU slot", () => {
   assert.match(source, /^on:\n  workflow_dispatch:/m);
   assert.match(source, /^  gpu-browser:\s*$/m);
   assert.deepEqual(
@@ -21,7 +21,7 @@ test("workflow is manual-only and uses exactly one trusted GPU slot", () => {
   assert.match(source, /^  contents: read$/m);
 });
 
-test("source gate pins immutable SHA and both ancestry directions", () => {
+void test("source gate pins immutable SHA and both ancestry directions", () => {
   for (const required of [
     "42e2b5d0a6372737b78178e5be49da7b76383d0a",
     "stage3/integration-20261115",
@@ -34,7 +34,7 @@ test("source gate pins immutable SHA and both ancestry directions", () => {
   ]) assert.ok(source.includes(required), "missing source gate: " + required);
 });
 
-test("one install then all four real E5 browser scenarios", () => {
+void test("one install then all four real E5 browser scenarios", () => {
   for (const required of [
     "CHROME_BIN: /opt/skybot-gpu-runtime/chrome-headless-shell-linux64/chrome-headless-shell",
     "NATIONAL_CHROME_ANGLE_BACKEND: gl-egl",
@@ -50,11 +50,11 @@ test("one install then all four real E5 browser scenarios", () => {
     "scenarios.jsonl",
     "if: always()",
   ]) assert.ok(source.includes(required), "missing required stage: " + required);
-  assert.equal((source.match(/npm run inst/g) || []).length, 1);
-  assert.equal((source.match(/node scripts\/national-qa\/browser-gameplay\.mjs/g) || []).length, 1);
+  assert.equal((source.match(/npm run inst/g) ?? []).length, 1);
+  assert.equal((source.match(/node scripts\/national-qa\/browser-gameplay\.mjs/g) ?? []).length, 1);
 });
 
-test("hardware proof cannot be forged inside disposable guest", () => {
+void test("hardware proof cannot be forged inside disposable guest", () => {
   for (const required of [
     "NATIONAL_GPU_ATTESTATION_FILE",
     "NATIONAL_GPU_PUBLIC_KEY_FILE",
