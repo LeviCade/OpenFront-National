@@ -11,15 +11,25 @@ import { fileURLToPath } from "node:url";
 
 const levels = ["info", "low", "moderate", "high", "critical"];
 const empty = () => ({
-  info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0,
+  info: 0,
+  low: 0,
+  moderate: 0,
+  high: 0,
+  critical: 0,
+  total: 0,
 });
 
 export function summarizeNpmAudit(json) {
-  if (!json || typeof json !== "object" ||
-      !json.metadata || typeof json.metadata !== "object" ||
-      !json.metadata.vulnerabilities ||
-      typeof json.metadata.vulnerabilities !== "object" ||
-      !json.vulnerabilities || typeof json.vulnerabilities !== "object") {
+  if (
+    !json ||
+    typeof json !== "object" ||
+    !json.metadata ||
+    typeof json.metadata !== "object" ||
+    !json.metadata.vulnerabilities ||
+    typeof json.metadata.vulnerabilities !== "object" ||
+    !json.vulnerabilities ||
+    typeof json.vulnerabilities !== "object"
+  ) {
     throw Error("AUDIT_JSON_INCOMPLETE");
   }
   const counts = {};
@@ -34,24 +44,32 @@ export function summarizeNpmAudit(json) {
     throw Error("AUDIT_SEVERITIES_DO_NOT_SUM");
   }
   const packages = Object.entries(json.vulnerabilities).map(([name, entry]) => {
-    if (!entry || typeof entry !== "object" ||
-        !levels.includes(entry.severity)) {
+    if (
+      !entry ||
+      typeof entry !== "object" ||
+      !levels.includes(entry.severity)
+    ) {
       throw Error("AUDIT_PACKAGE_SEVERITY_INVALID");
     }
     return {
       name: name.slice(0, 120),
       severity: entry.severity,
       direct: entry.isDirect === true,
-      fixAvailable: entry.fixAvailable === true ||
+      fixAvailable:
+        entry.fixAvailable === true ||
         (entry.fixAvailable && typeof entry.fixAvailable === "object"),
     };
   });
-  return { counts, packages: packages.sort((a,b) => a.name.localeCompare(b.name)) };
+  return {
+    counts,
+    packages: packages.sort((a, b) => a.name.localeCompare(b.name)),
+  };
 }
 
 function invokeAudit(arguments_) {
   const result = spawnSync("npm", ["audit", "--json", ...arguments_], {
-    encoding: "utf8", maxBuffer: 12 * 1024 * 1024,
+    encoding: "utf8",
+    maxBuffer: 12 * 1024 * 1024,
   });
   if (result.error || !result.stdout) {
     throw Error("NPM_AUDIT_UNAVAILABLE");
@@ -73,7 +91,9 @@ export function compareDependencyRisk(production, full) {
   return {
     production,
     allInstalled: full,
-    devOnlyCandidates: full.packages.filter((x) => !productionNames.has(x.name)),
+    devOnlyCandidates: full.packages.filter(
+      (x) => !productionNames.has(x.name),
+    ),
     productionAdvisoriesZero: production.counts.total === 0,
     developmentReviewPending: full.counts.total > production.counts.total,
     publicReleaseSecurityCleared: false,
@@ -86,13 +106,20 @@ function main() {
   try {
     const prod = invokeAudit(["--omit=dev"]);
     const full = invokeAudit([]);
-    result = { schema: 1, conclusive: true, ...compareDependencyRisk(prod, full) };
-    process.exitCode = prod.counts.total > 0 ||
+    result = {
+      schema: 1,
+      conclusive: true,
+      ...compareDependencyRisk(prod, full),
+    };
+    process.exitCode =
+      prod.counts.total > 0 ||
       (process.argv.includes("--strict-release") && full.counts.total > 0)
-      ? 1 : 0;
+        ? 1
+        : 0;
   } catch (error) {
     result = {
-      schema: 1, conclusive: false,
+      schema: 1,
+      conclusive: false,
       errorCode: String(error.message ?? error).slice(0, 100),
       production: { counts: empty(), packages: [] },
       allInstalled: { counts: empty(), packages: [] },
@@ -106,15 +133,20 @@ function main() {
     "national-qa-artifacts/dependencies.json",
     JSON.stringify(result, null, 2) + "\n",
   );
-  console.log(JSON.stringify({
-    conclusive: result.conclusive,
-    production: result.production.counts,
-    devCandidateCount: result.devOnlyCandidates?.length ?? null,
-    devReviewPending: result.developmentReviewPending,
-    errorCode: result.errorCode ?? null,
-  }));
+  console.log(
+    JSON.stringify({
+      conclusive: result.conclusive,
+      production: result.production.counts,
+      devCandidateCount: result.devOnlyCandidates?.length ?? null,
+      devReviewPending: result.developmentReviewPending,
+      errorCode: result.errorCode ?? null,
+    }),
+  );
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
   main();
 }

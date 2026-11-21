@@ -8,12 +8,12 @@ GPU diagnostic [#44881965453](https://github.com/LeviCade/OpenFront-National/act
 
 ## Four independent scenarios
 
-| Scenario | Browser harness args | Actual browser report path |
-| --- | --- | --- |
-| NATIONAL desktop | none | `national-qa-artifacts/browser-national-desktop/acceptance.json` |
-| NATIONAL mobile | `--mobile` | `national-qa-artifacts/browser-national-mobile/acceptance.json` |
-| Legacy FFA desktop | `--legacy` | `national-qa-artifacts/browser-legacy-ffa-desktop/acceptance.json` |
-| Legacy FFA mobile | `--legacy --mobile` | `national-qa-artifacts/browser-legacy-ffa-mobile/acceptance.json` |
+| Scenario           | Browser harness args | Actual browser report path                                         |
+| ------------------ | -------------------- | ------------------------------------------------------------------ |
+| NATIONAL desktop   | none                 | `national-qa-artifacts/browser-national-desktop/acceptance.json`   |
+| NATIONAL mobile    | `--mobile`           | `national-qa-artifacts/browser-national-mobile/acceptance.json`    |
+| Legacy FFA desktop | `--legacy`           | `national-qa-artifacts/browser-legacy-ffa-desktop/acceptance.json` |
+| Legacy FFA mobile  | `--legacy --mobile`  | `national-qa-artifacts/browser-legacy-ffa-mobile/acceptance.json`  |
 
 Success needs actual running HUD + canvas and real game action. NATIONAL additionally needs spawn, click-origin founding, accepted journal receipt and public roster, hostile duplicate rejection, accepted WAR declaration plus public active war state, real map assault with authoritative troop/motion change, peace proposal and acceptance with matching receipt and ended public layer, and when reachable genuine replay/victory. No synthetic worker/game writes or intent-only green. A missing step is **BLOCKED**, not `PASS`.
 

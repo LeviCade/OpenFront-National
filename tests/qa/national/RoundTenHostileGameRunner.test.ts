@@ -170,10 +170,10 @@ describe("R10 independent GameRunner hostile authority and replay canaries", () 
     expect(again).toEqual(bytes);
     for (const current of [game, restored]) {
       expect(
-        current.performNationalWarCommandWithOutcome(
-          current.player(alpha.id),
-          { ...command, warId: "e5-war:forged-new-layer" },
-        ),
+        current.performNationalWarCommandWithOutcome(current.player(alpha.id), {
+          ...command,
+          warId: "e5-war:forged-new-layer",
+        }),
       ).toEqual(accepted);
       expect(current.nationalWarState()?.wars.layers).toHaveLength(1);
     }

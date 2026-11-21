@@ -3,10 +3,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const run = (strict = false) =>
-  spawnSync(process.execPath, [
-    "scripts/national-qa/asset-audit.mjs",
-    ...(strict ? ["--strict-release"] : []),
-  ], { encoding: "utf8" });
+  spawnSync(
+    process.execPath,
+    [
+      "scripts/national-qa/asset-audit.mjs",
+      ...(strict ? ["--strict-release"] : []),
+    ],
+    { encoding: "utf8" },
+  );
 
 describe("R10 E5 inherited media and lawful release guard", () => {
   it("inventories every present media hash, actual music call site, and denies unreviewed release", () => {
@@ -38,7 +42,9 @@ describe("R10 E5 inherited media and lawful release guard", () => {
     // audio. No protected upstream assets are fetched for this test.
     const releaseAudit = run(true);
     expect(releaseAudit.status).toBe(
-      report.missingMusic.length || report.resourceMediaProvenance.length ? 1 : 0,
+      report.missingMusic.length || report.resourceMediaProvenance.length
+        ? 1
+        : 0,
     );
     if (report.missingMusic.length || report.resourceMediaProvenance.length) {
       expect(report.publicReleaseReady).toBe(false);
