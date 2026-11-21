@@ -390,4 +390,148 @@ describe("R11 new live imperial NATIONAL peace delegation (M5/WAR-05)", () => {
       beforeReplay,
     );
   });
+
+  it("wipes delegated peace for a surviving subordinate when a THIRD member inherits the crown", async () => {
+    const game = await spawned();
+    const a = principal(game, ca);
+    const b = principal(game, cb);
+    const c = principal(game, cc);
+    const d = principal(game, cd);
+    click(game, a, {
+      type: "national_found_empire",
+      empireId: empire,
+      requestId: "r11-third-found",
+    });
+    for (const [recipient, player, token] of [
+      [b, B, "bravo"],
+      [c, C, "charlie"],
+    ] as const) {
+      click(game, a, {
+        type: "national_offer_empire",
+        empireId: empire,
+        candidateId: player,
+        requestId: "r11-third-offer-" + token,
+      });
+      expect(game.nationalAccessionOffers(game.player(player))).toHaveLength(1);
+      expect(game.nationalAccessionOffers(game.player(D))).toEqual([]);
+      click(game, recipient, {
+        type: "national_accept_empire",
+        empireId: empire,
+        candidateId: player,
+        requestId: "r11-third-accept-" + token,
+      });
+    }
+    expect(game.nationalPoliticalAuthority()?.membersOf(empire)).toEqual(
+      [A, B, C].sort(),
+    );
+
+    click(game, a, {
+      type: "national_declare_war",
+      scope: "national",
+      nationId: B,
+      targetId: D,
+      targetKind: "nation",
+      requestId: "r11-third-national-war",
+    });
+    const national = lastWar(game, A, "r11-third-national-war");
+    expect(national.accepted).toBe(true);
+    click(game, a, {
+      type: "national_declare_war",
+      scope: "imperial",
+      nationId: A,
+      targetId: D,
+      targetKind: "nation",
+      requestId: "r11-third-imperial-war",
+    });
+    const imperial = lastWar(game, A, "r11-third-imperial-war");
+    expect(imperial.accepted).toBe(true);
+    const before = game.nationalWarState()?.wars.layers;
+    expect(before).toHaveLength(2);
+
+    grant(game, a, B, true, "r11-third-first-grant");
+    expect(lastPolicy(game, A, "r11-third-first-grant").accepted).toBe(true);
+    expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(true);
+
+    // B remains a subordinate when a different member (C) inherits.
+    click(game, a, {
+      type: "national_transfer_crown",
+      empireId: empire,
+      successorId: C,
+      requestId: "r11-third-transfer",
+    });
+    expect(lastPolicy(game, A, "r11-third-transfer").accepted).toBe(true);
+    expect(game.nationalPoliticalAuthority()?.emperorOf(empire)).toBe(C);
+    expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(false);
+    expect(game.nationalWarState()?.wars.layers).toEqual(before);
+    expect(
+      readVersioned(
+        GameSnapshot,
+        snapshotGameData(game).game,
+      ).national?.politics.empires.find((x) => x.id === empire)
+        ?.delegatedNationalPeace,
+    ).toBeUndefined();
+    click(game, b, {
+      type: "national_propose_peace",
+      warId: national.warId,
+      requestId: "r11-third-denied-after-transfer",
+    });
+    expect(lastWar(game, B, "r11-third-denied-after-transfer").accepted).toBe(
+      false,
+    );
+    grant(game, a, B, true, "r11-third-former-crown-denied");
+    expect(lastPolicy(game, A, "r11-third-former-crown-denied").accepted).toBe(
+      false,
+    );
+
+    // New emperor C, not the old crown A, may restore B's national-only right.
+    grant(game, c, B, true, "r11-third-successor-grant");
+    expect(lastPolicy(game, C, "r11-third-successor-grant").accepted).toBe(
+      true,
+    );
+    expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(true);
+    click(game, b, {
+      type: "national_propose_peace",
+      warId: imperial.warId,
+      requestId: "r11-third-imperial-denied",
+    });
+    expect(lastWar(game, B, "r11-third-imperial-denied").accepted).toBe(false);
+    click(game, b, {
+      type: "national_propose_peace",
+      warId: national.warId,
+      requestId: "r11-third-national-proposal",
+    });
+    const peace = lastWar(game, B, "r11-third-national-proposal");
+    expect(peace.accepted).toBe(true);
+    click(game, d, {
+      type: "national_accept_peace",
+      motionId: peace.motionId,
+      requestId: "r11-third-foreign-accept",
+    });
+    expect(lastWar(game, D, "r11-third-foreign-accept").accepted).toBe(true);
+    expect(game.nationalWarAuthority()?.atWar(B, D)).toBe(true);
+    expect(
+      game
+        .nationalWarState()
+        ?.wars.layers.find((layer) => layer.id === imperial.warId)?.endedTick,
+    ).toBeNull();
+    expect(
+      game
+        .nationalWarState()
+        ?.wars.layers.find((layer) => layer.id === national.warId)?.endedTick,
+    ).not.toBeNull();
+
+    const { restored, bytes, again } = await roundTrip(game, "plains");
+    expect(again).toEqual(bytes);
+    expect(restored.nationalPoliticalAuthority()?.emperorOf(empire)).toBe(C);
+    expect(restored.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(
+      true,
+    );
+    expect(restored.nationalWarState()).toEqual(game.nationalWarState());
+    const twin = principal(restored, ca);
+    for (let i = 0; i < 3; i++) {
+      advance(game, a);
+      advance(restored, twin);
+      expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
+    }
+  });
 });
