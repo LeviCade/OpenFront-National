@@ -17,3 +17,15 @@ No completion points are awarded until the resulting exact-head source,
 independent QA, and real GameRunner scenario results have passed.
 GPU-backed four-mode release and protected-server confidentiality remain
 separate strict release gates.
+
+## Final targeted engine/UI regression proof — 2026-11-21
+
+- Original combined full suite exposed five exact fixture/contract mismatches.
+- Targeted #44882077973: 35 affected cases PASS following actual E1/E2/E3/E4 interoperability repair.
+- Reused foreign request IDs now fail closed without terminating Game ticks.
+- Targeted #44882320697: five affected source suites, full TypeScript, pinned formatter SUCCESS.
+- Exact formatter-approved candidate source commit: `a3286e1177a426989fba6fbe9dd506540d355e6a`.
+- One-shot targeted GitHub workflows deleted after success; no standing expensive duplicate test trigger.
+- [Public owner GPU diagnostic #44881965453](https://github.com/LeviCade/OpenFront-National/actions/runs/44881965453): authentic Intel VirGL/WebGL1+2/shader evidence on NATIONAL desktop/mobile; reached spawn but DID NOT pass. Both legacy browser processes exited 0, but detailed reports were not captured. Never treat these diagnostics as signed release acceptance.
+
+**This documentation-only commit is a trusted-actor trigger for exact-head combined full TypeScript, full tests, lint, formatting, production build, independent QA, strict WAR/MDA/CAS and dependency acceptance. The result is NOT yet a pass.**
