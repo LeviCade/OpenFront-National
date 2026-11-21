@@ -64,6 +64,7 @@ async function setup(
     tick: 10,
     diplomacyResults: [] as NationalDiplomacyResult[],
     conflicts: null as NationalPublicConflicts | null,
+    conflictTick: null as number | null,
     national: options.national ?? true,
     replay: options.replay ?? false,
     spawned: options.spawned ?? true,
@@ -131,7 +132,7 @@ async function setup(
     nationalFoundingOutcome: () => null,
     nationalDiplomacyResults: () => state.diplomacyResults,
     nationalConflicts: () => state.conflicts,
-    nationalConflictsTick: () => state.conflicts ? state.tick : null,
+    nationalConflictsTick: () => state.conflicts ? state.conflictTick ?? state.tick : null,
     ticks: () => state.tick,
     isSpectator: () => state.spectator,
     inSpawnPhase: () => !state.spawned,
@@ -550,6 +551,64 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     expect(panel.querySelector<HTMLButtonElement>("#national-declare-war")!.disabled).toBe(true);
     expect(panel.querySelector<HTMLButtonElement>("#national-propose-peace")!.disabled).toBe(true);
     expect(intents()).toHaveLength(1);
+  });
+
+  it("rejects future-dated WAR and motion packets, and waits for a same-tick authoritative view", async () => {
+    const futureWar = { ...canonicalWar, startedTick: 11 };
+    expect(readNationalConflicts(projection([futureWar]), "nation-a", 10)).toBeNull();
+    expect(readNationalConflicts(projection(), "nation-a", 10)).not.toBeNull();
+    expect(readNationalConflicts(projection([canonicalWar], [{
+      ...foreignOffer, acceptedTick: 11, acceptedBy: "nation-a",
+    }]), "nation-a", 10)).toBeNull();
+
+    const { panel, state } = await setup();
+    await choose(panel, "#national-war-target", "nation-b");
+    panel.querySelector<HTMLButtonElement>("#national-declare-war")!.click();
+    state.tick = 11;
+    state.conflictTick = 10;
+    state.conflicts = projection([futureWar]);
+    state.diplomacyResults = [{
+      type: "national_declare_war",
+      actorId: "nation-a",
+      recipientId: "nation-a",
+      requestId: intents()[0].requestId,
+      sequence: 30,
+      tick: 11,
+      accepted: true,
+      warId: "war-11",
+    }];
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).not.toContain("War confirmed by game");
+    state.conflictTick = 11;
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).toContain("War confirmed by game: war-11");
+  });
+
+  it("rejects contradictory same-token receipts without displaying an optimistic success", async () => {
+    const { panel, state } = await setup();
+    await choose(panel, "#national-war-target", "nation-b");
+    panel.querySelector<HTMLButtonElement>("#national-declare-war")!.click();
+    const requestId = intents()[0].requestId as string;
+    state.tick = 11;
+    state.conflicts = projection([{ ...canonicalWar, startedTick: 11 }]);
+    state.diplomacyResults = [
+      {
+        type: "national_declare_war", actorId: "nation-a",
+        recipientId: "nation-a", requestId, sequence: 40,
+        tick: 11, accepted: true, warId: "war-11",
+      },
+      {
+        type: "national_declare_war", actorId: "nation-a",
+        recipientId: "nation-a", requestId, sequence: 41,
+        tick: 11, accepted: false, reason: "political-rule",
+      },
+    ];
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).toContain("Conflicting authenticated diplomacy receipts");
+    expect(panel.textContent).not.toContain("War confirmed by game");
   });
 
   it("fails closed on malformed, foreign and non-cryptographic receipt IDs", () => {
