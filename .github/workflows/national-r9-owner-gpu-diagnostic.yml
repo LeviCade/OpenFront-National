@@ -1,0 +1,114 @@
+name: NATIONAL R9 — Owner-only real GPU gameplay DIAGNOSTIC (not release)
+
+on:
+  push:
+    branches:
+      - stage3/r9-gpu-diagnostic-20261121
+    paths:
+      - .github/workflows/national-r9-owner-gpu-diagnostic.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: national-r9-owner-gpu-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  four-mode-diagnostic:
+    if: >-
+      github.repository == 'LeviCade/OpenFront-National' &&
+      github.actor == 'LeviCade' &&
+      github.ref == 'refs/heads/stage3/r9-gpu-diagnostic-20261121'
+    runs-on: skybot-ci-gpu
+    timeout-minutes: 55
+    env:
+      CHROME_BIN: /opt/skybot-gpu-runtime/chrome-headless-shell-linux64/chrome-headless-shell
+      NATIONAL_CHROME_ANGLE_BACKEND: gl-egl
+      EGL_PLATFORM: surfaceless
+      NATIONAL_REQUIRE_HARDWARE_GPU: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Verify owner-only disposable GPU and immutable source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_ENVIRONMENT}" = self-hosted
+          test "$(id -u)" -ne 0
+          test -x "$CHROME_BIN"
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$NATIONAL_REQUIRE_HARDWARE_GPU" = 0
+          mkdir -p national-qa-artifacts/gpu/diagnostic
+          printf '%s\n' "$GITHUB_SHA" > national-qa-artifacts/gpu/diagnostic/source-sha.txt
+          printf 'DIAGNOSTIC_ONLY_NOT_RELEASE_ATTESTATION\n' > national-qa-artifacts/gpu/diagnostic/classification.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - name: Install the pinned dependencies only once
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - name: Run four real Chromium gameplay probes (NO release attestation)
+        shell: bash
+        run: |
+          set -uo pipefail
+          failures=0
+          mkdir -p national-qa-artifacts/gpu/diagnostic
+          for mode in national-desktop national-mobile legacy-desktop legacy-mobile; do
+            args=()
+            case "$mode" in
+              national-mobile) args=(--mobile);;
+              legacy-desktop) args=(--legacy);;
+              legacy-mobile) args=(--legacy --mobile);;
+            esac
+            echo "GPU diagnostic attempting $mode"
+            node scripts/national-qa/browser-gameplay.mjs "${args[@]}" > "/tmp/national-gpu-$mode.log" 2>&1
+            code=$?
+            MODE="$mode" EXIT_CODE="$code" node --input-type=module <<'NODE'
+          import { existsSync, readFileSync, appendFileSync } from 'node:fs';
+          const mode = process.env.MODE;
+          const file = 'national-qa-artifacts/browser-' + mode + '/acceptance.json';
+          const outcome = {mode, exitCode: Number(process.env.EXIT_CODE),
+            diagnosticOnly: true, releaseAttested: false,
+            sourceSha: process.env.GITHUB_SHA, reportPresent: existsSync(file)};
+          if (existsSync(file)) {
+            try {
+              const x = JSON.parse(readFileSync(file,'utf8'));
+              outcome.sourceMatched = x.exactSource === process.env.GITHUB_SHA;
+              outcome.stage = typeof x.stage === 'string' ? x.stage.slice(0,64) : null;
+              const g2=x.actualHardware?.webgl, g1=x.actualHardware?.webgl1;
+              outcome.webgl2 = g2?.supported === true && g2?.contextLost !== true;
+              outcome.webgl1 = g1?.supported === true && g1?.contextLost !== true;
+              const pixel=[51,102,153,255];
+              outcome.webglShadersMatch = [g1?.shaderPixel,g2?.shaderPixel].every(
+                a => Array.isArray(a) && a.length === 4 && a.every((v,i)=>v===pixel[i]));
+              const renderer=String(g2?.unmaskedRenderer ?? '');
+              outcome.hardwareRendererReported = /Intel.*HD Graphics 4600/i.test(renderer) &&
+                /virgl/i.test(renderer) &&
+                !/swiftshader|llvmpipe|lavapipe|softpipe|swrast|software/i.test(renderer);
+            } catch {
+              outcome.reportValid = false;
+            }
+          }
+          appendFileSync('national-qa-artifacts/gpu/diagnostic/outcomes.jsonl',
+            JSON.stringify(outcome)+'\n');
+          NODE
+            echo "$mode exit=$code (nonrelease diagnostic only)"
+            if [ "$code" -ne 0 ]; then failures=1; fi
+          done
+          echo "DIAGNOSTIC_ONLY; NO_GPU_RELEASE_CERTIFICATION; scenario_failures=$failures"
+          exit "$failures"
+      - name: Upload bounded diagnostic outcomes only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-r9-owner-gpu-diagnostic-${{ github.run_id }}
+          path: national-qa-artifacts/gpu/diagnostic/
+          if-no-files-found: warn
+          retention-days: 7
