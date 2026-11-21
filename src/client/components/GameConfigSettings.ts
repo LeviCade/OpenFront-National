@@ -510,44 +510,52 @@ export class GameConfigSettings extends LitElement {
                   </div>
                 `;
               })}
-              ${settings.difficulty.nationalAvailable
-                ? html`<div class="group/difficulty-card relative">
-                    <button
-                      type="button"
-                      data-national-difficulty
-                      aria-pressed=${String(
-                        settings.difficulty.nationalMode === true,
-                      )}
-                      aria-label="NATIONAL sovereignty mode, Solo Free For All at Impossible difficulty"
-                      ?disabled=${settings.difficulty.disabled}
-                      @click=${this.handleNationalSelect}
-                      class="${
-                        settings.difficulty.disabled
-                          ? `${DISABLED_CARD} flex flex-col items-center justify-center p-4 gap-2 h-full min-h-24`
-                          : cardClass(
-                              settings.difficulty.nationalMode === true,
-                              "flex flex-col items-center justify-center p-4 gap-2 h-full min-h-24 focus-visible:outline-2 focus-visible:outline-yellow-300",
-                            )
-                      }"
-                    >
-                      <span aria-hidden="true" class="text-3xl">👑</span>
-                      <strong class="${CARD_LABEL_CLASS} text-center text-white">
-                        NATIONAL
-                      </strong>
-                      <span class="text-xs text-center text-white/75 normal-case">
-                        Sovereignty · Solo FFA · Impossible AI
-                      </span>
-                    </button>
-                  </div>`
-                : nothing}
+              ${
+                settings.difficulty.nationalAvailable
+                  ? html`<div class="group/difficulty-card relative">
+                      <button
+                        type="button"
+                        data-national-difficulty
+                        aria-pressed=${String(
+                          settings.difficulty.nationalMode === true,
+                        )}
+                        aria-label="NATIONAL sovereignty mode, Solo Free For All at Impossible difficulty"
+                        ?disabled=${settings.difficulty.disabled}
+                        @click=${this.handleNationalSelect}
+                        class="${
+                          settings.difficulty.disabled
+                            ? `${DISABLED_CARD} flex flex-col items-center justify-center p-4 gap-2 h-full min-h-24`
+                            : cardClass(
+                                settings.difficulty.nationalMode === true,
+                                "flex flex-col items-center justify-center p-4 gap-2 h-full min-h-24 focus-visible:outline-2 focus-visible:outline-yellow-300",
+                              )
+                        }"
+                      >
+                        <span aria-hidden="true" class="text-3xl">👑</span>
+                        <strong
+                          class="${CARD_LABEL_CLASS} text-center text-white"
+                        >
+                          NATIONAL
+                        </strong>
+                        <span
+                          class="text-xs text-center text-white/75 normal-case"
+                        >
+                          Sovereignty · Solo FFA · Impossible AI
+                        </span>
+                      </button>
+                    </div>`
+                  : nothing
+              }
             </div>
-            ${settings.difficulty.nationalMode
-              ? html`<p role="status" class="mt-3 text-sm text-yellow-200">
-                  NATIONAL selected. Click Start Game, place your nation on the map,
-                  then open the crown Diplomacy panel. You can switch back to
-                  ordinary Solo by choosing any standard difficulty.
-                </p>`
-              : nothing}
+            ${
+              settings.difficulty.nationalMode
+                ? html`<p role="status" class="mt-3 text-sm text-yellow-200">
+                    NATIONAL selected. Click Start Game, place your nation on
+                    the map, then open the crown Diplomacy panel. You can switch
+                    back to ordinary Solo by choosing any standard difficulty.
+                  </p>`
+                : nothing
+            }
           `,
         )}
         ${renderSection(

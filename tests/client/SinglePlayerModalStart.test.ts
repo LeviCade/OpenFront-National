@@ -72,7 +72,9 @@ describe("SinglePlayerModal start", () => {
     await modal.startGame();
     expect(events).toHaveLength(1);
     expect(events[0].gameStartInfo.config.nationalMode).toBeUndefined();
-    expect(events[0].gameStartInfo.config.difficulty).toBe(Difficulty.Impossible);
+    expect(events[0].gameStartInfo.config.difficulty).toBe(
+      Difficulty.Impossible,
+    );
   });
 
   it("carries the selected team count and validated disabled units into the join-lobby config", async () => {

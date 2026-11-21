@@ -3969,12 +3969,8 @@ describe("NATIONAL human touch map actions", () => {
     bus.on(ContextMenuEvent, (e) =>
       events.push({ kind: "context", x: e.x, y: e.y }),
     );
-    bus.on(MouseUpEvent, (e) =>
-      events.push({ kind: "spawn", x: e.x, y: e.y }),
-    );
-    bus.on(TouchEvent, (e) =>
-      events.push({ kind: "touch", x: e.x, y: e.y }),
-    );
+    bus.on(MouseUpEvent, (e) => events.push({ kind: "spawn", x: e.x, y: e.y }));
+    bus.on(TouchEvent, (e) => events.push({ kind: "touch", x: e.x, y: e.y }));
     bus.on(TouchGhostPlacementEvent, (e) =>
       events.push({ kind: "ghost", x: e.x, y: e.y }),
     );

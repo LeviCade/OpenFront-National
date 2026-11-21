@@ -680,8 +680,10 @@ export class NationalDiplomacyPanel extends LitElement {
       ) ?? [];
     // Real GameRunner player attack projection only, not an intent counter.
     const observedOutgoingAttacks =
-      game.myPlayer()?.outgoingAttacks?.().filter((attack) => !attack.retreating)
-        .length ?? 0;
+      game
+        .myPlayer()
+        ?.outgoingAttacks?.()
+        .filter((attack) => !attack.retreating).length ?? 0;
     return html`
       <section
         class="text-white w-[min(25rem,calc(100vw-1rem))] max-w-full rounded-xl border border-amber-400/50 bg-slate-950/95 shadow-xl backdrop-blur-sm overflow-hidden"
@@ -706,16 +708,18 @@ export class NationalDiplomacyPanel extends LitElement {
                 class="px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-4 max-h-[min(70dvh,calc(100dvh-8rem))] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] text-sm"
               >
                 <p class="text-xs text-slate-300">
-                  Choose a nation, declare WAR, then fight on the actual game map.
-                  Membership and outcomes come only from the engine.
+                  Choose a nation, declare WAR, then fight on the actual game
+                  map. Membership and outcomes come only from the engine.
                 </p>
                 <p
                   data-national-map-instructions
                   class="text-xs text-slate-300"
                 >
-                  ${game.inSpawnPhase()
-                    ? "Spawn first: click or tap an unoccupied land tile."
-                    : "Battle: right-click opposing territory on desktop, or tap it on mobile, then choose the enabled Attack action."}
+                  ${
+                    game.inSpawnPhase()
+                      ? "Spawn first: click or tap an unoccupied land tile."
+                      : "Battle: right-click opposing territory on desktop, or tap it on mobile, then choose the enabled Attack action."
+                  }
                 </p>
                 ${
                   politics
@@ -963,9 +967,11 @@ export class NationalDiplomacyPanel extends LitElement {
                 <div class="border-t border-white/15 pt-3 space-y-3">
                   <h2 class="font-semibold text-amber-200">Peace</h2>
                   <p class="text-xs text-slate-300">
-                    ${conflicts
-                      ? "Choose a real engine-issued WAR or motion ID. The game still decides constitutional authority."
-                      : "Awaiting authoritative current conflicts. Peace controls remain unavailable until the game sends live IDs."}
+                    ${
+                      conflicts
+                        ? "Choose a real engine-issued WAR or motion ID. The game still decides constitutional authority."
+                        : "Awaiting authoritative current conflicts. Peace controls remain unavailable until the game sends live IDs."
+                    }
                   </p>
                   ${
                     conflicts
@@ -980,17 +986,19 @@ export class NationalDiplomacyPanel extends LitElement {
                             ${conflicts.motions.filter((motion) => motion.acceptedTick === null).length}.
                           </p>
                           ${conflicts.layers.map(
-                            (layer) => html`<p class="break-all">
-                              WAR ${layer.id} · ${layer.first.id} vs
-                              ${layer.second.id} ·
-                              ${layer.endedTick === null ? "ACTIVE" : "ENDED"}
-                            </p>`,
+                            (layer) =>
+                              html`<p class="break-all">
+                                WAR ${layer.id} · ${layer.first.id} vs
+                                ${layer.second.id} ·
+                                ${layer.endedTick === null ? "ACTIVE" : "ENDED"}
+                              </p>`,
                           )}
                           ${conflicts.motions.map(
-                            (motion) => html`<p class="break-all">
-                              Motion ${motion.id} for WAR ${motion.layerId} ·
-                              ${motion.acceptedTick === null ? "PENDING" : "ACCEPTED"}
-                            </p>`,
+                            (motion) =>
+                              html`<p class="break-all">
+                                Motion ${motion.id} for WAR ${motion.layerId} ·
+                                ${motion.acceptedTick === null ? "PENDING" : "ACCEPTED"}
+                              </p>`,
                           )}
                         </div>`
                       : nothing
@@ -1063,10 +1071,12 @@ export class NationalDiplomacyPanel extends LitElement {
                       id="national-propose-peace"
                       type="submit"
                       class="min-h-11 rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 focus-visible:outline-2 focus-visible:outline-white disabled:opacity-50"
-                      ?disabled=${!canIssuePeace ||
-                      !this.warIdDraft.trim() ||
-                      (conflicts !== null &&
-                        !peaceWars.some((war) => war.id === this.warIdDraft))}
+                      ?disabled=${
+                        !canIssuePeace ||
+                        !this.warIdDraft.trim() ||
+                        (conflicts !== null &&
+                          !peaceWars.some((war) => war.id === this.warIdDraft))
+                      }
                     >
                       Propose peace
                     </button>
@@ -1093,7 +1103,9 @@ export class NationalDiplomacyPanel extends LitElement {
                         ).value)}
                       ?disabled=${!canIssuePeace || peaceMotions.length === 0}
                     >
-                      <option value="">Choose an opponent's peace motion</option>
+                      <option value="">
+                        Choose an opponent's peace motion
+                      </option>
                       ${peaceMotions.map(
                         (motion) =>
                           html`<option value=${motion.id}>
@@ -1105,12 +1117,14 @@ export class NationalDiplomacyPanel extends LitElement {
                       id="national-accept-peace"
                       type="submit"
                       class="min-h-11 rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 focus-visible:outline-2 focus-visible:outline-white disabled:opacity-50"
-                      ?disabled=${!canIssuePeace ||
-                      !this.motionIdDraft.trim() ||
-                      (conflicts !== null &&
-                        !peaceMotions.some(
-                          (motion) => motion.id === this.motionIdDraft,
-                        ))}
+                      ?disabled=${
+                        !canIssuePeace ||
+                        !this.motionIdDraft.trim() ||
+                        (conflicts !== null &&
+                          !peaceMotions.some(
+                            (motion) => motion.id === this.motionIdDraft,
+                          ))
+                      }
                     >
                       Accept peace
                     </button>
