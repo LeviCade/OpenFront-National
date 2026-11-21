@@ -1384,8 +1384,10 @@ export class GameServer {
         if (c.spectator && c.ws.readyState === WebSocket.OPEN) {
           c.ws.send(
             encodeServerMessage(
-              { type: "error", error: "national-spectator-not-supported" }
-                satisfies ServerErrorMessage,
+              {
+                type: "error",
+                error: "national-spectator-not-supported",
+              } satisfies ServerErrorMessage,
               this.zbinCtx,
             ),
           );
