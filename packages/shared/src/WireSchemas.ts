@@ -52,9 +52,15 @@ export type ServerMessage =
   | ServerLobbyInfoMessage
   | ServerNewLobbyMessage
   | ServerPongMessage
-  | ServerRedirectMessage;
+  | ServerRedirectMessage
+  | ServerNationalViewMessage;
 
 export type ServerTurnMessage = z.infer<typeof ServerTurnMessageSchema>;
+
+/** Server-authoritative recipient-only NATIONAL view; never a raw Turn. */
+export type ServerNationalViewMessage = z.infer<
+  typeof ServerNationalViewMessageSchema
+>;
 
 export type ServerStartGameMessage = z.infer<
   typeof ServerStartGameMessageSchema
@@ -483,6 +489,17 @@ export const WireGameStartInfoSchema = GameStartInfoSchema.extend({
 // Server
 //
 
+/**
+ * E3's explicitly allowed, JSON-string-encoded recipient frame travels
+ * inside the existing binary Zbin envelope. A raw GameSnapshot or Turn must
+ * NEVER be included. The client decodes its typed arrays for E4 GameView.
+ * Appended to the discriminated union to preserve all existing wire tags.
+ */
+export const ServerNationalViewMessageSchema = z.object({
+  type: z.literal("national_view"),
+  payload: z.string().max(16 * 1024 * 1024),
+});
+
 export const ServerTurnMessageSchema = z.object({
   type: z.literal("turn"),
   turn: TurnSchema,
@@ -598,6 +615,7 @@ export const ServerMessageSchema = zb.discriminatedUnion("type", [
   ServerPongMessageSchema,
   // Appended, never inserted: variant order is the wire tag (zbin/README.md).
   ServerRedirectMessageSchema,
+  ServerNationalViewMessageSchema,
 ]);
 
 //
