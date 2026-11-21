@@ -277,8 +277,13 @@ describe("C2 E2 REAL WebSocket three-account NATIONAL server", () => {
       await game.end();
       for (const peer of peers) peer.ws.terminate();
       for (const ws of wss.clients) ws.terminate();
-      await new Promise<void>((resolve) => wss.close(() => resolve()));
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+      // ws.Server({server}) may defer its own 'close' event until the
+      // attached HTTP server closes. Start BOTH closures together; awaiting
+      // wss.close() first deadlocks this live TCP integration teardown.
+      await Promise.all([
+        new Promise<void>((resolve) => wss.close(() => resolve())),
+        new Promise<void>((resolve) => server.close(() => resolve())),
+      ]);
     });
 
     const [a, b, c] = await Promise.all([socket(url), socket(url), socket(url)]);
