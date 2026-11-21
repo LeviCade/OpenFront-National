@@ -6,7 +6,7 @@
 
 ## 1. Real diagnostic history (do not erase or relabel)
 
-[Owner GPU run #44920010367](https://github.com/LeviCade/OpenFront-National/actions/runs/44920010367) ran four actual E5 browser processes on one Skybot guest after one dependency installation. The run failed overall *because actual NATIONAL gameplay failed*, not because GPU acquisition or CI setup failed. Artifact #14713027849 contains 25 bounded files (4 mode JSON, one summary JSON and 20 screenshots; 5,860,964-byte GitHub ZIP):
+[Owner GPU run #44920010367](https://github.com/LeviCade/OpenFront-National/actions/runs/44920010367) ran four actual E5 browser processes on one Skybot guest after one dependency installation. The run failed overall _because actual NATIONAL gameplay failed_, not because GPU acquisition or CI setup failed. Artifact #14713027849 contains 25 bounded files (4 mode JSON, one summary JSON and 20 screenshots; 5,860,964-byte GitHub ZIP):
 
 | Mode             | Process | First failure  | Screenshots | Source                                     |
 | ---------------- | ------- | -------------- | ----------: | ------------------------------------------ |
@@ -33,7 +33,7 @@ A trusted external host controller/operator must independently observe and sign 
 
 **Preflight proof** uses E5's signed `payload.version=1` contract, extended with `repository`, `repositoryId`, and `runnerId` (E5 may safely ignore the extra signed fields). It contains source, run, attempt, runner, challenge, bounded `issuedAtMs`/`expiresAtMs` (maximum 120 seconds), host physical GPU and lease facts, and signed guest VirGL backend/WebGL1/WebGL2 renderer and shader pixels. Required host chain: vendor `8086`, device `0412`, driver `i915`, render `/dev/dri/renderD128`, KVM and verified VirGL transport. **E5's short TTL may require trusted refreshed per-mode preflights during four serial browser tests**; the current controller has not demonstrated that broker contract. E6 does not weaken E5's TTL.
 
-**Postflight proof** is a *second detached signature*, captured after GitHub's job completion on the physical host/controller. Required payload:
+**Postflight proof** is a _second detached signature_, captured after GitHub's job completion on the physical host/controller. Required payload:
 
 ```json
 {
@@ -72,7 +72,7 @@ A trusted external host controller/operator must independently observe and sign 
 
 This is **schema documentation, not an actual signed receipt**. The real proof is `{ "payload": { ... }, "signature": "<64-byte Ed25519 signature, base64>" }`; every field, including cleanup, is signed. All ten cleanup facts must be directly observed on the host and true; an absent flag fails. The postflight time must be after job completion and no later than one hour afterward. The host's preflight and postflight GPU identities must agree. A source/run/runner/nonce swap, changed summary, altered or symlinked screenshots, wrong viewport, failed gameplay, absent key enrollment or guest-hosted proof fails closed.
 
-**Production execution boundary:** on an independently controlled host **after the ephemeral guest is gone**, place the independently acquired, access-controlled files in `/etc/skybot-ci/national-gpu-release/` as named by the CLI. The verifier reads the reviewed E5 fingerprint enrollment from the exact checked-out source and requires that fingerprint also be present in host-owned `host-trust-policy.json`. The optional host command `node scripts/national-gpu-ci/verify-independent-release.mjs` emits only a sanitized signed-verdict *verification result* (not a new private signature). It refuses execution under `GITHUB_ACTIONS=true`; no guest-provided trust path argument exists. Production source checkout must itself be verified against the approved immutable commit by the host.
+**Production execution boundary:** on an independently controlled host **after the ephemeral guest is gone**, place the independently acquired, access-controlled files in `/etc/skybot-ci/national-gpu-release/` as named by the CLI. The verifier reads the reviewed E5 fingerprint enrollment from the exact checked-out source and requires that fingerprint also be present in host-owned `host-trust-policy.json`. The optional host command `node scripts/national-gpu-ci/verify-independent-release.mjs` emits only a sanitized signed-verdict _verification result_ (not a new private signature). It refuses execution under `GITHUB_ACTIONS=true`; no guest-provided trust path argument exists. Production source checkout must itself be verified against the approved immutable commit by the host.
 
 **Scope of generated code:** verifier and synthetic tests are ready. The Skybot controller's actual out-of-guest preflight signer, key enrollment and per-run postflight signer/observer, secure evidence handoff, live teardown observation and verified GitHub runner ID are **external dependencies**. No physical host audit has been executed here. A positive synthetic signature test does **not** establish a real host signing service.
 
