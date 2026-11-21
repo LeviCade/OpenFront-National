@@ -50,7 +50,7 @@ function withCanonicalOutcome(game: Game) {
     value: () => [],
     configurable: true,
   });
-  Object.defineProperty(game, "performNationalWarCommand", {
+  Object.defineProperty(game, "performNationalWarCommandWithOutcome", {
     value: outcome,
     configurable: true,
   });

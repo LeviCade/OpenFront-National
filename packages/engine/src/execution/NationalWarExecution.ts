@@ -97,12 +97,10 @@ interface WarGamePort {
       motions: readonly { id: string }[];
     };
   } | null;
-  /**
-   * E1 keeps this existing method name while upgrading its return to an
-   * authenticated, snapshotted WAR outcome. The unmerged baseline returns
-   * void, so E2 does not infer any receipt until the read port also exists.
-   */
-  performNationalWarCommand(
+  /** Existing legacy WAR callers preserve their throwing/void semantics. */
+  performNationalWarCommand(actor: Player, command: CanonicalWarCommand): void;
+  /** E1's *separate* authoritative typed outcome + Game journal port. */
+  performNationalWarCommandWithOutcome?(
     actor: Player,
     command: CanonicalWarCommand,
     requestId?: string | null,
@@ -245,7 +243,10 @@ export class NationalWarExecution implements Execution {
     // Only E1 may decide or journal a canonical rejection. Once its outcome
     // port exists, even inactive actors and invalid sovereign claims reach it.
     // The older void port remains for integration baseline compatibility.
-    const hasJournal = typeof port.nationalWarCommandResults === "function";
+    const withOutcome = port.performNationalWarCommandWithOutcome;
+    const hasJournal =
+      typeof withOutcome === "function" &&
+      typeof port.nationalWarCommandResults === "function";
     if (
       !hasJournal &&
       (!game.hasPlayer(this.actor.id()) ||
@@ -304,7 +305,8 @@ export class NationalWarExecution implements Execution {
     // rejected WAR/peace clicks. Request IDs are correlation, not credentials.
     // E3 may project its authenticated journal; E2 never emits an outcome.
     if (hasJournal) {
-      const result = port.performNationalWarCommand(
+      const result = withOutcome.call(
+        port,
         this.actor,
         this.requestId === null
           ? command
