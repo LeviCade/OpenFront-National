@@ -92,6 +92,9 @@ void test("one pinned installation, one real GPU runner and four serial browser 
     runner,
     /for mode in national-desktop national-mobile legacy-desktop legacy-mobile/,
   );
+  assert.ok(runner.includes('wait-host-proof.mjs "$mode"'));
+  assert.ok(runner.includes("NATIONAL_GPU_ATTESTATION_FILE"));
+  assert.ok(runner.includes("NATIONAL_GPU_ATTESTATION_CHALLENGE"));
   assert.ok(runner.includes("node scripts/national-qa/browser-gameplay.mjs"));
   assert.match(runner, /sanitize-browser-evidence[.]mjs --kind/);
   assert.doesNotMatch(runner, /cat .*log|tail -n|grep .*log/);
