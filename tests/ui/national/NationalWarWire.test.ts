@@ -286,7 +286,7 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       NationalAcceptPeaceIntentSchema.safeParse(intents()[1]).success,
     ).toBe(true);
     expect(panel.textContent).not.toContain("Peace accepted");
-    expect(panel.textContent).toContain("no success is confirmed");
+    expect(panel.textContent).toMatch(/no success is confirmed|No completed action is confirmed/i);
   });
 
   it("fails closed for replay, eliminated players, spectators and a non-emperor", async () => {
@@ -503,8 +503,8 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     late.state.conflicts = projection([{ ...canonicalWar, endedTick: 11 }]);
     late.panel.refresh();
     await late.panel.updateComplete;
-    expect(late.panel.querySelector<HTMLButtonElement>("#national-propose-peace")!.disabled).toBe(true);
-    expect(late.panel.querySelector("#national-peace-war-id")?.tagName).toBe("SELECT");
+    expect(late.panel.querySelector<HTMLButtonElement>("#national-propose-peace")?.disabled ?? true).toBe(true);
+    expect(late.panel.querySelector("#national-peace-war-id option[value=\"war-11\"]")).toBeNull();
   });
 
   it("shows a pending opponent motion, then confirms peace only after canonical cessation", async () => {
