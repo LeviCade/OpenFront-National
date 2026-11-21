@@ -20,11 +20,11 @@ import {
 import { assertNever, simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
-import * as NationalPlanner from "../national/ai/NationalPlanner";
 import {
   deriveNationalWarSides,
   initialNationalPlannerMemory,
   planNationalInterest,
+  recordNationalWarOutcome,
   type NationalPlannerMemory,
 } from "../national/ai/NationalPlanner";
 import {
@@ -33,10 +33,8 @@ import {
 } from "../national/observation/LiveObservation";
 import {
   advanceLastKnown,
-  type NationalObservation,
   type NationalSightMemory,
 } from "../national/observation/NationalObservation";
-import type { NationalWarCommandOutcome } from "../national/politics/NationalGovernanceState";
 import {
   NationSchema,
   nationData,
@@ -73,15 +71,6 @@ type NationalExecutionPlannerMemory = NationalPlannerMemory & {
     readonly retryAfterTick: number;
   }[];
   readonly lastWarOutcomeSequence?: number;
-};
-
-const warOutcomePlanner = NationalPlanner as typeof NationalPlanner & {
-  readonly recordNationalWarOutcome?: (
-    observation: NationalObservation,
-    memory: NationalExecutionPlannerMemory,
-    outcome: NationalWarCommandOutcome,
-    retryTicks?: number,
-  ) => NationalExecutionPlannerMemory;
 };
 
 export class NationExecution implements Execution {
@@ -471,17 +460,14 @@ export class NationExecution implements Execution {
         outcome.commandTargetId !== targetId
       )
         return;
-      // Optional until E3's PR #60 joins E2. No second rejection planner:
-      // E3 owns its bounded blocked-target cooldown and replay sequence.
-      const recordOutcome = warOutcomePlanner.recordNationalWarOutcome;
-      if (recordOutcome !== undefined) {
-        this.nationalPlannerMemory = recordOutcome(
-          observation,
-          this.nationalPlannerMemory ??
-            initialNationalPlannerMemory(player.id()),
-          outcome,
-        );
-      }
+      // R10 E3 is merged. A rejected real Game outcome MUST reach the
+      // sole E3 cooldown/replanning helper; silently skipping that bridge
+      // is no longer a permitted state of the integrated game.
+      this.nationalPlannerMemory = recordNationalWarOutcome(
+        observation,
+        this.nationalPlannerMemory ?? initialNationalPlannerMemory(player.id()),
+        outcome,
+      );
       if (!outcome.accepted) return;
     }
     if (!war.authorizeOffensiveAction(player.id(), targetId)) return;

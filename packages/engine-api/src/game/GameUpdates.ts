@@ -51,6 +51,25 @@ export interface NationalPoliticsViewData {
 }
 
 /**
+ * PRIVATE accession offers for one authenticated human recipient. This is
+ * NOT part of nationalPolitics' public empire roster. E3 selects the viewer
+ * from the registered GameRunner principal, not a caller-supplied observerId.
+ * Every active recipient packet includes offers: [] when no offer survives;
+ * absent entirely for spectators, unverified clients and legacy games.
+ * All IDs are detached public political identities, never secret pact terms.
+ */
+export interface NationalAccessionOffersViewData {
+  readonly version: 1;
+  readonly recipientId: PlayerID;
+  readonly offers: readonly {
+    readonly empireId: string;
+    readonly candidateId: PlayerID;
+    readonly proposerId: PlayerID;
+    readonly recipientId: PlayerID;
+  }[];
+}
+
+/**
  * Single addressed command outcome. The worker MUST select results using its
  * authenticated principal, NOT an observerId supplied by a browser packet.
  * Only that recipient's packet may contain the result. Reason must be a
@@ -63,7 +82,18 @@ export interface NationalCommandResultViewData {
     | "national_found_empire"
     | "national_declare_war"
     | "national_propose_peace"
-    | "national_accept_peace";
+    | "national_accept_peace"
+    | "national_offer_empire"
+    | "national_accept_empire"
+    | "national_transfer_crown"
+    | "national_set_peace_delegation"
+    | "national_found_pact"
+    | "national_invite_pact"
+    | "national_accept_pact"
+    | "national_propose_pact_amendment"
+    | "national_approve_pact_amendment"
+    | "national_betray_pact"
+    | "national_expel_pact";
   readonly accepted: boolean;
   readonly tick: Tick;
   /**
@@ -74,6 +104,12 @@ export interface NationalCommandResultViewData {
   readonly requestId?: string;
   /** Public identifier only, when applicable to the actual command. */
   readonly empireId?: string;
+  /**
+   * E1-verified political target (empire/pact/member as appropriate).
+   * Required by the producing E3 political DTO, absent for Found Empire and
+   * WAR results. It is NOT a user-supplied privileged actor identity.
+   */
+  readonly commandTargetId?: string;
   readonly warId?: string;
   readonly motionId?: string;
   readonly reason?: string;
@@ -84,6 +120,11 @@ export interface GameUpdateViewData {
   updates: GameUpdates;
   /** E1 authoritative public-only politics; E3 emits, E4 consumes. */
   nationalPolitics?: NationalPoliticsViewData;
+  /**
+   * Recipient-only pending accession offers; E3 generates this independently
+   * from the public political view. Never synthesize offers from the roster.
+   */
+  nationalAccessionOffers?: NationalAccessionOffersViewData;
   /**
    * Outcomes scoped to the authenticated recipient of THIS view only.
    * E3 must filter before serialization; never broadcast the E1 journal.
