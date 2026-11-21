@@ -20,11 +20,11 @@ import {
   type Turn,
 } from "@openfront/engine-api/Schemas";
 import { GameRunner } from "@openfront/engine/GameRunner";
+import { encodeNationalViewPayload } from "@openfront/shared/NationalViewWire";
+import type { ServerNationalViewMessage } from "@openfront/shared/WireSchemas";
+import { encodeServerMessage } from "@openfront/shared/ZbinWire";
 import { createHash, randomUUID } from "node:crypto";
 import WebSocket from "ws";
-import { encodeNationalViewPayload } from "@openfront/shared/NationalViewWire";
-import { encodeServerMessage } from "@openfront/shared/ZbinWire";
-import type { ServerNationalViewMessage } from "@openfront/shared/WireSchemas";
 import type { Client } from "../Client";
 
 export interface NationalTickReceipt {
@@ -140,7 +140,10 @@ export class TrustedNationalMatch {
           try {
             const payload = encodeNationalViewPayload(packet);
             const wire = encodeServerMessage(
-              { type: "national_view", payload } satisfies ServerNationalViewMessage,
+              {
+                type: "national_view",
+                payload,
+              } satisfies ServerNationalViewMessage,
               undefined,
             );
             admittedSocket.send(wire);

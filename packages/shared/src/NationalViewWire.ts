@@ -1,3 +1,4 @@
+import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
 /**
  * Authenticated NATIONAL server -> browser frame payload.
  *
@@ -14,7 +15,6 @@ import {
   GameUpdateType,
   type GameUpdateViewData,
 } from "@openfront/engine-api/game/GameUpdates";
-import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
 
 export const NATIONAL_VIEW_VERSION = 1;
 export const NATIONAL_VIEW_MAX_BYTES = 16 * 1024 * 1024;
@@ -30,8 +30,11 @@ const serialBuckets = [
 ] as const;
 
 function numbers(v: unknown, max: number): number[] {
-  if (!Array.isArray(v) || v.length > max ||
-      !v.every((x) => typeof x === "number" && Number.isFinite(x))) {
+  if (
+    !Array.isArray(v) ||
+    v.length > max ||
+    !v.every((x) => typeof x === "number" && Number.isFinite(x))
+  ) {
     throw new Error("NATIONAL invalid packed recipient buffer");
   }
   return v as number[];
@@ -50,7 +53,8 @@ export function encodeNationalViewPayload(packet: GameUpdateViewData): string {
   const updates: JsonRecord = {};
   for (const kind of serialBuckets) {
     const items = packet.updates[kind] ?? [];
-    if (!Array.isArray(items)) throw new Error("NATIONAL update bucket invalid");
+    if (!Array.isArray(items))
+      throw new Error("NATIONAL update bucket invalid");
     updates[kind] = items;
   }
   const politics = packet.nationalPolitics;
@@ -86,11 +90,14 @@ export function encodeNationalViewPayload(packet: GameUpdateViewData): string {
               remainingMs: w.remainingMs,
               blockedByAssetDisposition: w.blockedByAssetDisposition,
             })),
-            victory: politics.victory === null ? null : {
-              sovereignPowerCount: politics.victory.sovereignPowerCount,
-              resolved: politics.victory.resolved,
-              prizes: politics.victory.prizes.map((p) => ({ ...p })),
-            },
+            victory:
+              politics.victory === null
+                ? null
+                : {
+                    sovereignPowerCount: politics.victory.sovereignPowerCount,
+                    resolved: politics.victory.resolved,
+                    prizes: politics.victory.prizes.map((p) => ({ ...p })),
+                  },
           },
         }),
     ...(accession === undefined
@@ -131,8 +138,37 @@ export function encodeNationalViewPayload(packet: GameUpdateViewData): string {
           nationalConflicts: {
             version: conflicts.version,
             recipientId: conflicts.recipientId,
-            layers: conflicts.layers,
-            motions: conflicts.motions,
+            // WAR/public participant terms are enumerated explicitly.
+            // Never copy new raw E1 ledger fields or treaty clauses.
+            layers: conflicts.layers.map((item) => {
+              if (!isRecord(item) || !isRecord(item.first) ||
+                  !isRecord(item.second)) {
+                throw new Error("NATIONAL unverified public WAR layer");
+              }
+              return {
+                id: item.id,
+                scope: item.scope,
+                first: { kind: item.first.kind, id: item.first.id },
+                second: { kind: item.second.kind, id: item.second.id },
+                declaredBy: item.declaredBy,
+                startedTick: item.startedTick,
+                endedTick: item.endedTick,
+              };
+            }),
+            motions: conflicts.motions.map((item) => {
+              if (!isRecord(item)) {
+                throw new Error("NATIONAL unverified peace motion");
+              }
+              return {
+                id: item.id,
+                layerId: item.layerId,
+                proposedBy: item.proposedBy,
+                proposingSide: item.proposingSide,
+                proposedTick: item.proposedTick,
+                acceptedTick: item.acceptedTick,
+                acceptedBy: item.acceptedBy,
+              };
+            }),
           },
         }),
     updates,
@@ -170,17 +206,30 @@ export function decodeNationalViewPayload(payload: string): GameUpdateViewData {
     throw new Error("NATIONAL recipient payload exceeds size limit");
   }
   const value: unknown = JSON.parse(payload);
-  if (!isRecord(value) || value.version !== NATIONAL_VIEW_VERSION ||
-      !Number.isSafeInteger(value.tick) || Number(value.tick) < 0 ||
-      !isRecord(value.updates)) {
+  if (
+    !isRecord(value) ||
+    value.version !== NATIONAL_VIEW_VERSION ||
+    !Number.isSafeInteger(value.tick) ||
+    Number(value.tick) < 0 ||
+    !isRecord(value.updates)
+  ) {
     throw new Error("NATIONAL recipient wire header invalid");
   }
   const legal = new Set([
-    "version", "tick", "nationalPolitics", "nationalAccessionOffers",
-    "nationalCommandResults", "nationalConflicts", "updates",
-    "packedTileUpdates", "packedPlayerUpdates", "packedUnitUpdates",
-    "packedMissileTimers", "playerNameViewData",
-    "tickExecutionDuration", "pendingTurns",
+    "version",
+    "tick",
+    "nationalPolitics",
+    "nationalAccessionOffers",
+    "nationalCommandResults",
+    "nationalConflicts",
+    "updates",
+    "packedTileUpdates",
+    "packedPlayerUpdates",
+    "packedUnitUpdates",
+    "packedMissileTimers",
+    "playerNameViewData",
+    "tickExecutionDuration",
+    "pendingTurns",
   ]);
   if (Object.keys(value).some((k) => !legal.has(k))) {
     throw new Error("NATIONAL recipient wire contains forbidden field");

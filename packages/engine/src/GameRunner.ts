@@ -46,15 +46,15 @@ import {
 import { collectLiveNationalObservation } from "./national/observation/LiveObservation";
 import { NationalOutboundFilter } from "./national/observation/NationalOutbound";
 import {
-  NationalServerRecipientSession,
-  type TrustedNationalServerConnection,
-} from "./national/observation/NationalServerOutbound";
-import {
   actorNationalResults,
   emptyNationalResultDeliveryState,
   initialNationalResultDeliveryState,
   type NationalResultDeliveryState,
 } from "./national/observation/NationalPoliticalPacket";
+import {
+  NationalServerRecipientSession,
+  type TrustedNationalServerConnection,
+} from "./national/observation/NationalServerOutbound";
 import {
   readSnapshotHeader,
   restoreGame,

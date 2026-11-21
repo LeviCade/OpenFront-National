@@ -24,20 +24,25 @@ import {
   encodeNationalViewPayload,
 } from "@openfront/shared/NationalViewWire";
 import { decodeServerMessage } from "@openfront/shared/ZbinWire";
-import { Client } from "../../src/server/Client";
-import { TrustedNationalMatch } from "../../src/server/national/TrustedNationalMatch";
+import { describe, expect, it } from "vitest";
 import {
   readNationalAccessionOffers,
   readNationalPoliticalResults,
 } from "../../src/client/NationalDiplomacyState";
-import { describe, expect, it } from "vitest";
+import { Client } from "../../src/server/Client";
+import { TrustedNationalMatch } from "../../src/server/national/TrustedNationalMatch";
 import { setup } from "../util/Setup";
 import { TestConfig } from "../util/TestConfig";
 
 const A = new PlayerInfo("Emperor", PlayerType.Human, "C5CLIENTA", "C5NATIONA");
 const B = new PlayerInfo("Invitee", PlayerType.Human, "C5CLIENTB", "C5NATIONB");
 const C = new PlayerInfo("Foreign", PlayerType.Human, "C5CLIENTC", "C5NATIONC");
-const D = new PlayerInfo("Candidate", PlayerType.Human, "C5CLIENTD", "C5NATIOND");
+const D = new PlayerInfo(
+  "Candidate",
+  PlayerType.Human,
+  "C5CLIENTD",
+  "C5NATIOND",
+);
 const PEOPLE = [A, B, C, D];
 const ID = "c5_real_empire";
 const MATCH = "C5_TRUSTED_FANOUT";
@@ -57,7 +62,9 @@ function admitted(p: PlayerInfo): { client: Client; socket: TestSocket } {
   const socket: TestSocket = {
     readyState: 1,
     frames: [],
-    send(bytes) { this.frames.push(bytes); },
+    send(bytes) {
+      this.frames.push(bytes);
+    },
   };
   const client = new Client(
     p.clientID!,
@@ -126,7 +133,10 @@ function latest(s: TestSocket): GameUpdateViewData {
   return all[all.length - 1];
 }
 function action(
-  type: "national_offer_empire" | "national_accept_empire" | "national_transfer_crown",
+  type:
+    | "national_offer_empire"
+    | "national_accept_empire"
+    | "national_transfer_crown",
   who: string,
   suffix: string,
 ) {
@@ -148,12 +158,14 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
   it("uses ONE E3 per-socket projector for candidate→emperor and emperor→candidate authenticated delivery", async () => {
     const { authority, game, sockets, observed } = await realMatch();
     const [a, b, c, d] = sockets;
-    expect(authority.submit(a.client, {
-      type: "national_found_empire",
-      empireId: ID,
-      requestId: "found_class5_a",
-      clientID: b.client.clientID, // malicious actor assertion gets stripped
-    })).toBe(true);
+    expect(
+      authority.submit(a.client, {
+        type: "national_found_empire",
+        empireId: ID,
+        requestId: "found_class5_a",
+        clientID: b.client.clientID, // malicious actor assertion gets stripped
+      }),
+    ).toBe(true);
     twice(authority);
     expect(game.nationalPoliticalAuthority()?.emperorOf(ID)).toBe(A.id);
     const publicA = latest(a.socket).nationalPolitics;
@@ -164,32 +176,55 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
     ]);
     // Only emperor A may see A's founding receipt.
     expect(latest(a.socket).nationalCommandResults).toEqual([
-      expect.objectContaining({ actorId: A.id, recipientId: A.id, accepted: true }),
+      expect.objectContaining({
+        actorId: A.id,
+        recipientId: A.id,
+        accepted: true,
+      }),
     ]);
     expect(latest(b.socket).nationalCommandResults).toBeUndefined();
     expect(latest(c.socket).nationalCommandResults).toBeUndefined();
 
     // RECIPROCAL D→A: D remains the candidate; A is the recipient.
-    expect(authority.submit(d.client, action("national_offer_empire", D.id, "1"))).toBe(true);
+    expect(
+      authority.submit(d.client, action("national_offer_empire", D.id, "1")),
+    ).toBe(true);
     twice(authority);
     const offeredA = latest(a.socket);
     expect(offeredA.nationalAccessionOffers).toMatchObject({
       recipientId: A.id,
-      offers: [{ empireId: ID, candidateId: D.id, proposerId: D.id, recipientId: A.id }],
+      offers: [
+        {
+          empireId: ID,
+          candidateId: D.id,
+          proposerId: D.id,
+          recipientId: A.id,
+        },
+      ],
     });
-    expect(readNationalAccessionOffers(offeredA.nationalAccessionOffers, A.id)?.offers).toHaveLength(1);
-    expect(readNationalAccessionOffers(offeredA.nationalAccessionOffers, C.id)).toBeNull();
+    expect(
+      readNationalAccessionOffers(offeredA.nationalAccessionOffers, A.id)
+        ?.offers,
+    ).toHaveLength(1);
+    expect(
+      readNationalAccessionOffers(offeredA.nationalAccessionOffers, C.id),
+    ).toBeNull();
     expect(latest(b.socket).nationalAccessionOffers?.offers).toEqual([]);
     expect(latest(c.socket).nationalAccessionOffers?.offers).toEqual([]);
     expect(latest(d.socket).nationalCommandResults).toEqual([
       expect.objectContaining({
-        type: "national_offer_empire", actorId: D.id, recipientId: D.id, accepted: true,
+        type: "national_offer_empire",
+        actorId: D.id,
+        recipientId: D.id,
+        accepted: true,
       }),
     ]);
     expect(offeredA.nationalCommandResults).toBeUndefined();
 
     // E2 queues the emperor's accepted intent. Receipt appears ONLY after E1.
-    expect(authority.submit(a.client, action("national_accept_empire", D.id, "2"))).toBe(true);
+    expect(
+      authority.submit(a.client, action("national_accept_empire", D.id, "2")),
+    ).toBe(true);
     authority.tick();
     expect(latest(a.socket).nationalAccessionOffers?.offers).toHaveLength(1);
     expect(latest(a.socket).nationalCommandResults).toBeUndefined();
@@ -199,34 +234,51 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
       (r) => r.requestId === "np_" + "2".repeat(32),
     );
     expect(accepted).toMatchObject({
-      actorId: A.id, recipientId: A.id, type: "national_accept_empire",
-      commandTargetId: ID, accepted: true,
+      actorId: A.id,
+      recipientId: A.id,
+      type: "national_accept_empire",
+      commandTargetId: ID,
+      accepted: true,
     });
-    expect(readNationalPoliticalResults(consentA.nationalCommandResults, A.id)).toHaveLength(1);
+    expect(
+      readNationalPoliticalResults(consentA.nationalCommandResults, A.id),
+    ).toHaveLength(1);
     expect(consentA.nationalAccessionOffers?.offers).toEqual([]);
     expect(game.nationalPoliticalAuthority()?.membersOf(ID)).toContain(D.id);
     expect(latest(c.socket).nationalCommandResults).toBeUndefined();
 
     // NORMAL A→B: candidate B receives A's offer; emperor A does not.
-    expect(authority.submit(a.client, action("national_offer_empire", B.id, "3"))).toBe(true);
+    expect(
+      authority.submit(a.client, action("national_offer_empire", B.id, "3")),
+    ).toBe(true);
     twice(authority);
     const offeredB = latest(b.socket);
     expect(offeredB.nationalAccessionOffers?.offers).toEqual([
       expect.objectContaining({
-        candidateId: B.id, proposerId: A.id, recipientId: B.id,
+        candidateId: B.id,
+        proposerId: A.id,
+        recipientId: B.id,
       }),
     ]);
-    expect(readNationalAccessionOffers(offeredB.nationalAccessionOffers, B.id)?.offers).toHaveLength(1);
+    expect(
+      readNationalAccessionOffers(offeredB.nationalAccessionOffers, B.id)
+        ?.offers,
+    ).toHaveLength(1);
     expect(latest(a.socket).nationalAccessionOffers?.offers).toEqual([]);
     expect(latest(c.socket).nationalAccessionOffers?.offers).toEqual([]);
-    expect(authority.submit(b.client, action("national_accept_empire", B.id, "4"))).toBe(true);
+    expect(
+      authority.submit(b.client, action("national_accept_empire", B.id, "4")),
+    ).toBe(true);
     twice(authority);
     expect(game.nationalPoliticalAuthority()?.membersOf(ID)).toContain(B.id);
     expect(latest(b.socket).nationalAccessionOffers?.offers).toEqual([]);
     expect(latest(b.socket).nationalCommandResults).toEqual([
       expect.objectContaining({
-        actorId: B.id, recipientId: B.id, type: "national_accept_empire",
-        commandTargetId: ID, accepted: true,
+        actorId: B.id,
+        recipientId: B.id,
+        type: "national_accept_empire",
+        commandTargetId: ID,
+        accepted: true,
       }),
     ]);
     expect(latest(d.socket).nationalCommandResults).toBeUndefined();
@@ -234,10 +286,14 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
     expect(observed.get(b.client)?.length).toBe(b.socket.frames.length);
 
     // Active current invitation C must be revoked after A→D crown transfer.
-    expect(authority.submit(a.client, action("national_offer_empire", C.id, "5"))).toBe(true);
+    expect(
+      authority.submit(a.client, action("national_offer_empire", C.id, "5")),
+    ).toBe(true);
     twice(authority);
     expect(latest(c.socket).nationalAccessionOffers?.offers).toHaveLength(1);
-    expect(authority.submit(a.client, action("national_transfer_crown", D.id, "6"))).toBe(true);
+    expect(
+      authority.submit(a.client, action("national_transfer_crown", D.id, "6")),
+    ).toBe(true);
     twice(authority);
     expect(game.nationalPoliticalAuthority()?.emperorOf(ID)).toBe(D.id);
     expect(latest(c.socket).nationalAccessionOffers?.offers).toEqual([]);
@@ -251,11 +307,16 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
     authority.tick();
     const countB = b.socket.frames.length;
     const forgedNext: TestSocket = {
-      readyState: 1, frames: [],
-      send(bytes) { this.frames.push(bytes); },
+      readyState: 1,
+      frames: [],
+      send(bytes) {
+        this.frames.push(bytes);
+      },
     };
     b.client.ws = forgedNext as unknown as Client["ws"]; // same client ID, DIFFERENT connection
-    expect(authority.submit(b.client, action("national_offer_empire", A.id, "7"))).toBe(false);
+    expect(
+      authority.submit(b.client, action("national_offer_empire", A.id, "7")),
+    ).toBe(false);
     authority.tick();
     expect(b.socket.frames.length).toBe(countB);
     expect(forgedNext.frames).toHaveLength(0);
@@ -267,7 +328,9 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
     c.client.spectator = true;
     authority.tick();
     expect(c.socket.frames.length).toBe(countC);
-    expect(authority.submit(c.client, action("national_offer_empire", A.id, "8"))).toBe(false);
+    expect(
+      authority.submit(c.client, action("national_offer_empire", A.id, "8")),
+    ).toBe(false);
     c.client.spectator = false;
     authority.tick();
     expect(c.socket.frames.length).toBe(countC);
@@ -276,7 +339,9 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
     a.socket.readyState = 3;
     authority.tick();
     expect(a.socket.frames.length).toBe(countA);
-    expect(authority.submit(a.client, action("national_offer_empire", C.id, "9"))).toBe(false);
+    expect(
+      authority.submit(a.client, action("national_offer_empire", C.id, "9")),
+    ).toBe(false);
     a.socket.readyState = 1;
     authority.tick();
     expect(a.socket.frames.length).toBe(countA);
@@ -287,10 +352,13 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
   it("the actual BINARY socket payload excludes raw host snapshots, credentials, WAR state, hidden packed buffers and forged fields", async () => {
     const { authority, sockets } = await realMatch();
     const [a, b, c] = sockets;
-    expect(authority.submit(a.client, {
-      type: "national_found_empire", empireId: ID,
-      requestId: "found_private_c5",
-    })).toBe(true);
+    expect(
+      authority.submit(a.client, {
+        type: "national_found_empire",
+        empireId: ID,
+        requestId: "found_private_c5",
+      }),
+    ).toBe(true);
     twice(authority);
     const packetB = latest(b.socket);
     const packetC = latest(c.socket);
@@ -302,7 +370,7 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
     expect(packetB).not.toHaveProperty("gameSnapshot");
     expect(packetB).not.toHaveProperty("privateTreatyTerms");
 
-    const msg = decodeServerMessage(b.socket.frames.at(-1)!, undefined);
+    const msg = decodeServerMessage(b.socket.frames[b.socket.frames.length - 1], undefined);
     expect(msg.type).toBe("national_view");
     if (msg.type !== "national_view") throw new Error("wrong wire type");
     expect(msg.payload).not.toContain("verified-independent-");
@@ -316,29 +384,67 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
       claims: { bearer: "SECRET_CREDENTIAL_CLASS5" },
       privateTreatyTerms: { text: "SECRET_PACT_CLASS5" },
       nationalWarState: { ledger: "SECRET_WAR_CLASS5" },
+      // Even inside an otherwise public E3 WAR/peace projection, arbitrary
+      // treaty clauses and host-only WAR internals may NEVER ride the wire.
+      nationalConflicts: {
+        version: 1 as const,
+        recipientId: B.id,
+        layers: [{
+          id: "public-war", scope: "national",
+          first: { kind: "nation", id: A.id },
+          second: { kind: "nation", id: C.id },
+          declaredBy: A.id, startedTick: 1, endedTick: null,
+          privateClause: "SECRET_NESTED_WAR_TERMS",
+        }],
+        motions: [{
+          id: "public-motion", layerId: "public-war", proposedBy: A.id,
+          proposingSide: 0, proposedTick: 2, acceptedTick: null,
+          acceptedBy: null, privateTerms: "SECRET_NESTED_PEACE_TERMS",
+        }],
+      },
       packedAttackUpdates: new Float64Array([123456789]),
       gameSnapshot: { allHiddenTroops: 777777 },
     };
     const encoded = encodeNationalViewPayload(poison);
     for (const secret of [
-      "SECRET_CREDENTIAL_CLASS5", "SECRET_PACT_CLASS5",
-      "SECRET_WAR_CLASS5", "123456789", "777777", "gameSnapshot",
-      "privateTreatyTerms", "packedAttackUpdates",
-    ]) expect(encoded).not.toContain(secret);
+      "SECRET_CREDENTIAL_CLASS5",
+      "SECRET_PACT_CLASS5",
+      "SECRET_WAR_CLASS5",
+      "SECRET_NESTED_WAR_TERMS",
+      "SECRET_NESTED_PEACE_TERMS",
+      "123456789",
+      "777777",
+      "gameSnapshot",
+      "privateTreatyTerms",
+      "packedAttackUpdates",
+    ])
+      expect(encoded).not.toContain(secret);
     const decoded = decodeNationalViewPayload(encoded);
     expect(decoded.nationalPolitics).toEqual(packetB.nationalPolitics);
     expect(decoded.packedTileUpdates).toBeInstanceOf(Uint32Array);
-    expect(() => decodeNationalViewPayload(JSON.stringify({
-      ...JSON.parse(encoded),
-      gameSnapshot: "PRIVATE_CLASS5",
-    }))).toThrow("forbidden field");
-    expect(() => decodeNationalViewPayload(JSON.stringify({
-      ...JSON.parse(encoded),
-      updates: { "999": [{ secret: "FOREIGN" }] },
-    }))).toThrow("update type forbidden");
-    expect(() => decodeNationalViewPayload(JSON.stringify({
-      ...JSON.parse(encoded),
-      packedTileUpdates: [9, 10, 11],
-    }))).toThrow("tile update invalid");
+    expect(() =>
+      decodeNationalViewPayload(
+        JSON.stringify({
+          ...JSON.parse(encoded),
+          gameSnapshot: "PRIVATE_CLASS5",
+        }),
+      ),
+    ).toThrow("forbidden field");
+    expect(() =>
+      decodeNationalViewPayload(
+        JSON.stringify({
+          ...JSON.parse(encoded),
+          updates: { "999": [{ secret: "FOREIGN" }] },
+        }),
+      ),
+    ).toThrow("update type forbidden");
+    expect(() =>
+      decodeNationalViewPayload(
+        JSON.stringify({
+          ...JSON.parse(encoded),
+          packedTileUpdates: [9, 10, 11],
+        }),
+      ),
+    ).toThrow("tile update invalid");
   });
 });
