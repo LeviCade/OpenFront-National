@@ -20,7 +20,7 @@ The accepted combat backend is `GameRunner` → server-stamped `Executor` → `N
 
 The two bots are real `NationExecution` instances, never simulated planner outputs. Each uses `collectLiveNationalObservation(game, ownPlayerId)`, calls E3's `planNationalInterest`, invokes **`Game.performNationalWarCommandWithOutcome`** for a legal observed frontier, feeds the returned full `NationalWarCommandOutcome` unchanged to E3's `recordNationalWarOutcome(observation, previousMemory, receipt)`, and queues existing `AttackExecution` **only** on an accepted and still-current Game-authorized WAR.
 
-E3 exclusively owns rejected-target selection and its bounded 180-tick cooldown (max 16 entries). E2 owns the execution hook, snapshot codec and actual attack. The execution codec persists optional `rejectedWarTargets` and `lastWarOutcomeSequence` from E3 without altering the WAR ledger. Public WAR-start/end observation can wake the E3 event-aware planner before its normal cadence; private peace motion IDs, enemy hidden troops, or nonrecipient command receipts cannot.
+E3 exclusively owns rejected-target selection and its bounded 180-tick cooldown (max 16 entries). E2 owns the execution hook, snapshot codec and actual attack. The execution codec persists optional `rejectedWarTargets` and `lastWarOutcomeSequence` from E3 without altering the WAR ledger. Public WAR-start/end observation is polled within five ticks, waking the E3 event-aware planner before its normal 30-tick cadence; private peace motion IDs, enemy hidden troops, or nonrecipient command receipts cannot.
 
 ## Verification map
 

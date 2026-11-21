@@ -341,9 +341,16 @@ export class NationExecution implements Execution {
   private tickNational(ticks: number): void {
     const player = this.player;
     if (player === null || !player.hasSpawned()) return;
-    // The E3 planner itself limits ordinary cadence. An authenticated
-    // public WAR transition may wake it early, so collect only this bot's
-    // filtered live observation before invoking that existing decision code.
+    // The E3 planner owns cadence and public-event reactions. Poll only
+    // every fifth tick before the ordinary deadline: a bounded 0–4 tick
+    // public-WAR reaction delay without a costly full observation on every
+    // simulation tick. The observation itself stays E3-principal-filtered.
+    if (
+      this.nationalPlannerMemory !== null &&
+      ticks < this.nationalPlannerMemory.nextPlanningTick &&
+      ticks % 5 !== 0
+    )
+      return;
     const verified = collectLiveNationalObservation(this.mg, player.id());
     const observation = verified.observation;
     const remembered = advanceLastKnown(
