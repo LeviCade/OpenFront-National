@@ -66,7 +66,6 @@ function publicWar(game: Game, observer: string | null) {
     game,
     observer,
     game.ticks(),
-    game.nationalPublicPoliticalView() ?? undefined,
   );
 }
 
@@ -149,6 +148,39 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
         acceptedTick: game.ticks(),
       }),
     ]);
+  });
+
+  it("revokes pending-motion intelligence on crown transfer without hiding public wars", async () => {
+    const game = await activeWar();
+    game.performNationalWarCommand(game.player(north.id), {
+      kind: "propose-peace",
+      motionId,
+      warId,
+    });
+    game.performNationalCommand(game.player(north.id), {
+      kind: "found-empire",
+      empireId: "r9_sovereign",
+    });
+    game.performNationalCommand(game.player(north.id), {
+      kind: "offer-empire",
+      empireId: "r9_sovereign",
+      candidateId: third.id,
+    });
+    game.performNationalCommand(game.player(third.id), {
+      kind: "accept-empire",
+      empireId: "r9_sovereign",
+      candidateId: third.id,
+    });
+    expect(publicWar(game, north.id)?.motions).toHaveLength(1);
+    expect(publicWar(game, third.id)?.motions).toEqual([]);
+    game.performNationalCommand(game.player(north.id), {
+      kind: "transfer-crown",
+      empireId: "r9_sovereign",
+      successorId: third.id,
+    });
+    expect(publicWar(game, north.id)?.motions).toEqual([]);
+    expect(publicWar(game, third.id)?.motions[0]?.id).toBe(motionId);
+    expect(publicWar(game, north.id)?.layers[0]?.id).toBe(warId);
   });
 
   it("GameRunner emits real public conflicts but never emits command success from war roster alone", async () => {

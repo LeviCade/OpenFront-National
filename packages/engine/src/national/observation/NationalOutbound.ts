@@ -141,7 +141,6 @@ export function projectNationalPublicConflict(
   game: Game,
   actorId: string | null,
   tick: number,
-  politics: NationalPublicPoliticalView | undefined,
 ): NationalPublicConflictView | undefined {
   if (!game.config().nationalMode()) return undefined;
   const snapshot = game.nationalWarState();
@@ -185,15 +184,33 @@ export function projectNationalPublicConflict(
   }
   layers.sort((a, b) => a.id.localeCompare(b.id));
 
-  const onSide = (
-    side: { readonly kind: "nation" | "empire"; readonly id: string },
-  ) =>
-    actorId !== null &&
-    (side.kind === "nation"
-      ? side.id === actorId
-      : (politics?.empires.find((e) => e.id === side.id)?.memberIds.includes(
-          actorId,
-        ) ?? false));
+  const authority = game.nationalPoliticalAuthority();
+  /** Match the EXACT E2 WarLedger.authorizedSide rules for peace.
+   * Membership alone never authorizes seeing confidential peace motions. */
+  const canNegotiate = (layer: (typeof snapshot.wars.layers)[number]) => {
+    if (
+      actorId === null ||
+      authority === null ||
+      !authority.nationAlive(actorId)
+    )
+      return false;
+    const authorizedSide = (
+      side: { readonly kind: "nation" | "empire"; readonly id: string },
+    ): boolean => {
+      if (layer.scope === "imperial")
+        return side.kind === "nation"
+          ? side.id === actorId
+          : authority.emperorOf(side.id) === actorId;
+      if (side.kind !== "nation") return false;
+      const empireId = authority.empireOf(side.id);
+      if (empireId === null) return side.id === actorId;
+      return (
+        authority.emperorOf(empireId) === actorId ||
+        (side.id === actorId && authority.maySettleNational(side.id))
+      );
+    };
+    return authorizedSide(layer.first) || authorizedSide(layer.second);
+  };
   const motions: NationalPublicConflictView["motions"][number][] = [];
   const motionIds = new Set<string>();
   for (const motion of snapshot.wars.motions) {
@@ -204,7 +221,7 @@ export function projectNationalPublicConflict(
     )
       continue;
     const layer = visibleLayers.get(motion.layerId);
-    if (!layer || (!onSide(layer.first) && !onSide(layer.second))) continue;
+    if (!layer || !canNegotiate(layer)) continue;
     if (
       !publicId(motion.id) ||
       !publicId(motion.layerId) ||
@@ -535,7 +552,6 @@ export class NationalOutboundFilter {
       game,
       this.observerId,
       data.tick,
-      publicPoliticalView,
     );
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
