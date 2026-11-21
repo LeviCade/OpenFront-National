@@ -995,6 +995,7 @@ export class RadialMenu implements Controller {
     this.isTransitioning = false;
 
     this.menuElement.style("display", "none");
+    this.menuElement.attr("data-target-player-id", null);
     this.isVisible = false;
     this.selectedItemId = null;
     this.hideTooltip();
@@ -1138,6 +1139,20 @@ export class RadialMenu implements Controller {
 
   public setParams(params: MenuElementParams) {
     this.params = params;
+    // The radial target identity describes the Game-owned tile beneath the
+    // actual pointer, never an addressable client-selected player ID.
+    // Only a live NATIONAL match exposes this read-only locator.
+    const config = params.game.config();
+    const owner = params.game.owner(params.tile);
+    const authoritativeTarget =
+      config.gameConfig().nationalMode === true &&
+      !config.isReplay() &&
+      owner.isPlayer() &&
+      params.selected !== null &&
+      owner.id() === params.selected.id()
+        ? owner.id()
+        : null;
+    this.menuElement?.attr("data-target-player-id", authoritativeTarget);
   }
 
   public getDefaultCenterIconSize(): number {
