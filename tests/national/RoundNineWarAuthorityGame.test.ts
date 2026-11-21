@@ -205,13 +205,16 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
       empireId: "r9-empire",
       candidateId: B,
     });
-    const attempted = game.performNationalWarCommandWithOutcome(game.player(B), {
-      kind: "declare-imperial",
-      warId: "r9-before-crown",
-      aggressor: { kind: "empire", id: "r9-empire" },
-      target: { kind: "nation", id: C },
-      requestId: "r9-before-transfer",
-    });
+    const attempted = game.performNationalWarCommandWithOutcome(
+      game.player(B),
+      {
+        kind: "declare-imperial",
+        warId: "r9-before-crown",
+        aggressor: { kind: "empire", id: "r9-empire" },
+        target: { kind: "nation", id: C },
+        requestId: "r9-before-transfer",
+      },
+    );
     expect(attempted.accepted).toBe(false);
     expect(game.nationalWarAuthority()?.authorizeOffensiveAction(B, C)).toBe(
       false,
@@ -359,5 +362,4 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
     ).toThrow(/reused foreign request ID/);
     expect(restored.snapshot()).toEqual(before);
   });
-
 });

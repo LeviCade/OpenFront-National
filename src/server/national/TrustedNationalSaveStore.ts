@@ -186,10 +186,7 @@ export interface TrustedNationalWarGamePort<
   Outcome,
 > extends TrustedHostGamePort {
   playerByClientID(clientID: ClientID): Actor | null | undefined;
-  performNationalWarCommandWithOutcome(
-    actor: Actor,
-    command: Command,
-  ): Outcome;
+  performNationalWarCommandWithOutcome(actor: Actor, command: Command): Outcome;
   nationalWarCommandResults(observer: Actor): readonly Outcome[];
 }
 

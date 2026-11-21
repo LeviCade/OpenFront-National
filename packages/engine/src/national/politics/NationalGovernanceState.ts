@@ -492,19 +492,20 @@ export class NationalGovernanceState {
         throw new Error("NATIONAL journal: invalid or future receipt");
       const isWar = warCommandKind.safeParse(receipt.commandKind).success;
       if (
-        isWar &&
-        (receipt.recipientId !== receipt.actorId ||
-          !warReason.safeParse(receipt.reason).success ||
-          (receipt.accepted &&
-            (receipt.warId === undefined ||
-              (receipt.commandKind === "national_propose_peace" &&
-                receipt.motionId === undefined) ||
-              (receipt.commandKind === "national_accept_peace" &&
-                receipt.motionId === undefined))) ||
-          (!receipt.accepted &&
-            (receipt.warId !== undefined || receipt.motionId !== undefined)) ||
-          (receipt.commandKind === "national_declare_war" &&
-            receipt.motionId !== undefined)) ||
+        (isWar &&
+          (receipt.recipientId !== receipt.actorId ||
+            !warReason.safeParse(receipt.reason).success ||
+            (receipt.accepted &&
+              (receipt.warId === undefined ||
+                (receipt.commandKind === "national_propose_peace" &&
+                  receipt.motionId === undefined) ||
+                (receipt.commandKind === "national_accept_peace" &&
+                  receipt.motionId === undefined))) ||
+            (!receipt.accepted &&
+              (receipt.warId !== undefined ||
+                receipt.motionId !== undefined)) ||
+            (receipt.commandKind === "national_declare_war" &&
+              receipt.motionId !== undefined))) ||
         (!isWar &&
           (receipt.recipientId !== undefined ||
             receipt.warId !== undefined ||
