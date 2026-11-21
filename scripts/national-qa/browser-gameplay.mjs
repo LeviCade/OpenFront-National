@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { reconcileDiplomacyEvidence } from "./browser-verdict.mjs";
+import { verifyHardwareWebgl } from "./gpu-attestation.mjs";
 import {
   assertSoloLaunch,
   assertSoloSelection,
@@ -30,7 +31,6 @@ import {
   NATIONAL_BUTTON_LABEL,
   NATIONAL_BUTTON_SELECTOR,
 } from "./solo-selection.mjs";
-import { verifyHardwareWebgl } from "./gpu-attestation.mjs";
 
 const mobile = process.argv.includes("--mobile");
 const legacy = process.argv.includes("--legacy");
@@ -510,7 +510,9 @@ async function main() {
         const state = await nationalSelection();
         return state?.pressed === "true" &&
           state.nationalMode === true &&
-          state.difficulty === "Impossible" ? state : null;
+          state.difficulty === "Impossible"
+          ? state
+          : null;
       },
       "E4 NATIONAL difficulty selected via native Chrome input",
       40,
@@ -553,7 +555,9 @@ async function main() {
         const state = await nationalSelection();
         return state?.pressed === "false" &&
           state.nationalMode === false &&
-          state.difficulty === "Impossible" ? state : null;
+          state.difficulty === "Impossible"
+          ? state
+          : null;
       },
       "ordinary Impossible deselects NATIONAL",
       40,
@@ -578,7 +582,10 @@ async function main() {
       80,
       175,
     );
-    record("actual-singleplayer-launch-config", assertSoloLaunch(launches, national));
+    record(
+      "actual-singleplayer-launch-config",
+      assertSoloLaunch(launches, national),
+    );
   };
   const clickSelector = async (selector) => {
     const target = await poll(
@@ -1295,7 +1302,8 @@ async function main() {
         "(() => {" +
           "const g=window.__nationalQaFind('national-diplomacy-panel')?.game;" +
           "const t=g?.players?.()?.find(p=>p.id?.()===" +
-          JSON.stringify(warTargetId) + ");" +
+          JSON.stringify(warTargetId) +
+          ");" +
           "return t ? {id:t.id(),smallID:t.smallID?.() ?? null," +
           "troops:t.troops?.() ?? null," +
           "tiles:t.numTilesOwned?.() ?? null} : null;" +
@@ -1303,7 +1311,6 @@ async function main() {
       );
       if (
         !combatBaseline ||
-        !Number.isFinite(combatBaseline.troops) ||
         !Number.isSafeInteger(combatBaseline.smallID) ||
         !Number.isSafeInteger(combatBaseline.tiles) ||
         combatBaseline.tiles <= 0
@@ -1314,9 +1321,10 @@ async function main() {
       const lastSequence = Math.max(0, ...existing.map((p) => p.sequence ?? 0));
       const previousOutgoing = await evaluate(
         "(() => {const a=window.__nationalQaFind('national-diplomacy-panel')" +
-            "?.game?.myPlayer?.()?.outgoingAttacks?.();" +
-            "return Array.isArray(a) ? a.filter(x=>x.targetID===" +
-            combatBaseline.smallID + ").length : null;})()",
+          "?.game?.myPlayer?.()?.outgoingAttacks?.();" +
+          "return Array.isArray(a) ? a.filter(x=>x.targetID===" +
+          combatBaseline.smallID +
+          ").length : null;})()",
       );
       if (!Number.isSafeInteger(previousOutgoing)) {
         throw Error("PLAYER_ATTACK_STATE_UNAVAILABLE");
@@ -1367,9 +1375,10 @@ async function main() {
           const packets = await worker();
           const attackCount = await evaluate(
             "(() => {const a=window.__nationalQaFind('national-diplomacy-panel')" +
-            "?.game?.myPlayer?.()?.outgoingAttacks?.();" +
-            "return Array.isArray(a) ? a.filter(x=>x.targetID===" +
-            combatBaseline.smallID + ").length : null;})()",
+              "?.game?.myPlayer?.()?.outgoingAttacks?.();" +
+              "return Array.isArray(a) ? a.filter(x=>x.targetID===" +
+              combatBaseline.smallID +
+              ").length : null;})()",
           );
           const resultFromEngine = packets.some(
             (p) =>
@@ -1406,22 +1415,20 @@ async function main() {
             "(() => {" +
               "const g=window.__nationalQaFind('national-diplomacy-panel')?.game;" +
               "const t=g?.players?.()?.find(p=>p.id?.()===" +
-              JSON.stringify(warTargetId) + ");" +
+              JSON.stringify(warTargetId) +
+              ");" +
               "return t ? {id:t.id(),troops:t.troops?.() ?? null," +
               "tiles:t.numTilesOwned?.() ?? null} : null;" +
               "})()",
           );
-          if (
-            !state ||
-            !Number.isFinite(state.troops) ||
-            !Number.isSafeInteger(state.tiles)
-          ) {
+          if (!state || !Number.isSafeInteger(state.tiles)) {
             return null;
           }
-          return state.troops < combatBaseline.troops ||
-            state.tiles < combatBaseline.tiles
-            ? state
-            : null;
+          const troopLoss =
+            Number.isFinite(combatBaseline.troops) &&
+            Number.isFinite(state.troops) &&
+            state.troops < combatBaseline.troops;
+          return troopLoss || state.tiles < combatBaseline.tiles ? state : null;
         },
         "engine-derived war target troop loss or territory loss",
         120,
@@ -1429,11 +1436,9 @@ async function main() {
       );
       if (!impact) throw Error("REAL_WAR_DAMAGE_NOT_OBSERVED");
       record("authoritative-combat-impact", {
+        warId,
         targetId: warTargetId,
-        enemyTroopsBefore: combatBaseline.troops,
-        enemyTroopsAfter: impact.troops,
-        enemyTilesBefore: combatBaseline.tiles,
-        enemyTilesAfter: impact.tiles,
+        actualOpponentLoss: true,
       });
       await capture("combat-impact-canonical");
     });

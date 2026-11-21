@@ -84,9 +84,9 @@ describe("R10 E5 actual E4 Solo difficulty selector contract", () => {
   it("detects real button activation and ordinary Impossible reverses selection", () => {
     const fixture = createNestedSolo();
     fixture.national.click();
-    expect(
-      assertSoloSelection(describeSoloSelection(fixture.root), true),
-    ).toBe(true);
+    expect(assertSoloSelection(describeSoloSelection(fixture.root), true)).toBe(
+      true,
+    );
     expect(fixture.modal.selectedDifficulty).toBe("Impossible");
     fixture.normal.click();
     expect(

@@ -193,14 +193,11 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
   const firstEventFailure = Array.isArray(report?.events)
     ? report.events.find(
         (event) =>
-          event?.name === "stage-failed" &&
-          typeof event.stage === "string",
+          event?.name === "stage-failed" && typeof event.stage === "string",
       )
     : null;
   const firstError = Array.isArray(report?.errors)
-    ? report.errors.find(
-        (error) => error && typeof error.stage === "string",
-      )
+    ? report.errors.find((error) => error && typeof error.stage === "string")
     : null;
   const lastError = firstError;
   const failedStage =
@@ -284,14 +281,13 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
       ].find(([, pattern]) => pattern.test(message));
       return match?.[0] ?? (lastError ? "UNCLASSIFIED_STAGE_FAILURE" : null);
     })(),
-    failureClass:
-      !report
-        ? "REPORT_MISSING"
-        : code !== 0
-          ? "GAMEPLAY_STAGE_FAILED"
-          : missingStages.length
-            ? "REQUIRED_STAGES_MISSING"
-            : null,
+    failureClass: !report
+      ? "REPORT_MISSING"
+      : code !== 0
+        ? "GAMEPLAY_STAGE_FAILED"
+        : missingStages.length
+          ? "REQUIRED_STAGES_MISSING"
+          : null,
     missingStages,
     webglShadersMatch: shader,
     signedHardwareAttested: hardware,

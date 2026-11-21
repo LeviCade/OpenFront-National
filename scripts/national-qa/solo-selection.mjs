@@ -76,10 +76,7 @@ export function assertSoloLaunch(launches, national) {
     ) {
       throw Error("NATIONAL_LAUNCH_CONFIG_MISMATCH");
     }
-  } else if (
-    actual.hasNationalMode !== false ||
-    actual.nationalMode !== null
-  ) {
+  } else if (actual.hasNationalMode !== false || actual.nationalMode !== null) {
     throw Error("LEGACY_FFA_CONTAINS_NATIONAL_CONFIG");
   }
   return {
@@ -93,8 +90,11 @@ export function assertSoloLaunch(launches, national) {
 
 /** Native Chrome CDP mouse/touch only. Never call DOM.click in browser QA. */
 export async function dispatchSoloPointer(send, mobile, x, y) {
-  if (typeof send !== "function" ||
-      !Number.isFinite(x) || !Number.isFinite(y)) {
+  if (
+    typeof send !== "function" ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y)
+  ) {
     throw Error("CHROMIUM_POINTER_ARGUMENTS_INVALID");
   }
   if (mobile) {

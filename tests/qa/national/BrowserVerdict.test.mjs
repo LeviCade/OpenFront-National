@@ -277,9 +277,7 @@ describe("R10 E5 first-failure preservation and evidence absence", () => {
   it("requires combat impact and legacy difficulty reversal as real stages", () => {
     const national = summarizeBrowserReport(
       {
-        events: [
-          { name: "stage-complete", stage: "map-assault" },
-        ],
+        events: [{ name: "stage-complete", stage: "map-assault" }],
       },
       0,
       "national-desktop",
@@ -287,9 +285,7 @@ describe("R10 E5 first-failure preservation and evidence absence", () => {
     expect(national.missingStages).toContain("combat-impact");
     const legacy = summarizeBrowserReport(
       {
-        events: [
-          { name: "stage-complete", stage: "legacy-ffa" },
-        ],
+        events: [{ name: "stage-complete", stage: "legacy-ffa" }],
       },
       0,
       "legacy-ffa-mobile",
