@@ -1,0 +1,51 @@
+name: C2 E5 one-time independent browser source verification
+on:
+  push:
+    branches: [feature/c2-class1-e5-real-browser-playthrough-20261121]
+    paths:
+      - "scripts/national-qa/browser-c2-*.mjs"
+      - "tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs"
+      - ".github/workflows/c2-class1-e5-source-verify.yml"
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Check exact Node source syntax
+        run: |
+          set -e
+          node --check scripts/national-qa/browser-c2-verdict.mjs
+          node --check scripts/national-qa/browser-c2-run.mjs
+          node --check tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs
+      - name: Independent negative-control tests
+        run: npx --no-install vitest run --project node tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs
+      - name: Lint exact touched source
+        run: npx --no-install oxlint scripts/national-qa/browser-c2-verdict.mjs scripts/national-qa/browser-c2-run.mjs tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs
+      - name: Check pinned oxfmt and show exact formatter diff if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(scripts/national-qa/browser-c2-verdict.mjs scripts/national-qa/browser-c2-run.mjs tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs)
+          if ! npx --no-install oxfmt --check "${files[@]}"; then
+            npx --no-install oxfmt --write "${files[@]}"
+            git diff -- "${files[@]}"
+            exit 1
+          fi
+      - name: Unprovisioned private mode must be BLOCKED
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          node scripts/national-qa/browser-c2-run.mjs --mode private-national
+          code=$?
+          set -e
+          test "$code" -eq 1
+          node -e "const f=require('fs');const x=JSON.parse(f.readFileSync('national-qa-artifacts/c2/private-national.json'));if(x.gameplay!=='BLOCKED'||x.hardware!=='BLOCKED')process.exit(1)"
