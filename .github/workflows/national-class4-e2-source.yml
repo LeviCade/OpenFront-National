@@ -30,4 +30,10 @@ jobs:
       - run: npm run typecheck
       - run: npx --no-install vitest run --project node tests/national/TrustedNationalServerAuthority.test.ts
       - run: npx --no-install oxlint src/server/national/TrustedNationalMatch.ts packages/engine/src/GameRunner.ts packages/engine/src/configuration/EngineConfig.ts src/server/GameServer.ts tests/national/TrustedNationalServerAuthority.test.ts
-      - run: npx --no-install oxfmt --check src/server/national/TrustedNationalMatch.ts packages/engine/src/GameRunner.ts packages/engine/src/configuration/EngineConfig.ts src/server/GameServer.ts tests/national/TrustedNationalServerAuthority.test.ts
+      - name: Format touched source and show exact proposed diff
+        run: |
+          npx --no-install oxfmt --write src/server/national/TrustedNationalMatch.ts packages/engine/src/GameRunner.ts packages/engine/src/configuration/EngineConfig.ts src/server/GameServer.ts tests/national/TrustedNationalServerAuthority.test.ts
+          echo "CLASS4_FORMAT_DIFF_BEGIN"
+          git -c color.ui=false diff --unified=0 -- src/server/national/TrustedNationalMatch.ts packages/engine/src/GameRunner.ts packages/engine/src/configuration/EngineConfig.ts src/server/GameServer.ts tests/national/TrustedNationalServerAuthority.test.ts
+          echo "CLASS4_FORMAT_DIFF_END"
+          npx --no-install oxfmt --check src/server/national/TrustedNationalMatch.ts packages/engine/src/GameRunner.ts packages/engine/src/configuration/EngineConfig.ts src/server/GameServer.ts tests/national/TrustedNationalServerAuthority.test.ts
