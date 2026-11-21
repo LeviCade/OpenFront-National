@@ -780,7 +780,7 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     );
     expect(
       panel.querySelector("[data-national-live-attacks]")?.textContent,
-    ).toContain("Observed live outgoing map attacks: 0");
+    ).toMatch(/Observed live outgoing map attacks:\s*0/);
     expect(panel.querySelector("[data-national-map-combat]")).not.toBeNull();
     const back = panel.querySelector<HTMLButtonElement>(
       "#national-return-to-map",
