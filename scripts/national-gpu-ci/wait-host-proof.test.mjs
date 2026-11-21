@@ -1,7 +1,11 @@
 import { strict as assert } from "node:assert";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { test } from "vitest";
-import { GPU_MODES, verifyPublicModeProof } from "./wait-host-proof.mjs";
+import {
+  GPU_MODES,
+  verifyPublicModeProof,
+  verifyGitHubJobBinding,
+} from "./wait-host-proof.mjs";
 
 const NOW = 1780000000000;
 const SOURCE = "a".repeat(40);
@@ -141,4 +145,56 @@ test("independent enrollment, expiry, host GPU chain and signature are required"
       NOW,
     ),
   );
+});
+
+test("independent public GitHub control plane binds actual numeric job and runner IDs", () => {
+  const p = proof("national-desktop");
+  const authoritative = {
+    total_count: 1,
+    jobs: [{
+      id: 136893771460,
+      run_id: Number(expected.runId),
+      run_attempt: Number(expected.runAttempt),
+      runner_name: expected.runnerName,
+      runner_id: 26,
+      status: "in_progress",
+    }],
+  };
+  assert.equal(
+    verifyPublicModeProof("national-desktop", p, pem, NONCE, enrolled, expected, NOW),
+    true,
+  );
+  assert.equal(verifyGitHubJobBinding(p.payload, authoritative, expected), true);
+  const changedId = { ...p.payload, jobId: "136893771461" };
+  const changedRunner = { ...p.payload, runnerId: "27" };
+  for (const altered of [changedId, changedRunner]) {
+    // An otherwise correctly signed record for a different job/runner
+    // is not permitted to certify the current GitHub-assigned execution.
+    const signed = { payload: altered,
+      signature: sign(null, Buffer.from(JSON.stringify(altered), "utf8"),
+        privateKey).toString("base64") };
+    assert.equal(
+      verifyPublicModeProof("national-desktop", signed, pem, NONCE, enrolled, expected, NOW),
+      true,
+    );
+    refuse("HOST_PROOF_GITHUB_JOB_RUNNER_MISMATCH", () =>
+      verifyGitHubJobBinding(signed.payload, authoritative, expected));
+  }
+  for (const bad of [
+    { ...authoritative, total_count: 101 },
+    { ...authoritative, total_count: 2 },
+    { ...authoritative, jobs: [] },
+  ]) {
+    refuse("GITHUB_JOB_INVENTORY_INCOMPLETE", () =>
+      verifyGitHubJobBinding(p.payload, bad, expected));
+  }
+  for (const badJob of [
+    { ...authoritative.jobs[0], runner_name: "skybot-ci-gpu" },
+    { ...authoritative.jobs[0], run_attempt: 2 },
+    { ...authoritative.jobs[0], status: "completed" },
+    { ...authoritative.jobs[0], run_id: 1234 },
+  ]) {
+    refuse("HOST_PROOF_GITHUB_JOB_RUNNER_MISMATCH", () =>
+      verifyGitHubJobBinding(p.payload, { total_count: 1, jobs: [badJob] }, expected));
+  }
 });
