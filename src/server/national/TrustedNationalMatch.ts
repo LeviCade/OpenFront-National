@@ -149,6 +149,16 @@ export class TrustedNationalMatch {
     return true;
   }
 
+  /** Authenticated host-only connection status; NEVER accepted from socket input. */
+  recordServerDisconnect(clientID: ClientID, disconnected: boolean): void {
+    if (!this.seats.has(clientID)) return;
+    this.intents.push(StampedIntentSchema.parse({
+      type: "mark_disconnected",
+      clientID,
+      isDisconnected: disconnected,
+    }));
+  }
+
   /** One deterministic simulation step, performed ONLY by the trusted host. */
   tick(): NationalTickReceipt {
     const turn: Turn = {
