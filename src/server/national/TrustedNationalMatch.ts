@@ -14,34 +14,15 @@ import {
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import {
   type ClientID,
-  type GameConfig,
   IntentSchema,
   type StampedIntent,
   StampedIntentSchema,
   type Turn,
 } from "@openfront/engine-api/Schemas";
-import { createHash } from "node:crypto";
+import { GameRunner } from "@openfront/engine/GameRunner";
+import { createHash, randomUUID } from "node:crypto";
+import WebSocket from "ws";
 import type { Client } from "../Client";
-
-/**
- * Narrow server-owned execution port. Inject the trusted GameRunner from the
- * authenticated host assembly; the server layer may depend on engine-api
- * contracts, never import the engine implementation directly.
- */
-export interface TrustedNationalRunnerPort {
-  readonly game: {
-    config(): { gameConfig(): GameConfig };
-    playerByClientID(clientID: ClientID): { type(): PlayerType } | null;
-    ticks(): number;
-  };
-  registerTrustedNationalRecipient(
-    clientID: ClientID,
-    deliver: (packet: GameUpdateViewData) => void,
-  ): void;
-  removeTrustedNationalRecipient(clientID: ClientID): void;
-  addTurn(turn: Turn): void;
-  executeNextTick(): boolean;
-}
 
 export interface NationalTickReceipt {
   readonly tick: number;
@@ -60,13 +41,15 @@ const MANAGEMENT_INTENTS = new Set([
 
 export class TrustedNationalMatch {
   private readonly seats = new Map<ClientID, Client>();
+  /** The exact admitted physical socket, not reusable clientID identity. */
+  private readonly activeSocket = new Map<ClientID, () => boolean>();
   private readonly requestIds = new Map<ClientID, Set<string>>();
   private readonly committed: Turn[] = [];
   private intents: StampedIntent[] = [];
 
   constructor(
     readonly gameID: string,
-    private readonly runner: TrustedNationalRunnerPort,
+    private readonly runner: GameRunner,
     admittedPlayers: readonly Client[],
     private readonly deliver: (
       client: Client,
@@ -122,13 +105,38 @@ export class TrustedNationalMatch {
     }
     // Register projections only after validating every seat. The GameRunner
     // itself verifies clientID -> real PlayerID on each subsequent tick.
-    for (const client of admittedPlayers) {
-      runner.registerTrustedNationalRecipient(client.clientID, (packet) => {
-        if (this.seats.get(client.clientID) === client && !client.spectator) {
-          this.deliver(client, packet);
-        }
-      });
-    }
+    for (const client of admittedPlayers) this.registerSeat(client);
+  }
+
+  /** E2's verified Client and original physical socket are authoritative.
+   * A reconnect always receives a NEW E3 cursor and server-minted nonce.
+   */
+  private registerSeat(client: Client): void {
+    const admittedSocket = client.ws;
+    const sessionId = randomUUID();
+    const active = () =>
+      this.seats.get(client.clientID) === client &&
+      client.ws === admittedSocket &&
+      admittedSocket.readyState === WebSocket.OPEN &&
+      !client.spectator &&
+      !!client.claims &&
+      !!client.publicId;
+    this.activeSocket.set(client.clientID, active);
+    this.runner.registerTrustedNationalRecipient(
+      client.clientID,
+      {
+        clientID: client.clientID,
+        sessionId,
+        isConnected: active,
+        isSpectator: () => client.spectator,
+      },
+      (packet) => {
+        // The runner already passed the host-only frame through E3's ONE
+        // principal-bound projection. E2 GameServer alone owns encoding and
+        // sending the existing national_projection wire variant.
+        if (active()) this.deliver(client, packet);
+      },
+    );
   }
 
   /**
@@ -139,6 +147,7 @@ export class TrustedNationalMatch {
   submit(sender: Client, candidate: unknown): boolean {
     if (
       this.seats.get(sender.clientID) !== sender ||
+      this.activeSocket.get(sender.clientID)?.() !== true ||
       sender.spectator ||
       !sender.claims ||
       !sender.publicId
@@ -198,9 +207,46 @@ export class TrustedNationalMatch {
       .digest("hex");
   }
 
+  /** E2 GameServer host-only disconnect status; never client admin intent. */
+  recordServerDisconnect(clientID: ClientID, disconnected: boolean): void {
+    if (!this.seats.has(clientID)) return;
+    this.intents.push(
+      StampedIntentSchema.parse({
+        type: "mark_disconnected",
+        clientID,
+        isDisconnected: disconnected,
+      }),
+    );
+  }
+
+  currentTick(): number {
+    return this.runner.game.ticks();
+  }
+
+  /** New physical socket for the SAME verified account/seat. Historical
+   * command receipts must NOT replay, current pending invitations may.
+   */
+  resumeRecipient(client: Client): boolean {
+    if (
+      this.seats.get(client.clientID) !== client ||
+      !client.claims ||
+      !client.publicId ||
+      client.spectator ||
+      client.ws.readyState !== WebSocket.OPEN ||
+      this.runner.game.playerByClientID(client.clientID)?.type() !==
+        PlayerType.Human
+    )
+      return false;
+    this.runner.removeTrustedNationalRecipient(client.clientID);
+    this.activeSocket.delete(client.clientID);
+    this.registerSeat(client);
+    return true;
+  }
+
   /** Revokes private E3 delivery. Already-committed turns remain canonical. */
   revokeRecipient(client: Client): void {
     if (this.seats.get(client.clientID) !== client) return;
+    this.activeSocket.delete(client.clientID);
     this.runner.removeTrustedNationalRecipient(client.clientID);
   }
 }
