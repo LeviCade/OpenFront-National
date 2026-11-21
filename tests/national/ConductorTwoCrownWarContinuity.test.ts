@@ -12,7 +12,7 @@ import {
   PlayerInfo,
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
-import type { GameConfig } from "@openfront/engine-api/Schemas";
+import { StampedIntentSchema, type GameConfig } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
@@ -383,6 +383,37 @@ describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host auth
       ),
     ).toThrow(/stale sovereign replay authority/);
     expect(snapshotGameData(m.game)).toEqual(afterCrown);
+
+    // A correct Game denial must not crash the authoritative runner tick.
+    // The server-origin stamp is still valid; the rejected authority is the
+    // previously accepted imperial token after crown transition.
+    const warBeforeReplay = m.game.nationalWarState();
+    const receiptsBeforeReplay = m.game.nationalWarCommandResults(
+      m.game.player(A),
+    );
+    const ticksBeforeReplay = m.game.ticks();
+    m.runner.addTurn({
+      turnNumber: ticksBeforeReplay,
+      intents: [
+        StampedIntentSchema.parse({
+          type: "national_declare_war",
+          scope: "imperial",
+          nationId: A,
+          targetId: D,
+          targetKind: "nation",
+          requestId: "c2_imperial_e_d",
+          clientID: OLD_A,
+        }),
+      ],
+    });
+    expect(m.runner.executeNextTick()).toBe(true);
+    m.runner.addTurn({ turnNumber: m.game.ticks(), intents: [] });
+    expect(m.runner.executeNextTick()).toBe(true);
+    expect(m.game.ticks()).toBe(ticksBeforeReplay + 2);
+    expect(m.game.nationalWarState()).toEqual(warBeforeReplay);
+    expect(m.game.nationalWarCommandResults(m.game.player(A))).toEqual(
+      receiptsBeforeReplay,
+    );
     // The canonical original accepted receipt is retained, not overwritten.
     expect(military(m.game, A, "c2_imperial_e_d").accepted).toBe(true);
     expect(political(m.game, A, "c2_transfer_receipt").accepted).toBe(true);
