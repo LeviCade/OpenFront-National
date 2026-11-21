@@ -58,7 +58,9 @@ void test("diagnostic is owner-only, feature-path-filtered and cannot certify re
   for (const required of [
     "github.actor == 'LeviCade'",
     "github.repository == 'LeviCade/OpenFront-National'",
-    "refs/heads/feature/r10-e6-skybot-gpu-evidence-20261121",
+    "refs/heads/stage3/r10-four-green-source-candidate-20261121",
+    "refs/heads/stage3/r10-reviewed-gpu-20261121",
+    "REFUSED: diagnostic must use Conductor-reviewed staging ref",
     "scripts/national-gpu-ci/OWNER_GPU_DIAGNOSTIC_TRIGGER",
     'test "$GITHUB_ACTOR" = LeviCade',
     "0e52b5eeb7490ce83898f2a9696732c7e7d6b21c",
