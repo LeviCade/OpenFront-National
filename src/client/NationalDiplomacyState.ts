@@ -265,6 +265,212 @@ export function validNationalWarReference(value: string): boolean {
   );
 }
 
+
+/**
+ * E3's optional, per-authenticated-recipient public WAR/peace projection.
+ * This is NOT a WAR ledger or a client-derived snapshot. A missing, stale,
+ * partial, foreign or malformed packet provides no evidence of execution.
+ */
+export interface NationalConflictSide {
+  readonly kind: "nation" | "empire";
+  readonly id: string;
+}
+export interface NationalPublicWarLayer {
+  readonly id: string;
+  readonly scope: "national" | "imperial";
+  readonly first: NationalConflictSide;
+  readonly second: NationalConflictSide;
+  readonly declaredBy: string;
+  readonly startedTick: number;
+  readonly endedTick: number | null;
+}
+export interface NationalPublicPeaceMotion {
+  readonly id: string;
+  readonly layerId: string;
+  readonly proposedBy: string;
+  readonly proposingSide: 0 | 1;
+  readonly proposedTick: number;
+  readonly acceptedTick: number | null;
+  readonly acceptedBy: string | null;
+}
+export interface NationalPublicConflicts {
+  readonly version: 1;
+  readonly recipientId: string;
+  readonly layers: readonly NationalPublicWarLayer[];
+  readonly motions: readonly NationalPublicPeaceMotion[];
+}
+
+function validConflictSide(value: unknown): value is NationalConflictSide {
+  return (
+    record(value) &&
+    (value.kind === "nation" || value.kind === "empire") &&
+    typeof value.id === "string" &&
+    validNationalWarReference(value.id)
+  );
+}
+
+/** Validate the COMPLETE E3 DTO before exposing even one war or motion. */
+export function readNationalConflicts(
+  source: unknown,
+  authenticatedActorId: string | null,
+): NationalPublicConflicts | null {
+  if (
+    !authenticatedActorId ||
+    !record(source) ||
+    source.version !== 1 ||
+    source.recipientId !== authenticatedActorId ||
+    !Array.isArray(source.layers) ||
+    !Array.isArray(source.motions) ||
+    source.layers.length > 512 ||
+    source.motions.length > 512
+  ) return null;
+  const layers: NationalPublicWarLayer[] = [];
+  const seenLayers = new Set<string>();
+  for (const row of source.layers) {
+    if (
+      !record(row) ||
+      typeof row.id !== "string" ||
+      !validNationalWarReference(row.id) ||
+      seenLayers.has(row.id) ||
+      (row.scope !== "national" && row.scope !== "imperial") ||
+      !validConflictSide(row.first) ||
+      !validConflictSide(row.second) ||
+      (row.first.kind === row.second.kind && row.first.id === row.second.id) ||
+      (row.scope === "national" && (row.first.kind !== "nation" || row.second.kind !== "nation")) ||
+      (row.scope === "imperial" && row.first.kind !== "empire" && row.second.kind !== "empire") ||
+      typeof row.declaredBy !== "string" ||
+      !validNationalWarReference(row.declaredBy) ||
+      !Number.isSafeInteger(row.startedTick) ||
+      (row.startedTick as number) < 0 ||
+      (row.endedTick !== null &&
+        (!Number.isSafeInteger(row.endedTick) ||
+          (row.endedTick as number) < (row.startedTick as number)))
+    ) return null;
+    seenLayers.add(row.id);
+    layers.push({
+      id: row.id,
+      scope: row.scope,
+      first: { ...row.first },
+      second: { ...row.second },
+      declaredBy: row.declaredBy,
+      startedTick: row.startedTick as number,
+      endedTick: row.endedTick as number | null,
+    });
+  }
+  const motions: NationalPublicPeaceMotion[] = [];
+  const seenMotions = new Set<string>();
+  for (const row of source.motions) {
+    if (
+      !record(row) ||
+      typeof row.id !== "string" ||
+      !validNationalWarReference(row.id) ||
+      seenMotions.has(row.id) ||
+      typeof row.layerId !== "string" ||
+      !seenLayers.has(row.layerId) ||
+      typeof row.proposedBy !== "string" ||
+      !validNationalWarReference(row.proposedBy) ||
+      (row.proposingSide !== 0 && row.proposingSide !== 1) ||
+      !Number.isSafeInteger(row.proposedTick) ||
+      (row.proposedTick as number) < 0 ||
+      (row.acceptedTick !== null &&
+        (!Number.isSafeInteger(row.acceptedTick) ||
+          (row.acceptedTick as number) < (row.proposedTick as number))) ||
+      (row.acceptedBy !== null &&
+        (typeof row.acceptedBy !== "string" ||
+          !validNationalWarReference(row.acceptedBy))) ||
+      (row.acceptedTick === null) !== (row.acceptedBy === null)
+    ) return null;
+    const layer = layers.find((entry) => entry.id === row.layerId)!;
+    if (
+      (row.proposedTick as number) < layer.startedTick ||
+      (row.acceptedTick !== null && row.acceptedTick !== layer.endedTick)
+    ) return null;
+    seenMotions.add(row.id);
+    motions.push({
+      id: row.id,
+      layerId: row.layerId,
+      proposedBy: row.proposedBy,
+      proposingSide: row.proposingSide,
+      proposedTick: row.proposedTick as number,
+      acceptedTick: row.acceptedTick as number | null,
+      acceptedBy: row.acceptedBy as string | null,
+    });
+  }
+  return { version: 1, recipientId: authenticatedActorId, layers, motions };
+}
+
+export interface NationalDiplomacyAttempt {
+  readonly commandType: NationalDiplomacyResult["type"];
+  readonly actorId: string;
+  readonly issuedTick: number;
+  readonly scope?: "national" | "imperial";
+  readonly ownEmpireId?: string;
+  readonly targetKind?: "nation" | "empire";
+  readonly targetId?: string;
+  readonly warId?: string;
+  readonly motionId?: string;
+}
+
+/** Reconcile a REAL accepted journal result with the SAME current public state. */
+export function confirmedNationalDiplomacy(
+  attempt: NationalDiplomacyAttempt,
+  result: NationalDiplomacyResult,
+  projection: NationalPublicConflicts | null,
+  projectionTick: number | null,
+): string | null {
+  if (
+    !result.accepted ||
+    result.actorId !== attempt.actorId ||
+    result.recipientId !== attempt.actorId ||
+    result.type !== attempt.commandType ||
+    result.tick < attempt.issuedTick ||
+    projection === null ||
+    projection.recipientId !== attempt.actorId ||
+    projectionTick === null ||
+    projectionTick < result.tick
+  ) return null;
+  const layer = projection.layers.find((item) => item.id === result.warId);
+  if (!layer) return null;
+  if (attempt.commandType === "national_declare_war") {
+    if (
+      layer.endedTick !== null ||
+      layer.startedTick < attempt.issuedTick ||
+      layer.startedTick > result.tick ||
+      layer.scope !== attempt.scope ||
+      layer.declaredBy !== attempt.actorId ||
+      layer.second.id !== attempt.targetId ||
+      layer.second.kind !== attempt.targetKind ||
+      (attempt.scope === "national" &&
+        (layer.first.kind !== "nation" || layer.first.id !== attempt.actorId)) ||
+      (attempt.scope === "imperial" &&
+        (layer.first.kind !== "empire" || layer.first.id !== attempt.ownEmpireId))
+    ) return null;
+    return `War confirmed by game: ${layer.id} is active.`;
+  }
+  if (!result.motionId) return null;
+  const motion = projection.motions.find((item) => item.id === result.motionId);
+  if (!motion || motion.layerId !== layer.id) return null;
+  if (attempt.commandType === "national_propose_peace") {
+    if (
+      attempt.warId !== layer.id ||
+      motion.proposedBy !== attempt.actorId ||
+      motion.proposedTick < attempt.issuedTick ||
+      motion.proposedTick > result.tick
+    ) return null;
+    return `Peace proposal confirmed by game: motion ${motion.id} for war ${layer.id}.`;
+  }
+  if (
+    attempt.commandType === "national_accept_peace" &&
+    attempt.motionId === motion.id &&
+    motion.acceptedBy === attempt.actorId &&
+    motion.acceptedTick !== null &&
+    motion.acceptedTick >= attempt.issuedTick &&
+    motion.acceptedTick <= result.tick &&
+    layer.endedTick === motion.acceptedTick
+  ) return `Peace accepted by game: hostilities ended for war ${layer.id}.`;
+  return null;
+}
+
 /** E1/E3 recipient-scoped WAR/peace outcomes, NEVER inferred from intent enqueue. */
 export interface NationalDiplomacyResult {
   readonly type:
