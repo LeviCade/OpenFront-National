@@ -13,10 +13,10 @@ import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
 const principals = [
-  new PlayerInfo("R10 A", PlayerType.Human, "r10-client-a", "r10-a"),
-  new PlayerInfo("R10 B", PlayerType.Human, "r10-client-b", "r10-b"),
-  new PlayerInfo("R10 C", PlayerType.Human, "r10-client-c", "r10-c"),
-  new PlayerInfo("R10 D", PlayerType.Human, "r10-client-d", "r10-d"),
+  new PlayerInfo("R10 A", PlayerType.Human, "R10CLIA1", "r10-a"),
+  new PlayerInfo("R10 B", PlayerType.Human, "R10CLIB2", "r10-b"),
+  new PlayerInfo("R10 C", PlayerType.Human, "R10CLIC3", "r10-c"),
+  new PlayerInfo("R10 D", PlayerType.Human, "R10CLID4", "r10-d"),
 ];
 const [A, B, C, D] = principals.map((p) => p.id);
 const positions = [
