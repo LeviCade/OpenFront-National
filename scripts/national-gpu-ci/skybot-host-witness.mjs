@@ -137,15 +137,14 @@ const execHost = (command, args) =>
   execFileSync(command, args, { encoding: "utf8", timeout: 15000,
     maxBuffer: 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
 const gpuIdentity = () => {
-  requireTrue(statSync(RENDER).isCharacterDevice(), "PHYSICAL_RENDER_NODE_UNAVAILABLE");
+  requireTrue(lstatSync(RENDER).isCharacterDevice() &&
+    !lstatSync(RENDER).isSymbolicLink(), "PHYSICAL_RENDER_NODE_UNAVAILABLE");
   requireTrue(readFileSync("/sys/class/drm/renderD128/device/vendor", "utf8").trim()
     === "0x8086", "PHYSICAL_GPU_VENDOR_MISMATCH");
   requireTrue(readFileSync("/sys/class/drm/renderD128/device/device", "utf8").trim()
     === "0x0412", "PHYSICAL_GPU_DEVICE_MISMATCH");
   requireTrue(readlinkSync("/sys/class/drm/renderD128/device/driver").split("/").at(-1)
     === "i915", "PHYSICAL_GPU_DRIVER_MISMATCH");
-  requireTrue(resolve("/sys/class/drm/renderD128/device") !== "",
-    "PHYSICAL_GPU_SYSFS_UNAVAILABLE");
   return {
     deviceVendorId: "8086",
     deviceId: "0412",
@@ -158,7 +157,7 @@ const physicalDomain = (name) => {
   const xml = execHost("virsh", ["-c", "qemu:///system", "dumpxml", name]);
   requireTrue(
     xml.includes("<name>" + name + "</name>") &&
-      /<domain type=['"]kvm['"]>/.test(xml) &&
+      /<domain type=['"]kvm['"][ >]/.test(xml) &&
       xml.includes(RENDER) &&
       /<gl\b/.test(xml),
     "PHYSICAL_GPU_DOMAIN_NOT_BOUND",
@@ -374,6 +373,7 @@ const assertHostOnly = () => {
     process.env.GITHUB_ACTIONS !== "true",
   "HOST_ONLY_ROOT_CONTROLLER_REQUIRED");
   checkRootDirectory(HOST_ROOT);
+  checkRootFile(fileURLToPath(import.meta.url));
 };
 async function main() {
   assertHostOnly();
