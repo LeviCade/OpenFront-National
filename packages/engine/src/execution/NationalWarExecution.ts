@@ -98,6 +98,15 @@ interface WarGamePort {
     };
   } | null;
   performNationalWarCommand(actor: Player, command: CanonicalWarCommand): void;
+  /**
+   * E1 owns the sole canonical receipt journal. Prefer its replay-safe outcome
+   * port once integrated; E2 must neither cache nor manufacture a result.
+   */
+  performNationalWarCommandWithOutcome?(
+    actor: Player,
+    command: CanonicalWarCommand,
+    requestId?: string | null,
+  ): unknown;
   nationalLevySource(nationId: string): TroopSource | null;
   applyNationalDefenseLevy(
     attacks: readonly IncomingDefense[],
@@ -228,19 +237,24 @@ export class NationalWarExecution implements Execution {
     this.active = false;
     const game = this.game;
     const port = game === null ? null : canonicalWarPort(game);
+    if (!game || !port?.performNationalWarCommand) return;
+    const political = game.nationalPoliticalAuthority();
+    if (!political) return; // FFA does not have NATIONAL command results.
+
+    // Only E1 may decide or journal a canonical rejection. Once its outcome
+    // port exists, even inactive actors and invalid sovereign claims reach it.
+    // The older void port remains for integration baseline compatibility.
+    const withOutcome = port.performNationalWarCommandWithOutcome;
+    const hasOutcomePort = typeof withOutcome === "function";
     if (
-      !game ||
-      !port?.performNationalWarCommand ||
-      !game.nationalPoliticalAuthority() ||
-      !game.hasPlayer(this.actor.id()) ||
-      game.player(this.actor.id()) !== this.actor ||
-      !this.actor.hasSpawned() ||
-      !this.actor.isAlive()
+      !hasOutcomePort &&
+      (!game.hasPlayer(this.actor.id()) ||
+        game.player(this.actor.id()) !== this.actor ||
+        !this.actor.hasSpawned() ||
+        !this.actor.isAlive())
     )
       return;
-
-    const political = game.nationalPoliticalAuthority()!;
-    if (!port.nationalWarState?.()) return;
+    if (!hasOutcomePort && !port.nationalWarState?.()) return;
     // An execution's engine tick + registered ordinal is deterministic across
     // snapshot/replay and cannot reuse an ID when peace deletes stale motions.
     // Unlike a client action ID, neither value is controlled by the request.
@@ -259,12 +273,17 @@ export class NationalWarExecution implements Execution {
         break;
       case "declare-imperial": {
         const empire = political.empireOf(this.actor.id());
-        if (empire === null || political.emperorOf(empire) !== this.actor.id())
+        if (
+          !hasOutcomePort &&
+          (empire === null || political.emperorOf(empire) !== this.actor.id())
+        )
           return;
         command = {
           kind: "declare-imperial",
           warId: id,
-          aggressor: { kind: "empire", id: empire },
+          // An unaffiliated actor is intentionally invalid. E1 must record
+          // the rejection rather than E2 silently losing the click.
+          aggressor: { kind: "empire", id: empire ?? this.actor.id() },
           target: { kind: this.command.targetKind, id: this.command.targetId },
         };
         break;
@@ -281,20 +300,32 @@ export class NationalWarExecution implements Execution {
         break;
     }
 
-    try {
-      // GameImpl rechecks authoritative actor, timing, live politics and
-      // delegates to the canonical snapshotted WarLedger.
-      // Passing the token cannot confer legitimacy: the actor remains the
-      // server-stamped Player and E1 rechecks sovereignty before any change.
-      port.performNationalWarCommand(
-        this.actor,
-        this.requestId === null
-          ? command
-          : { ...command, requestId: this.requestId },
-      );
-    } catch (error) {
-      console.warn("NATIONAL war command rejected:", String(error));
+    // E1's Game-owned result service is the ONLY authority for accepted and
+    // rejected WAR/peace clicks. Request IDs are correlation, not credentials.
+    // E3 may project its authenticated journal; E2 never emits an outcome.
+    if (hasOutcomePort) {
+      withOutcome.call(port, this.actor, command, this.requestId);
+      return;
     }
+
+    // Temporary compatibility with the already-integrated void E1 port.
+    // It cannot produce a trustworthy receipt: E4 must keep the click pending.
+    // Avoid throwing on an explicitly forged national initiator while older
+    // Game implementations still lack the outcome journal.
+    if (
+      command.kind === "declare-national" &&
+      command.aggressorId !== this.actor.id()
+    )
+      return;
+
+    // No console.warn suppression: unexpected authority failures are errors,
+    // never implicit acceptance. The new E1 result port handles rule denials.
+    port.performNationalWarCommand(
+      this.actor,
+      this.requestId === null
+        ? command
+        : { ...command, requestId: this.requestId },
+    );
   }
 
   snapshot(w: SnapshotWriter): ExecRecord {
