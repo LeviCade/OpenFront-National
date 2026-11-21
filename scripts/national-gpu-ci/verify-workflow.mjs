@@ -27,7 +27,7 @@ const runner = readFileSync(
   "utf8",
 );
 
-void test("strict default-main dispatch, owner admission and immutable R10 ancestry", () => {
+void test("strict default-main dispatch, owner admission and immutable Class Four staging", () => {
   assert.ok(source.includes("  workflow_dispatch:"));
   assert.match(source, /^    runs-on: skybot-ci-gpu$/m);
   assert.doesNotMatch(source, /pull_request:|matrix:/);
@@ -36,11 +36,10 @@ void test("strict default-main dispatch, owner admission and immutable R10 ances
     "github.event_name == 'workflow_dispatch'",
     "github.ref == 'refs/heads/main'",
     'test "$GITHUB_REF" = refs/heads/main',
-    "0e52b5eeb7490ce83898f2a9696732c7e7d6b21c",
+    "03463cb2ee6fb508e0ae83ce87aedbc6ee996d29",
     'git merge-base --is-ancestor "$BASE_SHA" "$NATIONAL_GPU_CANDIDATE_SHA"',
-    'git merge-base --is-ancestor "$NATIONAL_GPU_CANDIDATE_SHA" "$staging"',
-    "stage3/integration-20261115",
-    "stage3/r10-reviewed-gpu-20261121",
+    'test "$(git rev-parse "$staging")" = "$NATIONAL_GPU_CANDIDATE_SHA"',
+    "stage3/class4-six-owner-reciprocal-20261121",
     "persist-credentials: false",
     "NATIONAL_GPU_ATTESTATION_FILE",
     "NATIONAL_GPU_PUBLIC_KEY_FILE",
