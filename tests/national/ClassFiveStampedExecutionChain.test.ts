@@ -176,6 +176,9 @@ function delegation(id: string, enabled: boolean) {
 /** Recreate only the server-authenticated seat, never reuse the old socket. */
 function replacement(m: Match) {
   m.game.takeoverPlayer(m.game.player(A), NEXT);
+  // Revoke the old physical viewers before registering replacement sockets.
+  for (const client of [m.a, m.b, m.c, m.d])
+    m.host.revokeRecipient(client);
   const newA = seat(NEXT, "replacement-account");
   const successorHost = new TrustedNationalMatch(
     GAME_ID,
@@ -322,7 +325,13 @@ describe("Class Five E1: ORIGINAL authenticated clientID crosses queued Game exe
     // This also tests a restored pending execution, not merely live memory.
     m.host.tick();
     restored.executeNextTick();
-    expect(snapshotGameData(m.game)).toEqual(snapshotGameData(restored));
+    // Distinct physical delivery sessions can have different E3 cursors;
+    // compare the canonical governmental ledger, WAR and tick instead.
+    expect(m.game.ticks()).toBe(restored.ticks());
+    expect(m.game.nationalPublicPoliticalView()).toEqual(
+      restored.nationalPublicPoliticalView(),
+    );
+    expect(m.game.nationalWarState()).toEqual(restored.nationalWarState());
     expect(m.game.nationalPoliticalCommandResults(m.game.player(A))).toEqual(
       beforeReceipts,
     );
@@ -424,7 +433,11 @@ describe("Class Five E1: ORIGINAL authenticated clientID crosses queued Game exe
     restored.takeoverPlayer(restored.player(D), "C5SEATDX2");
     m.host.tick();
     restored.executeNextTick();
-    expect(snapshotGameData(m.game)).toEqual(snapshotGameData(restored));
+    expect(m.game.ticks()).toBe(restored.ticks());
+    expect(m.game.nationalPublicPoliticalView()).toEqual(
+      restored.nationalPublicPoliticalView(),
+    );
+    expect(m.game.nationalWarState()).toEqual(restored.nationalWarState());
     expect(
       m.game
         .nationalWarCommandResults(m.game.player(D))
@@ -440,6 +453,8 @@ describe("Class Five E1: ORIGINAL authenticated clientID crosses queued Game exe
     ).toBeNull();
 
     const newD = seat("C5SEATDX2", "replacement-d");
+    for (const client of [m.a, m.b, m.c, m.d])
+      m.host.revokeRecipient(client);
     const host2 = new TrustedNationalMatch(
       GAME_ID,
       m.runner,
