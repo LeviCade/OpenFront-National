@@ -45,3 +45,4 @@ jobs:
         run: npm run lint
 # verified original authenticated pact actor session
 # Valid authenticated 8-character client IDs + reconnect reset proof
+# Final host-stamped E1 pact + E3 nested WAR/private resource canaries + fresh socket reset

@@ -257,6 +257,63 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     expect(sockets[1].socket.frames).toHaveLength(prior);
   });
 
+  it("FOG-02 negative: real E3 host projection cannot be made to serialize nested secret WAR clauses, raw turns or a foreign troop canary", async () => {
+    const init = await setup("plains", { nationalMode: true }, P);
+    const { host, sockets } = await rig("plains", [
+      init.ref(15, 20), init.ref(45, 35), init.ref(70, 50),
+    ]);
+    host.tick();
+    const a = view(sockets[0].socket);
+    const attacked = {
+      ...a.data,
+      canonicalTurns: [{ secret: "SECRET_CANONICAL_HISTORY" }],
+      gameSnapshot: { authority: "SECRET_FULL_GAME" },
+      claims: { bearer: "SECRET_SOCKET_CREDENTIALS" },
+      nationalConflicts: {
+        version: 1,
+        recipientId: A.id,
+        layers: [{
+          id: "safe_public_id",
+          scope: "national",
+          first: { kind: "nation", id: A.id },
+          second: { kind: "nation", id: B.id },
+          declaredBy: A.id,
+          startedTick: 0,
+          endedTick: null,
+          secretTreatyTerms: "SECRET_NESTED_PACT",
+        }],
+        motions: [{
+          id: "motion_public_id", layerId: "safe_public_id",
+          proposedBy: A.id, proposingSide: 0, proposedTick: 0,
+          acceptedTick: null, acceptedBy: null,
+          privateTerms: "SECRET_PRIVATE_PEACE",
+        }],
+      },
+    } as unknown as GameUpdateViewData;
+    const encoded = encodeNationalRecipientProjection(attacked);
+    for (const secret of [
+      "SECRET_CANONICAL_HISTORY", "SECRET_FULL_GAME",
+      "SECRET_SOCKET_CREDENTIALS", "SECRET_NESTED_PACT",
+      "SECRET_PRIVATE_PEACE", "canonicalTurns", "gameSnapshot",
+    ]) expect(encoded).not.toContain(secret);
+
+    // Even a future mistakenly assembled filtered DTO must fail before
+    // a foreign player's numeric troop count enters the network encoder.
+    const forged = {
+      ...a.data,
+      nationalObserverMap: {
+        ...a.map,
+        units: [...a.map.units, {
+          id: 12345, ownerId: B.id, kind: "transport",
+          tile: init.ref(45, 35), troops: 6_666_666,
+        }],
+      },
+    } as unknown as GameUpdateViewData;
+    expect(() => encodeNationalRecipientProjection(forged)).toThrow(
+      "NATIONAL invalid bounded observer-map v1",
+    );
+  });
+
   it("FOG-04/05: actual coastal 200-tile sight reveals an enemy ship marker but not the transport landing plan or troops", async () => {
     const initial = await setup("half_land_half_ocean", { nationalMode: true }, P);
     const land: number[] = [];

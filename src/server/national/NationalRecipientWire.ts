@@ -12,6 +12,7 @@ import {
   type GameUpdateViewData,
 } from "@openfront/engine-api/game/GameUpdates";
 import { replacer } from "@openfront/shared/SharedUtil";
+import type { NationalPublicConflictView } from "@openfront/engine/national/observation/NationalOutbound";
 import {
   NATIONAL_OBSERVER_MAX_TILES,
   NATIONAL_OBSERVER_MAX_UNITS,
@@ -31,10 +32,11 @@ export function encodeNationalRecipientProjection(
   // absent, including enemy attacks, embargoes and private diplomacy.
   const updates = filtered.updates;
   const politics = filtered as GameUpdateViewData & {
-    nationalConflicts?: unknown;
+    nationalConflicts?: NationalPublicConflictView;
     nationalObserverMap?: NationalObserverMapV1;
   };
   const map = politics.nationalObserverMap;
+  const conflicts = politics.nationalConflicts;
   if (map !== undefined) {
     if (
       map.version !== NATIONAL_OBSERVER_MAP_VERSION ||
@@ -45,7 +47,16 @@ export function encodeNationalRecipientProjection(
       (map.nextCursor !== null &&
         (!Number.isSafeInteger(map.nextCursor) || map.nextCursor < map.cursor)) ||
       map.tiles.length > NATIONAL_OBSERVER_MAX_TILES ||
-      map.units.length > NATIONAL_OBSERVER_MAX_UNITS
+      map.units.length > NATIONAL_OBSERVER_MAX_UNITS ||
+      map.units.some((unit) =>
+        unit.ownerId !== map.observerId && unit.troops !== undefined
+      ) ||
+      (filtered.nationalAccessionOffers !== undefined &&
+        filtered.nationalAccessionOffers.recipientId !== map.observerId) ||
+      (filtered.nationalCommandResults ?? []).some((result) =>
+        result.actorId !== map.observerId ||
+        result.recipientId !== map.observerId
+      )
     ) throw new Error("NATIONAL invalid bounded observer-map v1");
   }
   const allowed = {
@@ -78,9 +89,32 @@ export function encodeNationalRecipientProjection(
     ...(filtered.nationalAccessionOffers === undefined
       ? {}
       : { nationalAccessionOffers: filtered.nationalAccessionOffers }),
-    ...(politics.nationalConflicts === undefined
+    ...(conflicts === undefined
       ? {}
-      : { nationalConflicts: politics.nationalConflicts }),
+      : {
+          nationalConflicts: {
+            version: 1 as const,
+            recipientId: conflicts.recipientId,
+            layers: conflicts.layers.map((layer) => ({
+              id: layer.id,
+              scope: layer.scope,
+              first: { kind: layer.first.kind, id: layer.first.id },
+              second: { kind: layer.second.kind, id: layer.second.id },
+              declaredBy: layer.declaredBy,
+              startedTick: layer.startedTick,
+              endedTick: layer.endedTick,
+            })),
+            motions: conflicts.motions.map((motion) => ({
+              id: motion.id,
+              layerId: motion.layerId,
+              proposedBy: motion.proposedBy,
+              proposingSide: motion.proposingSide,
+              proposedTick: motion.proposedTick,
+              acceptedTick: motion.acceptedTick,
+              acceptedBy: motion.acceptedBy,
+            })),
+          },
+        }),
     ...(map === undefined
       ? {}
       : {
