@@ -36,8 +36,11 @@ import { TerraNulliusImpl } from "@openfront/engine-lib/game/TerraNulliusImpl";
 import { UnitGrid } from "@openfront/engine-lib/game/UnitGrid";
 import { PlayerCosmetics, WirePlayer } from "@openfront/shared/WireSchemas";
 import {
+  readNationalAccessionOffers,
   readNationalConflicts,
   readNationalDiplomacyResults,
+  readNationalPoliticalResults,
+  retainNationalPoliticalResults,
   readNationalFoundingResults,
   readNationalPolitics,
   retainNationalDiplomacyResults,
@@ -46,6 +49,8 @@ import {
   type NationalPublicConflicts,
   type NationalFoundingResult,
   type NationalPublicPolitics,
+  type NationalAccessionView,
+  type NationalPoliticalResult,
 } from "../NationalDiplomacyState";
 import { computeAllianceClusters } from "../render/frame/derive/AllianceClusters";
 import { extractAttackRings } from "../render/frame/derive/AttackRings";
@@ -90,6 +95,8 @@ export class GameView implements GameLike {
   private _nationalConflicts: NationalPublicConflicts | null = null;
   private _nationalConflictsTick: number | null = null;
   private _nationalPoliticsTick: number | null = null;
+  private _nationalAccessionOffers: NationalAccessionView | null = null;
+  private _nationalPoliticalResults: readonly NationalPoliticalResult[] = [];
 
   public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
     return this._nationalPolitics;
@@ -118,6 +125,15 @@ export class GameView implements GameLike {
     return this._nationalConflictsTick;
   }
 
+  /** Invites are recipient-only; null means NOT VERIFIED, not zero offers. */
+  public nationalAccessionOffers(): Readonly<NationalAccessionView> | null {
+    return this._nationalAccessionOffers;
+  }
+
+  public nationalPoliticalResults(): readonly Readonly<NationalPoliticalResult>[] {
+    return this._nationalPoliticalResults;
+  }
+
   /** Null means the worker has not delivered a valid public roster. */
   public nationalPoliticsTick(): number | null {
     return this._nationalPoliticsTick;
@@ -132,6 +148,8 @@ export class GameView implements GameLike {
     this._nationalFoundingOutcome = null;
     this._nationalConflicts = null;
     this._nationalConflictsTick = null;
+    this._nationalAccessionOffers = null;
+    this._nationalPoliticalResults = [];
   }
   private startTick: Tick | null = null;
   private smallIDToID = new Map<number, PlayerID>();
@@ -335,6 +353,7 @@ export class GameView implements GameLike {
         nationalPolitics?: unknown;
         nationalConflicts?: unknown;
         nationalCommandResults?: unknown;
+        nationalAccessionOffers?: unknown;
       };
       this._nationalPolitics = readNationalPolitics(
         nationalPacket.nationalPolitics,
@@ -343,6 +362,10 @@ export class GameView implements GameLike {
         this._nationalPolitics === null ? null : gu.tick;
 
       const currentActorId = this._myPlayer?.id() ?? null;
+      this._nationalAccessionOffers = readNationalAccessionOffers(
+        nationalPacket.nationalAccessionOffers,
+        currentActorId,
+      );
       this._nationalConflicts =
         this._nationalPolitics === null
           ? null
@@ -395,6 +418,16 @@ export class GameView implements GameLike {
       this._nationalDiplomacyResults = retainNationalDiplomacyResults(
         this._nationalDiplomacyResults,
         diplomacyReceived,
+        gu.tick,
+        gu.tick < previousTick || this._nationalPolitics === null,
+      );
+      const politicalReceived = readNationalPoliticalResults(
+        nationalPacket.nationalCommandResults,
+        myActorId,
+      ).filter((item) => item.tick <= gu.tick);
+      this._nationalPoliticalResults = retainNationalPoliticalResults(
+        this._nationalPoliticalResults,
+        politicalReceived,
         gu.tick,
         gu.tick < previousTick || this._nationalPolitics === null,
       );
