@@ -104,7 +104,10 @@ const publicId = (value: unknown): value is string =>
   typeof value === "string" &&
   value.length > 0 &&
   value.length <= 256 &&
-  !/[\u0000-\u001f\u007f]/.test(value);
+  !Array.from(value).some((ch) => {
+    const code = ch.charCodeAt(0);
+    return code < 32 || code === 127;
+  });
 
 const resultTypes = new Set([
   "national_found_empire",
