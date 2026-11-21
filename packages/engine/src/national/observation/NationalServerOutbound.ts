@@ -17,6 +17,7 @@ import {
   restoreNationalHumanSight,
 } from "./HumanSightPersistence";
 import { collectLiveNationalObservation } from "./LiveObservation";
+import { NationalObserverMapPager } from "./NationalObserverMap";
 import {
   NationalOutboundFilter,
   projectNationalAccessionOffers,
@@ -63,6 +64,7 @@ export class NationalServerRecipientSession {
   private readonly originalSessionId: string;
   private readonly principalId: string | null;
   private readonly outbound: NationalOutboundFilter;
+  private readonly observerMap: NationalObserverMapPager | null;
   private receiptDelivery: NationalResultDeliveryState =
     emptyNationalResultDeliveryState();
   private closed = false;
@@ -92,6 +94,7 @@ export class NationalServerRecipientSession {
     // connection cannot acquire another player's rights by mutating its
     // session object later.
     this.principalId = player?.type() === PlayerType.Human ? player.id() : null;
+    this.observerMap = this.principalId === null ? null : new NationalObserverMapPager(game, this.principalId);
     this.outbound = new NationalOutboundFilter(game, this.principalId);
     if (this.principalId !== null) {
       this.outbound.restoreSightMemory(
@@ -142,6 +145,7 @@ export class NationalServerRecipientSession {
   public close(): void {
     this.closed = true;
     this.outbound.restoreSightMemory(null);
+    this.observerMap?.close();
     this.receiptDelivery = emptyNationalResultDeliveryState();
   }
 
@@ -248,6 +252,15 @@ export class NationalServerRecipientSession {
         this.outbound.snapshotSightMemory(),
       );
     }
-    return outbound;
+    // This additive map belongs ONLY to the authenticated original socket.
+    // It is computed from Game + verified sight AFTER E3's existing raw
+    // packet whitelist. No client-selectable tile, observer or page cursor.
+    if (actor === null || verified === null || this.observerMap === null) {
+      return outbound;
+    }
+    return {
+      ...outbound,
+      nationalObserverMap: this.observerMap.page(verified),
+    };
   }
 }
