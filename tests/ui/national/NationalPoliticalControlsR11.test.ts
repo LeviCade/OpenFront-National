@@ -282,6 +282,35 @@ describe("R11 NATIONAL political wire authorization", () => {
     expect(panel.querySelector("#national-accept-accession")).toBeNull();
   });
 
+  it("an independent candidate can initiate a real request, never claim joining from the send receipt", async () => {
+    const { panel, bus, state } = await mount();
+    const events: SendNationalOfferEmpireIntentEvent[] = [];
+    bus.on(SendNationalOfferEmpireIntentEvent, (event) => events.push(event));
+    expect(panel.querySelector("#national-request-accession")).not.toBeNull();
+    expect(panel.querySelector("#national-offer-accession")).toBeNull();
+    await choose(panel, "#national-request-empire", "Atlas");
+    panel.querySelector<HTMLButtonElement>("#national-request-accession")!.click();
+    await panel.updateComplete;
+    expect(events).toHaveLength(1);
+    expect(events[0].candidateId).toBe("nation-a");
+    expect(events[0].empireId).toBe("Atlas");
+    expect(events[0].requestId).toMatch(/^np_[0-9a-f]{32}$/);
+    expect(panel.textContent).toContain("Awaiting game receipt");
+    expect(panel.textContent).not.toContain("Confirmed by game: your nation joined");
+    state.politicalResults = [
+      politicalReceipt("national_offer_empire", events[0].requestId, "Atlas"),
+    ];
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).toContain("Game accepted your request to join Atlas");
+    expect(panel.textContent).toContain("membership is not confirmed");
+    expect(state.politics.empires[0].memberIds).not.toContain("nation-a");
+    state.politics = { empires: [], warnings: [] };
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.querySelector<HTMLButtonElement>("#national-request-accession")!.disabled).toBe(true);
+  });
+
   it("emperor accepts a candidate-initiated invitation only after the candidate joins the live roster", async () => {
     const { panel, bus, state } = await mount({
       emperor: true,
