@@ -82,6 +82,7 @@ import { themeProvider } from "./theme/ThemeProvider";
 import { GoToPlayerEvent } from "./TransformHandler";
 import {
   counterAttackTroops,
+  NationalTransportStatusEvent,
   MoveWarshipIntentEvent,
   NewLobbyEvent,
   SendAllianceExtensionIntentEvent,
@@ -95,6 +96,7 @@ import {
   SendUpgradeStructureIntentEvent,
   Transport,
 } from "./Transport";
+import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
 import {
   materializeTrustedNationalUpdate,
   parseTrustedNationalProjection,
