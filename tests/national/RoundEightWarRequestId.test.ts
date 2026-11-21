@@ -7,7 +7,7 @@ import {
 } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
-import type { Game } from "@openfront/engine/game/Game";
+import type { Game, Player } from "@openfront/engine/game/Game";
 import { describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
@@ -86,15 +86,34 @@ describe("E2 Round Eight WAR/peace authenticated correlation transport", () => {
     game.addExecution(exec);
     game.executeNextTick();
     game.executeNextTick();
-    expect(spy).toHaveBeenCalledWith(
-      game.player(north.id),
-      expect.objectContaining({
-        kind: "declare-national",
-        aggressorId: north.id,
-        targetId: south.id,
-        requestId: "r8_declare_1",
-      }),
-    );
+    const authoritative = (
+      game as unknown as {
+        nationalWarCommandResults?: (
+          actor: Player,
+        ) => readonly { requestId: string; accepted: boolean; commandKind: string }[];
+      }
+    ).nationalWarCommandResults?.(game.player(north.id));
+    if (authoritative !== undefined) {
+      expect(authoritative).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            requestId: "r8_declare_1",
+            accepted: true,
+            commandKind: "national_declare_war",
+          }),
+        ]),
+      );
+    } else {
+      expect(spy).toHaveBeenCalledWith(
+        game.player(north.id),
+        expect.objectContaining({
+          kind: "declare-national",
+          aggressorId: north.id,
+          targetId: south.id,
+          requestId: "r8_declare_1",
+        }),
+      );
+    }
     expect(game.nationalWarAuthority()?.atWar(north.id, south.id)).toBe(true);
     // E1 controls receipts: E2 must not fabricate acceptance based on the click.
     spy.mockRestore();
@@ -114,13 +133,32 @@ describe("E2 Round Eight WAR/peace authenticated correlation transport", () => {
     expect([...again]).toEqual([...bytes]);
     const forwarded = vi.spyOn(restored, "performNationalWarCommand");
     restored.executeNextTick();
-    expect(forwarded).toHaveBeenCalledWith(
-      restored.player(north.id),
-      expect.objectContaining({
-        kind: "declare-national",
-        requestId: "r8_resumable_click",
-      }),
-    );
+    const restoredResults = (
+      restored as unknown as {
+        nationalWarCommandResults?: (
+          actor: Player,
+        ) => readonly { requestId: string; accepted: boolean; commandKind: string }[];
+      }
+    ).nationalWarCommandResults?.(restored.player(north.id));
+    if (restoredResults !== undefined) {
+      expect(restoredResults).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            requestId: "r8_resumable_click",
+            accepted: true,
+            commandKind: "national_declare_war",
+          }),
+        ]),
+      );
+    } else {
+      expect(forwarded).toHaveBeenCalledWith(
+        restored.player(north.id),
+        expect.objectContaining({
+          kind: "declare-national",
+          requestId: "r8_resumable_click",
+        }),
+      );
+    }
     expect(restored.nationalWarAuthority()?.atWar(north.id, south.id)).toBe(
       true,
     );
