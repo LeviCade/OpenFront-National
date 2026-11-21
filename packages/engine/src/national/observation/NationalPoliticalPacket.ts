@@ -233,24 +233,23 @@ function readActorJournal(
       ? source.nationalPoliticalCommandResults(actor)
       : []),
     ...war.map((record) => {
-      // Normalize only explicit authoritative E1 WAR result types. No type is
-      // derived from a public conflict or a client-submitted command.
-      const sourceKind = record.commandKind ?? record.kind ?? record.type;
-      const kind =
-        sourceKind === "national_declare_war"
+      // E1's canonical WAR port provides commandKind only. No client
+      // intent, public roster, or invented type can become a receipt.
+      const normalized =
+        record.commandKind === "national_declare_war"
           ? "declare-national"
-          : sourceKind === "national_propose_peace"
+          : record.commandKind === "national_propose_peace"
             ? "propose-peace"
-            : sourceKind === "national_accept_peace"
+            : record.commandKind === "national_accept_peace"
               ? "accept-peace"
-              : sourceKind;
+              : record.commandKind;
       if (
-        record.kind !== undefined &&
-        record.commandKind !== undefined &&
-        record.kind !== record.commandKind
-      )
-        throw new Error("NATIONAL contradictory authoritative WAR kind");
-      return { ...record, commandKind: kind };
+        normalized === undefined ||
+        !Object.prototype.hasOwnProperty.call(WAR_TYPES, normalized)
+      ) {
+        throw new Error("NATIONAL unsupported authoritative WAR kind");
+      }
+      return { ...record, commandKind: normalized as NationalWarKind };
     }),
   ];
 }

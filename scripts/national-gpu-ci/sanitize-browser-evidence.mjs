@@ -78,7 +78,7 @@ export function summarizeBrowserEvidence(report, expectedSha) {
       .slice(0, 40),
     packetCounts: {
       observed: packets.length,
-      withPublicPolitics: packets.filter((p) => p?.publicPolitics != null).length,
+      withPublicPolitics: packets.filter((p) => p?.publicPolitics !== null).length,
       acceptedResults: packets.reduce(
         (sum, p) => sum + (Array.isArray(p?.commandResults)
           ? p.commandResults.filter((r) => r?.accepted === true).length

@@ -49,7 +49,7 @@ const sample = () => ({
   networkErrors: [],
 });
 
-void test("redacted report reveals only schema-listed performance and GPU evidence", () => {
+test("redacted report reveals only schema-listed performance and GPU evidence", () => {
   const result = summarizeBrowserEvidence(sample(), SHA);
   assert.equal(result.hardware.proofAccepted, true);
   assert.equal(result.sourceMatches, true);
@@ -70,7 +70,7 @@ void test("redacted report reveals only schema-listed performance and GPU eviden
   ]) assert.ok(!text.includes(marker), "leak marker: " + marker);
 });
 
-void test("mismatched source or absent independently verified hardware never passes", () => {
+test("mismatched source or absent independently verified hardware never passes", () => {
   assert.equal(summarizeBrowserEvidence(sample(), "b".repeat(40)).sourceMatches, false);
   assert.equal(summarizeBrowserEvidence(sample(), SHA).hardware.proofAccepted, true);
   const forged = sample();
@@ -78,7 +78,7 @@ void test("mismatched source or absent independently verified hardware never pas
   assert.equal(summarizeBrowserEvidence(forged, SHA).hardware.proofAccepted, false);
 });
 
-void test("publish four separate reports; reject absent proof and nonmatching source", () => {
+test("publish four separate reports; reject absent proof and nonmatching source", () => {
   const dir = mkdtempSync(join(tmpdir(), "national-gpu-public-"));
   try {
     mkdirSync(join(dir, "gpu"), { recursive: true });
@@ -116,7 +116,7 @@ void test("publish four separate reports; reject absent proof and nonmatching so
   }
 });
 
-void test("symlink named .png does not permit reading arbitrary filesystem content", () => {
+test("symlink named .png does not permit reading arbitrary filesystem content", () => {
   const dir = mkdtempSync(join(tmpdir(), "national-gpu-public-symlink-"));
   try {
     mkdirSync(join(dir, "gpu"), { recursive: true });
