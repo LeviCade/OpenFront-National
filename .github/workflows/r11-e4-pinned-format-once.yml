@@ -1,0 +1,34 @@
+name: R11 E4 one-time pinned source formatter
+on:
+  push:
+    branches:
+      - feature/r11-e4-format-once-20261121
+permissions:
+  contents: read
+jobs:
+  e4-formatter:
+    name: Format E4-only changed files with repository pinned oxfmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm ci --ignore-scripts
+      - name: Produce exact pinned-formatted E4 blobs without editing main PR
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --no-install oxfmt --write src/client/NationalDiplomacyPanel.ts tests/ui/national/NationalPoliticalControlsR11.test.ts
+          python3 - <<'PY'
+          import base64
+          for key, path in [
+              ("PANEL", "src/client/NationalDiplomacyPanel.ts"),
+              ("TEST", "tests/ui/national/NationalPoliticalControlsR11.test.ts"),
+          ]:
+              with open(path,"rb") as f:
+                  print("E4_FORMATTED_" + key + "=" + base64.b64encode(f.read()).decode("ascii"))
+          PY
+          git diff --check
