@@ -1,0 +1,195 @@
+name: NATIONAL — trusted Skybot GPU gameplay acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: "Exact 40-character SHA reachable from approved staging and descended from integration base"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: national-hardware-${{ inputs.candidate_sha }}
+  cancel-in-progress: false
+
+jobs:
+  gpu-browser:
+    name: Four real game scenarios on one trusted GPU guest
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: skybot-ci-gpu
+    timeout-minutes: 55
+    env:
+      NATIONAL_REQUIRE_HARDWARE_GPU: "1"
+      NATIONAL_CHROME_ANGLE_BACKEND: gl-egl
+      NATIONAL_GPU_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      NATIONAL_GPU_RUNNER_SCALE_SET: skybot-ci-gpu
+      CHROME_BIN: /opt/skybot-gpu-runtime/chrome-headless-shell-linux64/chrome-headless-shell
+    steps:
+      - name: Confirm authorized default-branch dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$NATIONAL_GPU_CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'REFUSED: candidate must be an immutable lowercase 40-character SHA' >&2
+            exit 1
+          }
+          test "$RUNNER_ENVIRONMENT" = self-hosted || {
+            echo 'REFUSED: trusted Skybot execution requires self-hosted runner' >&2
+            exit 1
+          }
+          test "$(id -u)" -ne 0 || {
+            echo 'REFUSED: disposable guest workflow must not run as root' >&2
+            exit 1
+          }
+
+      - name: Checkout review base without retaining token
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify candidate belongs to approved staging ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p national-qa-artifacts/gpu
+          BASE_SHA=42e2b5d0a6372737b78178e5be49da7b76383d0a
+          git fetch --no-tags origin \
+            '+refs/heads/stage3/integration-20261115:refs/remotes/origin/stage3/integration-20261115' \
+            '+refs/heads/stage3/round6-combined-acceptance-20261116:refs/remotes/origin/stage3/round6-combined-acceptance-20261116'
+          git cat-file -e "$NATIONAL_GPU_CANDIDATE_SHA^{commit}"
+          git merge-base --is-ancestor "$BASE_SHA" "$NATIONAL_GPU_CANDIDATE_SHA" || {
+            echo 'REFUSED: candidate predates/diverges from Conductor-approved integration base' >&2
+            exit 1
+          }
+          valid=0
+          for staging in \
+            refs/remotes/origin/stage3/integration-20261115 \
+            refs/remotes/origin/stage3/round6-combined-acceptance-20261116; do
+            if git show-ref --verify --quiet "$staging" &&
+               git merge-base --is-ancestor "$NATIONAL_GPU_CANDIDATE_SHA" "$staging"; then
+              valid=1
+              printf '%s\n' "$staging" > national-qa-artifacts/gpu/approved-staging-ref.txt
+              break
+            fi
+          done
+          if [[ "$valid" -ne 1 ]]; then
+            echo 'REFUSED: candidate is not reachable from approved staging history' >&2
+            exit 1
+          fi
+          git checkout --detach "$NATIONAL_GPU_CANDIDATE_SHA"
+          test "$(git rev-parse HEAD)" = "$NATIONAL_GPU_CANDIDATE_SHA"
+          printf '%s\n' "$NATIONAL_GPU_CANDIDATE_SHA" > national-qa-artifacts/gpu/sha.txt
+          printf 'SOURCE_ADMISSION=PASS\n' | tee national-qa-artifacts/gpu/source-admission.txt
+
+      - name: Inspect guest GPU and trusted hardware-proof availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$CHROME_BIN" || {
+            echo "BLOCKED: pinned Chrome Headless Shell not installed: $CHROME_BIN" >&2
+            exit 1
+          }
+          mkdir -p national-qa-artifacts/gpu
+          {
+            echo "RUN_ID=$GITHUB_RUN_ID"
+            echo "RUN_ATTEMPT=$GITHUB_RUN_ATTEMPT"
+            echo "RUNNER_NAME=$RUNNER_NAME"
+            echo "RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT"
+            echo "SOURCE_SHA=$NATIONAL_GPU_CANDIDATE_SHA"
+            echo "BROWSER=$CHROME_BIN"
+            id
+            uname -a
+            ls -l /dev/dri || true
+            for n in /sys/class/drm/renderD*/device/driver; do
+              if test -L "$n"; then readlink "$n"; fi
+            done
+            for n in /sys/class/drm/renderD*/device/vendor; do
+              if test -r "$n"; then cat "$n"; fi
+            done
+          } > national-qa-artifacts/gpu/guest-inventory.txt
+          (glxinfo -B || true) > national-qa-artifacts/gpu/glxinfo.txt 2>&1
+          # A guest-produced JSON object is NOT independent host evidence.
+          # E5 requires a controller/operator-signed short-lived proof and
+          # out-of-band trusted public key; no fake proof is generated here.
+          if [[ -z "${NATIONAL_GPU_ATTESTATION_FILE:-}" ||
+                -z "${NATIONAL_GPU_PUBLIC_KEY_FILE:-}" ||
+                -z "${NATIONAL_GPU_ATTESTATION_CHALLENGE:-}" ||
+                ! -r "$NATIONAL_GPU_ATTESTATION_FILE" ||
+                ! -r "$NATIONAL_GPU_PUBLIC_KEY_FILE" ]]; then
+            echo 'BLOCKED: trusted host-signed attestation not provisioned for this job' |
+              tee national-qa-artifacts/gpu/attestation-blocker.txt
+            exit 1
+          fi
+          [[ "$NATIONAL_GPU_ATTESTATION_CHALLENGE" =~ ^[0-9a-f]{64}$ ]] || {
+            echo 'BLOCKED: hardware challenge must be 64 hex characters' >&2
+            exit 1
+          }
+          echo 'HOST_SIGNED_PROOF_PRESENT=TRUE; VERIFICATION_DEFERRED_TO_E5_BROWSER' |
+            tee national-qa-artifacts/gpu/proof-presence.txt
+
+      - name: Set up pinned Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: npm
+
+      - name: Pin npm and install all dependencies once
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts npm@12.1.0
+          test "$(node --version)" = v24.15.0
+          test "$(npm --version)" = 12.1.0
+          npm run inst
+
+      - name: Run all four real browser scenarios independently
+        id: scenarios
+        shell: bash
+        env:
+          EGL_PLATFORM: surfaceless
+        run: |
+          set -uo pipefail
+          mkdir -p national-qa-artifacts/gpu
+          failed=0
+          : > national-qa-artifacts/gpu/scenarios.jsonl
+          for scenario in national-desktop national-mobile legacy-desktop legacy-mobile; do
+            args=()
+            case "$scenario" in
+              national-mobile) args=(--mobile);;
+              legacy-desktop) args=(--legacy);;
+              legacy-mobile) args=(--mobile --legacy);;
+            esac
+            echo "=== RUN $scenario at $NATIONAL_GPU_CANDIDATE_SHA ==="
+            node scripts/national-qa/browser-gameplay.mjs "${args[@]}" \
+              > "national-qa-artifacts/gpu/$scenario.log" 2>&1
+            status=$?
+            SCENARIO="$scenario" STATUS="$status" node -e '
+              const fs = require("node:fs");
+              fs.appendFileSync("national-qa-artifacts/gpu/scenarios.jsonl",
+                JSON.stringify({scenario:process.env.SCENARIO,
+                  result:Number(process.env.STATUS)===0?"PASS":"FAIL",
+                  exitCode:Number(process.env.STATUS)})+"\n");
+            '
+            echo "$scenario: exit $status"
+            tail -n 24 "national-qa-artifacts/gpu/$scenario.log" || true
+            if [[ "$status" -ne 0 ]]; then failed=1; fi
+          done
+          if [[ "$failed" -ne 0 ]]; then
+            echo 'BLOCKED: at least one required real gameplay scenario failed' >&2
+            exit 1
+          fi
+
+      - name: Upload bounded GPU evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-skybot-gpu-${{ inputs.candidate_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: national-qa-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
