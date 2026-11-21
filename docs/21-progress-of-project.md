@@ -199,6 +199,57 @@ is draft and unscored.
 Fourth Class = 40%.** Milestone weights remain unchanged; the
 Conductor Class grade is a separate 0–4 measure.
 
+## First Conductor's Fifth Class accepted development-source slice
+
+**40% → 41% (+1 verified).** [Six-owner PR #83](https://github.com/LeviCade/OpenFront-National/pull/83)
+merged as `3dee4095ffec424b3376a073007ff550bb34bd6e`,
+with merged source tree `8d3dc3452e8e7db16a6f921acfbec267b2b75b51`
+byte-identical to reviewed source
+`c006126a32457294060cf195d2f75f737f6e8f07`.
+[Exact reviewed R6 #44947981460](https://github.com/LeviCade/OpenFront-National/actions/runs/44947981460)
+**SUCCESS**: all seven source gates, 811/811 test files, 11,715
+passed tests, one prior skip; independent GameRunner/hostile and
+WAR/MDA/CAS/replay PASS.
+[Exact merged-head Source Baseline #44948411303](https://github.com/LeviCade/OpenFront-National/actions/runs/44948411303)
+**SUCCESS** and
+[independent QA #44948411299](https://github.com/LeviCade/OpenFront-National/actions/runs/44948411299)
+**SUCCESS**, including actual Chromium homepage smoke.
+
+- **M2 +1:** genuinely new human candidate-request and reciprocal
+  emperor-consent accession source workflow. E4 now permits an
+  independent nation to request admission to an existing empire.
+  The E3 correctly recipient-private invitation reaches the current
+  emperor, who can approve the real candidate ID rather than its own.
+  E2 authenticated GameRunner/E1 state prove acceptance and current
+  roster membership; E4 UI requires authoritative receipt plus
+  matching current roster. Combined
+  `NationalAccessionPacketsR11.test.ts` **4/4** and
+  `NationalPoliticalControlsR11.test.ts` **8/8**, including hostile
+  recipient and premature success negatives, executed and passed.
+  Distinct from R4 basic Game accession, and R10's stamped
+  GameRunner politics where human-facing controls were explicitly
+  not implemented. This is **accepted development source**, not
+  an independently authenticated two-/three-human browser test.
+
+**Not scored:** E1 stale-controller defense and E2 trusted GameRunner
+foundations are not yet wired to the actual Private lobby ingress:
+`GameServer.start()` still fails closed for Private NATIONAL, and
+the original trusted client stamp is not yet passed along all queued
+executions. E3 server-private outbound projection is not wired to
+live authenticated sockets. **M7 +0 and M9 +0**. No physically
+proven NATIONAL desktop/mobile GPU spawn/founding/combat sequence,
+no 3-human trusted shared game, no independently enrolled host-held
+Ed25519 key and real signed post-VM cleanup. Strict hosted
+browser software-rendering rejections were not waived.
+No public release; existing asset/music and security blockers remain.
+
+**Accounting: 16 opening + 5 R4 + 6 R8 + 6 R9 + 5 R10 +
+2 Fourth Class + 1 Fifth Class = 41%.** The original M0–M9
+weights remain unchanged. Fifth Class engineer assignments are
+Issues #84–#89 with integration target
+`stage3/class5-trusted-national-vertical-20261121`.
+The Manager's Conductor Score is a separate 0–4 assessment.
+
 ## Scoring controls
 
 - Each new point requires identifiable **real engine or browser**
@@ -208,7 +259,7 @@ Conductor Class grade is a separate 0–4 measure.
   weights are ceilings for new milestone allocation; the prior
   historical 16 remains an unallocated opening estimate rather than
   retroactively invented milestone achievements.
-- **Current: 40% verified.** Further points require
+- **Current: 41% verified.** Further points require
   additional accepted integration scenarios and the same CI discipline.
 - Never treat honest-client Solo Web Worker filtering as hostile
   client fog security. A trusted-host server is a separate release gate.
