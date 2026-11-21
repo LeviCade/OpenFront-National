@@ -35,8 +35,7 @@ async function gameWithHumans(): Promise<Game> {
   }
   game.executeNextTick();
   game.executeNextTick();
-  for (const p of players)
-    expect(game.player(p.id).hasSpawned()).toBe(true);
+  for (const p of players) expect(game.player(p.id).hasSpawned()).toBe(true);
   return game;
 }
 
@@ -73,8 +72,7 @@ function command(
   return {
     type,
     empireId,
-    ...(type === "national_offer_empire" ||
-    type === "national_accept_empire"
+    ...(type === "national_offer_empire" || type === "national_accept_empire"
       ? { candidateId: targetId ?? B }
       : type === "national_transfer_crown"
         ? { successorId: targetId ?? B }
@@ -146,31 +144,36 @@ describe("R10 E2 authenticated empire/crown wire bridge", () => {
     expect(game.nationalPoliticalAuthority()?.emperorOf(empireId)).toBe(A);
     send(charlie, command("national_transfer_crown", "r10-forged", clientC));
     expect(
-      game.nationalPoliticalCommandResults(game.player(C))
+      game
+        .nationalPoliticalCommandResults(game.player(C))
         .find((r) => r.requestId === "r10-forged")?.accepted,
     ).toBe(false);
     expect(game.nationalPoliticalAuthority()?.emperorOf(empireId)).toBe(A);
 
     send(alpha, command("national_offer_empire", "r10-offer", clientA));
     expect(
-      game.nationalPoliticalCommandResults(game.player(A))
+      game
+        .nationalPoliticalCommandResults(game.player(A))
         .find((r) => r.requestId === "r10-offer")?.accepted,
     ).toBe(true);
     send(bravo, command("national_accept_empire", "r10-join", clientB));
     expect(
-      game.nationalPoliticalCommandResults(game.player(B))
+      game
+        .nationalPoliticalCommandResults(game.player(B))
         .find((r) => r.requestId === "r10-join")?.accepted,
     ).toBe(true);
     expect(game.nationalPoliticalAuthority()?.empireOf(B)).toBe(empireId);
 
     send(alpha, command("national_transfer_crown", "r10-crown", clientA));
     expect(
-      game.nationalPoliticalCommandResults(game.player(A))
+      game
+        .nationalPoliticalCommandResults(game.player(A))
         .find((r) => r.requestId === "r10-crown")?.accepted,
     ).toBe(true);
     expect(game.nationalPoliticalAuthority()?.emperorOf(empireId)).toBe(B);
     expect(
-      game.nationalPoliticalCommandResults(game.player(C))
+      game
+        .nationalPoliticalCommandResults(game.player(C))
         .some((r) => r.accepted),
     ).toBe(false);
 

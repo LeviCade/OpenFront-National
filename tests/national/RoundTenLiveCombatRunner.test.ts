@@ -35,11 +35,7 @@ async function liveGame(): Promise<Game> {
   ];
   for (let i = 0; i < humans.length; i++) {
     game.addExecution(
-      new SpawnExecution(
-        gameID,
-        humans[i],
-        game.ref(spawn[i][0], spawn[i][1]),
-      ),
+      new SpawnExecution(gameID, humans[i], game.ref(spawn[i][0], spawn[i][1])),
     );
   }
   game.executeNextTick();
@@ -160,9 +156,7 @@ describe("R10 E2 actual GameRunner NATIONAL war, MDA and peace", () => {
     prewar.init(game, game.ticks());
     expect(prewar.isActive()).toBe(false);
     expect(game.player(A).troops()).toBe(prewarTroops);
-    expect([C, D].map((id) => game.player(id).troops())).toEqual(
-      prewarDonors,
-    );
+    expect([C, D].map((id) => game.player(id).troops())).toEqual(prewarDonors);
     expect(game.nationalWarState()!.levy.processed).toEqual([]);
 
     turn(game, engine, war(B, "r10-declare"));
@@ -243,7 +237,8 @@ describe("R10 E2 actual GameRunner NATIONAL war, MDA and peace", () => {
     });
     turn(game, engine);
     expect(
-      game.nationalWarCommandResults(game.player(A))
+      game
+        .nationalWarCommandResults(game.player(A))
         .find((row) => row.requestId === "r10-wrong-side")?.accepted,
     ).toBe(false);
     expect(game.nationalWarAuthority()!.atWar(A, B)).toBe(true);
@@ -256,7 +251,8 @@ describe("R10 E2 actual GameRunner NATIONAL war, MDA and peace", () => {
     });
     turn(game, engine);
     expect(
-      game.nationalWarCommandResults(game.player(B))
+      game
+        .nationalWarCommandResults(game.player(B))
         .find((row) => row.requestId === "r10-bilateral-accept")?.accepted,
     ).toBe(true);
     expect(game.nationalWarAuthority()!.atWar(A, B)).toBe(false);
@@ -299,7 +295,8 @@ describe("R10 E2 actual GameRunner NATIONAL war, MDA and peace", () => {
     turn(game, engine);
     expect(game.nationalWarState()!.wars.layers).toHaveLength(0);
     expect(
-      game.nationalWarCommandResults(game.player(B))
+      game
+        .nationalWarCommandResults(game.player(B))
         .find((row) => row.requestId === "r10-foreign-claim")?.accepted,
     ).toBe(false);
 
@@ -367,9 +364,7 @@ describe("R10 E2 actual GameRunner NATIONAL war, MDA and peace", () => {
       ),
     ).toBe(true);
     expect(
-      levy.allowances.every(
-        (row) => row.spent >= 0 && row.spent <= row.limit,
-      ),
+      levy.allowances.every((row) => row.spent >= 0 && row.spent <= row.limit),
     ).toBe(true);
     expect(levy.allowances).toHaveLength(2);
     expect(game.player(D).troops()).toBeLessThan(donorBefore);
