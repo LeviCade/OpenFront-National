@@ -175,6 +175,10 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
     "spawn",
     "found-empire",
     "rejected-founding",
+    "offer-accession",
+    "recipient-invitation",
+    "recipient-acceptance",
+    "transfer-crown",
     "declare-war",
     "map-assault",
     "propose-peace",
@@ -217,6 +221,10 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
         "spawn",
         "found-empire",
         "rejected-founding",
+        "offer-accession",
+        "recipient-invitation",
+        "recipient-acceptance",
+        "transfer-crown",
         "declare-war",
         "map-assault",
         "combat-impact",
@@ -231,6 +239,78 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
         "legacy-player-action",
       ];
   const missingStages = required.filter((s) => !completed.includes(s));
+  const requiredScreenshots = scenario.startsWith("national-")
+    ? [
+        "home",
+        "solo-modal",
+        "game-hud",
+        "spawn-unobstructed-map",
+        "player-spawned",
+        "founding-request",
+        "confirmed-empire",
+        "political-offer-accepted",
+        "political-member-joined-founders-view",
+        "political-crown-former-emperor-revoked",
+        "declared-war-live",
+        "radial-attack-enabled",
+        "map-assault-confirmed",
+        "combat-impact-canonical",
+        "peace-motion-proposed",
+        "peace-accepted-ended-war",
+      ]
+    : ["home", "solo-modal", "legacy-ffa-game-hud", "legacy-player-action"];
+  const capturedNames = Array.isArray(report?.events)
+    ? report.events.flatMap((e) =>
+        e?.name === "screenshot" && typeof e.label === "string"
+          ? [e.label]
+          : typeof e?.name === "string" &&
+              Number.isSafeInteger(e.packetCount) &&
+              Number.isSafeInteger(e.assetRequests)
+            ? [e.name] // Historical pre-R11 capture used the label as name.
+            : [],
+      )
+    : [];
+  const missingScreenshots = requiredScreenshots.filter(
+    (label) => !capturedNames.includes(label),
+  );
+  // A stage-complete marker and screenshots alone are NOT political proof.
+  // Require recipient-side private invite, real distinct actor input, two
+  // viewer rosters and physically separate opposing peace acceptance.
+  const evidenceEvents = Array.isArray(report?.events) ? report.events : [];
+  const politicalProof =
+    !scenario.startsWith("national-") ||
+    [
+      (e) =>
+        e.name === "political-recipient-private-invitation" &&
+        e.recipientOnly === true &&
+        e.secondAuthenticatedSession === true &&
+        e.originatingOfferReceiptMatched === true,
+      (e) =>
+        e.name === "political-accept-real-recipient-click" &&
+        e.differentPrincipal === true &&
+        e.realCdpInput === true,
+      (e) =>
+        e.name === "political-membership-confirmed-by-both" &&
+        e.recipientAccepted === true &&
+        e.founderRosterAgrees === true,
+      (e) =>
+        e.name === "political-crown-confirmed-by-both" &&
+        e.formerEmperorRevoked === true &&
+        e.successorIsDifferentPrincipal === true,
+      (e) =>
+        e.name === "war-opponent-identity-verified" &&
+        e.differentPrincipal === true &&
+        e.sameGameId === true &&
+        e.targetNotEmpireMember === true,
+      (e) =>
+        e.name === "peace-real-opponent-click" &&
+        e.differentPrincipal === true &&
+        e.realCdpInput === true,
+      (e) =>
+        e.name === "authoritative-peace-accepted" &&
+        e.differentPrincipal === true &&
+        e.warEndedInBothViews === true,
+    ].every((predicate) => evidenceEvents.some(predicate));
   const code = Number.isInteger(exitCode) ? exitCode : -1;
   const hardware = (report?.events ?? []).some(
     (event) =>
@@ -259,6 +339,22 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
         typeof lastError?.error === "string" ? lastError.error : "";
       const match = [
         ["MAP_ATTACK_NOT_DISPATCHED", /MAP_ATTACK_NOT_DISPATCHED/],
+        [
+          "POLITICAL_SECOND_SESSION_MISSING",
+          /POLITICAL_SECOND_AUTHORIZED_BROWSER_SESSION_MISSING|POLITICAL_DISTINCT_PRINCIPAL_REQUIRED|POLITICAL_SECOND_CDP_SESSION_UNREACHABLE/,
+        ],
+        [
+          "POLITICAL_INVITATION_NOT_DELIVERED",
+          /POLITICAL_INVITATION|POLITICAL_PRIVATE/,
+        ],
+        [
+          "POLITICAL_RECEIPT_OR_ROSTER_MISMATCH",
+          /POLITICAL_FORGED|POLITICAL_CANONICAL|POLITICAL_STALE|POLITICAL_CROSS_VIEW|POLITICAL_AUTHENTIC_RECEIPT_ABSENT/,
+        ],
+        [
+          "REAL_RADIAL_TARGET_MISSING",
+          /TARGET_AWARE_MAP_ANCHOR_MISSING|TARGET_AWARE_RADIAL_MENU_MISSING|RADIAL_TARGET_NOT_AUTHENTICATED/,
+        ],
         ["MAP_ASSAULT_ENGINE_MISSING", /MAP_ASSAULT_LACKS_ENGINE_STATE_CHANGE/],
         [
           "NO_ELIGIBLE_WAR_TARGET",
@@ -287,11 +383,21 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
         ? "GAMEPLAY_STAGE_FAILED"
         : missingStages.length
           ? "REQUIRED_STAGES_MISSING"
-          : null,
+          : missingScreenshots.length
+            ? "REQUIRED_SCREENSHOTS_MISSING"
+            : !politicalProof
+              ? "AUTHENTIC_MULTI_PRINCIPAL_EVIDENCE_MISSING"
+              : null,
     missingStages,
+    missingScreenshots,
+    authenticMultiPrincipalEvidence: politicalProof,
     webglShadersMatch: shader,
     signedHardwareAttested: hardware,
-    gameplayPassed: code === 0 && missingStages.length === 0,
+    gameplayPassed:
+      code === 0 &&
+      missingStages.length === 0 &&
+      missingScreenshots.length === 0 &&
+      politicalProof,
     publicReleasePassed: false,
   };
 }

@@ -74,6 +74,8 @@ function fixture() {
       scenario: mode,
       outcome: "UNVERIFIED",
       reason: "SIGNED_WITNESS_NOT_VERIFIED",
+      firstFailedStage: null,
+      releaseCertified: false,
       exitCode: 0,
       stageComplete: true,
       reportPresent: true,
@@ -379,6 +381,34 @@ test("wrong lane, missing mode, failing NATIONAL gameplay and forged guest certi
     );
     assert.equal(
       mutate((s) => {
+        s.modes["national-desktop"].outcome = "FAIL";
+      }).reason,
+      "GAMEPLAY_MODE_EVIDENCE_INCOMPLETE_national-desktop",
+    );
+    assert.equal(
+      mutate((s) => {
+        s.modes["national-desktop"].outcome = "UNVERIFIED";
+        s.modes["national-desktop"].reason = "GAMEPLAY_STAGE_FOUND_EMPIRE";
+      }).reason,
+      "GAMEPLAY_MODE_EVIDENCE_INCOMPLETE_national-desktop",
+    );
+    assert.equal(
+      mutate((s) => {
+        s.modes["national-desktop"].reason = "SIGNED_WITNESS_NOT_VERIFIED";
+        s.modes["national-desktop"].firstFailedStage = "found-empire";
+      }).reason,
+      "GAMEPLAY_MODE_EVIDENCE_INCOMPLETE_national-desktop",
+    );
+    assert.equal(
+      mutate((s) => {
+        s.modes["national-desktop"].firstFailedStage = null;
+        s.modes["national-desktop"].releaseCertified = true;
+      }).reason,
+      "GAMEPLAY_MODE_EVIDENCE_INCOMPLETE_national-desktop",
+    );
+    assert.equal(
+      mutate((s) => {
+        s.modes["national-desktop"].releaseCertified = false;
         s.modes["national-desktop"].exitCode = 1;
         s.modes["national-desktop"].outcome = "FAIL";
       }).reason,

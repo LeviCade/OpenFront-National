@@ -34,6 +34,7 @@ async function mount(
         ? { empires: [], warnings: [] }
         : options.politics,
     tick: 10,
+    paused: false,
     results: [] as NationalFoundingResult[],
   };
   const player = {
@@ -58,6 +59,7 @@ async function mount(
     nationalFoundingOutcome: () => null,
     nationalFoundingResults: () => optionsState.results,
     ticks: () => optionsState.tick,
+    isPaused: () => optionsState.paused,
     gameID: () => "national-test",
     players: () => [player],
   } as unknown as GameView;
@@ -144,13 +146,48 @@ describe("NATIONAL player-facing founding", () => {
 
     expect(sent).toEqual(["Atlas_Empire"]);
     expect(element.textContent).toContain(
-      "Awaiting its accepted or rejected result",
+      "Engine delivery and outcome are unverified",
     );
     expect(element.textContent).not.toContain("Confirmed by game");
     expect(
       element.querySelector<HTMLButtonElement>('button[type="submit"]')!
         .disabled,
     ).toBe(true);
+  });
+
+  it("exposes exact pending founder ID and actual tick/pause without implying worker delivery", async () => {
+    const { element, requests, optionsState } = await mount();
+    const input = element.querySelector<HTMLInputElement>(
+      "#national-empire-id",
+    )!;
+    input.value = "Atlas";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await element.updateComplete;
+    element.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    await element.updateComplete;
+
+    expect(requests).toHaveLength(1);
+    const status = element.querySelector<HTMLElement>(
+      "[data-national-founding-tick]",
+    )!;
+    expect(status.dataset.nationalFoundingRequestId).toBe(
+      requests[0].requestId,
+    );
+    expect(status.dataset.nationalFoundingActorId).toBe("nation-a");
+    expect(status.textContent).toContain("Submitted at Game tick");
+    expect(status.textContent).toContain(
+      "No matching accepted receipt observed yet",
+    );
+    expect(element.textContent).not.toContain("Confirmed by game");
+
+    optionsState.tick = 13;
+    optionsState.paused = true;
+    element.refresh();
+    await element.updateComplete;
+    expect(
+      element.querySelector("[data-national-founding-tick]")?.textContent,
+    ).toMatch(/current Game tick\s+13, pause\s+active/);
+    expect(element.textContent).not.toContain("Confirmed by game");
   });
 
   it("shows confirmed leadership only after authoritative state arrives, including restored games", async () => {
