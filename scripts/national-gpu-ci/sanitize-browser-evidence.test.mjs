@@ -133,18 +133,18 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       const completedStages = legacy
         ? ["legacy-ffa", "legacy-player-action"]
         : [
-          "found-empire",
-          "rejected-founding",
-          "offer-accession",
-          "recipient-invitation",
-          "recipient-acceptance",
-          "transfer-crown",
-          "declare-war",
-          "map-assault",
-          "combat-impact",
-          "propose-peace",
-          "accept-peace"
-        ];
+            "found-empire",
+            "rejected-founding",
+            "offer-accession",
+            "recipient-invitation",
+            "recipient-acceptance",
+            "transfer-crown",
+            "declare-war",
+            "map-assault",
+            "combat-impact",
+            "propose-peace",
+            "accept-peace",
+          ];
       for (const finished of completedStages) {
         report.events.push({ name: "stage-complete", stage: finished });
       }

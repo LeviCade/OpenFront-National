@@ -297,9 +297,8 @@ export function publishEvidence(root, expectedSha, kind = "release") {
         ) &&
         hasEvent("legacy-ffa-verified") &&
         hasEvent("legacy-actual-map-interaction-authoritative-update")
-      : R11_NATIONAL_STAGES.every((s) =>
-          summary.completedStages.includes(s),
-        ) && R11_NATIONAL_RECEIPTS.every(hasEvent);
+      : R11_NATIONAL_STAGES.every((s) => summary.completedStages.includes(s)) &&
+        R11_NATIONAL_RECEIPTS.every(hasEvent);
     const gl1 = raw?.actualHardware?.webgl1;
     const gl2 = raw?.actualHardware?.webgl;
     const physicalDiagnostic =
