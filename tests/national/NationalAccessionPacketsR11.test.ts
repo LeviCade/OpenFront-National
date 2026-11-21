@@ -392,14 +392,20 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
       // Use the actual E4 production parsers. A missing integration export is
       // an outright failure, never a substituted reader implemented by E3.
       const e4 = await import("../../src/client/NationalDiplomacyState");
-      const readOffers: unknown = Reflect.get(e4, "readNationalAccessionOffers");
+      const readOffers: unknown = Reflect.get(
+        e4,
+        "readNationalAccessionOffers",
+      );
       const readPolitical: unknown = Reflect.get(
         e4,
         "readNationalPoliticalResults",
       );
       expect(typeof readOffers).toBe("function");
       expect(typeof readPolitical).toBe("function");
-      if (typeof readOffers !== "function" || typeof readPolitical !== "function")
+      if (
+        typeof readOffers !== "function" ||
+        typeof readPolitical !== "function"
+      )
         throw new Error("R11 E3/E4 production wire reader missing");
 
       const game = await seeded();
@@ -415,12 +421,7 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
       // existing empire. In this direction the EMPEROR is the recipient;
       // candidateId must stay D (NOT be rewritten to A for E4).
       const issued = candidate.next(
-        order(
-          "national_offer_empire",
-          receiptId("1"),
-          D.clientID!,
-          D.id,
-        ),
+        order("national_offer_empire", receiptId("1"), D.clientID!, D.id),
       );
       expect(issued.nationalCommandResults).toBeUndefined();
       const emperorOffer = emperor.next();
@@ -438,7 +439,9 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
       });
       // This is the missing cross-owner contract: E4 MUST recognize an
       // E3-projected, E1-real candidate→emperor offer as actionable.
-      expect(readOffers(emperorOffer.nationalAccessionOffers, A.id)).toMatchObject({
+      expect(
+        readOffers(emperorOffer.nationalAccessionOffers, A.id),
+      ).toMatchObject({
         version: 1,
         recipientId: A.id,
         offers: [
@@ -459,21 +462,14 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
 
       // Distinguish a pending E2 stamped acceptance from a real E1 receipt.
       const pendingAccept = emperor.next(
-        order(
-          "national_accept_empire",
-          receiptId("2"),
-          A.clientID!,
-          D.id,
-        ),
+        order("national_accept_empire", receiptId("2"), A.clientID!, D.id),
       );
       expect(offers(pendingAccept)).toHaveLength(1);
       expect(emperor.receipts(receiptId("2"))).toEqual([]);
       const accepted = emperor.next();
       expect(offers(accepted)).toEqual([]);
       expect(game.nationalPoliticalAuthority()?.empireOf(D.id)).toBe(EMPIRE);
-      expect(
-        readPolitical(accepted.nationalCommandResults, A.id),
-      ).toEqual([
+      expect(readPolitical(accepted.nationalCommandResults, A.id)).toEqual([
         expect.objectContaining({
           type: "national_accept_empire",
           actorId: A.id,
@@ -529,9 +525,9 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
       });
       // The E4 accession result parser cannot mistake a delegation
       // receipt for consent to accession.
-      expect(
-        readPolitical(grantPacket.nationalCommandResults, A.id),
-      ).toEqual([]);
+      expect(readPolitical(grantPacket.nationalCommandResults, A.id)).toEqual(
+        [],
+      );
       expect(invitee.next().nationalCommandResults).toBeUndefined();
       expect(outsider.next().nationalCommandResults).toBeUndefined();
       expect(spectator.next().nationalCommandResults).toBeUndefined();
@@ -563,24 +559,16 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
       // Pending third-party offers become invalid on a real E1 crown
       // transfer; never display old actionable state after restore.
       emperor.send(
-        order(
-          "national_offer_empire",
-          receiptId("5"),
-          A.clientID!,
-          B.id,
-        ),
+        order("national_offer_empire", receiptId("5"), A.clientID!, B.id),
       );
       const beforeTransfer = invitee.next();
-      expect(readOffers(beforeTransfer.nationalAccessionOffers, B.id)).toMatchObject({
+      expect(
+        readOffers(beforeTransfer.nationalAccessionOffers, B.id),
+      ).toMatchObject({
         offers: [{ empireId: EMPIRE, candidateId: B.id, recipientId: B.id }],
       });
       emperor.send(
-        order(
-          "national_transfer_crown",
-          receiptId("6"),
-          A.clientID!,
-          D.id,
-        ),
+        order("national_transfer_crown", receiptId("6"), A.clientID!, D.id),
       );
       const revoked = invitee.next();
       expect(readOffers(revoked.nationalAccessionOffers, B.id)).toMatchObject({
@@ -594,10 +582,9 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
         readOffers(postRestore.nationalAccessionOffers, B.id),
       ).toMatchObject({ offers: [] });
       expect(postRestore.nationalCommandResults).toBeUndefined();
-      expect(
-        session(restored).next(),
-      ).not.toHaveProperty("nationalAccessionOffers");
+      expect(session(restored).next()).not.toHaveProperty(
+        "nationalAccessionOffers",
+      );
     },
   );
-
 });
