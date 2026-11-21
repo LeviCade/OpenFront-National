@@ -280,21 +280,37 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
   const politicalProof =
     !scenario.startsWith("national-") ||
     [
-      e => e.name === "political-recipient-private-invitation" &&
-        e.recipientOnly === true && e.secondAuthenticatedSession === true &&
+      (e) =>
+        e.name === "political-recipient-private-invitation" &&
+        e.recipientOnly === true &&
+        e.secondAuthenticatedSession === true &&
         e.originatingOfferReceiptMatched === true,
-      e => e.name === "political-accept-real-recipient-click" &&
-        e.differentPrincipal === true && e.realCdpInput === true,
-      e => e.name === "political-membership-confirmed-by-both" &&
-        e.recipientAccepted === true && e.founderRosterAgrees === true,
-      e => e.name === "political-crown-confirmed-by-both" &&
+      (e) =>
+        e.name === "political-accept-real-recipient-click" &&
+        e.differentPrincipal === true &&
+        e.realCdpInput === true,
+      (e) =>
+        e.name === "political-membership-confirmed-by-both" &&
+        e.recipientAccepted === true &&
+        e.founderRosterAgrees === true,
+      (e) =>
+        e.name === "political-crown-confirmed-by-both" &&
         e.formerEmperorRevoked === true &&
         e.successorIsDifferentPrincipal === true,
-      e => e.name === "peace-real-opponent-click" &&
-        e.differentPrincipal === true && e.realCdpInput === true,
-      e => e.name === "authoritative-peace-accepted" &&
-        e.differentPrincipal === true && e.warEndedInBothViews === true,
-    ].every(predicate => evidenceEvents.some(predicate));
+      (e) =>
+        e.name === "war-opponent-identity-verified" &&
+        e.differentPrincipal === true &&
+        e.sameGameId === true &&
+        e.targetNotEmpireMember === true,
+      (e) =>
+        e.name === "peace-real-opponent-click" &&
+        e.differentPrincipal === true &&
+        e.realCdpInput === true,
+      (e) =>
+        e.name === "authoritative-peace-accepted" &&
+        e.differentPrincipal === true &&
+        e.warEndedInBothViews === true,
+    ].every((predicate) => evidenceEvents.some(predicate));
   const code = Number.isInteger(exitCode) ? exitCode : -1;
   const hardware = (report?.events ?? []).some(
     (event) =>
@@ -323,14 +339,22 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
         typeof lastError?.error === "string" ? lastError.error : "";
       const match = [
         ["MAP_ATTACK_NOT_DISPATCHED", /MAP_ATTACK_NOT_DISPATCHED/],
-        ["POLITICAL_SECOND_SESSION_MISSING",
-          /POLITICAL_SECOND_AUTHORIZED_BROWSER_SESSION_MISSING|POLITICAL_DISTINCT_PRINCIPAL_REQUIRED|POLITICAL_SECOND_CDP_SESSION_UNREACHABLE/],
-        ["POLITICAL_INVITATION_NOT_DELIVERED",
-          /POLITICAL_INVITATION|POLITICAL_PRIVATE/],
-        ["POLITICAL_RECEIPT_OR_ROSTER_MISMATCH",
-          /POLITICAL_FORGED|POLITICAL_CANONICAL|POLITICAL_STALE|POLITICAL_CROSS_VIEW|POLITICAL_AUTHENTIC_RECEIPT_ABSENT/],
-        ["REAL_RADIAL_TARGET_MISSING",
-          /TARGET_AWARE_MAP_ANCHOR_MISSING|TARGET_AWARE_RADIAL_MENU_MISSING|RADIAL_TARGET_NOT_AUTHENTICATED/],
+        [
+          "POLITICAL_SECOND_SESSION_MISSING",
+          /POLITICAL_SECOND_AUTHORIZED_BROWSER_SESSION_MISSING|POLITICAL_DISTINCT_PRINCIPAL_REQUIRED|POLITICAL_SECOND_CDP_SESSION_UNREACHABLE/,
+        ],
+        [
+          "POLITICAL_INVITATION_NOT_DELIVERED",
+          /POLITICAL_INVITATION|POLITICAL_PRIVATE/,
+        ],
+        [
+          "POLITICAL_RECEIPT_OR_ROSTER_MISMATCH",
+          /POLITICAL_FORGED|POLITICAL_CANONICAL|POLITICAL_STALE|POLITICAL_CROSS_VIEW|POLITICAL_AUTHENTIC_RECEIPT_ABSENT/,
+        ],
+        [
+          "REAL_RADIAL_TARGET_MISSING",
+          /TARGET_AWARE_MAP_ANCHOR_MISSING|TARGET_AWARE_RADIAL_MENU_MISSING|RADIAL_TARGET_NOT_AUTHENTICATED/,
+        ],
         ["MAP_ASSAULT_ENGINE_MISSING", /MAP_ASSAULT_LACKS_ENGINE_STATE_CHANGE/],
         [
           "NO_ELIGIBLE_WAR_TARGET",
