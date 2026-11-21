@@ -686,8 +686,6 @@ describe("R11 E5 complete privacy proof fails closed on absent sender view", () 
     );
   });
 });
-
-
 describe("Class Four source-only A/B/C browser topology", () => {
   const A = {
     gameId: "same-authoritative-game",
@@ -723,13 +721,9 @@ describe("Class Four source-only A/B/C browser topology", () => {
     expect(verifyThreeLivePrincipals(A, B, { ...C, empires: [] }).reason).toBe(
       "POLITICAL_THIRD_VIEW_ROSTER_UNVERIFIED",
     );
-    expect(
-      verifyThreeLivePrincipals(
-        { ...A, empires: [] },
-        B,
-        C,
-      ).reason,
-    ).toBe("POLITICAL_THREE_PRINCIPAL_ROSTER_NOT_CURRENT");
+    expect(verifyThreeLivePrincipals({ ...A, empires: [] }, B, C).reason).toBe(
+      "POLITICAL_THREE_PRINCIPAL_ROSTER_NOT_CURRENT",
+    );
   });
 });
 
