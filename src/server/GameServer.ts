@@ -1269,6 +1269,220 @@ export class GameServer {
     });
   }
 
+  /**
+   * One authenticated Private lobby becomes ONE trusted server-owned Game.
+   * No browser receives a ServerTurnMessage, a canonical Game, or a snapshot.
+   * Map loading is asynchronous; the roster and host are checked again AFTER
+   * it resolves, so no late admission or disconnected host can hijack start.
+   */
+  private async startTrustedNational(): Promise<void> {
+    if (this.nationalStarting || this.ended || this.nationalMatch !== null) {
+      return;
+    }
+    this.nationalStarting = true;
+    try {
+      if (
+        this.gameConfig.nationalMode !== true ||
+        this.gameConfig.gameType !== GameType.Private ||
+        this.gameConfig.gameMode !== GameMode.FFA ||
+        this.gameConfig.tutorial === true ||
+        this.gameConfig.rankedType !== undefined ||
+        this.isListed() ||
+        this.creatorPersistentID === undefined
+      ) {
+        throw new Error("NATIONAL requires authenticated unlisted Private FFA host");
+      }
+      const seated = this.clients.players();
+      const host = seated.find(
+        (c) => c.persistentID === this.creatorPersistentID,
+      );
+      if (!host?.claims || !host.publicId || seated.length < 2) {
+        throw new Error("NATIONAL requires authenticated host and two real seats");
+      }
+      const accounts = new Set<string>();
+      const persistents = new Set<string>();
+      for (const client of seated) {
+        if (
+          !client.claims ||
+          !client.publicId ||
+          !client.persistentID ||
+          !this.clients.isConnected(client) ||
+          client.ws.readyState !== WebSocket.OPEN ||
+          accounts.has(client.publicId) ||
+          persistents.has(client.persistentID)
+        ) {
+          throw new Error("NATIONAL requires distinct connected authenticated seats");
+        }
+        accounts.add(client.publicId);
+        persistents.add(client.persistentID);
+      }
+      const friendsFor = friendsLookup(this.clients.active());
+      const parsed = WireGameStartInfoSchema.safeParse({
+        gameID: this.id,
+        lobbyCreatedAt: this.createdAt,
+        visibleAt: this.visibleAt,
+        config: sanitizeConfigForWire(this.gameConfig),
+        players: seated.map((c) => ({
+          username: c.username,
+          clanTag: this.startClanTag(c),
+          clientID: c.clientID,
+          cosmetics: c.cosmetics,
+          isLobbyCreator: this.lobbyCreatorID === c.clientID,
+          friends: friendsFor(c),
+          teamIndex: this.matchmakingTeamIndex(c),
+        })),
+        tribes: this.tribes,
+      });
+      if (!parsed.success) {
+        throw new Error("NATIONAL trusted start info validation failed");
+      }
+      const info = parsed.data satisfies WireGameStartInfo;
+      const runner = await this.deps.createNationalRunner(info);
+
+      // The loader may take seconds. Never start a Game whose authenticated
+      // seat disappeared or whose socket/host changed while it was loading.
+      const stillHere = this.clients.players();
+      if (
+        this.ended ||
+        this.gameConfig.nationalMode !== true ||
+        stillHere.length !== seated.length ||
+        seated.some(
+          (client, index) =>
+            stillHere[index] !== client ||
+            !this.clients.isConnected(client) ||
+            client.ws.readyState !== WebSocket.OPEN,
+        ) ||
+        !this.clients.isConnected(host)
+      ) {
+        throw new Error("NATIONAL authenticated roster changed during boot");
+      }
+
+      const match = new TrustedNationalMatch(
+        this.id,
+        runner,
+        seated,
+        (client, packet) => this.sendNationalRecipientPacket(client, packet),
+      );
+      this.gameStartInfo = info;
+      this.wireGameStartInfo = {
+        ...info,
+        listed: false,
+        players: info.config.disableClanTags
+          ? info.players.map((p) => ({ ...p, clanTag: null }))
+          : info.players,
+      };
+      this.zbinCtx = createGameWireContext(info.players);
+      this.nationalMatch = match;
+      this.stage = "started";
+      this._startTime = Date.now();
+      this.lastPingUpdate = Date.now();
+      this.stopLobbyInfoBroadcast();
+
+      // No spectators in the first trusted-host slice. They cannot join an
+      // authoritative Game seat, nor obtain a privileged projection.
+      for (const c of this.clients.active()) {
+        if (c.spectator && c.ws.readyState === WebSocket.OPEN) {
+          c.ws.send(
+            encodeServerMessage(
+              { type: "error", error: "national-spectator-not-supported" }
+                satisfies ServerErrorMessage,
+              this.zbinCtx,
+            ),
+          );
+          c.ws.close(CloseCode.Forbidden, CloseReason.CannotJoin);
+        }
+      }
+      for (const client of seated) this.sendTrustedNationalStart(client);
+      // First real server tick occurs after every admitted seat received its
+      // safe start. All subsequent ticks use the same canonical GameRunner.
+      this.commitTrustedNationalTick();
+      this.endTurnIntervalID = setInterval(
+        () => this.commitTrustedNationalTick(),
+        this.deps.turnIntervalMs(),
+      );
+    } catch (error) {
+      // Fail closed. In particular, do NOT fall back to legacy client turn
+      // broadcast on map-load, account or E3 filtering failure.
+      this.log.error("NATIONAL trusted boot refused", {
+        gameID: this.id,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      this.ended = true;
+      if (this.endTurnIntervalID !== undefined) {
+        clearInterval(this.endTurnIntervalID);
+        this.endTurnIntervalID = undefined;
+      }
+      this.clients.closeAll(CloseReason.GameEnded);
+    } finally {
+      this.nationalStarting = false;
+    }
+  }
+
+  private sendTrustedNationalStart(client: Client): void {
+    if (
+      this.nationalMatch === null ||
+      !this.clients.isConnected(client) ||
+      client.spectator ||
+      client.ws.readyState !== WebSocket.OPEN
+    ) return;
+    // The protocol intentionally has NO turns array or snapshot field.
+    client.ws.send(
+      encodeServerMessage({
+        type: "national_start",
+        gameStartInfo: this.names.startInfoFor(
+          client.clientID,
+          isAdminRole(client.role),
+          this.gameStartInfo,
+          this.wireGameStartInfo,
+        ),
+        myClientID: client.clientID,
+        tick: this.nationalMatch.currentTick(),
+        groupToken: this.groupToken,
+      } satisfies ServerNationalStartMessage, this.zbinCtx),
+    );
+  }
+
+  private sendNationalRecipientPacket(
+    client: Client,
+    packet: GameUpdateViewData,
+  ): void {
+    if (
+      this.ended ||
+      this.nationalMatch === null ||
+      !this.clients.isConnected(client) ||
+      client.spectator ||
+      client.ws.readyState !== WebSocket.OPEN
+    ) return;
+    const payload = encodeNationalRecipientProjection(packet);
+    client.ws.send(
+      encodeServerMessage({
+        type: "national_projection",
+        tick: packet.tick,
+        payload,
+      } satisfies ServerNationalProjectionMessage, this.zbinCtx),
+    );
+  }
+
+  private commitTrustedNationalTick(): void {
+    if (this.paused || this.ended || this.nationalMatch === null) return;
+    try {
+      this.nationalMatch.tick();
+    } catch (error) {
+      this.log.error("NATIONAL authoritative tick failed", {
+        gameID: this.id,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      // Stop all output on a failed E3 projection or authoritative tick.
+      // There is no safe fallback to a client-owned simulation.
+      this.ended = true;
+      if (this.endTurnIntervalID !== undefined) {
+        clearInterval(this.endTurnIntervalID);
+        this.endTurnIntervalID = undefined;
+      }
+      this.clients.closeAll(CloseReason.GameEnded);
+    }
+  }
+
   // Connected clients who will actually play. Spectators are excluded
   // everywhere a "player" is meant: the lobby cap, and gameStartInfo.
   private playerCount(): number {
