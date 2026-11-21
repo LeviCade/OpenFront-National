@@ -8,12 +8,12 @@
 
 [Owner GPU run #44920010367](https://github.com/LeviCade/OpenFront-National/actions/runs/44920010367) ran four actual E5 browser processes on one Skybot guest after one dependency installation. The run failed overall *because actual NATIONAL gameplay failed*, not because GPU acquisition or CI setup failed. Artifact #14713027849 contains 25 bounded files (4 mode JSON, one summary JSON and 20 screenshots; 5,860,964-byte GitHub ZIP):
 
-| Mode | Process | First failure | Screenshots | Source |
-|---|---|---|---:|---|
-| Legacy desktop | PASS | none | 3 | `80aa1582792640269865fb635adfe0f964d38315` |
-| Legacy mobile | PASS | none | 3 | `80aa1582792640269865fb635adfe0f964d38315` |
-| NATIONAL desktop | FAIL | `found-empire` | 8 | same |
-| NATIONAL mobile | FAIL | `spawn` | 6 | same |
+| Mode             | Process | First failure  | Screenshots | Source                                     |
+| ---------------- | ------- | -------------- | ----------: | ------------------------------------------ |
+| Legacy desktop   | PASS    | none           |           3 | `80aa1582792640269865fb635adfe0f964d38315` |
+| Legacy mobile    | PASS    | none           |           3 | `80aa1582792640269865fb635adfe0f964d38315` |
+| NATIONAL desktop | FAIL    | `found-empire` |           8 | same                                       |
+| NATIONAL mobile  | FAIL    | `spawn`        |           6 | same                                       |
 
 The original summary expressly says `UNSIGNED_DIAGNOSTIC_NOT_RELEASE`, `releaseCertified=false`, `hostCleanupVerified=false`. Shader pixels and renderer strings are **diagnostic facts, not signatures**. Host teardown was **not established** by this artifact.
 
