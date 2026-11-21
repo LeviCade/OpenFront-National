@@ -323,6 +323,13 @@ describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host auth
     const m = await createMatch();
     const { imperialId } = await atWar(m);
     const before = snapshotGameData(m.game);
+    const sameFounder = m.game.performNationalFoundEmpireWithOutcome(
+      m.game.player(A),
+      EMPIRE,
+      "c2_found_a",
+      OLD_A,
+    );
+    expect(sameFounder.accepted).toBe(true);
     const first = m.game.performNationalWarCommandWithOutcome(
       m.game.player(A),
       {
@@ -364,6 +371,14 @@ describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host auth
         m.game.player(A),
         { kind: "transfer-crown", empireId: EMPIRE, successorId: C },
         "c2_transfer_receipt",
+        OLD_A,
+      ),
+    ).toThrow(/stale sovereign replay authority/);
+    expect(() =>
+      m.game.performNationalFoundEmpireWithOutcome(
+        m.game.player(A),
+        EMPIRE,
+        "c2_found_a",
         OLD_A,
       ),
     ).toThrow(/stale sovereign replay authority/);
