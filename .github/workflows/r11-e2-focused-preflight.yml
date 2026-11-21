@@ -1,0 +1,40 @@
+name: R11 E2 One-Shot Focused Source Preflight
+on:
+  push:
+    branches:
+      - feature/r11-e2-foundation-combat-20261121
+    paths:
+      - .github/workflows/r11-e2-focused-preflight.yml
+permissions:
+  contents: read
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Pin npm 12 and restore repository dependencies
+        run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - name: Compute pinned formatter bytes; no source push or GH artifact storage
+        run: |
+          npx --no-install oxfmt --write packages/engine/src/execution/NationExecution.ts tests/national/RoundElevenFoundationCombat.test.ts
+          git diff --check
+          node <<'NODE'
+          const fs = require('node:fs');
+          for (const [i, path] of [
+            'packages/engine/src/execution/NationExecution.ts',
+            'tests/national/RoundElevenFoundationCombat.test.ts',
+          ].entries()) {
+            console.log('R11_E2_FMT_' + i + '=' + JSON.stringify(fs.readFileSync(path, 'utf8')));
+          }
+          NODE
+      - name: TypeScript across all project references
+        run: npm run typecheck
+      - name: Focused engine / national regression tests
+        run: |
+          npx --no-install vitest run --project node             tests/national/RoundElevenFoundationCombat.test.ts             tests/national/RoundTenNationExecutionBridge.test.ts             tests/national/NationalCampaignRoundtripR10.test.ts             tests/national/RoundTenLiveCombatRunner.test.ts
