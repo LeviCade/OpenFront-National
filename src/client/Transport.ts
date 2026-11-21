@@ -52,6 +52,7 @@ import {
   acceptTrustedNationalPrivateCapability,
   hasTrustedNationalPrivateCapability,
   revokeTrustedNationalPrivateCapability,
+  type TrustedNationalStartLike,
 } from "./NationalPrivateCapability";
 import { clientDevice, clientPlatform } from "./ClientPlatform";
 import { isDesktopShell } from "./DesktopShell";
@@ -475,6 +476,8 @@ export class Transport {
       this.onSendToggleGameStartTimer(e),
     );
     this.subscribe(SendSpectateEvent, (e) => {
+      revokeTrustedNationalPrivateCapability(this.eventBus, this.lobbyConfig.gameID);
+      this.dropBufferedNationalIntents();
       this.lobbyConfig.spectator = e.spectator;
       this.sendMsg({
         type: "spectate",
@@ -631,16 +634,39 @@ export class Transport {
             sessionStorage.removeItem(POOL_REDIRECT_FROM);
           }
         }
-        if (msg.type === "national_capability") {
-          acceptTrustedNationalPrivateCapability(this.eventBus, msg, {
-            gameID: this.lobbyConfig.gameID,
-            start: this.trustedNationalStart?.gameStartInfo ?? null,
-            startClientID: this.trustedNationalStart?.clientID ?? null,
-            remoteSocketOpen: !this.isLocal && socket.readyState === WebSocket.OPEN,
-            sessionReady: this.isSessionReady,
-            replay: this.lobbyConfig.gameRecord !== undefined,
-            spectator: this.lobbyConfig.spectator === true,
-          });
+        // E2's native national_start is distinct from legacy "start".
+        // On old servers the decoder never produces it: fail closed.
+        const trustedStart = msg as unknown as Partial<TrustedNationalStartLike>;
+        if (trustedStart.type === "national_start") {
+          this.trustedNationalStart =
+            trustedStart.gameStartInfo && typeof trustedStart.myClientID === "string"
+              ? {
+                  gameStartInfo: trustedStart.gameStartInfo,
+                  clientID: trustedStart.myClientID,
+                }
+              : null;
+          this.isSessionReady = this.trustedNationalStart !== null;
+          if (
+            this.trustedNationalStart &&
+            typeof trustedStart.tick === "number"
+          ) {
+            acceptTrustedNationalPrivateCapability(
+              this.eventBus,
+              trustedStart as TrustedNationalStartLike,
+              {
+                gameID: this.lobbyConfig.gameID,
+                start: this.trustedNationalStart.gameStartInfo,
+                startClientID: this.trustedNationalStart.clientID,
+                remoteSocketOpen: !this.isLocal && socket.readyState === WebSocket.OPEN,
+                sessionReady: this.isSessionReady,
+                replay: this.lobbyConfig.gameRecord !== undefined,
+                spectator: this.lobbyConfig.spectator === true,
+              },
+            );
+          } else {
+            revokeTrustedNationalPrivateCapability(this.eventBus, this.lobbyConfig.gameID);
+          }
+          this.onmessage(msg);
           return;
         }
         if (msg.type === "lobby_info" || msg.type === "start") {
