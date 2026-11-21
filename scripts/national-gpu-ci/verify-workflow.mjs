@@ -13,7 +13,7 @@ test("workflow is manual-only and uses exactly one trusted GPU slot", () => {
   assert.match(source, /^on:\n  workflow_dispatch:/m);
   assert.match(source, /^  gpu-browser:\s*$/m);
   assert.deepEqual(
-    [...source.matchAll(/^  ([a-z][a-z0-9-]*):\s*$/gm)].map((m) => m[1]),
+    [...source.split(/^jobs:\s*$/m)[1].matchAll(/^  ([a-z][a-z0-9-]*):\s*$/gm)].map((m) => m[1]),
     ["gpu-browser"],
   );
   assert.match(source, /^    runs-on: skybot-ci-gpu$/m);
