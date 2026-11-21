@@ -800,21 +800,41 @@ async function main() {
       );
       if (!/spawn before founding/i.test(msg))
         record("spawn-precondition-not-observed", { text: msg.slice(0, 150) });
-      // Human map interaction: try coordinates and stop immediately once the
-      // real game HUD enables Found Empire. Never mutate Game state from JS.
-      for (const [u, v] of [
-        [0.55, 0.55],
-        [0.4, 0.4],
-        [0.6, 0.42],
-        [0.3, 0.55],
-        [0.7, 0.6],
-        [0.2, 0.4],
-      ]) {
-        const enabled = await locate(
-          "^Found Empire$",
-          "national-diplomacy-panel",
-        );
-        if (enabled) break;
+      // Only real pointer interaction can spawn a human. Probe the visible
+      // actor's own state to avoid late duplicate clicks and to explain why
+      // a genuine browser fails (never mutate Game/player state in QA).
+      const ownSpawnState = async () =>
+        evaluate(`(() => {
+          const panel = window.__nationalQaFind('national-diplomacy-panel');
+          const game = panel?.game;
+          const player = game?.myPlayer?.();
+          return {
+            actorPresent: !!player,
+            inSpawnPhase: game?.inSpawnPhase?.() ?? null,
+            tilesOwned: player?.numTilesOwned?.() ?? 0,
+            publicPoliticsPresent: game?.nationalPolitics?.() != null,
+            panelExpanded: panel?.shadowRoot?.querySelector('button[aria-controls="national-diplomacy-content"]')?.getAttribute('aria-expanded') === 'true'
+          };
+        })()`);
+      record("spawn-own-state-before", await ownSpawnState());
+      // First preserve the old six positions. Additional points exercise
+      // real visible canvas clicks when the map rejects the initial tiles.
+      const spawnPositions = [
+        [0.55, 0.55], [0.4, 0.4], [0.6, 0.42],
+        [0.3, 0.55], [0.7, 0.6], [0.2, 0.4],
+        [0.15, 0.25], [0.3, 0.25], [0.45, 0.25],
+        [0.6, 0.25], [0.75, 0.25],
+        [0.15, 0.75], [0.3, 0.75], [0.45, 0.75],
+        [0.6, 0.75], [0.75, 0.75],
+        [0.2, 0.6], [0.35, 0.65], [0.55, 0.7],
+      ];
+      for (const [index, [u, v]] of spawnPositions.entries()) {
+        const state = await ownSpawnState();
+        if (state?.tilesOwned > 0) {
+          record("spawn-own-territory-observed", { attempt: index, ...state });
+          break;
+        }
+        if (await locate("^Found Empire$", "national-diplomacy-panel")) break;
         const canvas = await evaluate(`(() => {
           const canvases=[...document.querySelectorAll('canvas')].filter((e)=>e.getBoundingClientRect().width>150);
           const rect=canvases.sort((a,b)=>b.getBoundingClientRect().width-a.getBoundingClientRect().width)[0]?.getBoundingClientRect();
@@ -822,8 +842,10 @@ async function main() {
         })()`);
         if (!canvas) throw Error("Playable canvas not found");
         await hit(canvas.x, canvas.y);
-        await sleep(750);
+        await sleep(350);
+        record("spawn-own-state-after-click", { attempt: index, ...(await ownSpawnState()) });
       }
+      record("spawn-own-state-after-attempts", await ownSpawnState());
       await poll(
         () => locate("^Found Empire$", "national-diplomacy-panel"),
         "authenticated player spawned and Found Empire enabled",
