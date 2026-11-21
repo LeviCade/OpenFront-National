@@ -48,6 +48,11 @@ import { ZbContext } from "@openfront/zbin";
 import { ClientEnv, NoServerError } from "src/client/ClientEnv";
 import { getPlayToken } from "./Auth";
 import { LobbyConfig } from "./ClientGameRunner";
+import {
+  acceptTrustedNationalPrivateCapability,
+  hasTrustedNationalPrivateCapability,
+  revokeTrustedNationalPrivateCapability,
+} from "./NationalPrivateCapability";
 import { clientDevice, clientPlatform } from "./ClientPlatform";
 import { isDesktopShell } from "./DesktopShell";
 import { showInGameConfirm } from "./InGameModal";
@@ -349,6 +354,11 @@ export class Transport {
   // True once the server has responded to join/rejoin (via start or lobby_info),
   // proving the session is admitted and ready to accept gameplay intents.
   private isSessionReady = false;
+  /** Exact server start seat on this socket, not a lobby-config assertion. */
+  private trustedNationalStart: {
+    gameStartInfo: NonNullable<LobbyConfig["gameStartInfo"]>;
+    clientID: string | null;
+  } | null = null;
 
   // clientID dictionary for the binary wire (see ZbinWire.ts), seeded from
   // the roster in the start message. Null until the game starts, which is
@@ -544,6 +554,9 @@ export class Transport {
       return;
     }
     this.isSessionReady = false;
+    this.trustedNationalStart = null;
+    revokeTrustedNationalPrivateCapability(this.eventBus, this.lobbyConfig.gameID);
+    this.dropBufferedNationalIntents();
     this.startPing();
     this.killExistingSocket();
     // WS origin comes from ClientEnv, resolved per game: the id's letter
@@ -600,6 +613,10 @@ export class Transport {
           return;
         }
         if (msg.type === "start") {
+          this.trustedNationalStart = {
+            gameStartInfo: msg.gameStartInfo,
+            clientID: msg.myClientID ?? null,
+          };
           // Seed the dictionary from the same players array, in the same
           // order, that the server seeded its own from.
           this.zbinCtx = createGameWireContext(msg.gameStartInfo.players);
@@ -614,7 +631,21 @@ export class Transport {
             sessionStorage.removeItem(POOL_REDIRECT_FROM);
           }
         }
-        this.isSessionReady = true;
+        if (msg.type === "national_capability") {
+          acceptTrustedNationalPrivateCapability(this.eventBus, msg, {
+            gameID: this.lobbyConfig.gameID,
+            start: this.trustedNationalStart?.gameStartInfo ?? null,
+            startClientID: this.trustedNationalStart?.clientID ?? null,
+            remoteSocketOpen: !this.isLocal && socket.readyState === WebSocket.OPEN,
+            sessionReady: this.isSessionReady,
+            replay: this.lobbyConfig.gameRecord !== undefined,
+            spectator: this.lobbyConfig.spectator === true,
+          });
+          return;
+        }
+        if (msg.type === "lobby_info" || msg.type === "start") {
+          this.isSessionReady = true;
+        }
         if (msg.type === "lobby_info" || msg.type === "start") {
           this.eventBus.emit(
             new NationalTransportStatusEvent(true, this.lobbyConfig.gameID),
@@ -651,6 +682,9 @@ export class Transport {
     };
     this.socket.onclose = (event: CloseEvent) => {
       this.isSessionReady = false;
+      this.trustedNationalStart = null;
+      revokeTrustedNationalPrivateCapability(this.eventBus, this.lobbyConfig.gameID);
+      this.dropBufferedNationalIntents();
       this.eventBus.emit(
         new NationalTransportStatusEvent(false, this.lobbyConfig.gameID),
       );
@@ -847,6 +881,9 @@ export class Transport {
   }
 
   leaveGame() {
+    revokeTrustedNationalPrivateCapability(this.eventBus, this.lobbyConfig.gameID);
+    this.trustedNationalStart = null;
+    this.dropBufferedNationalIntents();
     this.eventBus.emit(
       new NationalTransportStatusEvent(false, this.lobbyConfig.gameID),
     );
@@ -909,6 +946,7 @@ export class Transport {
   private onSendNationalFoundEmpireIntent(
     event: SendNationalFoundEmpireIntentEvent,
   ) {
+    if (!this.nationalDiplomacyWireEnabled()) return;
     // The wire schema and engine validate the ID and acting client again.
     // Do not stamp a player ID here or create political state on the client.
     // E2 owns the zod wire schema update. A typed variable preserves the
@@ -929,10 +967,23 @@ export class Transport {
    */
   private nationalDiplomacyWireEnabled(): boolean {
     const cfg = this.lobbyConfig.gameStartInfo?.config;
+    if (this.lobbyConfig.gameRecord !== undefined || cfg?.nationalMode !== true)
+      return false;
+    if (cfg.gameType === GameType.Singleplayer) return this.isLocal;
     return (
-      cfg?.gameType === GameType.Singleplayer &&
-      cfg.nationalMode === true &&
-      this.lobbyConfig.gameRecord === undefined
+      cfg.gameType === GameType.Private &&
+      !this.isLocal &&
+      this.isSessionReady &&
+      this.socket?.readyState === WebSocket.OPEN &&
+      this.lobbyConfig.spectator !== true &&
+      hasTrustedNationalPrivateCapability(this.eventBus, this.lobbyConfig.gameID)
+    );
+  }
+
+  /** Never replay national commands buffered before a socket disconnect. */
+  private dropBufferedNationalIntents(): void {
+    this.buffer = this.buffer.filter(
+      (msg) => msg.type !== "intent" || !msg.intent.type.startsWith("national_"),
     );
   }
 
