@@ -166,8 +166,8 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
         secretPlans: "unannounced-attack-753159",
         levy: { secretTroops: 87654321, donors: ["covert-donor"] },
         wars: {
-          ...original.layers,
-          layers: original.layers.layers.map((layer) => ({
+          ...original.wars,
+          layers: original.wars.layers.map((layer) => ({
             ...layer,
             secretRoute: "transport-destination-123",
           })),
