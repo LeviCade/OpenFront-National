@@ -24,7 +24,7 @@ const expected = Object.freeze({
   runId: "44920010367",
   runAttempt: "1",
   jobId: "14920010367",
-  runnerName: "skybot-ci-gpu-real-job",
+  runnerName: "skybot-gpu-openfront-national-452d86d9",
   runnerId: "12345",
   challenge: CHALLENGE,
   approvedStagingRef: APPROVED_STAGING,
