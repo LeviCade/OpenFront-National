@@ -26,7 +26,8 @@ const TYPES = new Set([
   "national_propose_peace",
   "national_accept_peace",
 ]);
-const strictId = (id) => typeof id === "string" && /^[a-zA-Z0-9_-]{1,256}$/.test(id);
+const strictId = (id) => typeof id === "string" && id.length > 0 && id.length <= 256 &&
+  Array.from(id).every((ch) => ch.charCodeAt(0) >= 32 && ch.charCodeAt(0) !== 127);
 const fail = (reason) => ({ accepted: false, reason });
 
 /** Collapse repeated delivery of the SAME signed/recipient-scoped journal item. */
@@ -123,11 +124,18 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
   const completed = (Array.isArray(report?.events) ? report.events : [])
     .filter((event) => event?.name === "stage-complete" && typeof event.stage === "string")
     .map((event) => event.stage.slice(0, 64));
+  const safeStages = new Set([
+    "boot", "home", "solo", "national-mode", "start", "spawn",
+    "found-empire", "rejected-founding", "declare-war", "map-assault",
+    "propose-peace", "accept-peace", "legacy-ffa", "legacy-player-action",
+  ]);
+  const normalizedStage = (value) =>
+    typeof value === "string" && safeStages.has(value) ? value : "UNKNOWN_STAGE";
   const lastError = Array.isArray(report?.errors) ? report.errors.at(-1) : null;
   const failedStage = typeof lastError?.stage === "string"
-    ? lastError.stage.slice(0, 64)
+    ? normalizedStage(lastError.stage)
     : typeof report?.stage === "string" && exitCode !== 0
-      ? report.stage.slice(0, 64) : null;
+      ? normalizedStage(report.stage) : null;
   const required = scenario.startsWith("national-")
     ? ["home", "solo", "national-mode", "start", "spawn", "found-empire",
        "rejected-founding", "declare-war", "map-assault",
@@ -150,6 +158,20 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
     reported: !!report,
     completedStages: [...new Set(completed)].slice(0, 32),
     failedStage,
+    failureHint: (() => {
+      const message = typeof lastError?.error === "string" ? lastError.error : "";
+      const match = [
+        ["MAP_ATTACK_NOT_DISPATCHED", /MAP_ATTACK_NOT_DISPATCHED/],
+        ["MAP_ASSAULT_ENGINE_MISSING", /MAP_ASSAULT_LACKS_ENGINE_STATE_CHANGE/],
+        ["NO_ELIGIBLE_WAR_TARGET", /NO_REAL_SELECTABLE_GAME_TARGET|UI_SELECT_MISSING_OR_DISABLED/],
+        ["PEACE_OTHER_PRINCIPAL_REQUIRED", /PEACE_ACCEPTANCE_NOT_SUBMITTED|ENGINE_REFERENCE_NOT_SELECTABLE/],
+        ["CHROMIUM_NATIVE_SELECTION", /CHROMIUM_NATIVE_OPTION_NOT_SELECTED/],
+        ["GPU_RELEASE_TRUST_MISSING", /GPU_RELEASE_TRUST_ROOT_NOT_ENROLLED|INDEPENDENT_HARDWARE_PROOF_MISSING/],
+        ["WEBGL_SOFTWARE_FORBIDDEN", /SOFTWARE_RENDERER_FORBIDDEN|WebGL gate/],
+        ["AUTHORITY_RECEIPT_MISSING", /receipt|GAME_WAR_LAYER_MISSING|Timed out/],
+      ].find(([, pattern]) => pattern.test(message));
+      return match?.[0] ?? (lastError ? "UNCLASSIFIED_STAGE_FAILURE" : null);
+    })(),
     failureClass: code !== 0 ? "GAMEPLAY_STAGE_FAILED" :
       missingStages.length ? "REQUIRED_STAGES_MISSING" : null,
     missingStages,
