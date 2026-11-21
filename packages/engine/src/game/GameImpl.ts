@@ -658,13 +658,13 @@ export class GameImpl implements Game {
   }
 
   /**
-   * Trusted-host defense in depth. E2 MUST retain the originating authenticated
-   * server-stamped clientID in every pending execution/snapshot and pass it to
-   * these Game entry points. Never substitute the Player's later clientID:
-   * a takeover changes it on the SAME Player object.
+   * Trusted-host authority: the ORIGINAL admitted session is mandatory for
+   * every human command in a server-owned Private NATIONAL Game. E2 preserves
+   * the stamped clientID through queued executions and snapshot/replay.
    *
-   * Undefined is kept only for existing internally trusted bots and legacy
-   * callers; browser payloads must NEVER select/omit this parameter.
+   * Unbound calls remain backward compatible ONLY in Solo/legacy and for
+   * trusted internal nation/bot principals. A browser cannot choose that
+   * exception: Private authenticated humans fail closed BEFORE journal lookup.
    */
   private assertNationalExecutionPrincipal(
     actor: Player,
@@ -672,6 +672,13 @@ export class GameImpl implements Game {
   ): void {
     if (this._players.get(actor.id()) !== actor)
       throw new Error("NATIONAL: forged actor");
+    if (
+      this._config.nationalMode() &&
+      this._config.gameConfig().gameType === GameType.Private &&
+      actor.type() === PlayerType.Human &&
+      authenticatedClientID === undefined
+    )
+      throw new Error("NATIONAL: missing authenticated actor session");
     if (
       authenticatedClientID !== undefined &&
       (actor.type() !== PlayerType.Human ||
@@ -1080,10 +1087,11 @@ export class GameImpl implements Game {
           return "actor-inactive";
         if (!/^[A-Za-z0-9_-]{1,64}$/.test(empireId)) return "invalid-empire-id";
         try {
-          this.performNationalCommand(actor, {
-            kind: "found-empire",
-            empireId,
-          });
+          this.performNationalCommand(
+            actor,
+            { kind: "found-empire", empireId },
+            authenticatedClientID,
+          );
           return "accepted";
         } catch {
           // Never serialize exception text, engine internals or other
@@ -1148,7 +1156,7 @@ export class GameImpl implements Game {
         if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
           return "actor-inactive";
         try {
-          this.performNationalCommand(actor, command);
+          this.performNationalCommand(actor, command, authenticatedClientID);
           return "accepted";
         } catch {
           // Do not transmit internal pact terms, engine state or stack traces.
