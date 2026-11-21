@@ -1,0 +1,29 @@
+name: C2 first class E1 — WAR-12 exact security proof
+on:
+  push:
+    branches: [tooling/c2-class1-e1-war12-audit-20261121]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 23
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install exact pinned dependencies
+        run: |
+          npm install -g npm@12.1.0
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Real WAR-12 sovereign succession and hostile execution tests
+        run: npx --no-install vitest run tests/national/ConductorTwoCrownWarContinuity.test.ts tests/national/ClassFiveStampedExecutionChain.test.ts tests/national/RoundElevenImperialPeaceDelegation.test.ts --reporter=verbose
+      - name: Typecheck complete workspace
+        if: always()
+        run: npm run typecheck
+      - name: Emit pinned formatting patches
+        if: always()
+        run: |
+          npx --no-install oxfmt --write tests/national/ConductorTwoCrownWarContinuity.test.ts packages/engine/src/game/GameImpl.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/national/politics/NationalWarState.ts packages/engine/src/national/conflict/WarLedger.ts
+          git diff -- tests/national/ConductorTwoCrownWarContinuity.test.ts packages/engine/src/game/GameImpl.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/national/politics/NationalWarState.ts packages/engine/src/national/conflict/WarLedger.ts
