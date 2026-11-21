@@ -32,7 +32,7 @@ import { verifyIndependentRelease } from "./verify-independent-release.mjs";
 export const HOST_ROOT = "/etc/skybot-ci/national-gpu-release";
 export const REPOSITORY = "LeviCade/OpenFront-National";
 export const REPOSITORY_ID = "1459234894";
-export const APPROVED_STAGING = "stage3/class4-six-owner-reciprocal-20261121";
+export const APPROVED_STAGING = "stage3/class5-trusted-national-vertical-20261121";
 export const OVERLAY_DIR = "/var/lib/libvirt/images/ci-disposable/overlays";
 const SHA = /^[a-f0-9]{40}$/;
 const HEX64 = /^[a-f0-9]{64}$/;
