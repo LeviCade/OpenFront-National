@@ -3,6 +3,7 @@ import { GameType } from "@openfront/engine-api/game/GameTypes";
 import { EventBus } from "@openfront/shared/EventBus";
 import { afterEach, describe, expect, it } from "vitest";
 import "../../../src/client/NationalDiplomacyPanel";
+import type { NationalDiplomacyPanel } from "../../../src/client/NationalDiplomacyPanel";
 import {
   createNationalPoliticalRequestId,
   readNationalAccessionOffers,
@@ -12,7 +13,6 @@ import {
   type NationalPublicPolitics,
   type NationalAccessionView,
 } from "../../../src/client/NationalDiplomacyState";
-import type { NationalDiplomacyPanel } from "../../../src/client/NationalDiplomacyPanel";
 import {
   SendNationalAcceptEmpireIntentEvent,
   SendNationalOfferEmpireIntentEvent,
@@ -25,7 +25,10 @@ const savedWidth = window.innerWidth;
 
 afterEach(() => {
   for (const el of mounted.splice(0)) el.remove();
-  Object.defineProperty(window, "innerWidth", { value: savedWidth, configurable: true });
+  Object.defineProperty(window, "innerWidth", {
+    value: savedWidth,
+    configurable: true,
+  });
 });
 
 function politicalReceipt(
@@ -61,7 +64,13 @@ async function mount(
     politicalResults: [] as NationalPoliticalResult[],
     politics: {
       empires: options.emperor
-        ? [{ id: "Atlas", leaderId: "nation-a", memberIds: ["nation-a", "nation-b"] }]
+        ? [
+            {
+              id: "Atlas",
+              leaderId: "nation-a",
+              memberIds: ["nation-a", "nation-b"],
+            },
+          ]
         : [{ id: "Atlas", leaderId: "nation-b", memberIds: ["nation-b"] }],
       warnings: [],
     } as NationalPublicPolitics,
@@ -75,7 +84,7 @@ async function mount(
     id: () => nation.id,
     name: () => nation.name,
     isAlive: () => true,
-    numTilesOwned: () => state.spawned ? 5 : 0,
+    numTilesOwned: () => (state.spawned ? 5 : 0),
   }));
   const game = {
     config: () => ({
@@ -100,18 +109,28 @@ async function mount(
     nationalConflicts: () => null,
   } as unknown as GameView;
   const bus = new EventBus();
-  const panel = document.createElement("national-diplomacy-panel") as NationalDiplomacyPanel;
+  const panel = document.createElement(
+    "national-diplomacy-panel",
+  ) as NationalDiplomacyPanel;
   panel.game = game;
   panel.eventBus = bus;
   document.body.appendChild(panel);
   mounted.push(panel);
   await panel.updateComplete;
-  panel.querySelector<HTMLButtonElement>('button[aria-controls="national-diplomacy-content"]')!.click();
+  panel
+    .querySelector<HTMLButtonElement>(
+      'button[aria-controls="national-diplomacy-content"]',
+    )!
+    .click();
   await panel.updateComplete;
   return { panel, bus, state };
 }
 
-async function choose(panel: NationalDiplomacyPanel, selector: string, value: string) {
+async function choose(
+  panel: NationalDiplomacyPanel,
+  selector: string,
+  value: string,
+) {
   const select = panel.querySelector<HTMLSelectElement>(selector);
   expect(select).not.toBeNull();
   select!.value = value;
@@ -124,29 +143,61 @@ describe("R11 NATIONAL political wire authorization", () => {
     const valid = {
       version: 1,
       recipientId: "nation-a",
-      offers: [{ empireId: "Atlas", candidateId: "nation-a", proposerId: "nation-b", recipientId: "nation-a" }],
+      offers: [
+        {
+          empireId: "Atlas",
+          candidateId: "nation-a",
+          proposerId: "nation-b",
+          recipientId: "nation-a",
+        },
+      ],
     } as const;
     expect(readNationalAccessionOffers(undefined, "nation-a")).toBeNull();
-    expect(readNationalAccessionOffers(valid, "nation-a")?.offers).toHaveLength(1);
-    expect(readNationalAccessionOffers({ ...valid, recipientId: "nation-c" }, "nation-a")).toBeNull();
-    expect(readNationalAccessionOffers({ ...valid, offers: [...valid.offers, ...valid.offers] }, "nation-a")).toBeNull();
-    expect(readNationalAccessionOffers({
-      ...valid, offers: [{ ...valid.offers[0], candidateId: "nation-c" }],
-    }, "nation-a")).toBeNull();
+    expect(readNationalAccessionOffers(valid, "nation-a")?.offers).toHaveLength(
+      1,
+    );
+    expect(
+      readNationalAccessionOffers(
+        { ...valid, recipientId: "nation-c" },
+        "nation-a",
+      ),
+    ).toBeNull();
+    expect(
+      readNationalAccessionOffers(
+        { ...valid, offers: [...valid.offers, ...valid.offers] },
+        "nation-a",
+      ),
+    ).toBeNull();
+    expect(
+      readNationalAccessionOffers(
+        {
+          ...valid,
+          offers: [{ ...valid.offers[0], candidateId: "nation-c" }],
+        },
+        "nation-a",
+      ),
+    ).toBeNull();
   });
 
   it("retains only matching E1 political receipts within a bounded tick window", () => {
     const requestId = "np_" + "a".repeat(32);
     const valid = politicalReceipt("national_offer_empire", requestId, "Atlas");
-    expect(readNationalPoliticalResults([
-      valid,
-      { ...valid, actorId: "nation-b" },
-      { ...valid, recipientId: "nation-b" },
-      { ...valid, requestId: "made-up" },
-      { ...valid, tick: -2 },
-    ], "nation-a")).toEqual([valid]);
+    expect(
+      readNationalPoliticalResults(
+        [
+          valid,
+          { ...valid, actorId: "nation-b" },
+          { ...valid, recipientId: "nation-b" },
+          { ...valid, requestId: "made-up" },
+          { ...valid, tick: -2 },
+        ],
+        "nation-a",
+      ),
+    ).toEqual([valid]);
     expect(retainNationalPoliticalResults([valid], [], 300, false)).toEqual([]);
-    expect(retainNationalPoliticalResults([], [valid], 12, false)).toEqual([valid]);
+    expect(retainNationalPoliticalResults([], [valid], 12, false)).toEqual([
+      valid,
+    ]);
     expect(createNationalPoliticalRequestId()).toMatch(/^np_[0-9a-f]{32}$/);
   });
 
@@ -155,7 +206,9 @@ describe("R11 NATIONAL political wire authorization", () => {
     const events: SendNationalOfferEmpireIntentEvent[] = [];
     bus.on(SendNationalOfferEmpireIntentEvent, (event) => events.push(event));
     await choose(panel, "#national-accession-candidate", "nation-c");
-    panel.querySelector<HTMLButtonElement>("#national-offer-accession")!.click();
+    panel
+      .querySelector<HTMLButtonElement>("#national-offer-accession")!
+      .click();
     await panel.updateComplete;
     expect(events).toHaveLength(1);
     expect(events[0].candidateId).toBe("nation-c");
@@ -166,24 +219,40 @@ describe("R11 NATIONAL political wire authorization", () => {
     ];
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.textContent).toContain("Game accepted accession offer command");
-    expect(panel.textContent).toContain("Only the recipient can verify delivery");
+    expect(panel.textContent).toContain(
+      "Game accepted accession offer command",
+    );
+    expect(panel.textContent).toContain(
+      "Only the recipient can verify delivery",
+    );
   });
 
   it("recipient cannot accept until their own real invitation arrives; membership needs new roster", async () => {
     const { panel, bus, state } = await mount();
     const events: SendNationalAcceptEmpireIntentEvent[] = [];
     bus.on(SendNationalAcceptEmpireIntentEvent, (event) => events.push(event));
-    expect(panel.querySelector<HTMLButtonElement>("#national-accept-accession")!.disabled).toBe(true);
+    expect(
+      panel.querySelector<HTMLButtonElement>("#national-accept-accession")!
+        .disabled,
+    ).toBe(true);
     state.offers = {
       version: 1,
       recipientId: "nation-a",
-      offers: [{ empireId: "Atlas", candidateId: "nation-a", proposerId: "nation-b", recipientId: "nation-a" }],
+      offers: [
+        {
+          empireId: "Atlas",
+          candidateId: "nation-a",
+          proposerId: "nation-b",
+          recipientId: "nation-a",
+        },
+      ],
     };
     panel.refresh();
     await panel.updateComplete;
     await choose(panel, "#national-invitation-empire", "Atlas");
-    panel.querySelector<HTMLButtonElement>("#national-accept-accession")!.click();
+    panel
+      .querySelector<HTMLButtonElement>("#national-accept-accession")!
+      .click();
     await panel.updateComplete;
     expect(events).toHaveLength(1);
     expect(events[0].candidateId).toBe("nation-a");
@@ -192,14 +261,24 @@ describe("R11 NATIONAL political wire authorization", () => {
     ];
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.textContent).not.toContain("Confirmed by game: your nation joined");
+    expect(panel.textContent).not.toContain(
+      "Confirmed by game: your nation joined",
+    );
     state.politics = {
-      empires: [{ id: "Atlas", leaderId: "nation-b", memberIds: ["nation-a", "nation-b"] }],
+      empires: [
+        {
+          id: "Atlas",
+          leaderId: "nation-b",
+          memberIds: ["nation-a", "nation-b"],
+        },
+      ],
       warnings: [],
     };
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.textContent).toContain("Confirmed by game: your nation joined Atlas");
+    expect(panel.textContent).toContain(
+      "Confirmed by game: your nation joined Atlas",
+    );
     expect(panel.querySelector("#national-accept-accession")).toBeNull();
   });
 
@@ -214,7 +293,13 @@ describe("R11 NATIONAL political wire authorization", () => {
       politicalReceipt("national_transfer_crown", events[0].requestId, "Atlas"),
     ];
     state.politics = {
-      empires: [{ id: "Atlas", leaderId: "nation-b", memberIds: ["nation-a", "nation-b"] }],
+      empires: [
+        {
+          id: "Atlas",
+          leaderId: "nation-b",
+          memberIds: ["nation-a", "nation-b"],
+        },
+      ],
       warnings: [],
     };
     panel.refresh();
@@ -225,7 +310,10 @@ describe("R11 NATIONAL political wire authorization", () => {
   });
 
   it("a pre-spawn mobile viewport keeps the real map uncovered and opens the panel after spawn", async () => {
-    Object.defineProperty(window, "innerWidth", { value: 390, configurable: true });
+    Object.defineProperty(window, "innerWidth", {
+      value: 390,
+      configurable: true,
+    });
     const { panel, state } = await mount({ spawned: false });
     const toggle = panel.querySelector<HTMLButtonElement>(
       'button[aria-controls="national-diplomacy-content"]',

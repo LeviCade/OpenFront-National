@@ -312,7 +312,8 @@ export class NationalDiplomacyPanel extends LitElement {
         tick < political.issuedTick
       ) {
         this.lastPoliticalSubmission = null;
-        this.politicalStatus = "Political session or principal changed. The prior action is unconfirmed.";
+        this.politicalStatus =
+          "Political session or principal changed. The prior action is unconfirmed.";
       } else {
         const relevant = (game.nationalPoliticalResults?.() ?? []).filter(
           (result) =>
@@ -338,7 +339,8 @@ export class NationalDiplomacyPanel extends LitElement {
         ) {
           this.lastPoliticalSubmission = null;
           this.politicalStatus = null;
-          this.politicalError = "Conflicting political receipts; no action is confirmed.";
+          this.politicalError =
+            "Conflicting political receipts; no action is confirmed.";
         } else if (result?.accepted === false) {
           this.lastPoliticalSubmission = null;
           this.politicalStatus = null;
@@ -347,7 +349,8 @@ export class NationalDiplomacyPanel extends LitElement {
           const empire = politics?.empires.find(
             (item) => item.id === political.empireId,
           );
-          const fresh = (game.nationalPoliticsTick?.() ?? null) !== null &&
+          const fresh =
+            (game.nationalPoliticsTick?.() ?? null) !== null &&
             (game.nationalPoliticsTick?.() ?? -1) >= result.tick;
           const confirmed =
             fresh &&
@@ -368,13 +371,16 @@ export class NationalDiplomacyPanel extends LitElement {
                   : `Confirmed by game: ${this.playerName(political.targetId)} now leads ${political.empireId}. Your emperor powers have ended.`;
           } else if (tick - political.issuedTick >= 200) {
             this.lastPoliticalSubmission = null;
-            this.politicalStatus = "The game accepted the request but a matching fresh political roster did not arrive. Outcome is unconfirmed.";
+            this.politicalStatus =
+              "The game accepted the request but a matching fresh political roster did not arrive. Outcome is unconfirmed.";
           } else {
-            this.politicalStatus = "Accepted political receipt seen; waiting for authoritative current membership and leadership.";
+            this.politicalStatus =
+              "Accepted political receipt seen; waiting for authoritative current membership and leadership.";
           }
         } else if (tick - political.issuedTick >= 200) {
           this.lastPoliticalSubmission = null;
-          this.politicalStatus = "No authenticated political receipt arrived. The outcome is unknown.";
+          this.politicalStatus =
+            "No authenticated political receipt arrived. The outcome is unknown.";
         }
       }
     }
@@ -396,7 +402,8 @@ export class NationalDiplomacyPanel extends LitElement {
     }
     if (this.lastPoliticalSubmission !== null) {
       this.lastPoliticalSubmission = null;
-      this.politicalStatus = "Connection interrupted; political acceptance cannot be confirmed.";
+      this.politicalStatus =
+        "Connection interrupted; political acceptance cannot be confirmed.";
       this.politicalError = null;
     }
     if (this.pendingAttempt === null) {
@@ -699,11 +706,13 @@ export class NationalDiplomacyPanel extends LitElement {
     const actor = game?.myPlayer();
     const reason = this.warUnavailableReason;
     if (reason || !game || !actor || !this.eventBus) {
-      this.politicalError = reason ?? "The authenticated game channel is unavailable.";
+      this.politicalError =
+        reason ?? "The authenticated game channel is unavailable.";
       return;
     }
     if (this.lastPoliticalSubmission !== null) {
-      this.politicalError = "A political request is awaiting an authoritative outcome.";
+      this.politicalError =
+        "A political request is awaiting an authoritative outcome.";
       return;
     }
     const ownEmpire = this.memberEmpire;
@@ -714,14 +723,16 @@ export class NationalDiplomacyPanel extends LitElement {
         (item) => item.empireId === this.chosenInvitation,
       );
       if (!offer || ownEmpire !== null) {
-        this.politicalError = "Choose an authenticated invitation for a nation outside all empires.";
+        this.politicalError =
+          "Choose an authenticated invitation for a nation outside all empires.";
         return;
       }
       empireId = offer.empireId;
       targetId = actor.id();
     } else {
       if (!ownEmpire || ownEmpire.leaderId !== actor.id()) {
-        this.politicalError = "Only the current emperor can send offers or transfer the crown.";
+        this.politicalError =
+          "Only the current emperor can send offers or transfer the crown.";
         return;
       }
       empireId = ownEmpire.id;
@@ -734,7 +745,8 @@ export class NationalDiplomacyPanel extends LitElement {
           ? this.accessionCandidates()
           : this.crownSuccessors();
       if (!authorized.some((item) => item.id === targetId)) {
-        this.politicalError = "Select an eligible living nation from the current roster.";
+        this.politicalError =
+          "Select an eligible living nation from the current roster.";
         return;
       }
     }
@@ -742,7 +754,8 @@ export class NationalDiplomacyPanel extends LitElement {
     try {
       requestId = createNationalPoliticalRequestId();
     } catch {
-      this.politicalError = "Secure political request identity is unavailable. Nothing was sent.";
+      this.politicalError =
+        "Secure political request identity is unavailable. Nothing was sent.";
       return;
     }
     try {
@@ -752,11 +765,19 @@ export class NationalDiplomacyPanel extends LitElement {
         );
       } else if (action === "national_accept_empire") {
         this.eventBus.emit(
-          new SendNationalAcceptEmpireIntentEvent(empireId, targetId, requestId),
+          new SendNationalAcceptEmpireIntentEvent(
+            empireId,
+            targetId,
+            requestId,
+          ),
         );
       } else {
         this.eventBus.emit(
-          new SendNationalTransferCrownIntentEvent(empireId, targetId, requestId),
+          new SendNationalTransferCrownIntentEvent(
+            empireId,
+            targetId,
+            requestId,
+          ),
         );
       }
       this.lastPoliticalSubmission = {
@@ -938,14 +959,20 @@ export class NationalDiplomacyPanel extends LitElement {
           aria-controls="national-diplomacy-content"
           aria-expanded=${String(this.expanded)}
           @click=${() => {
-            if (game.inSpawnPhase() && typeof window !== "undefined" && window.innerWidth <= 640) {
+            if (
+              game.inSpawnPhase() &&
+              typeof window !== "undefined" &&
+              window.innerWidth <= 640
+            ) {
               this.expanded = false;
             } else {
               this.expanded = !this.expanded;
             }
           }}
         >
-          <span>${game.inSpawnPhase() ? "👑 NATIONAL · Diplomacy · Tap map to spawn" : "👑 NATIONAL · Diplomacy"}</span>
+          <span
+            >${game.inSpawnPhase() ? "👑 NATIONAL · Diplomacy · Tap map to spawn" : "👑 NATIONAL · Diplomacy"}</span
+          >
           <span aria-hidden="true">${this.expanded ? "▴" : "▾"}</span>
         </button>
         ${
@@ -1104,20 +1131,22 @@ export class NationalDiplomacyPanel extends LitElement {
                 >
                   ${this.message ?? nothing}
                 </div>
-                ${this.pendingAttempt
-                  ? html`<p
-                      data-national-founding-tick
-                      role="status"
-                      aria-live="polite"
-                      class="text-xs text-amber-200"
-                    >
-                      Awaiting authoritative founder receipt:
-                      issued at engine tick ${this.pendingAttempt.issuedTick},
-                      current engine tick ${game.ticks()}.
-                      A 00:00 Solo HUD clock can be normal during spawn; it
-                      does not prove founding succeeded or failed.
-                    </p>`
-                  : nothing}
+                ${
+                  this.pendingAttempt
+                    ? html`<p
+                        data-national-founding-tick
+                        role="status"
+                        aria-live="polite"
+                        class="text-xs text-amber-200"
+                      >
+                        Awaiting authoritative founder receipt: issued at engine
+                        tick ${this.pendingAttempt.issuedTick}, current engine
+                        tick ${game.ticks()}. A 00:00 Solo HUD clock can be
+                        normal during spawn; it does not prove founding
+                        succeeded or failed.
+                      </p>`
+                    : nothing
+                }
                 ${
                   this.error
                     ? html`<p role="alert" class="text-xs text-red-300">
@@ -1408,83 +1437,170 @@ export class NationalDiplomacyPanel extends LitElement {
                   }
                 </div>
 
-                <div class="border-t border-white/15 pt-3 space-y-3" aria-label="NATIONAL accession and succession">
-                  <h2 class="font-semibold text-amber-200">Accession and succession</h2>
-                  ${isEmperor
-                    ? html`<form class="space-y-2" @submit=${(event: SubmitEvent) => this.submitPolitical(event, "national_offer_empire")}>
-                        <label for="national-accession-candidate" class="block font-semibold">Offer accession to nation</label>
-                        <select id="national-accession-candidate" required
-                          class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base text-white"
-                          .value=${this.accessionCandidateId}
-                          @change=${(event: Event) => (this.accessionCandidateId = (event.target as HTMLSelectElement).value)}
-                          ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || this.accessionCandidates().length === 0}
+                <div
+                  class="border-t border-white/15 pt-3 space-y-3"
+                  aria-label="NATIONAL accession and succession"
+                >
+                  <h2 class="font-semibold text-amber-200">
+                    Accession and succession
+                  </h2>
+                  ${
+                    isEmperor
+                      ? html`<form
+                            class="space-y-2"
+                            @submit=${(event: SubmitEvent) => this.submitPolitical(event, "national_offer_empire")}
+                          >
+                            <label
+                              for="national-accession-candidate"
+                              class="block font-semibold"
+                              >Offer accession to nation</label
+                            >
+                            <select
+                              id="national-accession-candidate"
+                              required
+                              class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base text-white"
+                              .value=${this.accessionCandidateId}
+                              @change=${(event: Event) => (this.accessionCandidateId = (event.target as HTMLSelectElement).value)}
+                              ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || this.accessionCandidates().length === 0}
+                            >
+                              <option value="">
+                                Choose an independent living nation
+                              </option>
+                              ${this.accessionCandidates().map((candidate) => html`<option value=${candidate.id}>${candidate.name} (${candidate.id})</option>`)}
+                            </select>
+                            <button
+                              id="national-offer-accession"
+                              type="submit"
+                              class="min-h-11 rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+                              ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || !this.accessionCandidates().some((item) => item.id === this.accessionCandidateId)}
+                            >
+                              Offer accession
+                            </button>
+                          </form>
+                          <form
+                            class="space-y-2"
+                            @submit=${(event: SubmitEvent) => this.submitPolitical(event, "national_transfer_crown")}
+                          >
+                            <label
+                              for="national-crown-successor"
+                              class="block font-semibold"
+                              >Transfer crown to member</label
+                            >
+                            <select
+                              id="national-crown-successor"
+                              required
+                              class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base text-white"
+                              .value=${this.crownSuccessorId}
+                              @change=${(event: Event) => (this.crownSuccessorId = (event.target as HTMLSelectElement).value)}
+                              ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || this.crownSuccessors().length === 0}
+                            >
+                              <option value="">
+                                Choose a living empire member
+                              </option>
+                              ${this.crownSuccessors().map((successor) => html`<option value=${successor.id}>${successor.name} (${successor.id})</option>`)}
+                            </select>
+                            <button
+                              id="national-transfer-crown"
+                              type="submit"
+                              class="min-h-11 rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+                              ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || !this.crownSuccessors().some((item) => item.id === this.crownSuccessorId)}
+                            >
+                              Transfer crown
+                            </button>
+                          </form>`
+                      : nothing
+                  }
+                  ${
+                    ownEmpire === null
+                      ? html`<form
+                          class="space-y-2"
+                          @submit=${(event: SubmitEvent) => this.submitPolitical(event, "national_accept_empire")}
                         >
-                          <option value="">Choose an independent living nation</option>
-                          ${this.accessionCandidates().map((candidate) => html`<option value=${candidate.id}>${candidate.name} (${candidate.id})</option>`)}
-                        </select>
-                        <button id="national-offer-accession" type="submit"
-                          class="min-h-11 rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
-                          ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || !this.accessionCandidates().some((item) => item.id === this.accessionCandidateId)}>
-                          Offer accession
-                        </button>
-                      </form>
-                      <form class="space-y-2" @submit=${(event: SubmitEvent) => this.submitPolitical(event, "national_transfer_crown")}>
-                        <label for="national-crown-successor" class="block font-semibold">Transfer crown to member</label>
-                        <select id="national-crown-successor" required
-                          class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base text-white"
-                          .value=${this.crownSuccessorId}
-                          @change=${(event: Event) => (this.crownSuccessorId = (event.target as HTMLSelectElement).value)}
-                          ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || this.crownSuccessors().length === 0}
-                        >
-                          <option value="">Choose a living empire member</option>
-                          ${this.crownSuccessors().map((successor) => html`<option value=${successor.id}>${successor.name} (${successor.id})</option>`)}
-                        </select>
-                        <button id="national-transfer-crown" type="submit"
-                          class="min-h-11 rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
-                          ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || !this.crownSuccessors().some((item) => item.id === this.crownSuccessorId)}>
-                          Transfer crown
-                        </button>
-                      </form>`
-                    : nothing}
-                  ${ownEmpire === null
-                    ? html`<form class="space-y-2" @submit=${(event: SubmitEvent) => this.submitPolitical(event, "national_accept_empire")}>
-                        <label for="national-invitation-empire" class="block font-semibold">Received accession invitations</label>
-                        <select id="national-invitation-empire" required
-                          class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base text-white"
-                          .value=${this.chosenInvitation}
-                          @change=${(event: Event) => (this.chosenInvitation = (event.target as HTMLSelectElement).value)}
-                          ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || this.accessionOffers.length === 0}
-                        >
-                          <option value="">Choose a verified invitation</option>
-                          ${this.accessionOffers.map((offer) => html`<option value=${offer.empireId}>${offer.empireId} · from ${this.playerName(offer.proposerId)}</option>`)}
-                        </select>
-                        <button id="national-accept-accession" type="submit"
-                          class="min-h-11 rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
-                          ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || !this.accessionOffers.some((offer) => offer.empireId === this.chosenInvitation)}>
-                          Accept accession
-                        </button>
-                        ${game.nationalAccessionOffers?.() === null || game.nationalAccessionOffers?.() === undefined
-                          ? html`<p role="status" class="text-xs text-amber-200">Recipient-only invitations have not been verified by the game yet.</p>`
-                          : this.accessionOffers.length === 0
-                            ? html`<p role="status" class="text-xs text-slate-300">No verified invitations currently addressed to your nation.</p>`
-                            : nothing}
-                      </form>`
-                    : nothing}
-                  <p role="status" aria-live="polite" aria-busy=${String(this.lastPoliticalSubmission !== null)}
-                    data-national-political-status class="text-xs text-amber-200">${this.politicalStatus ?? nothing}</p>
-                  ${this.politicalError
-                    ? html`<p role="alert" class="text-xs text-red-300">${this.politicalError}</p>`
-                    : nothing}
-                  <p class="text-xs text-slate-400">An accepted command receipt does not prove that an invitation was delivered. Accession and crown transfer require a fresh, authoritative empire roster.</p>
+                          <label
+                            for="national-invitation-empire"
+                            class="block font-semibold"
+                            >Received accession invitations</label
+                          >
+                          <select
+                            id="national-invitation-empire"
+                            required
+                            class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base text-white"
+                            .value=${this.chosenInvitation}
+                            @change=${(event: Event) => (this.chosenInvitation = (event.target as HTMLSelectElement).value)}
+                            ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || this.accessionOffers.length === 0}
+                          >
+                            <option value="">
+                              Choose a verified invitation
+                            </option>
+                            ${this.accessionOffers.map((offer) => html`<option value=${offer.empireId}>${offer.empireId} · from ${this.playerName(offer.proposerId)}</option>`)}
+                          </select>
+                          <button
+                            id="national-accept-accession"
+                            type="submit"
+                            class="min-h-11 rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+                            ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || !this.accessionOffers.some((offer) => offer.empireId === this.chosenInvitation)}
+                          >
+                            Accept accession
+                          </button>
+                          ${
+                            game.nationalAccessionOffers?.() === null ||
+                            game.nationalAccessionOffers?.() === undefined
+                              ? html`<p
+                                  role="status"
+                                  class="text-xs text-amber-200"
+                                >
+                                  Recipient-only invitations have not been
+                                  verified by the game yet.
+                                </p>`
+                              : this.accessionOffers.length === 0
+                                ? html`<p
+                                    role="status"
+                                    class="text-xs text-slate-300"
+                                  >
+                                    No verified invitations currently addressed
+                                    to your nation.
+                                  </p>`
+                                : nothing
+                          }
+                        </form>`
+                      : nothing
+                  }
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    aria-busy=${String(this.lastPoliticalSubmission !== null)}
+                    data-national-political-status
+                    class="text-xs text-amber-200"
+                  >
+                    ${this.politicalStatus ?? nothing}
+                  </p>
+                  ${
+                    this.politicalError
+                      ? html`<p role="alert" class="text-xs text-red-300">
+                          ${this.politicalError}
+                        </p>`
+                      : nothing
+                  }
+                  <p class="text-xs text-slate-400">
+                    An accepted command receipt does not prove that an
+                    invitation was delivered. Accession and crown transfer
+                    require a fresh, authoritative empire roster.
+                  </p>
                 </div>
                 <div class="border-t border-white/15 pt-3 space-y-2">
-                  <h2 class="font-semibold text-amber-200">Other diplomatic actions</h2>
+                  <h2 class="font-semibold text-amber-200">
+                    Other diplomatic actions
+                  </h2>
                   ${["Non-aggression pact", "Mutual defense pact"].map(
-                    (label) => html`<button type="button" disabled
-                      aria-label="${label} (not yet available)"
-                      class="mr-2 mb-2 rounded-md border border-white/20 px-3 py-1.5 text-xs text-slate-500 cursor-not-allowed">
-                      ${label} · Unavailable
-                    </button>`,
+                    (label) =>
+                      html`<button
+                        type="button"
+                        disabled
+                        aria-label="${label} (not yet available)"
+                        class="mr-2 mb-2 rounded-md border border-white/20 px-3 py-1.5 text-xs text-slate-500 cursor-not-allowed"
+                      >
+                        ${label} · Unavailable
+                      </button>`,
                   )}
                 </div>
               </div>`
