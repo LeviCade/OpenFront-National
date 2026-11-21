@@ -128,8 +128,9 @@ export function summarizeBrowserEvidence(report, expectedSha) {
       .slice(0, 40),
     packetCounts: {
       observed: packets.length,
-      withPublicPolitics: packets.filter((p) => p?.publicPolitics != null)
-        .length,
+      withPublicPolitics: packets.filter(
+        (p) => p?.publicPolitics !== null && p?.publicPolitics !== undefined,
+      ).length,
       acceptedResults: packets.reduce(
         (sum, p) =>
           sum +
@@ -207,6 +208,14 @@ export function publishEvidence(root, expectedSha, kind = "release") {
     }
     const summary = summarizeBrowserEvidence(raw, expectedSha);
     const status = recorded.get(mode);
+    const expectedViewport = mode.endsWith("mobile")
+      ? "390x844 mobile"
+      : "1280x800 desktop";
+    const actualViewport =
+      raw?.viewport === "390x844 mobile" ||
+      raw?.viewport === "1280x800 desktop"
+        ? raw.viewport
+        : null;
     if (
       !summary.sourceMatches ||
       (status?.result !== "PASS" && status?.result !== "FAIL")
@@ -233,18 +242,19 @@ export function publishEvidence(root, expectedSha, kind = "release") {
       pixelMatches(gl2.shaderPixel) &&
       typeof gl1.unmaskedRenderer === "string" &&
       /virgl/i.test(gl1.unmaskedRenderer) &&
-      !/swiftshader|llvmpipe|lavapipe|softpipe|software|swrast/i.test(gl1.unmaskedRenderer) &&
-      summary.hardware.renderer != null;
-    const signed = kind === "release" &&
+      !/swiftshader|llvmpipe|lavapipe|softpipe|software|swrast/i.test(
+        gl1.unmaskedRenderer,
+      ) &&
+      summary.hardware.renderer !== null;
+    const signed =
+      kind === "release" &&
       raw?.hardwareAcceptanceRequired === true &&
       summary.hardware.proofAccepted === true;
     const laneMatches =
       raw?.hardwareAcceptanceRequired === (kind === "release");
-    const viewportMatches = mode.endsWith("mobile")
-      ? raw?.viewport === "390x844 mobile"
-      : raw?.viewport === "1280x800 desktop";
-    const statusExitMatches = status?.result ===
-      (status?.exitCode === 0 ? "PASS" : "FAIL");
+    const viewportMatches = actualViewport === expectedViewport;
+    const statusExitMatches =
+      status?.result === (status?.exitCode === 0 ? "PASS" : "FAIL");
     const reportedPass = status?.result === "PASS";
     const scenarioAccepted =
       summary.sourceMatches &&
@@ -256,21 +266,35 @@ export function publishEvidence(root, expectedSha, kind = "release") {
       (kind === "diagnostic" || signed);
     if (reportedPass && !scenarioAccepted) valid = false;
     if (!statusExitMatches) valid = false;
-    const outcome = !status ? "NOT_RUN" : reportedPass
-      ? (scenarioAccepted ? "PASS" : "UNVERIFIED")
-      : "FAIL";
-    const reason = !status ? "PROCESS_NOT_RUN" :
-      !raw ? "REPORT_MISSING_OR_INVALID" :
-      !summary.sourceMatches ? "SOURCE_MISMATCH" :
-      !viewportMatches ? "VIEWPORT_MISMATCH" :
-      !laneMatches ? "EVIDENCE_LANE_MISMATCH" :
-      !physicalDiagnostic ? "GPU_OBSERVATION_INCOMPLETE" :
-      status.exitCode !== 0
-        ? (summary.stageReached ? "GAMEPLAY_STAGE_" +
-          summary.stageReached.toUpperCase().replaceAll("-", "_")
-          : "BROWSER_PROCESS_FAILURE") :
-      !stageComplete ? "GAMEPLAY_INCOMPLETE" :
-      kind === "release" && !signed ? "SIGNED_WITNESS_NOT_VERIFIED" : "NONE";
+    const outcome = !status
+      ? "NOT_RUN"
+      : reportedPass
+        ? scenarioAccepted
+          ? "PASS"
+          : "UNVERIFIED"
+        : "FAIL";
+    const reason = !status
+      ? "PROCESS_NOT_RUN"
+      : !raw
+        ? "REPORT_MISSING_OR_INVALID"
+        : !summary.sourceMatches
+          ? "SOURCE_MISMATCH"
+          : !viewportMatches
+            ? "VIEWPORT_MISMATCH"
+            : !laneMatches
+              ? "EVIDENCE_LANE_MISMATCH"
+              : !physicalDiagnostic
+                ? "GPU_OBSERVATION_INCOMPLETE"
+                : status.exitCode !== 0
+                  ? summary.stageReached
+                    ? "GAMEPLAY_STAGE_" +
+                      summary.stageReached.toUpperCase().replaceAll("-", "_")
+                    : "BROWSER_PROCESS_FAILURE"
+                  : !stageComplete
+                    ? "GAMEPLAY_INCOMPLETE"
+                    : kind === "release" && !signed
+                      ? "SIGNED_WITNESS_NOT_VERIFIED"
+                      : "NONE";
     summary.hardware.diagnosticObserved = physicalDiagnostic;
     summary.hardware.proofAccepted = signed;
     summary.hardware.verdict = signed ? summary.hardware.verdict : null;
@@ -289,9 +313,12 @@ export function publishEvidence(root, expectedSha, kind = "release") {
           !png.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC) ||
           !png.subarray(-12).equals(PNG_IEND) ||
           png.subarray(12, 16).toString("ascii") !== "IHDR" ||
-          png.readUInt32BE(16) < 1 || png.readUInt32BE(16) > 4096 ||
-          png.readUInt32BE(20) < 1 || png.readUInt32BE(20) > 4096
-        ) continue;
+          png.readUInt32BE(16) < 1 ||
+          png.readUInt32BE(16) > 4096 ||
+          png.readUInt32BE(20) < 1 ||
+          png.readUInt32BE(20) > 4096
+        )
+          continue;
         copyFileSync(path, join(outputDir, name));
         images.push(name);
       }
@@ -306,6 +333,12 @@ export function publishEvidence(root, expectedSha, kind = "release") {
       viewportMatches,
       laneMatches,
       releaseCertified: false,
+      reportPresent: raw !== null,
+      expectedViewport,
+      actualViewport,
+      firstFailedStage:
+        status?.exitCode !== 0 ? summary.stageReached : null,
+      screenshotCount: images.length,
       ...summary,
       screenshotNames: images,
     };
@@ -316,12 +349,15 @@ export function publishEvidence(root, expectedSha, kind = "release") {
   }
   result.schema = 2;
   result.lane = kind;
-  result.exactCandidateSha = expectedSha;
-  result.allModesPass = valid &&
-    MODES.every((mode) => result.modes[mode].outcome === "PASS");
-  result.classification = kind === "diagnostic"
-    ? "UNSIGNED_DIAGNOSTIC_NOT_RELEASE"
-    : "E5_BROWSER_SIGNED_GATE_PENDING_HOST_CLEANUP";
+  result.exactCandidateSha = SHA.test(expectedSha ?? "")
+    ? expectedSha
+    : null;
+  result.allModesPass =
+    valid && MODES.every((mode) => result.modes[mode].outcome === "PASS");
+  result.classification =
+    kind === "diagnostic"
+      ? "UNSIGNED_DIAGNOSTIC_NOT_RELEASE"
+      : "E5_BROWSER_SIGNED_GATE_PENDING_HOST_CLEANUP";
   result.releaseCertified = false;
   result.hostCleanupVerified = false;
   writeFileSync(

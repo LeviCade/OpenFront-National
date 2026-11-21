@@ -5,7 +5,7 @@ on:
     branches:
       - feature/r10-e6-skybot-gpu-evidence-20261121
     paths:
-      - .github/workflows/national-r10-owner-gpu-diagnostic.yml
+      - scripts/national-gpu-ci/OWNER_GPU_DIAGNOSTIC_TRIGGER
 
 permissions:
   contents: read
@@ -56,7 +56,7 @@ jobs:
           printf 'DIAGNOSTIC_ONLY_NOT_RELEASE_ATTESTATION\n' > national-qa-artifacts/gpu/diagnostic/classification.txt
       - uses: actions/setup-node@v4
         with:
-          node-version: '24.15.0'
+          node-version: "24.15.0"
           cache: npm
       - name: Install the pinned dependencies only once
         run: |

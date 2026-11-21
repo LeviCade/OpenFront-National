@@ -16,10 +16,16 @@ const source = readFileSync(
 );
 
 const diagnostic = readFileSync(
-  new URL("../../.github/workflows/national-r10-owner-gpu-diagnostic.yml", import.meta.url),
+  new URL(
+    "../../.github/workflows/national-r10-owner-gpu-diagnostic.yml",
+    import.meta.url,
+  ),
   "utf8",
 );
-const runner = readFileSync(new URL("./run-four-modes.sh", import.meta.url), "utf8");
+const runner = readFileSync(
+  new URL("./run-four-modes.sh", import.meta.url),
+  "utf8",
+);
 
 void test("strict default-main dispatch, owner admission and immutable R10 ancestry", () => {
   assert.ok(source.includes("  workflow_dispatch:"));
@@ -52,7 +58,7 @@ void test("diagnostic is owner-only, feature-path-filtered and cannot certify re
     "github.actor == 'LeviCade'",
     "github.repository == 'LeviCade/OpenFront-National'",
     "refs/heads/feature/r10-e6-skybot-gpu-evidence-20261121",
-    "national-r10-owner-gpu-diagnostic.yml",
+    "scripts/national-gpu-ci/OWNER_GPU_DIAGNOSTIC_TRIGGER",
     'test "$GITHUB_ACTOR" = LeviCade',
     "0e52b5eeb7490ce83898f2a9696732c7e7d6b21c",
     'NATIONAL_REQUIRE_HARDWARE_GPU: "0"',
@@ -75,7 +81,10 @@ void test("one pinned installation, one real GPU runner and four serial browser 
     assert.equal((workflow.match(/npm run inst/g) ?? []).length, 1);
     assert.doesNotMatch(workflow, /swiftshader|--enable-unsafe-swiftshader|--disable-gpu/i);
   }
-  assert.match(runner, /for mode in national-desktop national-mobile legacy-desktop legacy-mobile/);
+  assert.match(
+    runner,
+    /for mode in national-desktop national-mobile legacy-desktop legacy-mobile/,
+  );
   assert.ok(runner.includes("node scripts/national-qa/browser-gameplay.mjs"));
   assert.match(runner, /sanitize-browser-evidence[.]mjs --kind/);
   assert.doesNotMatch(runner, /cat .*log|tail -n|grep .*log/);
@@ -85,10 +94,17 @@ void test("git ancestry denies stale ancestors and unrelated sibling sources", (
   const dir = mkdtempSync(join(tmpdir(), "r10-gpu-ancestry-"));
   const git = (...args) =>
     execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
-  const commit = (name) => git(
-    "-c", "user.name=E6", "-c", "user.email=e6@example.invalid",
-    "commit", "--allow-empty", "-m", name,
-  );
+  const commit = (name) =>
+    git(
+      "-c",
+      "user.name=E6",
+      "-c",
+      "user.email=e6@example.invalid",
+      "commit",
+      "--allow-empty",
+      "-m",
+      name,
+    );
   const ancestor = (a, b) => {
     try {
       git("merge-base", "--is-ancestor", a, b);
