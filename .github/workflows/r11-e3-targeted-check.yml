@@ -38,3 +38,5 @@ jobs:
 # R11 E3 second focused probe after TypeScript fixes
 
 # R11 E3 third focused probe: legal 8-character clientIDs
+
+# R11 E3 fourth focused probe: canonical candidate PlayerID wire encoding
