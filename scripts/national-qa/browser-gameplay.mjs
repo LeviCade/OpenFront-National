@@ -814,7 +814,7 @@ async function main() {
         const activity = await poll(async () => {
           const packets = await worker();
           return packets.some((p) => (p.tick ?? 0) > lastTick &&
-            (p.hasTerritoryDelta || p.hasAuthoritativeAttackDelta));
+            (p.hasTerritoryDelta === true || p.hasAuthoritativeAttackDelta === true));
         }, "legacy real map input followed by authoritative tile or attack update", 35, 300);
         if (!activity) throw Error("LEGACY_PLAYER_ACTION_UNCONFIRMED");
         const spawned = await poll(async () => {
@@ -1132,7 +1132,7 @@ async function main() {
         const attackCount = await evaluate("window.__nationalQaFind('national-diplomacy-panel')?.game?.myPlayer?.()?.outgoingAttacks?.()?.length ?? null");
         const resultFromEngine = packets.some((p) =>
           p.sequence > lastSequence &&
-          (p.hasAuthoritativeAttackDelta || p.hasAuthoritativeMotion));
+          (p.hasAuthoritativeAttackDelta === true || p.hasAuthoritativeMotion === true));
         return Number.isSafeInteger(attackCount) &&
           attackCount > previousOutgoing && resultFromEngine;
       }, "actual own outgoing attack plus authoritative combat packet", 60, 300);
