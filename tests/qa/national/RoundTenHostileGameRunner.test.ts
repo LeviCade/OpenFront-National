@@ -48,8 +48,10 @@ async function spawned(): Promise<Game> {
   return game;
 }
 
-function realPackets(game: Game, clientID?: string): GameUpdateViewData[] {
+function observedPrincipal(game: Game, clientID?: string) {
   const packets: GameUpdateViewData[] = [];
+  // Create recipient-bound delivery cursor BEFORE the new command. Constructing
+  // it after the command intentionally discards prior journal receipts.
   const runner = new GameRunner(
     game,
     new Executor(game, seed, clientID),
@@ -58,16 +60,24 @@ function realPackets(game: Game, clientID?: string): GameUpdateViewData[] {
     },
     clientID,
   );
-  game.queueViewResync();
-  runner.addTurn({ turnNumber: game.ticks(), intents: [] });
-  expect(runner.executeNextTick()).toBe(true);
-  expect(packets.length).toBeGreaterThan(0);
-  return packets;
+  return {
+    packets,
+    next() {
+      game.queueViewResync();
+      runner.addTurn({ turnNumber: game.ticks(), intents: [] });
+      expect(runner.executeNextTick()).toBe(true);
+      expect(packets.length).toBeGreaterThan(0);
+      return packets;
+    },
+  };
 }
 
 describe("R10 independent GameRunner hostile authority and replay canaries", () => {
   it("does not disclose another player's positive WAR result to foreign or unbound workers", async () => {
     const game = await spawned();
+    const alphaView = observedPrincipal(game, alpha.clientID!);
+    const bravoView = observedPrincipal(game, bravo.clientID!);
+    const anonymousView = observedPrincipal(game, undefined);
     const war = game.performNationalWarCommandWithOutcome(
       game.player(alpha.id),
       {
@@ -84,7 +94,7 @@ describe("R10 independent GameRunner hostile authority and replay canaries", () 
       recipientId: alpha.id,
       requestId: "e5-r10-actual-request",
     });
-    const alphaPackets = realPackets(game, alpha.clientID!);
+    const alphaPackets = alphaView.next();
     const alphaOutcomes = alphaPackets.flatMap(
       (packet) => packet.nationalCommandResults ?? [],
     );
@@ -98,8 +108,11 @@ describe("R10 independent GameRunner hostile authority and replay canaries", () 
         }),
       ]),
     );
-    for (const clientID of [bravo.clientID!, undefined]) {
-      const foreignPackets = realPackets(game, clientID);
+    for (const [clientID, view] of [
+      [bravo.clientID!, bravoView],
+      [undefined, anonymousView],
+    ] as const) {
+      const foreignPackets = view.next();
       const foreignOutcomes = foreignPackets.flatMap(
         (packet) => packet.nationalCommandResults ?? [],
       );
