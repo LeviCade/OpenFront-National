@@ -10,7 +10,6 @@ import { GameMode, GameType, PlayerType } from "@openfront/engine-api/game/GameT
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import {
   type ClientID,
-  type Intent,
   IntentSchema,
   type StampedIntent,
   StampedIntentSchema,
