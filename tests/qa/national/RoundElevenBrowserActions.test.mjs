@@ -13,6 +13,8 @@ import {
 import {
   acceptRadialTarget,
   classifyFoundingEvidence,
+  classifySoloBattleEvidence,
+  soloSpawnFractions,
   describePanel,
   distinctPeacePrincipal,
   unobstructedCanvasPoint,
@@ -207,6 +209,66 @@ describe("R11 E5 authentic founding lifecycle and ownership", () => {
     ).toBe("FOUNDING_RECEIPT_STATUS_INVALID");
   });
 });
+describe("Class Five E5 NATIONAL Solo native gameplay evidence", () => {
+  it("searches distinct viewport positions for real mobile and desktop map taps", () => {
+    const points = soloSpawnFractions();
+    expect(points.length).toBeGreaterThan(24);
+    expect(points[0]).toEqual([0.55, 0.55]);
+    expect(new Set(points.map(([x, y]) => x + ":" + y)).size).toBe(
+      points.length,
+    );
+    expect(points.every(([x, y]) => x > 0 && x < 1 && y > 0 && y < 1)).toBe(
+      true,
+    );
+  });
+
+  it("requires a genuine targeted radial click, newer engine packet and damage", () => {
+    const valid = {
+      targetId: "enemy",
+      emitted: [{ targetId: "enemy", troops: 100 }],
+      before: { id: "enemy", tiles: 15, troops: 1000 },
+      after: { id: "enemy", tiles: 14, troops: 980 },
+      outgoingBefore: 0,
+      outgoingAfter: 1,
+      packets: [{ sequence: 5, hasAuthoritativeAttackDelta: true }],
+      firstSequence: 4,
+    };
+    expect(classifySoloBattleEvidence(valid)).toEqual({
+      accepted: true,
+      reason: "SOLO_REAL_RADIAL_COMBAT_IMPACT",
+      troopLoss: true,
+      territoryLoss: true,
+    });
+    expect(
+      classifySoloBattleEvidence({ ...valid, emitted: [] }).reason,
+    ).toBe("SOLO_REAL_RADIAL_ATTACK_ABSENT");
+    expect(
+      classifySoloBattleEvidence({
+        ...valid,
+        emitted: [{ targetId: "other", troops: 100 }],
+      }).accepted,
+    ).toBe(false);
+    expect(
+      classifySoloBattleEvidence({ ...valid, outgoingAfter: 0 }).reason,
+    ).toBe("SOLO_ATTACK_ENGINE_DELTA_ABSENT");
+    expect(
+      classifySoloBattleEvidence({
+        ...valid,
+        packets: [{ sequence: 4, hasAuthoritativeAttackDelta: true }],
+      }).accepted,
+    ).toBe(false);
+    expect(
+      classifySoloBattleEvidence({ ...valid, after: valid.before }).reason,
+    ).toBe("SOLO_OPPONENT_DAMAGE_ABSENT");
+    expect(
+      classifySoloBattleEvidence({
+        ...valid,
+        after: { id: "foreign", tiles: 1, troops: 0 },
+      }).accepted,
+    ).toBe(false);
+  });
+});
+
 describe("R11 E5 genuine radial and peace authority gates", () => {
   it("cannot accept a radial action for a wrong target or disabled Attack", () => {
     expect(
