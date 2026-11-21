@@ -105,6 +105,58 @@ confidentiality remain unaccepted. Asset provenance and missing
 music are separate release blockers. Production npm audit is zero,
 but development advisories still require review. **No public release.**
 
+## Round Ten accepted six-engine development source
+
+**33% → 38% (+5 verified points).** Six engineers' 42 distinct
+changed paths were assembled in [PR #62](https://github.com/LeviCade/OpenFront-National/pull/62)
+and MERGED into `00e4269603b7bb86abdc101d0c5eeeb5c0a267bf`.
+The merged tree `3c9f710a361fa9938678c00a0fb932319214c719`
+is byte-identical to reviewed combined candidate `6c2452ef001c0b8dfebd87aee87c27a01a2afbdc`.
+[Exact merged-source CI #44920349492](https://github.com/LeviCade/OpenFront-National/actions/runs/44920349492)
+**SUCCESS**: 798 passing files, 11,639 passing tests, one skipped,
+typecheck/lint/pinned formatting/build all passed.
+[Exact merged independent QA #44920349473](https://github.com/LeviCade/OpenFront-National/actions/runs/44920349473)
+**SUCCESS**: real GameRunner/replay/hostile packets and Chromium smoke.
+The identical candidate tree also passed all seven
+[R6 source gates #44919852298](https://github.com/LeviCade/OpenFront-National/actions/runs/44919852298)
+and WAR/MDA/CAS/replay in
+[#44919852256](https://github.com/LeviCade/OpenFront-National/actions/runs/44919852256).
+
+New credit, distinct from previously awarded R4/R8/R9 scenarios:
+
+- **M2 +1:** authenticated stamped offer/recipient-only Game invitation/
+  consent/exclusive membership/crown transfer and request replay using
+  real GameRunner. Different from R4 basic succession and R9 ballots.
+  Worker recipient packet delivery and human-facing controls are NOT done.
+- **M3 +2:** actual legal WAR → real map assault → troops/tiles change →
+  lawful peace, forged/zero-strength/after-peace denial and replay.
+  Prior WAR legality and missile-cessation points are not repeated.
+- **M4 +1:** live donor troop spending while genuine territorial combat
+  occurs, with one donor on two simultaneous fronts; not just the
+  previously scored microattack levy conservation.
+- **M8 +1:** two real NationExecution bots plus authenticated GameRunner
+  human; bot-issued accepted WAR, genuine attack/damage, peace and replay.
+  Full real rejected-declaration → cooldown → alternate attack through
+  ordinary bot ticks remains unverified and gets zero additional credit.
+
+**M9 +0.** The first reviewed
+[Skybot R10 four-mode GPU diagnostic #44920010367](https://github.com/LeviCade/OpenFront-National/actions/runs/44920010367)
+actually ran all four on observed Mesa Intel VirGL WebGL1/WebGL2.
+Legacy FFA desktop/mobile **PASS diagnostic**. NATIONAL desktop
+**FAIL at found-empire receipt**; NATIONAL mobile **FAIL at spawn**.
+[Sanitized evidence](https://github.com/LeviCade/OpenFront-National/actions/runs/44920010367/artifacts/14713027849)
+is UNSIGNED: not public-release attestation, independent host cleanup
+verification or 4/4 game acceptance. E5 owns browser action/receipt
+verification, E4 human UI and mobile map access, E2 engine triage only
+if proven, E3 private invitation packets. Trusted host/server,
+licensed missing music, inherited asset provenance and dev advisories
+remain open.
+
+**Accounting: 16 opening + 5 R4 + 6 R8 + 6 R9 + 5 R10 = 38%.**
+Original M0–M9 milestone weights unchanged. The lower Manager 38–43%
+development progress goal is met; NATIONAL game playability and
+public release are not accepted.
+
 ## Scoring controls
 
 - Each new point requires identifiable **real engine or browser**
@@ -114,7 +166,7 @@ but development advisories still require review. **No public release.**
   weights are ceilings for new milestone allocation; the prior
   historical 16 remains an unallocated opening estimate rather than
   retroactively invented milestone achievements.
-- **Current: 33%. Round Nine 32–37% target met.** Further points require
+- **Current: 38%. Round Ten 38–43% target met at its lower bound.** Further points require
   additional accepted integration scenarios and the same CI discipline.
 - Never treat honest-client Solo Web Worker filtering as hostile
   client fog security. A trusted-host server is a separate release gate.
