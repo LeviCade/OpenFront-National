@@ -11,7 +11,7 @@
  *   ... --mobile
  */
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   mkdirSync,
   mkdtempSync,
@@ -22,7 +22,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { reconcileDiplomacyEvidence } from "./browser-verdict.mjs";
 import {
   PANEL_TOGGLE,
   describePanel,
@@ -31,6 +30,7 @@ import {
   acceptRadialTarget,
   distinctPeacePrincipal,
 } from "./browser-r11-verdict.mjs";
+import { reconcileDiplomacyEvidence } from "./browser-verdict.mjs";
 import { verifyHardwareWebgl } from "./gpu-attestation.mjs";
 import {
   assertSoloLaunch,
@@ -627,11 +627,15 @@ async function main() {
       };
     })()`);
   const panelObservation = () =>
-    evaluate("(() => {" +
-      "const panel=window.__nationalQaFind('national-diplomacy-panel');" +
-      "const toggle=panel?.querySelector('button[aria-controls=\\\"national-diplomacy-content\\\"]');" +
-      "return (" + describePanel.toString() + ")(toggle,panel);" +
-      "})()");
+    evaluate(
+      "(() => {" +
+        "const panel=window.__nationalQaFind('national-diplomacy-panel');" +
+        "const toggle=panel?.querySelector('button[aria-controls=\\\"national-diplomacy-content\\\"]');" +
+        "return (" +
+        describePanel.toString() +
+        ")(toggle,panel);" +
+        "})()",
+    );
   const setPanelExpanded = async (expanded) => {
     const prior = await panelObservation();
     if (!prior?.valid) throw Error("PANEL_REAL_TOGGLE_MISSING");
@@ -641,7 +645,9 @@ async function main() {
         const next = await panelObservation();
         return next?.valid && next.expanded === expanded ? next : null;
       },
-      expanded ? "real diplomacy panel expanded" : "real diplomacy panel collapsed",
+      expanded
+        ? "real diplomacy panel expanded"
+        : "real diplomacy panel collapsed",
       35,
       150,
     );
@@ -656,9 +662,12 @@ async function main() {
         "const canvas=[...document.querySelectorAll('canvas')]" +
         ".filter(c=>c.getBoundingClientRect().width>150)" +
         ".sort((a,b)=>b.getBoundingClientRect().width-a.getBoundingClientRect().width)[0];" +
-        "return (" + unobstructedCanvasPoint.toString() + ")(document,canvas," +
-          JSON.stringify(fractions) + ");" +
-      "})()",
+        "return (" +
+        unobstructedCanvasPoint.toString() +
+        ")(document,canvas," +
+        JSON.stringify(fractions) +
+        ");" +
+        "})()",
     );
   const fill = async (selector, value) => {
     const target = await poll(
@@ -1110,8 +1119,12 @@ async function main() {
       await setPanelExpanded(false);
       await capture("spawn-unobstructed-map");
       const locations = [
-        [0.55, 0.55], [0.4, 0.4], [0.6, 0.42],
-        [0.3, 0.55], [0.7, 0.6], [0.2, 0.4],
+        [0.55, 0.55],
+        [0.4, 0.4],
+        [0.6, 0.42],
+        [0.3, 0.55],
+        [0.7, 0.6],
+        [0.2, 0.4],
       ];
       let actualSpawn = before.spawned && before.ownedTiles > 0 ? before : null;
       let unobstructedInputs = 0;
@@ -1181,9 +1194,12 @@ async function main() {
       })()`);
       if (!attached) throw Error("FOUNDING_REAL_EVENTBUS_NOT_CONNECTED");
       const prior = await gameObservation();
-      if (!prior?.spawned || !(prior.ownedTiles > 0) ||
-          typeof prior.actorId !== "string" ||
-          !Number.isSafeInteger(prior.tick)) {
+      if (
+        !prior?.spawned ||
+        !(prior.ownedTiles > 0) ||
+        typeof prior.actorId !== "string" ||
+        !Number.isSafeInteger(prior.tick)
+      ) {
         throw Error("FOUNDING_ACTOR_NOT_CANONICALLY_SPAWNED");
       }
       await fill("#national-empire-id", empireId);
@@ -1191,8 +1207,10 @@ async function main() {
       submittedFounding = await evaluate(
         "window.__nationalQaRequests?.[0] ?? null",
       );
-      if (submittedFounding?.empireId !== empireId ||
-          !/^nf_[a-f0-9]{32}$/.test(submittedFounding?.requestId ?? "")) {
+      if (
+        submittedFounding?.empireId !== empireId ||
+        !/^nf_[a-f0-9]{32}$/.test(submittedFounding?.requestId ?? "")
+      ) {
         throw Error("REAL_FOUNDING_REQUEST_ID_MISSING_OR_INVALID");
       }
       record("founding-real-click-submitted", {
@@ -1213,25 +1231,27 @@ async function main() {
             "const g=panel?.game;" +
             "if(!g) return null;" +
             "return { tick:g.ticks?.() ?? null," +
-              "paused:g.isPaused?.() ?? null," +
-              "actorId:g.myPlayer?.()?.id?.() ?? null," +
-              "results:g.nationalFoundingResults?.() ?? []," +
-              "publicEmpires:g.nationalPolitics?.()?.empires ?? null," +
-              "uiConfirmed:/Confirmed by game: your nation founded/.test(panel.innerText)," +
-              "snapshotTick:g.ticks?.() ?? null };" +
-          "})()",
+            "paused:g.isPaused?.() ?? null," +
+            "actorId:g.myPlayer?.()?.id?.() ?? null," +
+            "results:g.nationalFoundingResults?.() ?? []," +
+            "publicEmpires:g.nationalPolitics?.()?.empires ?? null," +
+            "uiConfirmed:/Confirmed by game: your nation founded/.test(panel.innerText)," +
+            "snapshotTick:g.ticks?.() ?? null };" +
+            "})()",
         );
         if (!observedState) throw Error("FOUNDING_GAMEVIEW_DISAPPEARED");
         if (observedState.actorId !== prior.actorId) {
           throw Error("FOUNDING_ACTOR_CHANGED_DURING_REQUEST");
         }
         const packets = await worker();
-        const journal = packets.flatMap(p =>
-          Array.isArray(p.commandResults) ? p.commandResults : [],
-        ).filter(r => r?.requestId === submittedFounding.requestId);
+        const journal = packets
+          .flatMap((p) =>
+            Array.isArray(p.commandResults) ? p.commandResults : [],
+          )
+          .filter((r) => r?.requestId === submittedFounding.requestId);
         const view = Array.isArray(observedState.results)
           ? observedState.results.filter(
-              r => r?.requestId === submittedFounding.requestId,
+              (r) => r?.requestId === submittedFounding.requestId,
             )
           : [];
         last = classifyFoundingEvidence({
@@ -1246,8 +1266,13 @@ async function main() {
           publicEmpires: observedState.publicEmpires,
           uiConfirmed: observedState.uiConfirmed,
         });
-        if (attempt === 0 || attempt === 8 ||
-            attempt === 16 || attempt === 31 || last.status !== "pending") {
+        if (
+          attempt === 0 ||
+          attempt === 8 ||
+          attempt === 16 ||
+          attempt === 31 ||
+          last.status !== "pending"
+        ) {
           record("founding-engine-checkpoint", {
             attempt,
             tickBefore: prior.tick,
@@ -1255,8 +1280,9 @@ async function main() {
             paused: observedState.paused,
             matchedJournal: journal.length,
             matchedView: view.length,
-            hasRoster: Array.isArray(observedState.publicEmpires) &&
-              observedState.publicEmpires.some(e => e.id === empireId),
+            hasRoster:
+              Array.isArray(observedState.publicEmpires) &&
+              observedState.publicEmpires.some((e) => e.id === empireId),
             uiConfirmed: observedState.uiConfirmed,
             classification: last.reason,
             owner: last.owner,
@@ -1271,9 +1297,12 @@ async function main() {
         }
         await sleep(300);
       }
-      if (!result) throw Error(
-        (last?.reason ?? "FOUNDING_UNRESOLVED") + "_OWNER_" + (last?.owner ?? "UNKNOWN"),
-      );
+      if (!result)
+        throw Error(
+          (last?.reason ?? "FOUNDING_UNRESOLVED") +
+            "_OWNER_" +
+            (last?.owner ?? "UNKNOWN"),
+        );
       record("authoritative-empire-accepted", {
         verified: true,
         actorCorrelated: true,
@@ -1287,7 +1316,7 @@ async function main() {
       // real EventBus and Transport, NOT by faking any game/worker state.
       // The UI correctly hides its form after founding; the authenticated
       // engine must still reject a malicious duplicate command.
-      const duplicateRequestId = "qa_r6_duplicate_" + Date.now().toString(36);
+      const duplicateRequestId = "nf_" + randomBytes(16).toString("hex");
       const request = await evaluate(`(async () => {
         const panel = window.__nationalQaFind('national-diplomacy-panel');
         if (!panel?.eventBus) return 'missing live EventBus';
@@ -1456,24 +1485,27 @@ async function main() {
       // directly. The marker is only a read-only locator on the rendered map.
       await setPanelExpanded(false);
       const target = await poll(
-        () => evaluate(
-          "(() => {" +
-            "const actor=" + JSON.stringify(warTargetId) + ";" +
-            "const anchor=[...document.querySelectorAll('[data-national-map-target-id]')]" +
-            ".find(e=>e.getAttribute('data-national-map-target-id')===actor);" +
-            "if(!anchor) return null;" +
-            "const rect=anchor.getBoundingClientRect();" +
-            "const x=Math.round(rect.x+rect.width/2);" +
-            "const y=Math.round(rect.y+rect.height/2);" +
-            "const canvas=[...document.querySelectorAll('canvas')]" +
-            ".find(c=>{const r=c.getBoundingClientRect();" +
+        () =>
+          evaluate(
+            "(() => {" +
+              "const actor=" +
+              JSON.stringify(warTargetId) +
+              ";" +
+              "const anchor=[...document.querySelectorAll('[data-national-map-target-id]')]" +
+              ".find(e=>e.getAttribute('data-national-map-target-id')===actor);" +
+              "if(!anchor) return null;" +
+              "const rect=anchor.getBoundingClientRect();" +
+              "const x=Math.round(rect.x+rect.width/2);" +
+              "const y=Math.round(rect.y+rect.height/2);" +
+              "const canvas=[...document.querySelectorAll('canvas')]" +
+              ".find(c=>{const r=c.getBoundingClientRect();" +
               "return x>=r.left&&x<r.right&&y>=r.top&&y<r.bottom;});" +
-            "const top=document.elementFromPoint(x,y);" +
-            "return rect.width>0&&rect.height>0&&canvas&&" +
+              "const top=document.elementFromPoint(x,y);" +
+              "return rect.width>0&&rect.height>0&&canvas&&" +
               "(top===canvas||canvas.contains(top))" +
               "? {x,y,targetId:actor}:null;" +
-          "})()",
-        ),
+              "})()",
+          ),
         "visible unobstructed player-target map anchor from E4",
         12,
         200,
@@ -1483,31 +1515,40 @@ async function main() {
         await hit(target.x, target.y);
       } else {
         await send("Input.dispatchMouseEvent", {
-          type: "mouseMoved", x: target.x, y: target.y,
+          type: "mouseMoved",
+          x: target.x,
+          y: target.y,
         });
         await send("Input.dispatchMouseEvent", {
-          type: "mousePressed", x: target.x, y: target.y,
-          button: "right", clickCount: 1,
+          type: "mousePressed",
+          x: target.x,
+          y: target.y,
+          button: "right",
+          clickCount: 1,
         });
         await send("Input.dispatchMouseEvent", {
-          type: "mouseReleased", x: target.x, y: target.y,
-          button: "right", clickCount: 1,
+          type: "mouseReleased",
+          x: target.x,
+          y: target.y,
+          button: "right",
+          clickCount: 1,
         });
-        record("actual-secondary-pointer", {targetAware:true});
+        record("actual-secondary-pointer", { targetAware: true });
       }
       const radial = await poll(
-        () => evaluate(
-          "(() => {" +
-            "const menu=document.querySelector('.radial-menu-container');" +
-            "if(!menu||getComputedStyle(menu).display==='none')return null;" +
-            "const center=menu.querySelector('.center-button-hitbox');" +
-            "if(!center)return null;" +
-            "const r=center.getBoundingClientRect();" +
-            "return {targetId:menu.getAttribute('data-target-player-id')," +
+        () =>
+          evaluate(
+            "(() => {" +
+              "const menu=document.querySelector('.radial-menu-container');" +
+              "if(!menu||getComputedStyle(menu).display==='none')return null;" +
+              "const center=menu.querySelector('.center-button-hitbox');" +
+              "if(!center)return null;" +
+              "const r=center.getBoundingClientRect();" +
+              "return {targetId:menu.getAttribute('data-target-player-id')," +
               "buttonEnabled:getComputedStyle(center).cursor==='pointer'," +
               "x:r.x+r.width/2,y:r.y+r.height/2};" +
-          "})()",
-        ),
+              "})()",
+          ),
         "actual target-labelled radial menu and enabled Attack center",
         32,
         180,
@@ -1521,6 +1562,7 @@ async function main() {
       if (!canAttack.accepted) throw Error(canAttack.reason + "_OWNER_E4");
       // The enabled, genuinely rendered center Attack control triggers the
       // application's normal PlayerActionHandler under real input.
+      await capture("radial-attack-enabled");
       await hit(radial.x, radial.y);
       record("real-target-aware-radial-attack", {
         targetMatch: true,
@@ -1670,10 +1712,10 @@ async function main() {
       // principal. E1/E4 must expose a real opposing actor turn/session.
       const stateBeforeAccept = await currentConflicts();
       const offer = stateBeforeAccept?.projection?.motions?.find(
-        motion => motion.id === peaceMotionId,
+        (motion) => motion.id === peaceMotionId,
       );
       const layer = stateBeforeAccept?.projection?.layers?.find(
-        candidate => candidate.id === warId,
+        (candidate) => candidate.id === warId,
       );
       const opposition = distinctPeacePrincipal({
         proposerId: offer?.proposedBy,

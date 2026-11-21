@@ -233,14 +233,23 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
   const missingStages = required.filter((s) => !completed.includes(s));
   const requiredScreenshots = scenario.startsWith("national-")
     ? [
-        "home", "solo-modal", "game-hud", "player-spawned",
-        "confirmed-empire", "declared-war-live", "map-assault-confirmed",
-        "combat-impact-canonical", "peace-motion-proposed",
+        "home",
+        "solo-modal",
+        "game-hud",
+        "spawn-unobstructed-map",
+        "player-spawned",
+        "founding-request",
+        "confirmed-empire",
+        "declared-war-live",
+        "radial-attack-enabled",
+        "map-assault-confirmed",
+        "combat-impact-canonical",
+        "peace-motion-proposed",
         "peace-accepted-ended-war",
       ]
     : ["home", "solo-modal", "legacy-ffa-game-hud", "legacy-player-action"];
   const capturedNames = Array.isArray(report?.events)
-    ? report.events.flatMap(e =>
+    ? report.events.flatMap((e) =>
         e?.name === "screenshot" && typeof e.label === "string"
           ? [e.label]
           : typeof e?.name === "string" &&
@@ -251,7 +260,7 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
       )
     : [];
   const missingScreenshots = requiredScreenshots.filter(
-    label => !capturedNames.includes(label),
+    (label) => !capturedNames.includes(label),
   );
   const code = Number.isInteger(exitCode) ? exitCode : -1;
   const hardware = (report?.events ?? []).some(
@@ -317,7 +326,8 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
     webglShadersMatch: shader,
     signedHardwareAttested: hardware,
     gameplayPassed:
-      code === 0 && missingStages.length === 0 &&
+      code === 0 &&
+      missingStages.length === 0 &&
       missingScreenshots.length === 0,
     publicReleasePassed: false,
   };
