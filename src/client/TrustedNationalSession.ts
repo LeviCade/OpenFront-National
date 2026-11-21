@@ -5,8 +5,8 @@
 import {
   GameUpdateType,
   type GameUpdateViewData,
-  type GameUpdates,
 } from "@openfront/engine-api/game/GameUpdates";
+import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
 import type { GameEvent } from "@openfront/shared/EventBus";
 import type { ServerNationalStartMessage } from "@openfront/shared/WireSchemas";
 
