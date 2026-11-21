@@ -1,6 +1,7 @@
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
+import { NationalGovernanceState } from "@openfront/engine/national/politics/NationalGovernanceState";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
 import {
@@ -45,7 +46,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
     expect(game.nationalWarAuthority()?.authorizeOffensiveAction(A, B)).toBe(
       false,
     );
-    const war = game.performNationalWarCommand(game.player(A), {
+    const war = game.performNationalWarCommandWithOutcome(game.player(A), {
       kind: "declare-national",
       warId: "r9-war-1",
       aggressorId: A,
@@ -66,7 +67,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
     expect(game.nationalWarAuthority()?.authorizeOffensiveAction(A, B)).toBe(
       true,
     );
-    const rejected = game.performNationalWarCommand(game.player(C), {
+    const rejected = game.performNationalWarCommandWithOutcome(game.player(C), {
       kind: "declare-national",
       warId: "r9-illegal-war",
       aggressorId: A,
@@ -87,7 +88,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
     expect(game.nationalPoliticalCommandResults(game.player(A))).toEqual([]);
     const forged = new Proxy(game.player(A), {});
     expect(() =>
-      game.performNationalWarCommand(forged, {
+      game.performNationalWarCommandWithOutcome(forged, {
         kind: "declare-national",
         warId: "r9-forged",
         aggressorId: A,
@@ -103,7 +104,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
       // E2 assigns a new engine-generated war ID on a later retry; the
       // original client request must return its existing authoritative ID.
       expect(
-        g.performNationalWarCommand(g.player(A), {
+        g.performNationalWarCommandWithOutcome(g.player(A), {
           kind: "declare-national",
           warId: "r9-new-engine-generated-id",
           aggressorId: A,
@@ -113,7 +114,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
       ).toEqual(war);
       expect(g.nationalWarState()?.wars.layers).toHaveLength(1);
       expect(() =>
-        g.performNationalWarCommand(g.player(C), {
+        g.performNationalWarCommandWithOutcome(g.player(C), {
           kind: "declare-national",
           warId: "r9-collision",
           aggressorId: C,
@@ -122,7 +123,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
         }),
       ).toThrow(/reused foreign request ID/);
       expect(() =>
-        g.performNationalWarCommand(g.player(A), {
+        g.performNationalWarCommandWithOutcome(g.player(A), {
           kind: "declare-national",
           warId: "r9-collision",
           aggressorId: A,
@@ -130,7 +131,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
           requestId: "r9-war-request",
         }),
       ).toThrow(/reused foreign request ID/);
-      const proposal = g.performNationalWarCommand(g.player(A), {
+      const proposal = g.performNationalWarCommandWithOutcome(g.player(A), {
         kind: "propose-peace",
         motionId: "r9-peace-1",
         warId: "r9-war-1",
@@ -146,7 +147,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
         motionId: "r9-peace-1",
       });
       expect(
-        g.performNationalWarCommand(g.player(A), {
+        g.performNationalWarCommandWithOutcome(g.player(A), {
           kind: "propose-peace",
           motionId: "r9-new-engine-generated-motion",
           warId: "r9-war-1",
@@ -154,7 +155,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
         }),
       ).toEqual(proposal);
       expect(g.nationalWarState()?.wars.motions).toHaveLength(1);
-      const denied = g.performNationalWarCommand(g.player(A), {
+      const denied = g.performNationalWarCommandWithOutcome(g.player(A), {
         kind: "accept-peace",
         motionId: "r9-peace-1",
         requestId: "r9-wrong-side",
@@ -164,7 +165,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
         accepted: false,
         reason: "war-rule",
       });
-      const settlement = g.performNationalWarCommand(g.player(B), {
+      const settlement = g.performNationalWarCommandWithOutcome(g.player(B), {
         kind: "accept-peace",
         motionId: "r9-peace-1",
         requestId: "r9-peace-accepted",
@@ -204,7 +205,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
       empireId: "r9-empire",
       candidateId: B,
     });
-    const attempted = game.performNationalWarCommand(game.player(B), {
+    const attempted = game.performNationalWarCommandWithOutcome(game.player(B), {
       kind: "declare-imperial",
       warId: "r9-before-crown",
       aggressor: { kind: "empire", id: "r9-empire" },
@@ -223,7 +224,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
     expect(game.nationalPoliticalAuthority()?.emperorOf("r9-empire")).toBe(B);
     const { restored } = await roundTrip(game, "plains");
     for (const g of [game, restored]) {
-      const accepted = g.performNationalWarCommand(g.player(B), {
+      const accepted = g.performNationalWarCommandWithOutcome(g.player(B), {
         kind: "declare-imperial",
         warId: "r9-crowned-war",
         aggressor: { kind: "empire", id: "r9-empire" },
@@ -242,7 +243,7 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
       expect(g.nationalWarAuthority()?.authorizeOffensiveAction(A, C)).toBe(
         true,
       );
-      const formerCrown = g.performNationalWarCommand(g.player(A), {
+      const formerCrown = g.performNationalWarCommandWithOutcome(g.player(A), {
         kind: "declare-imperial",
         warId: "r9-former-crown",
         aggressor: { kind: "empire", id: "r9-empire" },
@@ -300,6 +301,63 @@ describe("Round Nine authenticated Game-owned WAR/peace command outcomes", () =>
     expect(() =>
       readTrustedNationalWarOutcomes(game, "r9-host", "forged", resolver),
     ).toThrow(/roster mismatch/);
+  });
+
+  it("keeps old request collisions rejected after 1,024 newer journal records and snapshot restore", () => {
+    const journal = new NationalGovernanceState();
+    for (let i = 0; i < 1_100; i++) {
+      const result = journal.recordWarCommand(
+        A,
+        "national_declare_war",
+        B,
+        5,
+        `r9-aging-${i}`,
+        `intent:${i}`,
+        { warId: `r9-aging-war-${i}` },
+        () => "war-rule",
+      );
+      expect(result.accepted).toBe(false);
+    }
+    const saved = journal.snapshot();
+    expect(saved.receipts).toHaveLength(1_100);
+    expect(saved.results).toHaveLength(128);
+
+    const restored = new NationalGovernanceState();
+    restored.restore(saved, 5);
+    const before = restored.snapshot();
+    const replay = restored.recordWarCommand(
+      A,
+      "national_declare_war",
+      B,
+      10,
+      "r9-aging-0",
+      "intent:0",
+      { warId: "new-generated-war-id" },
+      () => {
+        throw new Error("Replay must never execute a second WAR");
+      },
+    );
+    expect(replay).toMatchObject({
+      requestId: "r9-aging-0",
+      sequence: 0,
+      tick: 5,
+      accepted: false,
+      reason: "war-rule",
+    });
+    expect(restored.snapshot()).toEqual(before);
+    expect(() =>
+      restored.recordWarCommand(
+        A,
+        "national_declare_war",
+        B,
+        10,
+        "r9-aging-0",
+        "changed-intent",
+        { warId: "different" },
+        () => "accepted",
+      ),
+    ).toThrow(/reused foreign request ID/);
+    expect(restored.snapshot()).toEqual(before);
   });
 
 });

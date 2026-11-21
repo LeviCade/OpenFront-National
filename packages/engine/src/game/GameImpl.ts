@@ -651,13 +651,29 @@ export class GameImpl implements Game {
     return this._nationalWar?.snapshot() ?? null;
   }
 
+  /** Legacy direct Game WAR port: preserves real WarLedger rule exceptions. */
+  performNationalWarCommand(actor: Player, command: NationalWarCommand): void {
+    if (this._nationalWar === null || this._national === null)
+      throw new Error("NATIONAL war: mode not enabled");
+    if (
+      this.inSpawnPhase() ||
+      this._players.get(actor.id()) !== actor ||
+      !actor.hasSpawned() ||
+      !actor.isAlive()
+    ) {
+      throw new Error("NATIONAL war: unauthenticated or inactive actor");
+    }
+    this.synchronizeNationalState();
+    this._nationalWar.perform(actor.id(), command, this._ticks);
+  }
+
   /**
    * Authoritative WAR/peace decision. The existing WarLedger alone mutates
    * host-owned conflict state; the ONE governance journal owns the outcome.
    * The request fingerprint excludes engine-generated war/motion IDs, so a
    * later retry with the same client token can return the original receipt.
    */
-  performNationalWarCommand(
+  performNationalWarCommandWithOutcome(
     actor: Player,
     command: NationalWarCommand & { readonly requestId?: string },
     requestId: string | null = null,

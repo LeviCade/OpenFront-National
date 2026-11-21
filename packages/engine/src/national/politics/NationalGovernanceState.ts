@@ -150,8 +150,8 @@ export const NationalGovernanceSnapshotSchema = z.object({
   nextSequence: tick,
   /** Last 128 results for E3 recipient delivery. */
   results: z.array(commandOutcome).max(128),
-  /** Last 1024 request receipts enforce retry idempotence. */
-  receipts: z.array(commandOutcome).max(1024),
+  /** Immutable request receipts for the match lifetime; never silently evict. */
+  receipts: z.array(commandOutcome).max(16_384),
   /** One authoritative memory record per verified human principal. */
   memories: z.array(memory).max(1024),
 });
@@ -165,13 +165,16 @@ export type FoundEmpireReason =
   | "invalid-empire-id"
   | "political-rule";
 export const NATIONAL_RESULT_RETENTION = 128;
-export const NATIONAL_REQUEST_RETENTION = 1024;
+/** Hard lifetime admission limit, NOT a sliding replay window. */
+export const NATIONAL_REQUEST_RETENTION = 16_384;
 export const NATIONAL_SIGHT_RETENTION_TICKS = 60;
 
 export class NationalGovernanceState {
   private nextSequence = 0;
   private results: NationalFoundEmpireResult[] = [];
   private receipts: NationalFoundEmpireResult[] = [];
+  /** Index over SAME canonical receipts, never a second command journal. */
+  private readonly receiptIndex = new Map<string, NationalFoundEmpireResult>();
   private readonly memories = new Map<PlayerID, NationalSightMemory>();
 
   /**
@@ -270,7 +273,8 @@ export class NationalGovernanceState {
       identity.parse(warReferences.recipientId);
       if (warReferences.recipientId !== actorId)
         throw new Error("NATIONAL command journal: mismatched WAR recipient");
-      if (warReferences.warId !== undefined) identity.parse(warReferences.warId);
+      if (warReferences.warId !== undefined)
+        identity.parse(warReferences.warId);
       if (warReferences.motionId !== undefined)
         identity.parse(warReferences.motionId);
     }
@@ -286,13 +290,13 @@ export class NationalGovernanceState {
     // Skip retained collisions deterministically; NEVER reinterpret an
     // explicit duplicate, which must still be idempotent or rejected.
     if (suppliedRequestId === null) {
-      while (this.receipts.some((r) => r.requestId === requestId)) {
+      while (this.receiptIndex.has(requestId)) {
         if (this.nextSequence === Number.MAX_SAFE_INTEGER)
           throw new Error("NATIONAL command journal: sequence exhausted");
         requestId = `auto:${gameTick}:${++this.nextSequence}`;
       }
     }
-    const existing = this.receipts.find((r) => r.requestId === requestId);
+    const existing = this.receiptIndex.get(requestId);
     if (existing) {
       if (
         existing.actorId !== actorId ||
@@ -305,6 +309,11 @@ export class NationalGovernanceState {
     }
     if (this.nextSequence === Number.MAX_SAFE_INTEGER)
       throw new Error("NATIONAL command journal: sequence exhausted");
+    // A full journal fails CLOSED. Never forget an accepted WAR/peace token:
+    // after a sliding-window eviction, a settled war could be redeclared by
+    // the same old client request with a new engine-generated war ID.
+    if (this.receipts.length >= NATIONAL_REQUEST_RETENTION)
+      throw new Error("NATIONAL command journal: lifetime request cap reached");
     const reason = perform();
     const result: NationalFoundEmpireResult = {
       sequence: this.nextSequence++,
@@ -340,8 +349,8 @@ export class NationalGovernanceState {
     commandOutcome.parse(result);
     this.results.push(result);
     this.receipts.push(result);
+    this.receiptIndex.set(requestId, result);
     this.results = this.results.slice(-NATIONAL_RESULT_RETENTION);
-    this.receipts = this.receipts.slice(-NATIONAL_REQUEST_RETENTION);
     return { ...result };
   }
 
@@ -533,6 +542,9 @@ export class NationalGovernanceState {
     this.nextSequence = saved.nextSequence;
     this.results = saved.results.map((r) => ({ ...r }));
     this.receipts = saved.receipts.map((r) => ({ ...r }));
+    this.receiptIndex.clear();
+    for (const receipt of this.receipts)
+      this.receiptIndex.set(receipt.requestId, receipt);
     this.memories.clear();
     for (const record of saved.memories)
       this.memories.set(record.observerId, {

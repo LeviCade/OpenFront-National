@@ -1,7 +1,5 @@
 import type { PlayerID } from "@openfront/engine-api/game/GameTypes";
 import type { ClientID } from "@openfront/engine-api/Schemas";
-import type { NationalWarCommand } from "../../../packages/engine/src/national/politics/NationalWarState";
-import type { NationalWarCommandOutcome } from "../../../packages/engine/src/national/politics/NationalGovernanceState";
 /**
  * Server-side NATIONAL save primitive.
  *
@@ -178,27 +176,28 @@ export class TrustedNationalSaveStore<GameType extends TrustedHostGamePort> {
 /**
  * FUTURE PROTECTED-HOST EXECUTION PORT (not a deployed server endpoint).
  *
- * The host resolves the real session and roster BEFORE calling Game authority.
- * This structural interface imports types only: it cannot expose a raw
- * NATIONAL GameSnapshot, another player's journal, or a mutable WAR ledger.
- * E2/E3 should bind this behind their own authenticated host transport.
+ * This adapter is deliberately structural; server files MUST NOT import the
+ * engine's political modules (enforced by LayerBoundaries.test.ts). The
+ * Game type remains the sole authority for command and outcome semantics.
  */
 export interface TrustedNationalWarGamePort<
   Actor extends { id(): PlayerID },
+  Command,
+  Outcome,
 > extends TrustedHostGamePort {
   playerByClientID(clientID: ClientID): Actor | null | undefined;
-  performNationalWarCommand(
+  performNationalWarCommandWithOutcome(
     actor: Actor,
-    command: NationalWarCommand & { readonly requestId?: string },
-  ): NationalWarCommandOutcome;
-  nationalWarCommandResults(
-    observer: Actor,
-  ): readonly NationalWarCommandOutcome[];
+    command: Command,
+  ): Outcome;
+  nationalWarCommandResults(observer: Actor): readonly Outcome[];
 }
 
 /** Mandatory server-session/roster check, shared by execution and delivery. */
 function boundNationalWarActor<Actor extends { id(): PlayerID }>(
-  game: TrustedNationalWarGamePort<Actor>,
+  game: TrustedHostGamePort & {
+    playerByClientID(clientID: ClientID): Actor | null | undefined;
+  },
   gameID: string,
   session: unknown,
   resolveSession: (
@@ -228,32 +227,36 @@ function boundNationalWarActor<Actor extends { id(): PlayerID }>(
 /** Trusted host forwards a command but never accepts actor IDs from JSON. */
 export function executeTrustedNationalWarCommand<
   Actor extends { id(): PlayerID },
+  Command,
+  Outcome,
 >(
-  game: TrustedNationalWarGamePort<Actor>,
+  game: TrustedNationalWarGamePort<Actor, Command, Outcome>,
   gameID: string,
   session: unknown,
   resolveSession: (
     session: unknown,
     gameID: string,
   ) => AuthenticatedNationalOwner | null,
-  command: NationalWarCommand & { readonly requestId?: string },
-): NationalWarCommandOutcome {
+  command: Command,
+): Outcome {
   const actor = boundNationalWarActor(game, gameID, session, resolveSession);
-  return game.performNationalWarCommand(actor, command);
+  return game.performNationalWarCommandWithOutcome(actor, command);
 }
 
 /** Separate principal-verified read port; E3 handles outbound packets. */
 export function readTrustedNationalWarOutcomes<
   Actor extends { id(): PlayerID },
+  Command,
+  Outcome,
 >(
-  game: TrustedNationalWarGamePort<Actor>,
+  game: TrustedNationalWarGamePort<Actor, Command, Outcome>,
   gameID: string,
   session: unknown,
   resolveSession: (
     session: unknown,
     gameID: string,
   ) => AuthenticatedNationalOwner | null,
-): readonly NationalWarCommandOutcome[] {
+): readonly Outcome[] {
   const actor = boundNationalWarActor(game, gameID, session, resolveSession);
   return game.nationalWarCommandResults(actor);
 }

@@ -615,13 +615,17 @@ export interface Game extends GameLike {
   /** Durable WAR + LEVY snapshot for honest-client observation and replay. */
   nationalWarState(): NationalWarStateSnapshot | null;
   /** Internal trusted actor; E2 owns external schema and command validation. */
-  performNationalWarCommand(
+  performNationalWarCommand(actor: Player, command: NationalWarCommand): void;
+  /** E2 consumes the authoritative Game result; legacy direct calls still throw. */
+  performNationalWarCommandWithOutcome(
     actor: Player,
     command: NationalWarCommand & { readonly requestId?: string },
     requestId?: string | null,
   ): NationalWarCommandOutcome;
   /** Actor-only WAR outcomes; never broadcast into political/founding results. */
-  nationalWarCommandResults(observer: Player): readonly NationalWarCommandOutcome[];
+  nationalWarCommandResults(
+    observer: Player,
+  ): readonly NationalWarCommandOutcome[];
   /** Canonical sorted, unique living/spawned MDA donors; E2 never chooses IDs. */
   nationalMdaAllies(defenderId: PlayerID): readonly PlayerID[];
   /** Canonical read-only source from a real living Game Player. */
