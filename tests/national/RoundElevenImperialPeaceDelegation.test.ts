@@ -129,7 +129,7 @@ describe("R11 new live imperial NATIONAL peace delegation (M5/WAR-05)", () => {
     click(game, a, { type: "national_found_empire", empireId: empire, requestId: "r11-found" });
     click(game, a, { type: "national_offer_empire", empireId: empire, candidateId: B, requestId: "r11-offer" });
     click(game, b, { type: "national_accept_empire", empireId: empire, candidateId: B, requestId: "r11-accept" });
-    expect(game.nationalPoliticalAuthority()?.membersOf(empire)).toEqual([A, B]);
+    expect(game.nationalPoliticalAuthority()?.membersOf(empire)).toEqual([A, B].sort());
     expect(delegated(game)).toEqual([]);
 
     // Emperor starts a real national war ON BEHALF OF B.
