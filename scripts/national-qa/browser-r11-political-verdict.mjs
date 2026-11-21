@@ -123,8 +123,7 @@ export function verifyPrivateInvitation({
     return fail("POLITICAL_PRIVATE_INVITATION_LEAKED_TO_SENDER", "E3");
   if (
     founderView.offers.some(
-      (o) =>
-        !o || o.recipientId !== founderId || o.candidateId !== founderId,
+      (o) => !o || o.recipientId !== founderId || o.candidateId !== founderId,
     )
   )
     return fail("POLITICAL_SENDER_PRIVATE_VIEW_MISMATCH", "E3");
