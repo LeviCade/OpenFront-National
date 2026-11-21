@@ -1,4 +1,4 @@
-name: R11 E2 One-Shot Focused Source Preflight
+name: R11 E2 Final Focused Source Preflight
 on:
   push:
     branches:

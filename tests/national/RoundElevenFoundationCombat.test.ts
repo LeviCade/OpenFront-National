@@ -65,7 +65,11 @@ function results(packets: readonly Packet[]) {
   return packets.flatMap((p) => p.nationalCommandResults ?? []);
 }
 async function humanGame(count = 3): Promise<Game> {
-  const game = await setup("plains", { nationalMode: true }, founders.slice(0, count));
+  const game = await setup(
+    "plains",
+    { nationalMode: true },
+    founders.slice(0, count),
+  );
   const cells = [
     [20, 20],
     [80, 20],
@@ -73,9 +77,7 @@ async function humanGame(count = 3): Promise<Game> {
   ];
   for (let i = 0; i < count; i++) {
     const [x, y] = cells[i];
-    game.addExecution(
-      new SpawnExecution(GAME_ID, founders[i], game.ref(x, y)),
-    );
+    game.addExecution(new SpawnExecution(GAME_ID, founders[i], game.ref(x, y)));
   }
   game.executeNextTick();
   game.executeNextTick();
@@ -88,14 +90,18 @@ function memory(bot: NationExecution): NationalPlannerMemory | null {
   // Read-only inspection of the actual bot's internal snapshot-owned memory.
   // Never inject memory or call the planner hook in place of Game execution.
   return (
-    bot as unknown as { readonly nationalPlannerMemory: NationalPlannerMemory | null }
+    bot as unknown as {
+      readonly nationalPlannerMemory: NationalPlannerMemory | null;
+    }
   ).nationalPlannerMemory;
 }
 function botFor(game: Game, id: string): NationExecution {
-  const bot = game.executions().find(
-    (execution) =>
-      execution instanceof NationExecution && execution.playerID() === id,
-  );
+  const bot = game
+    .executions()
+    .find(
+      (execution) =>
+        execution instanceof NationExecution && execution.playerID() === id,
+    );
   expect(bot).toBeDefined();
   return bot as NationExecution;
 }
@@ -119,9 +125,9 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
       clientID: CA,
     });
     tick(game, alpha.runner);
-    const result = game.nationalCommandResults(game.player(A)).find(
-      (item) => item.requestId === requestId,
-    );
+    const result = game
+      .nationalCommandResults(game.player(A))
+      .find((item) => item.requestId === requestId);
     expect(result).toMatchObject({
       accepted: true,
       actorId: A,
@@ -162,9 +168,24 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
     const BOT_A = "R11AIBOT";
     const BOT_B = "R11BIBOT";
     const HUMAN = "R11HUMAN";
-    const botAInfo = new PlayerInfo("Alpha bot", PlayerType.Nation, null, BOT_A);
-    const botBInfo = new PlayerInfo("Bravo bot", PlayerType.Nation, null, BOT_B);
-    const humanInfo = new PlayerInfo("Human", PlayerType.Human, "R11HUMC1", HUMAN);
+    const botAInfo = new PlayerInfo(
+      "Alpha bot",
+      PlayerType.Nation,
+      null,
+      BOT_A,
+    );
+    const botBInfo = new PlayerInfo(
+      "Bravo bot",
+      PlayerType.Nation,
+      null,
+      BOT_B,
+    );
+    const humanInfo = new PlayerInfo(
+      "Human",
+      PlayerType.Human,
+      "R11HUMC1",
+      HUMAN,
+    );
     const nationA = new Nation(new Cell(15, 25), botAInfo);
     const nationB = new Nation(new Cell(55, 25), botBInfo);
     const game = await setup(
@@ -210,11 +231,8 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
       expect.arrayContaining([BOT_B, HUMAN]),
     );
     expect(
-      planNationalInterest(
-        observed,
-        initialNationalPlannerMemory(BOT_A),
-        30,
-      ).decision?.targetId,
+      planNationalInterest(observed, initialNationalPlannerMemory(BOT_A), 30)
+        .decision?.targetId,
     ).toBe(BOT_B);
 
     // Real, legally approved treaty protection: the AI does NOT know hidden
@@ -240,6 +258,9 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
     ).toBe(true);
 
     // This real human acts in the same match via authenticated execution.
+    const calls = vi.spyOn(game, "performNationalWarCommandWithOutcome");
+    const outgoing = vi.spyOn(game, "addExecution");
+    const beforeTroops = game.player(BOT_A).troops();
     const human = authenticatedRunner(game, humanInfo.clientID!);
     tick(game, human.runner, {
       type: "national_found_empire",
@@ -249,14 +270,12 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
     });
     tick(game, human.runner);
     expect(
-      game.nationalCommandResults(game.player(HUMAN)).find(
-        (r) => r.requestId === "r11_human_found",
-      )?.accepted,
+      game
+        .nationalCommandResults(game.player(HUMAN))
+        .find((r) => r.requestId === "r11_human_found")?.accepted,
     ).toBe(true);
 
-    const calls = vi.spyOn(game, "performNationalWarCommandWithOutcome");
-    const outgoing = vi.spyOn(game, "addExecution");
-    const beforeTroops = game.player(BOT_A).troops();
+
     let rejected:
       | ReturnType<Game["performNationalWarCommandWithOutcome"]>
       | undefined;
@@ -278,23 +297,6 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
       }
       if (rejected && alternative) break;
     }
-    console.log(
-      "R11_E2_BOT_DIAGNOSTIC",
-      JSON.stringify({
-        warCalls: calls.mock.calls.map(([actor, command], index) => ({
-          actor: actor.id(),
-          target: command.kind === "declare-national" ? command.targetId : command.kind,
-          outcome: calls.mock.results[index].value,
-        })),
-        memory: memory(botFor(game, BOT_A)),
-        observation: {
-          frontiers: collectLiveNationalObservation(game, BOT_A).observation.frontiers,
-          troops: game.player(BOT_A).troops(),
-        },
-        warLayers: game.nationalWarState()?.wars.layers,
-        attempts: calls.mock.calls.length,
-      }),
-    );
     expect(rejected).toMatchObject({
       accepted: false,
       actorId: BOT_A,
@@ -352,7 +354,10 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
 
     // The bot waits out its genuine 180-tick rejected-target cooldown. Do
     // not cause the result by injecting a fake acknowledgment or memory.
-    const replayedCalls = vi.spyOn(game, "performNationalWarCommandWithOutcome");
+    const replayedCalls = vi.spyOn(
+      game,
+      "performNationalWarCommandWithOutcome",
+    );
     while (game.ticks() < blocked!.retryAfterTick) game.executeNextTick();
     const earlyRetries = replayedCalls.mock.calls.filter(
       ([actor, cmd]) =>
@@ -373,18 +378,12 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
         game.player(y < 47 ? B : C).conquer(game.ref(x, y));
       }
     }
-    for (let x = 20; x <= 30; x++)
-      game.player(A).conquer(game.ref(x, 20));
-    for (let y = 20; y < 72; y++)
-      game.player(A).conquer(game.ref(30, y));
-    for (let x = 70; x <= 80; x++)
-      game.player(B).conquer(game.ref(x, 20));
-    for (let y = 20; y < 47; y++)
-      game.player(B).conquer(game.ref(70, y));
-    for (let x = 70; x <= 80; x++)
-      game.player(C).conquer(game.ref(x, 80));
-    for (let y = 47; y <= 80; y++)
-      game.player(C).conquer(game.ref(70, y));
+    for (let x = 20; x <= 30; x++) game.player(A).conquer(game.ref(x, 20));
+    for (let y = 20; y < 72; y++) game.player(A).conquer(game.ref(30, y));
+    for (let x = 70; x <= 80; x++) game.player(B).conquer(game.ref(x, 20));
+    for (let y = 20; y < 47; y++) game.player(B).conquer(game.ref(70, y));
+    for (let x = 70; x <= 80; x++) game.player(C).conquer(game.ref(x, 80));
+    for (let y = 47; y <= 80; y++) game.player(C).conquer(game.ref(70, y));
     game.player(A).setTroops(300_000);
     game.player(B).setTroops(230_000);
     game.player(C).setTroops(240_000);
@@ -419,9 +418,9 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
       clientID: CA,
     });
     tick(game, ra.runner);
-    const proposal = game.nationalWarCommandResults(game.player(A)).find(
-      (item) => item.requestId === "r11_a_proposes",
-    );
+    const proposal = game
+      .nationalWarCommandResults(game.player(A))
+      .find((item) => item.requestId === "r11_a_proposes");
     expect(proposal?.accepted).toBe(true);
     expect(proposal?.motionId).toBeDefined();
     tick(game, ra.runner, {
@@ -432,9 +431,9 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
     });
     tick(game, ra.runner);
     expect(
-      game.nationalWarCommandResults(game.player(A)).find(
-        (item) => item.requestId === "r11_wrong_same_side",
-      )?.accepted,
+      game
+        .nationalWarCommandResults(game.player(A))
+        .find((item) => item.requestId === "r11_wrong_same_side")?.accepted,
     ).toBe(false);
     expect(game.nationalWarAuthority()!.atWar(A, B)).toBe(true);
 
@@ -447,9 +446,9 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
       clientID: CB,
     });
     tick(game, rb.runner);
-    const accepted = game.nationalWarCommandResults(game.player(B)).find(
-      (item) => item.requestId === "r11_b_accepts",
-    );
+    const accepted = game
+      .nationalWarCommandResults(game.player(B))
+      .find((item) => item.requestId === "r11_b_accepts");
     expect(accepted).toMatchObject({
       accepted: true,
       actorId: B,
@@ -460,15 +459,27 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
     expect(game.nationalWarAuthority()!.atWar(A, B)).toBe(false);
     expect(game.nationalWarAuthority()!.atWar(A, C)).toBe(true);
     const layers = game.nationalWarState()!.wars.layers;
-    expect(layers.find((layer) => layer.id === warAB!.warId)?.endedTick).not.toBeNull();
-    expect(layers.find((layer) => layer.id === warAC!.warId)?.endedTick).toBeNull();
+    expect(
+      layers.find((layer) => layer.id === warAB!.warId)?.endedTick,
+    ).not.toBeNull();
+    expect(
+      layers.find((layer) => layer.id === warAC!.warId)?.endedTick,
+    ).toBeNull();
 
     // Private E1 receipts only appear in the matching principal's worker
     // projection, never in foreign/spectator update packets.
-    expect(results(ra.packets).some((item) => item.requestId === "r11_a_proposes")).toBe(true);
-    expect(results(rb.packets).some((item) => item.requestId === "r11_b_accepts")).toBe(true);
-    expect(results(ra.packets).every((item) => item.recipientId === A)).toBe(true);
-    expect(results(rb.packets).every((item) => item.recipientId === B)).toBe(true);
+    expect(
+      results(ra.packets).some((item) => item.requestId === "r11_a_proposes"),
+    ).toBe(true);
+    expect(
+      results(rb.packets).some((item) => item.requestId === "r11_b_accepts"),
+    ).toBe(true);
+    expect(results(ra.packets).every((item) => item.recipientId === A)).toBe(
+      true,
+    );
+    expect(results(rb.packets).every((item) => item.recipientId === B)).toBe(
+      true,
+    );
     tick(game, rc.runner);
     expect(results(rc.packets)).toEqual([]);
 
@@ -490,7 +501,9 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
     expect(game.player(A).troops()).toBe(idle.player(A).troops());
     expect(game.player(B).numTilesOwned()).toBe(defenderBefore);
     expect(game.nationalWarState()!.levy).toEqual(levyBefore);
-    expect(game.nationalWarAuthority()!.authorizeOffensiveAction(A, C)).toBe(true);
+    expect(game.nationalWarAuthority()!.authorizeOffensiveAction(A, C)).toBe(
+      true,
+    );
     expect(ra.errors).toEqual([]);
     expect(rb.errors).toEqual([]);
     expect(rc.errors).toEqual([]);
