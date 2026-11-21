@@ -1743,8 +1743,12 @@ export class GameServer {
       this.log.warn("Could not find client for websocket in sendStartGameMsg");
       return;
     }
-    if (this.nationalMatch !== null) {
-      this.sendTrustedNationalStart(client);
+    // Even during teardown or failed startup, NATIONAL must never fall
+    // through to the legacy start frame with unfiltered turn history.
+    if (this.gameConfig.nationalMode === true) {
+      if (this.nationalMatch !== null) {
+        this.sendTrustedNationalStart(client);
+      }
       return;
     }
 
