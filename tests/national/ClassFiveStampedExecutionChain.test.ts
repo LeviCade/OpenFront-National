@@ -177,8 +177,7 @@ function delegation(id: string, enabled: boolean) {
 function replacement(m: Match) {
   m.game.takeoverPlayer(m.game.player(A), NEXT);
   // Revoke the old physical viewers before registering replacement sockets.
-  for (const client of [m.a, m.b, m.c, m.d])
-    m.host.revokeRecipient(client);
+  for (const client of [m.a, m.b, m.c, m.d]) m.host.revokeRecipient(client);
   const newA = seat(NEXT, "replacement-account");
   const successorHost = new TrustedNationalMatch(
     GAME_ID,
@@ -453,8 +452,7 @@ describe("Class Five E1: ORIGINAL authenticated clientID crosses queued Game exe
     ).toBeNull();
 
     const newD = seat("C5SEATDX2", "replacement-d");
-    for (const client of [m.a, m.b, m.c, m.d])
-      m.host.revokeRecipient(client);
+    for (const client of [m.a, m.b, m.c, m.d]) m.host.revokeRecipient(client);
     const host2 = new TrustedNationalMatch(
       GAME_ID,
       m.runner,
