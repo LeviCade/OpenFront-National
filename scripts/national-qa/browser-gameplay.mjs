@@ -1296,13 +1296,15 @@ async function main() {
           "const g=window.__nationalQaFind('national-diplomacy-panel')?.game;" +
           "const t=g?.players?.()?.find(p=>p.id?.()===" +
           JSON.stringify(warTargetId) + ");" +
-          "return t ? {id:t.id(),troops:t.troops?.() ?? null," +
+          "return t ? {id:t.id(),smallID:t.smallID?.() ?? null," +
+          "troops:t.troops?.() ?? null," +
           "tiles:t.numTilesOwned?.() ?? null} : null;" +
           "})()",
       );
       if (
         !combatBaseline ||
         !Number.isFinite(combatBaseline.troops) ||
+        !Number.isSafeInteger(combatBaseline.smallID) ||
         !Number.isSafeInteger(combatBaseline.tiles) ||
         combatBaseline.tiles <= 0
       ) {
@@ -1311,7 +1313,10 @@ async function main() {
       const existing = await worker();
       const lastSequence = Math.max(0, ...existing.map((p) => p.sequence ?? 0));
       const previousOutgoing = await evaluate(
-        "window.__nationalQaFind('national-diplomacy-panel')?.game?.myPlayer?.()?.outgoingAttacks?.()?.length ?? null",
+        "(() => {const a=window.__nationalQaFind('national-diplomacy-panel')" +
+            "?.game?.myPlayer?.()?.outgoingAttacks?.();" +
+            "return Array.isArray(a) ? a.filter(x=>x.targetID===" +
+            combatBaseline.smallID + ").length : null;})()",
       );
       if (!Number.isSafeInteger(previousOutgoing)) {
         throw Error("PLAYER_ATTACK_STATE_UNAVAILABLE");
@@ -1336,18 +1341,35 @@ async function main() {
         await hit(point.x, point.y);
         await sleep(500);
         const actions = await evaluate("window.__nationalQaMapAttacks ?? []");
-        if (actions.some((a) => Number.isFinite(a.troops) && a.troops > 0))
+        if (
+          actions.some(
+            (a) =>
+              a.targetId === warTargetId &&
+              Number.isFinite(a.troops) &&
+              a.troops > 0,
+          )
+        )
           break;
       }
       const attacks = await evaluate("window.__nationalQaMapAttacks ?? []");
-      if (!attacks.some((a) => Number.isFinite(a.troops) && a.troops > 0)) {
-        throw Error("MAP_ATTACK_NOT_DISPATCHED_BY_REAL_INPUT");
+      if (
+        !attacks.some(
+          (a) =>
+            a.targetId === warTargetId &&
+            Number.isFinite(a.troops) &&
+            a.troops > 0,
+        )
+      ) {
+        throw Error("MAP_ATTACK_ON_DECLARED_WAR_TARGET_NOT_DISPATCHED");
       }
       const authoritative = await poll(
         async () => {
           const packets = await worker();
           const attackCount = await evaluate(
-            "window.__nationalQaFind('national-diplomacy-panel')?.game?.myPlayer?.()?.outgoingAttacks?.()?.length ?? null",
+            "(() => {const a=window.__nationalQaFind('national-diplomacy-panel')" +
+            "?.game?.myPlayer?.()?.outgoingAttacks?.();" +
+            "return Array.isArray(a) ? a.filter(x=>x.targetID===" +
+            combatBaseline.smallID + ").length : null;})()",
           );
           const resultFromEngine = packets.some(
             (p) =>
