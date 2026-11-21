@@ -220,12 +220,12 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
         commandKind: "accept-empire",
         accepted: true,
       });
-      expect(
-        g.nationalPoliticalAuthority()?.membersOf("r10-empire-a"),
-      ).toEqual([A, B]);
-      expect(
-        g.nationalPoliticalAuthority()?.membersOf("r10-empire-c"),
-      ).toEqual([C]);
+      expect(g.nationalPoliticalAuthority()?.membersOf("r10-empire-a")).toEqual(
+        [A, B],
+      );
+      expect(g.nationalPoliticalAuthority()?.membersOf("r10-empire-c")).toEqual(
+        [C],
+      );
       expect(g.nationalAccessionOffers(g.player(B))).toEqual([]);
       expect(privateSnapshot(g).national?.politics.pacts).toEqual([]);
       expect(g.nationalVictoryRoster()).toBeNull();
@@ -239,9 +239,7 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
         "r10-stale-consent",
       );
       expect(last(politicalReceipts(g, B))?.accepted).toBe(false);
-      expect(g.nationalPoliticalAuthority()?.empireOf(B)).toBe(
-        "r10-empire-a",
-      );
+      expect(g.nationalPoliticalAuthority()?.empireOf(B)).toBe("r10-empire-a");
     }
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
   });
@@ -282,9 +280,7 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
         accepted: false,
         reason: "political-rule",
       });
-      expect(g.nationalPoliticalAuthority()?.empireOf(B)).toBe(
-        "r10-founder-b",
-      );
+      expect(g.nationalPoliticalAuthority()?.empireOf(B)).toBe("r10-founder-b");
     }
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
   });
