@@ -67,7 +67,7 @@ async function realThreeNationMatch(): Promise<Game> {
   for (let y = 0; y < game.height(); y++) {
     for (let x = 0; x < game.width(); x++) {
       const tile = game.ref(x, y);
-      if (!game.isLand(tile)) continue;
+      if (!game.isLand(tile) || game.isImpassable(tile)) continue;
       const id = x < firstLimit ? AI_A : x < secondLimit ? AI_B : HUMAN;
       game.player(id).conquer(tile);
     }
@@ -193,7 +193,7 @@ describe("R10 three-nation observed-information live match", () => {
     expect(observation(restored, AI_B)).toEqual(observation(game, AI_B));
   });
 
-  it("public WAR endings trigger a peace replan, preserving deterministic replay", async () => {
+  it("replans on public WAR endings with deterministic replay", async () => {
     const game = await realThreeNationMatch();
     const start = game.performNationalWarCommandWithOutcome(
       game.player(AI_A),
@@ -273,7 +273,7 @@ describe("R10 three-nation observed-information live match", () => {
     ).toEqual(replanned);
   });
 
-  it("real rejected WAR receipts produce bounded alternative plans, never a forged acceptance", async () => {
+  it("turns real rejected WAR receipts into bounded alternative plans", async () => {
     const game = await realThreeNationMatch();
     // A settled layer retains its canonical ID, so reusing it must fail.
     const first = game.performNationalWarCommandWithOutcome(
@@ -352,7 +352,7 @@ describe("R10 three-nation observed-information live match", () => {
     ).toThrow(/foreign command outcome/);
   });
 
-  it("spectator and third nation never receive opposing receipts or secret peace", async () => {
+  it("never sends third nations or spectators private peace and receipts", async () => {
     const game = await realThreeNationMatch();
     const human = runner(game, infoHuman.clientID!);
     const spectator = runner(game);

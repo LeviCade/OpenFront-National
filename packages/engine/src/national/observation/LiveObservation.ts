@@ -242,7 +242,11 @@ export function collectLiveNationalObservation(
         markVisible(neighbor, memberId);
         const owner = game.owner(neighbor);
         if (!owner.isPlayer()) {
-          if (memberId === observerId && game.isLand(neighbor)) {
+          if (
+            memberId === observerId &&
+            game.isLand(neighbor) &&
+            !game.isImpassable(neighbor)
+          ) {
             unownedFrontier = true;
           }
           return;
