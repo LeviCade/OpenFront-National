@@ -77,6 +77,8 @@ export function verifyThreeLivePrincipals(founder, recipient, opponent) {
   if (empire.memberIds.includes(opponent.actorId))
     return fail("WAR_OPPONENT_IS_SAME_EMPIRE", "E2/E4");
   const otherView = opponent.empires?.find((e) => e?.id === empire.id);
+  if (otherView?.memberIds?.includes(opponent.actorId))
+    return fail("WAR_OPPONENT_IS_SAME_EMPIRE", "E2/E4");
   if (
     !otherView ||
     otherView.leaderId !== recipient.actorId ||
@@ -343,6 +345,10 @@ export function sanitizePacketEvidence(packets) {
  * invitation packets, command nonces, fog, browser body text or live secrets.
  */
 const TRUSTED_ACCEPTANCE_FAILURE_CODES = Object.freeze([
+  "NATIONAL_SOLO_CANNOT_PROVE_THREE_PRINCIPALS_OWNER_E2",
+  "NATIONAL_TRUSTED_SERVER_MULTIPLAYER_REQUIRED_OWNER_E2",
+  "FOUNDING_UI_PENDING_IDENTITY_MISMATCH_OWNER_E4",
+  "FOUNDING_VIEW_BEHIND_RECEIPT",
   "POLITICAL_SECOND_AUTHORIZED_BROWSER_SESSION_MISSING_OWNER_E2_E4_E6",
   "POLITICAL_SECOND_LIVE_GAME_PAGE_MISSING_OWNER_E2_E4_E6",
   "POLITICAL_ACCEPT_NATIVE_CLICK_NOT_OBSERVED_OWNER_E4",
