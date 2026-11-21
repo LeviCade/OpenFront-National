@@ -71,6 +71,7 @@ export class NationalDiplomacyPanel extends LitElement {
       })
     | null = null;
   @state() private accessionCandidateId = "";
+  @state() private requestedAccessionEmpireId = "";
   @state() private chosenInvitation = "";
   @state() private crownSuccessorId = "";
   @state() private politicalStatus: string | null = null;
@@ -357,7 +358,9 @@ export class NationalDiplomacyPanel extends LitElement {
           const confirmed =
             fresh &&
             (political.type === "national_offer_empire"
-              ? empire?.leaderId === political.actorId
+              ? political.targetId === political.actorId
+                ? empire !== undefined
+                : empire?.leaderId === political.actorId
               : political.type === "national_accept_empire"
                 ? empire?.memberIds.includes(political.targetId) === true
                 : empire?.leaderId === political.targetId &&
@@ -367,7 +370,9 @@ export class NationalDiplomacyPanel extends LitElement {
             this.politicalError = null;
             this.politicalStatus =
               political.type === "national_offer_empire"
-                ? `Game accepted accession offer command for ${this.playerName(political.targetId)}. Only the recipient can verify delivery of the invitation.`
+                ? political.targetId === political.actorId
+                  ? `Game accepted your request to join ${political.empireId}. Only the emperor can verify delivery; membership is not confirmed.`
+                  : `Game accepted accession offer command for ${this.playerName(political.targetId)}. Only the recipient can verify delivery of the invitation.`
                 : political.type === "national_accept_empire"
                   ? political.targetId === political.actorId
                     ? `Confirmed by game: your nation joined ${political.empireId}.`
@@ -684,6 +689,33 @@ export class NationalDiplomacyPanel extends LitElement {
     return view && view.recipientId === actorId ? view.offers : [];
   }
 
+  /** Independent candidates can ask the actual current emperor to admit them. */
+  private requestableAccessionEmpires(): readonly {
+    id: string;
+    leaderName: string;
+  }[] {
+    const game = this.game;
+    const actor = game?.myPlayer();
+    if (!game || !actor || this.memberEmpire !== null) return [];
+    return (game.nationalPolitics()?.empires ?? [])
+      .filter(
+        (empire) =>
+          !empire.memberIds.includes(actor.id()) &&
+          game
+            .players()
+            .some(
+              (player) =>
+                player.id() === empire.leaderId &&
+                player.isAlive() &&
+                player.numTilesOwned() > 0,
+            ),
+      )
+      .map((empire) => ({
+        id: empire.id,
+        leaderName: this.playerName(empire.leaderId),
+      }));
+  }
+
   private accessionCandidates(): readonly { id: string; name: string }[] {
     const actor = this.game?.myPlayer();
     const empire = this.memberEmpire;
@@ -756,6 +788,17 @@ export class NationalDiplomacyPanel extends LitElement {
       }
       empireId = offer.empireId;
       targetId = offer.candidateId;
+    } else if (action === "national_offer_empire" && ownEmpire === null) {
+      const empire = this.requestableAccessionEmpires().find(
+        (entry) => entry.id === this.requestedAccessionEmpireId,
+      );
+      if (!empire) {
+        this.politicalError =
+          "Choose an active empire with an eligible emperor before requesting accession.";
+        return;
+      }
+      empireId = empire.id;
+      targetId = actor.id();
     } else {
       if (!ownEmpire || ownEmpire.leaderId !== actor.id()) {
         this.politicalError =
@@ -974,6 +1017,7 @@ export class NationalDiplomacyPanel extends LitElement {
     const warReason = this.warUnavailableReason;
     const isEmperor =
       ownEmpire !== null && ownEmpire.leaderId === game.myPlayer()?.id();
+    const requestableEmpires = this.requestableAccessionEmpires();
     const warKind =
       this.warScope === "national" ? "nation" : this.warTargetKind;
     const warTargets = this.warTargets(warKind);
@@ -1517,6 +1561,43 @@ export class NationalDiplomacyPanel extends LitElement {
                     Accession and succession
                   </h2>
                   ${
+                    ownEmpire === null
+                      ? html`<form
+                          class="space-y-2"
+                          @submit=${(event: SubmitEvent) => this.submitPolitical(event, "national_offer_empire")}
+                        >
+                          <label
+                            for="national-request-empire"
+                            class="block font-semibold"
+                            >Request to join an empire</label
+                          >
+                          <select
+                            id="national-request-empire"
+                            required
+                            class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base text-white"
+                            .value=${this.requestedAccessionEmpireId}
+                            @change=${(event: Event) => (this.requestedAccessionEmpireId = (event.target as HTMLSelectElement).value)}
+                            ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || requestableEmpires.length === 0}
+                          >
+                            <option value="">Choose a current empire</option>
+                            ${requestableEmpires.map((empire) => html`<option value=${empire.id}>${empire.id} · Emperor ${empire.leaderName}</option>`)}
+                          </select>
+                          <button
+                            id="national-request-accession"
+                            type="submit"
+                            class="min-h-11 rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+                            ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || this.eventBus === null || !requestableEmpires.some((empire) => empire.id === this.requestedAccessionEmpireId)}
+                          >
+                            Request accession
+                          </button>
+                          <p class="text-xs text-slate-300">
+                            The emperor must accept your request before your
+                            nation joins. Sending is not membership.
+                          </p>
+                        </form>`
+                      : nothing
+                  }
+                  ${
                     isEmperor
                       ? html`<form
                             class="space-y-2"
@@ -1604,7 +1685,7 @@ export class NationalDiplomacyPanel extends LitElement {
                             <option value="">
                               Choose a verified invitation
                             </option>
-                            ${this.accessionOffers.map((offer) => html`<option value=${`${offer.empireId}:${offer.candidateId}`}>${offer.empireId} · ${this.playerName(offer.candidateId)} · from ${this.playerName(offer.proposerId)}</option>`)}
+                            ${this.accessionOffers.map((offer) => html`<option value=${`${offer.empireId}:${offer.candidateId}`}>${offer.candidateId === game.myPlayer()?.id() ? `Invitation from ${this.playerName(offer.proposerId)} to join ${offer.empireId}` : `Request from ${this.playerName(offer.candidateId)} to join ${offer.empireId}`}</option>`)}
                           </select>
                           <button
                             id="national-accept-accession"
@@ -1612,7 +1693,7 @@ export class NationalDiplomacyPanel extends LitElement {
                             class="min-h-11 rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
                             ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || !this.accessionOffers.some((offer) => `${offer.empireId}:${offer.candidateId}` === this.chosenInvitation)}
                           >
-                            Accept accession
+                            ${this.accessionOffers.find((offer) => `${offer.empireId}:${offer.candidateId}` === this.chosenInvitation)?.candidateId === game.myPlayer()?.id() ? "Accept invitation and join" : "Admit candidate into empire"}
                           </button>
                           ${
                             game.nationalAccessionOffers?.() === null ||
