@@ -3970,6 +3970,9 @@ describe("NATIONAL human touch map actions", () => {
     bus.on(ContextMenuEvent, (e) =>
       events.push({ kind: "context", x: e.x, y: e.y }),
     );
+    bus.on(MouseUpEvent, (e) =>
+      events.push({ kind: "spawn", x: e.x, y: e.y }),
+    );
     bus.on(TouchEvent, (e) =>
       events.push({ kind: "touch", x: e.x, y: e.y }),
     );
@@ -4006,9 +4009,9 @@ describe("NATIONAL human touch map actions", () => {
     }
   }
 
-  it("opens the real engine-authorized radial for a NATIONAL spawn tap", () => {
+  it("routes a NATIONAL spawn tap through the existing desktop spawn map path", () => {
     expect(tapNational(true, false, true)).toEqual([
-      { kind: "context", x: 122, y: 211 },
+      { kind: "spawn", x: 122, y: 211 },
     ]);
   });
 

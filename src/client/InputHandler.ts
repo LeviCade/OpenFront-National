@@ -1412,12 +1412,15 @@ export class InputHandler {
           this.gameView.config().gameConfig().nationalMode === true &&
           !this.gameView.config().isReplay()
         ) {
-          // NATIONAL's tap is an action *selection*, not an automatic attack.
-          // Open the same real engine-authorized radial used by a mouse
-          // context click. During spawn it offers the normal spawn action;
-          // afterwards it asks Player.actions(tile) before offering Attack.
-          // Ordinary FFA keeps its original touch/player-info behavior.
-          this.eventBus.emit(new ContextMenuEvent(event.x, event.y));
+          // The spawn path is exactly the existing desktop map action.
+          // Later taps open the same real engine-authorized radial used by a
+          // mouse context click; it asks Player.actions(tile) before Attack.
+          // Never issue a direct attack from an arbitrary touch coordinate.
+          if (this.gameView.inSpawnPhase()) {
+            this.eventBus.emit(new MouseUpEvent(event.x, event.y));
+          } else {
+            this.eventBus.emit(new ContextMenuEvent(event.x, event.y));
+          }
         } else {
           this.eventBus.emit(new TouchEvent(event.x, event.y));
         }
