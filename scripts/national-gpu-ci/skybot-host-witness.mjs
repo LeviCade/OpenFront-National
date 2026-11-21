@@ -187,7 +187,15 @@ export function probePhysicalPostflight(expected) {
   const names = execHost("virsh", ["-c", "qemu:///system", "list", "--all", "--name"])
     .split("\n").filter(Boolean);
   requireTrue(!names.includes(expected.runnerName), "GUEST_VM_STILL_REGISTERED");
-  requireTrue(!existsSync(LEASE), "HOST_GPU_LEASE_NOT_RELEASED");
+  // existsSync follows symlinks and would miss a broken, still-present marker.
+  let leaseAbsent = false;
+  try {
+    lstatSync(LEASE);
+  } catch (error) {
+    if (error?.code === "ENOENT") leaseAbsent = true;
+    else throw error;
+  }
+  requireTrue(leaseAbsent, "HOST_GPU_LEASE_NOT_RELEASED");
   requireTrue(!actualACL().some((x) => x.startsWith("user:libvirt-qemu:")),
     "HOST_GPU_ACL_NOT_REVOKED");
   const mounts = readFileSync("/proc/self/mountinfo", "utf8").split("\n");
