@@ -1,3 +1,7 @@
+> **CURRENT STAGE 3 SUCCESSION — NOVEMBER 21, 2026:** Official completion **33%**. Round Nine source is **ACCEPTED** via merged PR [#47](https://github.com/LeviCade/OpenFront-National/pull/47), with exact integration `0e52b5eeb7490ce83898f2a9696732c7e7d6b21c` green Source CI #44883951734 and independent QA #44883951757. New Round Ten Conductor coordination: [Issue #48](https://github.com/LeviCade/OpenFront-National/issues/48); six engineer work orders [#49–#54](https://github.com/LeviCade/OpenFront-National/issues/49), and [Round Ten full durable handoff](docs/release/NATIONAL_R10_CONDUCTOR_HANDOFF_20261121.md). **No verified Round Ten progress yet.** Browser full-match and public release remain BLOCKED. Earlier three-engineer/27% instructions below are historical, not active authority.
+
+---
+
 # 👑 OpenFront: NATIONAL — Permanent Project Handoff
 
 **Repository:** https://github.com/LeviCade/OpenFront-National
