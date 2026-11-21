@@ -59,7 +59,10 @@ const stateSchema = z.object({
     .max(128)
     .regex(/^[A-Za-z0-9_-]+$/)
     .nullable(),
-  authenticatedClientID: z.string().regex(/^[A-Za-z0-9]{8,10}$/).nullable(),
+  authenticatedClientID: z
+    .string()
+    .regex(/^[A-Za-z0-9]{8,10}$/)
+    .nullable(),
 });
 type State = z.infer<typeof stateSchema>;
 
