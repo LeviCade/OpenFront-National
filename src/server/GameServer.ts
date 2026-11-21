@@ -437,6 +437,16 @@ export class GameServer {
       return finish(denied);
     }
 
+    if (
+      this.gameConfig.nationalMode === true &&
+      this.nationalMatch === null &&
+      this.hasStarted()
+    ) {
+      // Prestart is not trusted execution. No player or host can make the
+      // legacy queue flush while the protected map/roster is loading.
+      return finish({ status: 409, error: "NATIONAL trusted runner not ready" });
+    }
+
     if (this.nationalMatch !== null) {
       // The authenticated websocket path supplies a roster Client. An
       // admin-bot cannot inject engine actions or host session authority.
@@ -1781,8 +1791,9 @@ export class GameServer {
   }
 
   private endTurn() {
-    // No canonical NATIONAL turn, past or present, may reach legacy sockets.
-    if (this.nationalMatch !== null) return;
+    // Across lobby, prestart, loading, started and failed-boot states:
+    // NEVER permit NATIONAL through the legacy broadcast turn queue.
+    if (this.gameConfig.nationalMode === true) return;
     // Skip turn execution if game is paused
     if (this.paused) {
       return;
