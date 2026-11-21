@@ -97,16 +97,17 @@ interface WarGamePort {
       motions: readonly { id: string }[];
     };
   } | null;
-  performNationalWarCommand(actor: Player, command: CanonicalWarCommand): void;
   /**
-   * E1 owns the sole canonical receipt journal. Prefer its replay-safe outcome
-   * port once integrated; E2 must neither cache nor manufacture a result.
+   * E1 keeps this existing method name while upgrading its return to an
+   * authenticated, snapshotted WAR outcome. The unmerged baseline returns
+   * void, so E2 does not infer any receipt until the read port also exists.
    */
-  performNationalWarCommandWithOutcome?(
+  performNationalWarCommand(
     actor: Player,
     command: CanonicalWarCommand,
     requestId?: string | null,
   ): unknown;
+  nationalWarCommandResults?(observer: Player): readonly unknown[];
   nationalLevySource(nationId: string): TroopSource | null;
   applyNationalDefenseLevy(
     attacks: readonly IncomingDefense[],
@@ -116,7 +117,7 @@ interface WarGamePort {
 }
 
 function canonicalWarPort(game: Game): Partial<WarGamePort> {
-  return game as Game & Partial<WarGamePort>;
+  return game as Partial<WarGamePort>;
 }
 
 export function authorizeNationalAttack(
@@ -244,8 +245,8 @@ export class NationalWarExecution implements Execution {
     // Only E1 may decide or journal a canonical rejection. Once its outcome
     // port exists, even inactive actors and invalid sovereign claims reach it.
     // The older void port remains for integration baseline compatibility.
-    const withOutcome = port.performNationalWarCommandWithOutcome;
-    const hasOutcomePort = typeof withOutcome === "function";
+    const hasOutcomePort =
+      typeof port.nationalWarCommandResults === "function";
     if (
       !hasOutcomePort &&
       (!game.hasPlayer(this.actor.id()) ||
@@ -304,7 +305,29 @@ export class NationalWarExecution implements Execution {
     // rejected WAR/peace clicks. Request IDs are correlation, not credentials.
     // E3 may project its authenticated journal; E2 never emits an outcome.
     if (hasOutcomePort) {
-      withOutcome.call(port, this.actor, command, this.requestId);
+      const result = port.performNationalWarCommand(
+        this.actor,
+        this.requestId === null
+          ? command
+          : { ...command, requestId: this.requestId },
+        this.requestId,
+      );
+      // Never interpret non-throwing or void execution as acceptance. E1's
+      // verified recipient-bound journal is the only source of WAR outcomes.
+      if (
+        typeof result !== "object" ||
+        result === null ||
+        !("accepted" in result) ||
+        typeof result.accepted !== "boolean" ||
+        !("actorId" in result) ||
+        result.actorId !== this.actor.id() ||
+        !("recipientId" in result) ||
+        result.recipientId !== this.actor.id() ||
+        !("requestId" in result) ||
+        typeof result.requestId !== "string" ||
+        (this.requestId !== null && result.requestId !== this.requestId)
+      )
+        throw new Error("NATIONAL WAR: invalid canonical E1 outcome");
       return;
     }
 

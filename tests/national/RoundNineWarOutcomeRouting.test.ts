@@ -2,7 +2,7 @@ import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
-import type { Game } from "@openfront/engine/game/Game";
+import type { Game, Player } from "@openfront/engine/game/Game";
 import { describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
 
@@ -36,16 +36,31 @@ function queue(
   );
 }
 
+function withCanonicalOutcome(game: Game) {
+  const outcome = vi.fn(
+    (actor: Player, _command: unknown, requestId: string | null) => ({
+      accepted: false,
+      actorId: actor.id(),
+      recipientId: actor.id(),
+      requestId: requestId ?? "legacy-war-request",
+    }),
+  );
+  Object.defineProperty(game, "nationalWarCommandResults", {
+    value: () => [],
+    configurable: true,
+  });
+  Object.defineProperty(game, "performNationalWarCommand", {
+    value: outcome,
+    configurable: true,
+  });
+  return outcome;
+}
+
 describe("E2 Round Nine WAR execution to E1-owned outcome port", () => {
   it("forwards forged claims with the stamped actor", async () => {
     const game = await spawned();
     const before = game.nationalWarState();
-    const outcome = vi.fn(() => ({ accepted: false }));
-    const legacy = vi.spyOn(game, "performNationalWarCommand");
-    Object.defineProperty(game, "performNationalWarCommandWithOutcome", {
-      value: outcome,
-      configurable: true,
-    });
+    const outcome = withCanonicalOutcome(game);
 
     queue(
       game,
@@ -71,17 +86,12 @@ describe("E2 Round Nine WAR execution to E1-owned outcome port", () => {
       }),
       "r9_forged_claim",
     );
-    expect(legacy).not.toHaveBeenCalled();
-    expect(game.nationalWarState()).toEqual(before);
+     expect(game.nationalWarState()).toEqual(before);
   });
 
   it("forwards stale peace and repeated tokens", async () => {
     const game = await spawned();
-    const outcome = vi.fn(() => ({ accepted: false }));
-    Object.defineProperty(game, "performNationalWarCommandWithOutcome", {
-      value: outcome,
-      configurable: true,
-    });
+    const outcome = withCanonicalOutcome(game);
 
     queue(
       game,
@@ -126,11 +136,7 @@ describe("E2 Round Nine WAR execution to E1-owned outcome port", () => {
 
   it("forwards invalid imperial clicks and legacy null tokens", async () => {
     const game = await spawned();
-    const outcome = vi.fn(() => ({ accepted: false }));
-    Object.defineProperty(game, "performNationalWarCommandWithOutcome", {
-      value: outcome,
-      configurable: true,
-    });
+    const outcome = withCanonicalOutcome(game);
 
     queue(
       game,
