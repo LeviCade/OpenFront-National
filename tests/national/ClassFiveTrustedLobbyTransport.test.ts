@@ -124,6 +124,24 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
     vi.useRealTimers();
   });
 
+  it("never flushes a canonical turn from a hostile host pause in NATIONAL prestart", async () => {
+    const { game, seats: [host, beta] } = fixture();
+    game.prestart();
+    await action(host, { type: "toggle_pause", paused: true });
+    await action(beta, {
+      type: "national_found_empire",
+      empireId: "must-not-queue",
+      requestId: "untrusted-prestart",
+    });
+    expect(game.isPaused()).toBe(false);
+    expect(sent(host).some((m) => m.type === "turn")).toBe(false);
+    game.start();
+    for (let i = 0; i < 50; i++) await Promise.resolve();
+    expect(starts(host)).toHaveLength(1);
+    expect(receipt(beta, "untrusted-prestart")).toBe(false);
+    expect(sent(host).some((m) => m.type === "turn")).toBe(false);
+  });
+
   it("uses one match for three humans, sends no canonical turns, isolates private E1 receipts", async () => {
     const { game, seats: [a, b, c] } = fixture();
     await boot(game);
