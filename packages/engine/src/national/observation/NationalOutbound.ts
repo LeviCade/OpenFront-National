@@ -514,14 +514,21 @@ export class NationalOutboundFilter {
               if (item.type === "national_declare_war")
                 return (
                   /^[A-Za-z0-9_-]{1,128}$/.test(item.requestId) &&
-                  (!item.accepted || publicId(item.warId))
+                  (item.accepted
+                    ? publicId(item.warId) && item.motionId === undefined
+                    : item.warId === undefined &&
+                      item.motionId === undefined)
                 );
-              if (item.type === "national_propose_peace" ||
-                  item.type === "national_accept_peace")
+              if (
+                item.type === "national_propose_peace" ||
+                item.type === "national_accept_peace"
+              )
                 return (
                   /^[A-Za-z0-9_-]{1,128}$/.test(item.requestId) &&
-                  (!item.accepted ||
-                    (publicId(item.warId) && publicId(item.motionId)))
+                  (item.accepted
+                    ? publicId(item.warId) && publicId(item.motionId)
+                    : item.warId === undefined &&
+                      item.motionId === undefined)
                 );
               return publicId(item.commandTargetId);
             })

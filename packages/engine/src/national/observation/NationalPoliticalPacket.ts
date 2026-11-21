@@ -28,7 +28,10 @@ interface AuthoritativeFounderOutcome {
   readonly recipientId?: string;
   /** E1 may use a typed result name or command kind on the WAR read port. */
   readonly kind?: NationalWarKind;
-  readonly type?: "national_declare_war" | "national_propose_peace" | "national_accept_peace";
+  readonly type?:
+    | "national_declare_war"
+    | "national_propose_peace"
+    | "national_accept_peace";
   readonly commandTargetId?: string;
   readonly warId?: string;
   readonly motionId?: string;
@@ -182,6 +185,26 @@ function validRecord(record: AuthoritativeFounderOutcome, game: Game): void {
     record.actorId.length > 256 ||
     typeof record.accepted !== "boolean" ||
     !VALID_REASONS.has(record.reason) ||
+    (record.commandKind === undefined &&
+      !["accepted", "actor-inactive", "invalid-empire-id", "political-rule"].includes(
+        record.reason,
+      )) ||
+    (record.commandKind !== undefined &&
+      Object.prototype.hasOwnProperty.call(POLITICAL_TYPES, record.commandKind) &&
+      !["accepted", "actor-inactive", "political-rule"].includes(record.reason)) ||
+    (record.commandKind !== undefined &&
+      Object.prototype.hasOwnProperty.call(WAR_TYPES, record.commandKind) &&
+      (![
+        "accepted",
+        "actor-inactive",
+        "invalid-war-command",
+        "war-rule",
+      ].includes(record.reason) ||
+        (!record.accepted &&
+          (record.warId !== undefined || record.motionId !== undefined)) ||
+        ((record.commandKind === "declare-national" ||
+          record.commandKind === "declare-imperial") &&
+          record.motionId !== undefined))) ||
     record.accepted !== (record.reason === "accepted")
   ) {
     throw new Error("NATIONAL invalid authoritative founder receipt");

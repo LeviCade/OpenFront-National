@@ -87,7 +87,7 @@ function liveRunner(game: Game, clientID?: string) {
 }
 
 describe("Round Nine actual Game-owned public WAR state and private receipts", () => {
-  it("only publishes real active WAR IDs and participant-visible pending motion IDs, including after replay", async () => {
+  it("publishes real active WAR and scoped peace motions across replay", async () => {
     const game = await activeWar();
     const spectator = publicWar(game, null)!;
     expect(spectator.layers).toEqual([
@@ -146,7 +146,7 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     ]);
   });
 
-  it("revokes pending-motion intelligence on crown transfer without hiding public wars", async () => {
+  it("revokes private peace motions after imperial crown transfer", async () => {
     const game = await activeWar();
     game.performNationalWarCommand(game.player(north.id), {
       kind: "propose-peace",
@@ -179,7 +179,7 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     expect(publicWar(game, north.id)?.layers[0]?.id).toBe(warId);
   });
 
-  it("GameRunner emits real public conflicts but never emits command success from war roster alone", async () => {
+  it("never infers command success from a public conflict roster", async () => {
     const game = await activeWar();
     const northPacket = liveRunner(game, north.clientID!)();
     const foreignPacket = liveRunner(game, third.clientID!)();
@@ -199,7 +199,7 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     expect(nonparticipant.nationalConflicts?.motions).toEqual([]);
   });
 
-  it("deep-whitelists WAR data and never forwards levy, attack plans or hidden motion metadata", async () => {
+  it("whitelists WAR data without hidden plans or levy balances", async () => {
     const game = await activeWar();
     const original = game.nationalWarState()!;
     Object.defineProperty(game, "nationalWarState", {
@@ -231,7 +231,7 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     expect(projection.layers.map((w) => w.id)).toEqual([warId]);
   });
 
-  it("forged, foreign, reordered and duplicate WAR journal entries never become unrelated click results", async () => {
+  it("rejects forged, reordered, conflicting and foreign journals", async () => {
     const game = await activeWar();
     const northView = liveRunner(game, north.clientID!);
     const southView = liveRunner(game, south.clientID!);
@@ -257,7 +257,11 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
       configurable: true,
       value: (_actor: Player) => journal,
     });
-    const record = (sequence: number, requestId: string, actorId = north.id): WarRecord => ({
+    const record = (
+      sequence: number,
+      requestId: string,
+      actorId = north.id,
+    ): WarRecord => ({
       sequence,
       requestId,
       actorId,
@@ -273,7 +277,11 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     });
     const first = record(31, "nc_0123456789abcdef0123456789abcdef");
     const second = record(30, "nc_abcdef0123456789abcdef0123456789");
-    journal.push(first, second, record(32, "nc_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", south.id));
+    journal.push(
+      first,
+      second,
+      record(32, "nc_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", south.id),
+    );
     const delivered = northView();
     expect(delivered.nationalCommandResults).toEqual([
       expect.objectContaining({ sequence: 30, requestId: second.requestId, warId }),
@@ -293,17 +301,25 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     expect(() => actorNationalResults(game, game.player(north.id), state)).toThrow(
       /conflicting authoritative founder receipts/,
     );
+    const freshRead = () =>
+      actorNationalResults(
+        game,
+        game.player(north.id),
+        emptyNationalResultDeliveryState(),
+      );
     journal.splice(0, journal.length, { ...first, tick: game.ticks() + 1 });
-    expect(() =>
-      actorNationalResults(game, game.player(north.id), emptyNationalResultDeliveryState()),
-    ).toThrow(/invalid authoritative founder receipt/);
+    expect(freshRead).toThrow(/invalid authoritative founder receipt/);
     journal.splice(0, journal.length, { ...first, warId: "" });
-    expect(() =>
-      actorNationalResults(game, game.player(north.id), emptyNationalResultDeliveryState()),
-    ).toThrow(/invalid authoritative founder receipt/);
+    expect(freshRead).toThrow(/invalid authoritative founder receipt/);
+    journal.splice(0, journal.length, {
+      ...first,
+      accepted: false,
+      reason: "war-rule",
+    });
+    expect(freshRead).toThrow(/invalid authoritative founder receipt/);
   });
 
-  it("can read an actual E1-style WAR result without a founder empire ID, including rejection", async () => {
+  it("reads E1 WAR result types without founder empire IDs", async () => {
     const game = await activeWar();
     const journal = [
       {
@@ -355,7 +371,7 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     expect(results[1]).not.toHaveProperty("motionId");
   });
 
-  it("joins the real E1 WAR journal to GameRunner, never fabricating results on branches without that port", async () => {
+  it("bridges actual E1 WAR/peace outcomes through GameRunner", async () => {
     const game = await activeWar();
     const source = game as Game & {
       nationalWarCommandResults?: (
@@ -447,7 +463,7 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     expect(publicWar(restored, south.id)?.layers[0]?.endedTick).not.toBeNull();
   });
 
-  it("direct outbound filter refuses foreign, future and malformed result IDs", async () => {
+  it("rejects foreign, future and malformed outbound results", async () => {
     const game = await activeWar();
     const filter = new NationalOutboundFilter(game, north.id);
     const packet = liveRunner(game, north.clientID!)();
@@ -486,6 +502,18 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
           tick: game.ticks(),
           reason: "accepted",
           warId,
+        },
+        {
+          type: "national_propose_peace",
+          actorId: north.id,
+          recipientId: north.id,
+          accepted: false,
+          requestId: "nc_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          sequence: 4,
+          tick: game.ticks(),
+          reason: "war-rule",
+          warId,
+          motionId,
         },
       ],
     };
