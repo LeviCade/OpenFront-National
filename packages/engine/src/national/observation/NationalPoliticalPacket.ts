@@ -48,17 +48,12 @@ type NationalResultType =
   | "national_found_empire"
   | (typeof POLITICAL_TYPES)[NationalPoliticalKind]
   | (typeof WAR_TYPES)[NationalWarKind];
-const RESULT_TYPES = new Set<string>([
-  "national_found_empire",
-  ...Object.values(POLITICAL_TYPES),
-  ...Object.values(WAR_TYPES),
-]);
 const WAR_REQUEST = /^[A-Za-z0-9_-]{1,128}$/;
 const safeId = (value: unknown): value is string =>
   typeof value === "string" &&
   value.length > 0 &&
   value.length <= 256 &&
-  !/[\\u0000-\\u001f\\u007f]/.test(value);
+  !/[\u0000-\u001f\u007f]/.test(value);
 
 type JournalGame = Game & {
   nationalCommandResults?: (
