@@ -107,6 +107,20 @@ export function verifyPrivateInvitation({
     !Array.isArray(founderView.offers)
   )
     return fail("POLITICAL_SENDER_PRIVATE_VIEW_UNVERIFIED", "E3");
+  // An exact recipient-only invitation in the sender's independently
+  // authenticated view is a disclosure, even though it ALSO violates the
+  // sender-view ownership invariant. Classify the leak before the generic
+  // mismatch; do not weaken either rejection rule.
+  if (
+    founderView.offers.some(
+      (o) =>
+        o?.empireId === empireId &&
+        o.proposerId === founderId &&
+        o.recipientId === recipientId &&
+        o.candidateId === recipientId,
+    )
+  )
+    return fail("POLITICAL_PRIVATE_INVITATION_LEAKED_TO_SENDER", "E3");
   if (
     founderView.offers.some(
       (o) =>
@@ -114,12 +128,6 @@ export function verifyPrivateInvitation({
     )
   )
     return fail("POLITICAL_SENDER_PRIVATE_VIEW_MISMATCH", "E3");
-  if (
-    founderView?.offers?.some(
-      (o) => o?.empireId === empireId && o?.candidateId === recipientId,
-    )
-  )
-    return fail("POLITICAL_PRIVATE_INVITATION_LEAKED_TO_SENDER", "E3");
   return { accepted: true, reason: "AUTHENTIC_RECIPIENT_ONLY_INVITATION" };
 }
 

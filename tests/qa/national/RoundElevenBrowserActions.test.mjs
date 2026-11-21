@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import {
+  corroboratePublicEmpire,
+  reconcilePoliticalReceipt,
+  safeFailureCode,
+  sanitizeAcceptanceEvent,
+  sanitizePacketEvidence,
   verifyDistinctLiveSessions,
   verifyPrivateInvitation,
-  reconcilePoliticalReceipt,
-  corroboratePublicEmpire,
-  sanitizePacketEvidence,
-  sanitizeAcceptanceEvent,
-  safeFailureCode,
 } from "../../../scripts/national-qa/browser-r11-political-verdict.mjs";
 import {
   acceptRadialTarget,
@@ -374,6 +374,46 @@ describe("R11 E5 independent two-principal political acceptance", () => {
         founderView: { ...valid.founderView, offers: [offer] },
       }).reason,
     ).toBe("POLITICAL_PRIVATE_INVITATION_LEAKED_TO_SENDER");
+    // A sender can legitimately receive OTHER invitations addressed to it.
+    const ownOffer = {
+      empireId: "Another_Empire",
+      candidateId: founderId,
+      recipientId: founderId,
+      proposerId: "third-player",
+    };
+    expect(
+      verifyPrivateInvitation({
+        ...valid,
+        founderView: {
+          ...valid.founderView,
+          offers: [ownOffer],
+        },
+      }),
+    ).toMatchObject({
+      accepted: true,
+      reason: "AUTHENTIC_RECIPIENT_ONLY_INVITATION",
+    });
+    // A legitimate sender packet must not camouflage a leaked invitation.
+    expect(
+      verifyPrivateInvitation({
+        ...valid,
+        founderView: {
+          ...valid.founderView,
+          offers: [ownOffer, offer],
+        },
+      }).reason,
+    ).toBe("POLITICAL_PRIVATE_INVITATION_LEAKED_TO_SENDER");
+    // A malformed foreign packet that is NOT the exact private offer
+    // remains a fail-closed sender-view mismatch, never an accepted view.
+    expect(
+      verifyPrivateInvitation({
+        ...valid,
+        founderView: {
+          ...valid.founderView,
+          offers: [{ ...offer, proposerId: "different-sender" }],
+        },
+      }).reason,
+    ).toBe("POLITICAL_SENDER_PRIVATE_VIEW_MISMATCH");
   });
 
   it("correlates real founder OFFER receipt but does not certify invitation delivery from that alone", () => {
@@ -592,7 +632,14 @@ describe("R11 E5 complete privacy proof fails closed on absent sender view", () 
     ).toBe("POLITICAL_SENDER_PRIVATE_VIEW_MISMATCH");
   });
   it("rejects unknown spectator state even if actor and tick appear valid", () => {
-    const a = { gameId: "g", actorId: "a", spawned: true, ownedTiles: 3, tick: 7, spectator: false };
+    const a = {
+      gameId: "g",
+      actorId: "a",
+      spawned: true,
+      ownedTiles: 3,
+      tick: 7,
+      spectator: false,
+    };
     const b = { ...a, actorId: "b", spectator: undefined };
     expect(verifyDistinctLiveSessions(a, b, "b").reason).toBe(
       "POLITICAL_SPECTATOR_OR_INACTIVE",
