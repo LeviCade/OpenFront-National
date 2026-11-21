@@ -624,7 +624,7 @@ async function main() {
           .then((info) => info.gpu ?? { unavailable: true })
           .catch((error) => ({ unavailable: true, reason: String(error) })),
       };
-      record("actual-gpu-webgl2-capabilities", {
+      record("actual-gpu-webgl1-webgl2-capabilities", {
         graphics: hardwareCapabilities,
       });
       if (hardwareOnly) {
@@ -756,7 +756,11 @@ async function main() {
           const gate = window.__nationalQaFind('webgl-gate');
           if (gate) return { blocked: true, status: gate.status };
           const panel = window.__nationalQaFind('national-diplomacy-panel');
-          return panel && !/game is starting/i.test(document.body.innerText)
+          const hud = window.__nationalQaFind('game-right-sidebar');
+          const canvas = [...document.querySelectorAll('canvas')].some(
+            (item) => item.getBoundingClientRect().width > 150
+          );
+          return panel && hud && canvas && !/game is starting/i.test(document.body.innerText)
             ? { running: true } : null;
         })()`),
         "actual started match or explicit WebGL hard blocker",

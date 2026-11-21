@@ -1,36 +1,37 @@
-# NATIONAL Round Eight — executable real-hardware browser release gate
+# NATIONAL Round Nine — hardware browser release runbook
 
-**Source base:** `5e956e13f9e3b054c15cfd75110284c5a48fdd5c` (accepted dev integration). **Owner:** E5. **Public release:** BLOCKED until four real browser traces and authority, assets, dependencies are resolved.
+**Owner:** Engineer #5 (browser and attestation), Engineer #6 (workflow/runner), Conductor (review + integration). **Release verdict:** BLOCKED.
 
-## Why hosted Chrome cannot certify this build
+Full normative witness details: [NATIONAL_R9_GPU_WITNESS_CONTRACT.md](NATIONAL_R9_GPU_WITNESS_CONTRACT.md). This supersedes the R8 unsigned-renderer instructions; previous source CI green is not full-gameplay evidence.
 
-GitHub-hosted Chrome 157 reported WebGL2 via `ANGLE Vulkan SwiftShader Device (Subzero)` and the game's actual WebGL gate correctly refused to start. WebGL2 _presence_, a homepage screenshot, or `--enable-unsafe-swiftshader` is not hardware evidence. Never pass `--use-angle=swiftshader` or bypass the application's WebGL gate. E5 additionally fails hardware QA if Chromium's unmasked renderer is absent/generic or identifies SwiftShader, llvmpipe, lavapipe, softpipe or software rasterization. This attestation is diagnostic, not a cryptographic attestation of the host.
+## Existing source evidence, not release evidence
 
-## Provision a real runner (macOS or Linux)
+The historical E5 PR #39 HEAD `b1ae75edcaefcc10c26c8d3e6c25d88e4892e58c` passed source baseline #44088877963, independent QA #44088877916, and combined source #44088877726 (GPU job **skipped**). That does not certify current R9 HEAD or any physical browser playthrough. Original hosted Chromium exposed a SwiftShader WebGL2 renderer; it did not reach a legitimate GPU-backed game and cannot be accepted.
 
-1. Provide an actual physically/virtually passed-through GPU, correct OS graphics drivers, headless-compatible EGL/Metal/X11 display, Google Chrome or Chromium, Git, Node 24.15.0, npm 12.1.0, and renderer introspection utilities (`glxinfo` on Linux, `system_profiler SPDisplaysDataType` on macOS; `nvidia-smi` for NVIDIA).
-2. In GitHub repository **Settings → Actions → Runners → New self-hosted runner**, select the matching OS/architecture and execute GitHub's generated **download, configure and start** commands **on the hardware host**, using GitHub's current ephemeral registration token. Never commit the token. Add the custom label `gpu` (the installed default-branch workflow selects `[self-hosted, gpu]`). Linux service users must have access to the actual display/GPU; macOS users need an active graphics session.
-3. Verify that the runner appears **Online** with `self-hosted` and `gpu` labels. GitHub's runner registry was not exposed through the available audit integration, so E5 does not claim an online runner without separate evidence.
-4. From **Actions → NATIONAL — Real GPU browser gameplay acceptance → Run workflow**, enter the **40-character merged or staging candidate SHA**. The default-branch workflow rejects commit hashes outside approved integration/staging ancestry. A new _unmerged_ E5 feature-branch commit cannot be used until Conductor integrates it into approved ancestry; locally test the branch directly before merge.
-5. For local branch testing on the hardware host:
-   ```sh
-   git checkout feature/r8-e5-browser-release-security
-   npm run inst
-   npm run typecheck && npm test && npm run lint && npm run format:check && npm run build-prod
-   export NATIONAL_REQUIRE_HARDWARE_GPU=1
-   export CHROME_BIN="$(command -v google-chrome || command -v chromium)"
-   node scripts/national-qa/browser-gameplay.mjs
-   node scripts/national-qa/browser-gameplay.mjs --mobile
-   node scripts/national-qa/browser-gameplay.mjs --legacy
-   node scripts/national-qa/browser-gameplay.mjs --mobile --legacy
-   ```
-   On macOS, set `CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`. If needed for an actual GPU only, set `NATIONAL_CHROME_ANGLE_BACKEND=gl` or `vulkan`; never `swiftshader`.
-6. Archive each run's `national-qa-artifacts/browser-*/acceptance.json`, `*.png`, actual unmasked WebGL renderer, CDP console/network diagnostics and worker-scoped receipts. The browser tester requires **HUD/spawn → exact accepted and rejected Found Empire tokens → trusted save/restore → sovereign victory** for NATIONAL; legacy FFA must independently reach running gameplay. Do not assert absent WAR/peace, keyboard or touch coverage from these traces: add real input/action evidence before those release criteria are scored.
+## Physically authorized Skybot path
 
-## Hard security boundaries
+The observed Skybot device is Intel HD Graphics 4600 / 8086:0412 on i915 renderD128 via hardware-backed VirGL/KVM. Its GL-EGL launch change from draft PR #43 was incorporated into E5's browser harness without relaxing WebGL gates. E6 owns the workflow using verified `skybot-ci-gpu` runner and pinned `/opt/skybot-gpu-runtime/chrome-headless-shell-linux64/chrome-headless-shell`, on a trusted approved exact candidate. Do not add a duplicate workflow or commit GPU machine/controller changes in E5.
 
-Browser-owned worker is **not secure against a modified local client**, regardless of packet filtering or fake hosted saves. Never unseal/export the raw hidden full-game snapshot. E1's trusted-host authenticated save/reload must prove principal authorization, state confidentiality, restore identity, stale/foreign recipient rejection, and no replayed founder toast. Until this is exercised on an actual protected host, browser save/restore remains a release blocker.
+Before any browser can pass, Conductor must enroll the independently verified Skybot Ed25519 **public key fingerprint** in `scripts/national-qa/trusted-gpu-keys.json`, after confirming the private signing key stays *only* outside the disposable guest/job/browser. The checked-in allowlist initially contains no keys: a missing signer or untrusted key **fails closed**. E6 must provide a fresh signed witness + source/run/attempt/runner/challenge context per the normative contract.
 
-## Exact verdict as authored
+## Execute genuine four-mode gameplay
 
-No usable GPU renderer or hardware-backed four-mode run was available in the E5 audit environment; no browser PASS, screenshot of spawned HUD or live victory is claimed. Dependency and restricted-asset gates are independent of this infrastructure blocker.
+With dependencies installed on a provisioned authorized GPU VM and a separately signed witness created for the exact run, use `NATIONAL_REQUIRE_HARDWARE_GPU=1`, `NATIONAL_CHROME_ANGLE_BACKEND=gl-egl`, `CHROME_BIN`, `NATIONAL_GPU_ATTESTATION_FILE`, `NATIONAL_GPU_PUBLIC_KEY_FILE`, `NATIONAL_GPU_ATTESTATION_CHALLENGE`, `NATIONAL_GPU_CANDIDATE_SHA` and the GitHub runner context. Then, on **one approved worker**:
+
+```sh
+node scripts/national-qa/browser-gameplay.mjs
+node scripts/national-qa/browser-gameplay.mjs --mobile
+node scripts/national-qa/browser-gameplay.mjs --legacy
+node scripts/national-qa/browser-gameplay.mjs --legacy --mobile
+```
+
+The test writes separate `national-qa-artifacts/browser-national-desktop`, `browser-national-mobile`, `browser-legacy-ffa-desktop` and `browser-legacy-ffa-mobile` directories. Archive `acceptance.json`, every actual screenshot, CDP renderer/shader proof, console/network errors and sanitized worker receipts; keep the exact candidate SHA. Only mark individual scenarios passing when the real game passes. Browser homepage, menu screenshots, self-signed guest JSON, unverified `virgl` strings, SwiftShader, llvmpipe, lavapipe and synthetic packets are insufficient.
+
+## Independent blockers
+
+- **Gameplay:** authoritative WAR/peace recipient-scoped acceptance/rejection, real state changes, FFA tactics, game keyboard input, secure multiplayer/replay/victory flows are not yet proven by these scripts. No fabricated evidence.
+- **Host confidentiality:** E1's in-memory save primitive is not deployed protected authority. Foreign-session, replay, forged-outcome, private fog and raw snapshot negative tests remain mandatory.
+- **Assets (#5):** 40 inherited media files pending independent provenance review; four music tracks missing and strict release audit fails. Never copy protected upstream assets.
+- **Dependencies (#6):** earlier source audit showed zero production advisories, but only an exact Conductor-integrated build can close the security issue.
+
+**Public release remains BLOCKED until both actual hardware playthrough and protected-host, assets and security obligations are satisfied.**

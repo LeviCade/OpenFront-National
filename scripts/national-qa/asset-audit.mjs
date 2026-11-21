@@ -91,16 +91,18 @@ const musicSources = [
   "src/client/sound/SoundManager.ts",
   "src/client/sound/MenuMusic.ts",
 ];
+const musicCallSites = musicSources.flatMap((source) =>
+  readFileSync(source, "utf8")
+    .split(/\\r?\\n/)
+    .flatMap((line, index) =>
+      Array.from(
+        line.matchAll(/sounds[/]music[/][a-z0-9-]+[.]mp3/g),
+        (match) => ({ source, line: index + 1, path: match[0] }),
+      ),
+    ),
+);
 const referencedMusic = [
-  ...new Set(
-    musicSources.flatMap((source) => {
-      const text = readFileSync(source, "utf8");
-      return Array.from(
-        text.matchAll(/sounds[/]music[/][a-z0-9-]+[.]mp3/g),
-        (match) => match[0],
-      );
-    }),
-  ),
+  ...new Set(musicCallSites.map(({ path }) => path)),
 ].sort();
 const missingMusic = referencedMusic.filter(
   (path) => !existsSync(join("resources", path)),
@@ -115,6 +117,7 @@ const result = {
   ),
   originReviewStatus: "PENDING",
   referencedMusic,
+  musicCallSites,
   missingMusic,
   publicReleaseReady:
     failed.length === 0 && missingMusic.length === 0 && provenance.length === 0,
