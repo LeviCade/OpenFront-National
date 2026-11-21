@@ -6,8 +6,18 @@ import type { Game } from "@openfront/engine/game/Game";
 import { describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
 
-const north = new PlayerInfo("North", PlayerType.Human, "R9NORTH1", "r9-north");
-const south = new PlayerInfo("South", PlayerType.Human, "R9SOUTH1", "r9-south");
+const north = new PlayerInfo(
+  "North",
+  PlayerType.Human,
+  "R9NORTH1",
+  "r9-north",
+);
+const south = new PlayerInfo(
+  "South",
+  PlayerType.Human,
+  "R9SOUTH1",
+  "r9-south",
+);
 
 async function spawned(): Promise<Game> {
   const game = await setup("plains", { nationalMode: true }, [north, south]);
@@ -36,7 +46,7 @@ function queue(
 }
 
 describe("E2 Round Nine WAR execution to E1-owned outcome port", () => {
-  it("forwards a forged sovereign claim to E1 with the stamped actor", async () => {
+  it("forwards forged claims with the stamped actor", async () => {
     const game = await spawned();
     const before = game.nationalWarState();
     const outcome = vi.fn(() => ({ accepted: false }));
@@ -74,7 +84,7 @@ describe("E2 Round Nine WAR execution to E1-owned outcome port", () => {
     expect(game.nationalWarState()).toEqual(before);
   });
 
-  it("forwards stale peace and repeated tokens without E2 deduplication", async () => {
+  it("forwards stale peace and repeated tokens", async () => {
     const game = await spawned();
     const outcome = vi.fn(() => ({ accepted: false }));
     Object.defineProperty(game, "performNationalWarCommandWithOutcome", {
@@ -123,7 +133,7 @@ describe("E2 Round Nine WAR execution to E1-owned outcome port", () => {
     expect(game.nationalWarAuthority()?.atWar(north.id, south.id)).toBe(false);
   });
 
-  it("does not lose a rejected imperial click or invent a legacy token", async () => {
+  it("forwards invalid imperial clicks and legacy null tokens", async () => {
     const game = await spawned();
     const outcome = vi.fn(() => ({ accepted: false }));
     Object.defineProperty(game, "performNationalWarCommandWithOutcome", {
