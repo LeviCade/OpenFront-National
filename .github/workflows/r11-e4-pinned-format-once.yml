@@ -1,4 +1,4 @@
-name: R11 E4 one-time pinned source formatter
+name: R11 E4 pinned Class Three UI status validation
 on:
   push:
     branches:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   e4-formatter:
-    name: Format E4-only changed files with repository pinned oxfmt
+    name: Format only E4 founding-status paths and run focused tests
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -17,24 +17,20 @@ jobs:
           node-version: "24.15.0"
       - run: npm install --global --ignore-scripts npm@12.1.0
       - run: npm ci --ignore-scripts
-      - name: Produce exact pinned-formatted E4 blobs without editing main PR
+      - name: Pinned format, byte capture, typecheck and E4 focused tests
         shell: bash
         run: |
           set -euo pipefail
-          npx --no-install oxfmt --write src/client/NationalDiplomacyPanel.ts src/client/hud/GameRenderer.ts src/client/hud/layers/RadialMenu.ts src/client/controllers/NationalMapTargetController.ts tests/ui/national/NationalHumanMapInputR11.test.ts
-
+          npx --no-install oxfmt --write src/client/NationalDiplomacyPanel.ts tests/ui/national/NationalDiplomacyPanel.test.ts
           python3 - <<'PY'
           import base64
           for key, path in [
               ("PANEL", "src/client/NationalDiplomacyPanel.ts"),
-              ("RENDERER", "src/client/hud/GameRenderer.ts"),
-              ("RADIAL", "src/client/hud/layers/RadialMenu.ts"),
-              ("CONTROLLER", "src/client/controllers/NationalMapTargetController.ts"),
-              ("TEST", "tests/ui/national/NationalHumanMapInputR11.test.ts"),
+              ("TEST", "tests/ui/national/NationalDiplomacyPanel.test.ts"),
           ]:
               with open(path,"rb") as f:
-                  print("E4_FORMATTED_" + key + "=" + base64.b64encode(f.read()).decode("ascii"))
+                  print("E4_CLASS3_" + key + "=" + base64.b64encode(f.read()).decode("ascii"))
           PY
           npm run typecheck
-          npx --no-install vitest run tests/ui/national/NationalHumanMapInputR11.test.ts tests/ui/national/NationalPoliticalControlsR11.test.ts
+          npx --no-install vitest run tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalPoliticalControlsR11.test.ts tests/ui/national/NationalHumanMapInputR11.test.ts
           git diff --check
