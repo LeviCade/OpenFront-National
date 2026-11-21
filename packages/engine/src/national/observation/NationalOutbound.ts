@@ -28,7 +28,7 @@ import {
   advanceLastKnown,
   type NationalSightMemory,
 } from "./NationalObservation";
-import type { OutboundFounderResult } from "./NationalPoliticalPacket";
+import type { OutboundNationalResult } from "./NationalPoliticalPacket";
 
 /**
  * Explicit PUBLIC political whitelist. Even an accidentally extended E1
@@ -71,6 +71,134 @@ function publicPolitics(
             ),
           },
   };
+}
+
+
+/** The ONLY engine-issued public WAR facts sent across the E3 worker boundary.
+ * Never forward WarLedger snapshots: they include private levy information.
+ * Peace motions remain scoped to nations actually on a current WAR side.
+ * E2 owns adding this DTO to GameUpdates; E3 does not edit E2's schema. */
+export interface NationalPublicConflictView {
+  readonly wars: readonly {
+    readonly id: string;
+    readonly scope: "national" | "imperial";
+    readonly first: { readonly kind: "nation" | "empire"; readonly id: string };
+    readonly second: { readonly kind: "nation" | "empire"; readonly id: string };
+    readonly startedTick: number;
+  }[];
+  readonly peaceMotions: readonly {
+    readonly id: string;
+    readonly warId: string;
+    readonly proposedBy: string;
+    readonly proposedTick: number;
+  }[];
+}
+
+const publicId = (value: unknown): value is string =>
+  typeof value === "string" &&
+  value.length > 0 &&
+  value.length <= 256 &&
+  !/[\u0000-\u001f\u007f]/.test(value);
+
+const resultTypes = new Set([
+  "national_found_empire",
+  "national_declare_war",
+  "national_propose_peace",
+  "national_accept_peace",
+  "national_offer_empire",
+  "national_accept_empire",
+  "national_transfer_crown",
+  "national_found_pact",
+  "national_invite_pact",
+  "national_accept_pact",
+  "national_propose_pact_amendment",
+  "national_approve_pact_amendment",
+  "national_betray_pact",
+  "national_expel_pact",
+]);
+const politicalReason = new Set([
+  "accepted",
+  "actor-inactive",
+  "invalid-empire-id",
+  "political-rule",
+]);
+
+/** Query only current, canonical, engine-owned WAR truth, never intent/cache.
+ * Visible active layers are public; pending diplomacy is participant-private. */
+export function projectNationalPublicConflict(
+  game: Game,
+  actorId: string | null,
+  tick: number,
+  politics: NationalPublicPoliticalView | undefined,
+): NationalPublicConflictView | undefined {
+  if (!game.config().nationalMode()) return undefined;
+  const snapshot = game.nationalWarState();
+  if (snapshot === null) return undefined;
+  const sides = new Map<string, (typeof snapshot.wars.layers)[number]>();
+  const wars: NationalPublicConflictView["wars"][number][] = [];
+  for (const layer of snapshot.wars.layers) {
+    if (layer.endedTick !== null || layer.startedTick > tick) continue;
+    if (
+      !publicId(layer.id) ||
+      !publicId(layer.first.id) ||
+      !publicId(layer.second.id) ||
+      !publicId(layer.declaredBy) ||
+      !Number.isSafeInteger(layer.startedTick) ||
+      layer.startedTick < 0 ||
+      !["national", "imperial"].includes(layer.scope) ||
+      !["nation", "empire"].includes(layer.first.kind) ||
+      !["nation", "empire"].includes(layer.second.kind) ||
+      sides.has(layer.id)
+    ) {
+      // Invalid authoritative state cannot be rendered as a verified war.
+      throw new Error("NATIONAL malformed current public WAR layer");
+    }
+    sides.set(layer.id, layer);
+    wars.push({
+      id: layer.id,
+      scope: layer.scope,
+      first: { kind: layer.first.kind, id: layer.first.id },
+      second: { kind: layer.second.kind, id: layer.second.id },
+      startedTick: layer.startedTick,
+    });
+  }
+  wars.sort((a, b) => a.id.localeCompare(b.id));
+
+  const onSide = (
+    side: { readonly kind: "nation" | "empire"; readonly id: string },
+  ) =>
+    actorId !== null &&
+    (side.kind === "nation"
+      ? side.id === actorId
+      : (politics?.empires.find((e) => e.id === side.id)?.memberIds.includes(
+          actorId,
+        ) ?? false));
+  const peaceMotions: NationalPublicConflictView["peaceMotions"][number][] = [];
+  const motionIds = new Set<string>();
+  for (const motion of snapshot.wars.motions) {
+    if (motion.acceptedTick !== null || motion.proposedTick > tick) continue;
+    const layer = sides.get(motion.layerId);
+    if (!layer || (!onSide(layer.first) && !onSide(layer.second))) continue;
+    if (
+      !publicId(motion.id) ||
+      !publicId(motion.layerId) ||
+      !publicId(motion.proposedBy) ||
+      !Number.isSafeInteger(motion.proposedTick) ||
+      motion.proposedTick < 0 ||
+      motionIds.has(motion.id)
+    ) {
+      throw new Error("NATIONAL malformed visible peace motion");
+    }
+    motionIds.add(motion.id);
+    peaceMotions.push({
+      id: motion.id,
+      warId: motion.layerId,
+      proposedBy: motion.proposedBy,
+      proposedTick: motion.proposedTick,
+    });
+  }
+  peaceMotions.sort((a, b) => a.id.localeCompare(b.id));
+  return { wars, peaceMotions };
 }
 
 function publicPlayer(u: PlayerUpdate): PlayerUpdate {
@@ -295,9 +423,7 @@ export class NationalOutboundFilter {
         : undefined;
 
     const proposedResults = (
-      data as GameUpdateViewData & {
-        nationalCommandResults?: readonly OutboundFounderResult[];
-      }
+      data as unknown as { nationalCommandResults?: readonly OutboundNationalResult[] }
     ).nationalCommandResults;
     // A second independent scope check prevents an accidental caller from
     // attaching the E1 journal for another actor to this viewer's packet.
@@ -305,21 +431,45 @@ export class NationalOutboundFilter {
       this.observerId === null
         ? []
         : (proposedResults ?? [])
-            .filter(
-              (item) =>
-                item.recipientId === this.observerId &&
-                item.actorId === this.observerId &&
-                item.type === "national_found_empire" &&
-                typeof item.sequence === "number" &&
-                Number.isSafeInteger(item.sequence) &&
-                item.sequence >= 0 &&
-                typeof item.requestId === "string" &&
-                item.requestId.length > 0 &&
-                item.requestId.length <= 256,
-            )
+            .filter((item) => {
+              if (
+                item.recipientId !== this.observerId ||
+                item.actorId !== this.observerId ||
+                !resultTypes.has(item.type) ||
+                typeof item.accepted !== "boolean" ||
+                !Number.isSafeInteger(item.sequence) ||
+                item.sequence < 0 ||
+                !Number.isSafeInteger(item.tick) ||
+                item.tick < 0 ||
+                item.tick > data.tick ||
+                !publicId(item.requestId) ||
+                !politicalReason.has(item.reason) ||
+                item.accepted !== (item.reason === "accepted")
+              )
+                return false;
+              if (item.type === "national_found_empire")
+                return publicId(item.empireId);
+              if (item.type === "national_declare_war")
+                return (
+                  /^[A-Za-z0-9_-]{1,128}$/.test(item.requestId) &&
+                  publicId(item.warId)
+                );
+              if (item.type === "national_propose_peace")
+                return (
+                  /^[A-Za-z0-9_-]{1,128}$/.test(item.requestId) &&
+                  publicId(item.warId) &&
+                  publicId(item.motionId)
+                );
+              if (item.type === "national_accept_peace")
+                return (
+                  /^[A-Za-z0-9_-]{1,128}$/.test(item.requestId) &&
+                  publicId(item.motionId)
+                );
+              return publicId(item.commandTargetId);
+            })
             .map((item) => ({
-              // A second explicit DTO whitelist: never forward private,
-              // future or accidental extra journal object properties.
+              // A second explicit DTO whitelist; never spread the engine
+              // journal (which could hold fingerprints, troops or secrets).
               recipientId: item.recipientId,
               actorId: item.actorId,
               type: item.type,
@@ -327,11 +477,30 @@ export class NationalOutboundFilter {
               tick: item.tick,
               sequence: item.sequence,
               requestId: item.requestId,
-              empireId: item.empireId,
               reason: item.reason,
+              ...(item.type === "national_found_empire"
+                ? { empireId: item.empireId }
+                : item.type === "national_declare_war" ||
+                    item.type === "national_propose_peace" ||
+                    item.type === "national_accept_peace"
+                  ? {
+                      ...(item.warId === undefined
+                        ? {}
+                        : { warId: item.warId }),
+                      ...(item.motionId === undefined
+                        ? {}
+                        : { motionId: item.motionId }),
+                    }
+                  : { commandTargetId: item.commandTargetId }),
             }));
 
     const publicPoliticalView = publicPolitics(data);
+    const publicConflictView = projectNationalPublicConflict(
+      game,
+      this.observerId,
+      data.tick,
+      publicPoliticalView,
+    );
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
     return {
@@ -344,6 +513,9 @@ export class NationalOutboundFilter {
       ...(publicPoliticalView === undefined
         ? {}
         : { nationalPolitics: publicPoliticalView }),
+      ...(publicConflictView === undefined
+        ? {}
+        : { nationalConflict: publicConflictView }),
       tick: data.tick,
       updates,
       packedTileUpdates: new Uint32Array(packedTile),
@@ -359,6 +531,6 @@ export class NationalOutboundFilter {
       ...(playerNameViewData ? { playerNameViewData } : {}),
       tickExecutionDuration: data.tickExecutionDuration,
       pendingTurns: data.pendingTurns,
-    };
+    } as GameUpdateViewData;
   }
 }
