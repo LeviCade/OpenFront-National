@@ -1,5 +1,6 @@
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
+import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { NationalFoundEmpireExecution } from "@openfront/engine/execution/NationalFoundEmpireExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
@@ -7,7 +8,6 @@ import type { Game } from "@openfront/engine/game/Game";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import type { NationalCommand } from "@openfront/engine/national/NationalRuntime";
-import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
