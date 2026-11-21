@@ -67,6 +67,44 @@ unsupported and has been **retracted**, not silently converted. We
 retain that 16% as an unallocated historical opening balance and
 do not count it again.
 
+## Round Nine accepted six-engine development source
+
+**27% → 33% (+6 points).** [PR #47](https://github.com/LeviCade/OpenFront-National/pull/47)
+merged as `c4d1b27378ee6f895fc89d99d63abcb585afa8ff`.
+Exact merged-commit [source CI #44883503405](https://github.com/LeviCade/OpenFront-National/actions/runs/44883503405)
+passed 788 test files, 11,589 tests (one skipped), TypeScript,
+lint, pinned formatting and production build. Exact merged-commit
+[independent QA #44883503446](https://github.com/LeviCade/OpenFront-National/actions/runs/44883503446)
+passed live GameRunner/replay/hostile-packet checks and Chromium landing.
+Strict WAR/MDA/CAS and replay
+[#44883140968](https://github.com/LeviCade/OpenFront-National/actions/runs/44883140968)
+passed on the identical Git source tree
+`8f86416c7bdc46e83e223a3ac49758fdc9b5a788`.
+
+- **M1 +2:** SOV-03/04/05/06: eight-player imperial victory,
+  crown transfer, eight-metric crisis warning/rescue and
+  emperor-elimination dissolution under deterministic replay.
+  This advances prior basic victory/warning coverage.
+- **M2 +1:** COAL-03/04/06/07: distinct authenticated player
+  constitutional ballots, unanimous amendment, forbidden expulsion
+  and membership-invalidation replay. Prior credit concerned basic
+  accession, crown and pact transitions, not amendments.
+- **M3 +2:** WAR-09/10/11/12: in-flight missile/MIRV and naval
+  post-peace safety; WAR-R9: authenticated accepted/rejected WAR
+  journal results and recipient-filtered command correlation.
+  Prior basic WAR declaration/peace credit is not repeated.
+- **M4 +1:** LEVY-04/05/06/07: real two-front overlapping MDA
+  funding, 20 microattacks, reserves/caps and conserved donor troop
+  balances through snapshot/replay; beyond prior simple levies.
+
+**M9 +0.** Real owner-operated Skybot Intel VirGL powered legacy/FFA
+desktop/mobile gameplay and NATIONAL desktop's human spawn with
+52 owned tiles, but complete NATIONAL founding, mobile spawning,
+independent signed hardware attestation and protected-host
+confidentiality remain unaccepted. Asset provenance and missing
+music are separate release blockers. Production npm audit is zero,
+but development advisories still require review. **No public release.**
+
 ## Scoring controls
 
 - Each new point requires identifiable **real engine or browser**
@@ -76,7 +114,7 @@ do not count it again.
   weights are ceilings for new milestone allocation; the prior
   historical 16 remains an unallocated opening estimate rather than
   retroactively invented milestone achievements.
-- **Current: 27%. Prior 26–31% target met.** Further points require
+- **Current: 33%. Round Nine 32–37% target met.** Further points require
   additional accepted integration scenarios and the same CI discipline.
 - Never treat honest-client Solo Web Worker filtering as hostile
   client fog security. A trusted-host server is a separate release gate.
