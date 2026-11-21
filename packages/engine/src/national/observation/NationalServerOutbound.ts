@@ -81,8 +81,7 @@ export class NationalServerRecipientSession {
     // Capture a REAL registered principal once. A spectator or unknown
     // connection cannot acquire another player's rights by mutating its
     // session object later.
-    this.principalId =
-      player?.type() === PlayerType.Human ? player.id() : null;
+    this.principalId = player?.type() === PlayerType.Human ? player.id() : null;
     this.outbound = new NationalOutboundFilter(game, this.principalId);
     if (this.principalId !== null) {
       this.outbound.restoreSightMemory(
@@ -116,8 +115,11 @@ export class NationalServerRecipientSession {
       this.originalClientID === null
         ? null
         : this.game.playerByClientID(this.originalClientID);
-    if (!player || player.id() !== this.principalId ||
-        player.type() !== PlayerType.Human) {
+    if (
+      !player ||
+      player.id() !== this.principalId ||
+      player.type() !== PlayerType.Human
+    ) {
       this.close();
       return null;
     }
@@ -209,14 +211,23 @@ export class NationalServerRecipientSession {
     const actor = this.currentPlayer();
     if (this.closed) return null;
     const verified =
-      actor === null ? null : collectLiveNationalObservation(this.game, actor.id());
+      actor === null
+        ? null
+        : collectLiveNationalObservation(this.game, actor.id());
     const selected = {
       ...authoritativeFrame,
       nationalPolitics: packet.nationalPolitics,
       nationalCommandResults: packet.nationalCommandResults,
       nationalAccessionOffers: packet.nationalAccessionOffers,
     };
-    const outbound = this.outbound.project(this.game, selected, verified);
+    // A pre-spawn/eliminated principal is not authorized to receive any
+    // first-party player stats, historical units or private invitation DTO.
+    // Do not reuse the previously authorized filter with a null observation.
+    const filter =
+      actor === null
+        ? new NationalOutboundFilter(this.game, null)
+        : this.outbound;
+    const outbound = filter.project(this.game, selected, verified);
     if (actor !== null) {
       persistNationalHumanSight(
         this.game,

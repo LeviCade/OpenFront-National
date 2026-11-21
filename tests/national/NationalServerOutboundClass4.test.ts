@@ -5,7 +5,10 @@
  * This test does not claim a server-hosted NATIONAL multiplayer transport.
  */
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
-import { GameUpdateType, type GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import {
+  GameUpdateType,
+  type GameUpdateViewData,
+} from "@openfront/engine-api/game/GameUpdates";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
@@ -13,11 +16,11 @@ import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import { NationalServerRecipientSession } from "@openfront/engine/national/observation/NationalServerOutbound";
+import { describe, expect, it } from "vitest";
 import {
   readNationalAccessionOffers,
   readNationalPoliticalResults,
 } from "../../src/client/NationalDiplomacyState";
-import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
@@ -32,7 +35,9 @@ const RUN = "class4-e3-actual-game";
 async function actualGame(): Promise<Game> {
   const game = await setup("plains", { nationalMode: true }, PEOPLE);
   PEOPLE.forEach((p, i) =>
-    game.addExecution(new SpawnExecution(RUN, p, game.ref(15 + 20 * i, 20 + 15 * i))),
+    game.addExecution(
+      new SpawnExecution(RUN, p, game.ref(15 + 20 * i, 20 + 15 * i)),
+    ),
   );
   game.executeNextTick();
   game.executeNextTick();
@@ -68,7 +73,10 @@ function runner(game: Game, clientID: string) {
 }
 
 function command(
-  type: "national_offer_empire" | "national_accept_empire" | "national_transfer_crown",
+  type:
+    | "national_offer_empire"
+    | "national_accept_empire"
+    | "national_transfer_crown",
   suffix: string,
   clientID: string,
   candidateId: string,
@@ -120,9 +128,16 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
       requestId: "nf_class4founder",
     });
     expect(sendA.server.projectPolitics()?.nationalCommandResults).toEqual([
-      expect.objectContaining({ type: "national_found_empire", actorId: A.id, recipientId: A.id, accepted: true }),
+      expect.objectContaining({
+        type: "national_found_empire",
+        actorId: A.id,
+        recipientId: A.id,
+        accepted: true,
+      }),
     ]);
-    expect(sendC.server.projectPolitics()?.nationalCommandResults).toBeUndefined();
+    expect(
+      sendC.server.projectPolitics()?.nationalCommandResults,
+    ).toBeUndefined();
 
     // Candidate D invites A. The genuine E1 invitation candidateId remains
     // D, while the recipient is emperor A. This broke the previous E4 reader.
@@ -139,11 +154,22 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
         },
       ],
     });
-    expect(readNationalAccessionOffers(incoming?.nationalAccessionOffers, A.id)?.offers).toHaveLength(1);
-    expect(readNationalAccessionOffers(incoming?.nationalAccessionOffers, C.id)).toBeNull();
-    expect(sendB.server.projectPolitics()?.nationalAccessionOffers?.offers).toEqual([]);
-    expect(sendC.server.projectPolitics()?.nationalAccessionOffers?.offers).toEqual([]);
-    expect(spectator.server.projectPolitics()).not.toHaveProperty("nationalAccessionOffers");
+    expect(
+      readNationalAccessionOffers(incoming?.nationalAccessionOffers, A.id)
+        ?.offers,
+    ).toHaveLength(1);
+    expect(
+      readNationalAccessionOffers(incoming?.nationalAccessionOffers, C.id),
+    ).toBeNull();
+    expect(
+      sendB.server.projectPolitics()?.nationalAccessionOffers?.offers,
+    ).toEqual([]);
+    expect(
+      sendC.server.projectPolitics()?.nationalAccessionOffers?.offers,
+    ).toEqual([]);
+    expect(spectator.server.projectPolitics()).not.toHaveProperty(
+      "nationalAccessionOffers",
+    );
     expect(sendD.server.projectPolitics()?.nationalCommandResults).toEqual([
       expect.objectContaining({
         type: "national_offer_empire",
@@ -156,36 +182,63 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
 
     // E2 first queues, then E1 executes; only A may receive the result.
     ruler.next(command("national_accept_empire", "2", A.clientID!, D.id));
-    expect(sendA.server.projectPolitics()?.nationalAccessionOffers?.offers).toHaveLength(1);
-    expect(sendA.server.projectPolitics()?.nationalCommandResults).toBeUndefined();
+    expect(
+      sendA.server.projectPolitics()?.nationalAccessionOffers?.offers,
+    ).toHaveLength(1);
+    expect(
+      sendA.server.projectPolitics()?.nationalCommandResults,
+    ).toBeUndefined();
     ruler.next();
     const accepted = sendA.server.projectPolitics();
-    const receipt = accepted?.nationalCommandResults?.find((r) => r.requestId === "np_" + "2".repeat(32));
+    const receipt = accepted?.nationalCommandResults?.find(
+      (r) => r.requestId === "np_" + "2".repeat(32),
+    );
     expect(receipt).toMatchObject({
-      type: "national_accept_empire", actorId: A.id,
-      recipientId: A.id, commandTargetId: EMPIRE, accepted: true,
+      type: "national_accept_empire",
+      actorId: A.id,
+      recipientId: A.id,
+      commandTargetId: EMPIRE,
+      accepted: true,
     });
-    expect(readNationalPoliticalResults(accepted?.nationalCommandResults, A.id)).toHaveLength(1);
+    expect(
+      readNationalPoliticalResults(accepted?.nationalCommandResults, A.id),
+    ).toHaveLength(1);
     expect(accepted?.nationalAccessionOffers?.offers).toEqual([]);
-    expect(game.nationalPoliticalAuthority()?.membersOf(EMPIRE)).toContain(D.id);
-    expect(sendD.server.projectPolitics()?.nationalCommandResults).toBeUndefined();
-    expect(sendB.server.projectPolitics()?.nationalCommandResults).toBeUndefined();
+    expect(game.nationalPoliticalAuthority()?.membersOf(EMPIRE)).toContain(
+      D.id,
+    );
+    expect(
+      sendD.server.projectPolitics()?.nationalCommandResults,
+    ).toBeUndefined();
+    expect(
+      sendB.server.projectPolitics()?.nationalCommandResults,
+    ).toBeUndefined();
 
     // A new, unrelated B invitation is current until succession invalidates
     // it. Old GAMESNAPSHOTS do not reannounce an already expired invitation.
     ruler.send(command("national_offer_empire", "3", A.clientID!, B.id));
-    expect(sendB.server.projectPolitics()?.nationalAccessionOffers?.offers).toEqual([
+    expect(
+      sendB.server.projectPolitics()?.nationalAccessionOffers?.offers,
+    ).toEqual([
       expect.objectContaining({ candidateId: B.id, recipientId: B.id }),
     ]);
     ruler.send(command("national_transfer_crown", "4", A.clientID!, D.id));
     expect(game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(D.id);
-    expect(sendB.server.projectPolitics()?.nationalAccessionOffers?.offers).toEqual([]);
+    expect(
+      sendB.server.projectPolitics()?.nationalAccessionOffers?.offers,
+    ).toEqual([]);
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
     const reconnectB = outgoing(restored, B.clientID!);
-    expect(reconnectB.server.projectPolitics()?.nationalAccessionOffers?.offers).toEqual([]);
-    expect(reconnectB.server.projectPolitics()?.nationalCommandResults).toBeUndefined();
-    expect(sendA.server.projectPolitics()?.nationalAccessionOffers?.offers).toEqual([]);
+    expect(
+      reconnectB.server.projectPolitics()?.nationalAccessionOffers?.offers,
+    ).toEqual([]);
+    expect(
+      reconnectB.server.projectPolitics()?.nationalCommandResults,
+    ).toBeUndefined();
+    expect(
+      sendA.server.projectPolitics()?.nationalAccessionOffers?.offers,
+    ).toEqual([]);
   });
 
   it("preserves E1 delegated-peace actor/recipient/sequence/outcome; denies foreign results, swapped sessions, spectator and disconnected sockets", async () => {
@@ -197,9 +250,16 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
     const c = outgoing(game, C.clientID!);
     const anonymous = outgoing(game, null, true);
     const unknown = outgoing(game, "UNKNOWNID");
-    ruler.send({ type: "national_found_empire", clientID: A.clientID, empireId: EMPIRE, requestId: "nf_c4founder" });
+    ruler.send({
+      type: "national_found_empire",
+      clientID: A.clientID,
+      empireId: EMPIRE,
+      requestId: "nf_c4founder",
+    });
     ruler.send(command("national_offer_empire", "5", A.clientID!, B.id));
-    runner(game, B.clientID!).send(command("national_accept_empire", "6", B.clientID!, B.id));
+    runner(game, B.clientID!).send(
+      command("national_accept_empire", "6", B.clientID!, B.id),
+    );
     // Ruler's pending result cursor is actor-only and can be advanced safely.
     a.server.projectPolitics();
     const grantId = "np_" + "7".repeat(32);
@@ -216,19 +276,32 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
     const canonical = game
       .nationalPoliticalCommandResults(game.player(A.id))
       .find((r) => r.requestId === grantId);
-    const receipt = a.server.projectPolitics()?.nationalCommandResults?.find((r) => r.requestId === grantId);
+    const receipt = a.server
+      .projectPolitics()
+      ?.nationalCommandResults?.find((r) => r.requestId === grantId);
     expect(canonical?.accepted).toBe(true);
     expect(receipt).toMatchObject({
-      type: "national_set_peace_delegation", actorId: canonical?.actorId,
-      recipientId: canonical?.recipientId, requestId: canonical?.requestId,
-      sequence: canonical?.sequence, tick: canonical?.tick,
+      type: "national_set_peace_delegation",
+      actorId: canonical?.actorId,
+      recipientId: canonical?.recipientId,
+      requestId: canonical?.requestId,
+      sequence: canonical?.sequence,
+      tick: canonical?.tick,
       commandTargetId: canonical?.commandTargetId,
-      accepted: canonical?.accepted, reason: canonical?.reason,
+      accepted: canonical?.accepted,
+      reason: canonical?.reason,
     });
-    expect(b.server.projectPolitics()?.nationalCommandResults).toBeUndefined();
+    // B is entitled to its OWN prior acceptance receipt but never A's
+    // new delegation command result.
+    const ownB = b.server.projectPolitics()?.nationalCommandResults ?? [];
+    expect(ownB.some((entry) => entry.requestId === grantId)).toBe(false);
     expect(c.server.projectPolitics()?.nationalCommandResults).toBeUndefined();
-    expect(anonymous.server.projectPolitics()).not.toHaveProperty("nationalCommandResults");
-    expect(unknown.server.projectPolitics()).not.toHaveProperty("nationalCommandResults");
+    expect(anonymous.server.projectPolitics()).not.toHaveProperty(
+      "nationalCommandResults",
+    );
+    expect(unknown.server.projectPolitics()).not.toHaveProperty(
+      "nationalCommandResults",
+    );
 
     const denial = "np_" + "8".repeat(32);
     foreign.send({
@@ -242,8 +315,11 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
     expect(c.server.projectPolitics()?.nationalCommandResults).toEqual([
       expect.objectContaining({
         type: "national_set_peace_delegation",
-        actorId: C.id, recipientId: C.id, accepted: false,
-        requestId: denial, reason: "political-rule",
+        actorId: C.id,
+        recipientId: C.id,
+        accepted: false,
+        requestId: denial,
+        reason: "political-rule",
       }),
     ]);
     expect(a.server.projectPolitics()?.nationalCommandResults).toBeUndefined();
@@ -263,15 +339,20 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
     expect(b.server.projectPolitics()).toBeNull();
     b.link.spectator = false;
     expect(b.server.projectPolitics()).toBeNull();
-    expect(anonymous.server.projectPolitics()?.nationalPolitics?.empires).toEqual([
-      expect.objectContaining({ id: EMPIRE, leaderId: A.id }),
-    ]);
+    expect(
+      anonymous.server.projectPolitics()?.nationalPolitics?.empires,
+    ).toEqual([expect.objectContaining({ id: EMPIRE, leaderId: A.id })]);
   });
 
   it("never serializes E1 Game, foreign receipts, pact terms, hidden tiles/troops or unfiltered packed resource updates", async () => {
     const game = await actualGame();
     const ruler = runner(game, A.clientID!);
-    ruler.send({ type: "national_found_empire", clientID: A.clientID, empireId: EMPIRE, requestId: "nf_c4private" });
+    ruler.send({
+      type: "national_found_empire",
+      clientID: A.clientID,
+      empireId: EMPIRE,
+      requestId: "nf_c4private",
+    });
     const a = outgoing(game, A.clientID!);
     const c = outgoing(game, C.clientID!);
     const spectator = outgoing(game, null, true);
@@ -281,7 +362,8 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
     // then E3's sight filter projects only lawful map visibility. Deliberately
     // poison additional transport fields to catch accidental raw spread.
     const unseen = [...game.player(A.id).tiles()].find(
-      (tile) => !collectLiveNationalObservation(game, C.id).visibleTiles.has(tile),
+      (tile) =>
+        !collectLiveNationalObservation(game, C.id).visibleTiles.has(tile),
     );
     expect(unseen).toBeDefined();
     const poisoned = {
@@ -291,9 +373,14 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
       nationalCommandResults: [
         {
           type: "national_found_empire",
-          actorId: A.id, recipientId: A.id,
-          requestId: "nf_forged", sequence: 888,
-          tick: game.ticks(), accepted: true, reason: "accepted", empireId: EMPIRE,
+          actorId: A.id,
+          recipientId: A.id,
+          requestId: "nf_forged",
+          sequence: 888,
+          tick: game.ticks(),
+          accepted: true,
+          reason: "accepted",
+          empireId: EMPIRE,
         },
       ],
       packedTileUpdates: new Uint32Array([unseen!, 0xffffffff]),
@@ -323,7 +410,7 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
     const words = JSON.stringify(c.server.projectPolitics());
     expect(words).not.toContain("SECRET_TERMS_C4");
     expect(words).not.toContain("999991");
-    expect(words).not.toContain("accessionOffers\":");
+    expect(words).not.toContain('accessionOffers":');
     expect(words).not.toContain("nationalWarState");
     expect(words).not.toContain("privatePactTerms");
     const live = a.server.projectGameUpdate(current);
