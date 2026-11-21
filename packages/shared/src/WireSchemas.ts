@@ -52,7 +52,16 @@ export type ServerMessage =
   | ServerLobbyInfoMessage
   | ServerNewLobbyMessage
   | ServerPongMessage
-  | ServerRedirectMessage;
+  | ServerRedirectMessage
+  | ServerNationalStartMessage
+  | ServerNationalProjectionMessage;
+
+export type ServerNationalStartMessage = z.infer<
+  typeof ServerNationalStartMessageSchema
+>;
+export type ServerNationalProjectionMessage = z.infer<
+  typeof ServerNationalProjectionMessageSchema
+>;
 
 export type ServerTurnMessage = z.infer<typeof ServerTurnMessageSchema>;
 
@@ -586,6 +595,27 @@ export const ServerRedirectMessageSchema = z.object({
   gameID: ID,
 });
 
+/**
+ * A distinct, fail-closed trusted-host NATIONAL protocol.
+ * No turns, authoritative Game, replay or snapshots travel on these frames.
+ * The projection is a bounded JSON serialization of E3's strictly filtered
+ * per-recipient view, not an arbitrary GameUpdateViewData from the engine.
+ * Appended union variants preserve every existing zbin tag.
+ */
+export const ServerNationalStartMessageSchema = z.object({
+  type: z.literal("national_start"),
+  gameStartInfo: WireGameStartInfoSchema,
+  myClientID: ID,
+  tick: zb.uint(),
+  groupToken: GroupToken.optional(),
+});
+
+export const ServerNationalProjectionMessageSchema = z.object({
+  type: z.literal("national_projection"),
+  tick: zb.uint(),
+  payload: z.string().max(2_000_000),
+});
+
 export const ServerMessageSchema = zb.discriminatedUnion("type", [
   ServerTurnMessageSchema,
   ServerPrestartMessageSchema,
@@ -598,6 +628,8 @@ export const ServerMessageSchema = zb.discriminatedUnion("type", [
   ServerPongMessageSchema,
   // Appended, never inserted: variant order is the wire tag (zbin/README.md).
   ServerRedirectMessageSchema,
+  ServerNationalStartMessageSchema,
+  ServerNationalProjectionMessageSchema,
 ]);
 
 //

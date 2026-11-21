@@ -84,6 +84,7 @@ export class Executor {
           intent.empireId,
           null,
           intent.requestId ?? null,
+          intent.clientID,
         );
       case "national_offer_empire":
         return new NationalFoundEmpireExecution(
@@ -95,6 +96,7 @@ export class Executor {
             candidateId: intent.candidateId,
           },
           intent.requestId ?? null,
+          intent.clientID,
         );
       case "national_accept_empire":
         return new NationalFoundEmpireExecution(
@@ -106,6 +108,7 @@ export class Executor {
             candidateId: intent.candidateId,
           },
           intent.requestId ?? null,
+          intent.clientID,
         );
       case "national_transfer_crown":
         return new NationalFoundEmpireExecution(
@@ -117,6 +120,7 @@ export class Executor {
             successorId: intent.successorId,
           },
           intent.requestId ?? null,
+          intent.clientID,
         );
       case "national_set_peace_delegation":
         // The stamped clientID has ALREADY resolved the trusted actor above.
@@ -131,6 +135,7 @@ export class Executor {
             enabled: intent.enabled,
           },
           intent.requestId ?? null,
+          intent.clientID,
         );
       case "national_declare_war":
         return new NationalWarExecution(
@@ -147,18 +152,21 @@ export class Executor {
                 targetId: intent.targetId,
               },
           intent.requestId ?? null,
+          intent.clientID,
         );
       case "national_propose_peace":
         return new NationalWarExecution(
           player,
           { kind: "propose-peace", warId: intent.warId },
           intent.requestId ?? null,
+          intent.clientID,
         );
       case "national_accept_peace":
         return new NationalWarExecution(
           player,
           { kind: "accept-peace", motionId: intent.motionId },
           intent.requestId ?? null,
+          intent.clientID,
         );
       case "cancel_attack":
         return new RetreatExecution(player, intent.attackID);

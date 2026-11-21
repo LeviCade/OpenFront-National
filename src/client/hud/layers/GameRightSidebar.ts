@@ -14,6 +14,7 @@ import "../../NationalDiplomacyPanel";
 import { showInGameAlert, showInGameConfirm } from "../../InGameModal";
 import { TogglePauseIntentEvent } from "../../InputHandler";
 import type { NationalDiplomacyPanel } from "../../NationalDiplomacyPanel";
+import { NationalPrivateCapabilityChangedEvent } from "../../NationalPrivateCapability";
 import {
   NationalTransportStatusEvent,
   PauseGameIntentEvent,
@@ -108,6 +109,13 @@ export class GameRightSidebar extends LitElement implements Controller {
     this.eventBus.on(ImmunityBarVisibleEvent, (e) => {
       this.immunityBarVisible = e.visible;
       this.updateParentOffset();
+    });
+
+    this.eventBus.on(NationalPrivateCapabilityChangedEvent, (e) => {
+      if (e.gameID !== this.game.gameID()) return;
+      if (!e.ready) this.nationalPanel?.connectionInterrupted();
+      this.nationalPanel?.refresh();
+      this.requestUpdate();
     });
 
     this.eventBus.on(NationalTransportStatusEvent, (e) => {
@@ -476,7 +484,8 @@ export class GameRightSidebar extends LitElement implements Controller {
       </aside>
       ${
         this.game.config().gameConfig().nationalMode === true &&
-        this.game.config().gameConfig().gameType === GameType.Singleplayer
+        (this.game.config().gameConfig().gameType === GameType.Singleplayer ||
+          this.game.config().gameConfig().gameType === GameType.Private)
           ? html`<national-diplomacy-panel
               .game=${this.game}
               .eventBus=${this.eventBus}

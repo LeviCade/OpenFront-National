@@ -359,6 +359,7 @@ export function empireForMember(
 export function foundingUnavailableReason(state: {
   national: boolean;
   solo: boolean;
+  trustedPrivate?: boolean;
   replay: boolean;
   spawned: boolean;
   alive: boolean;
@@ -366,8 +367,12 @@ export function foundingUnavailableReason(state: {
   memberEmpire: NationalPublicEmpire | null;
   pending: boolean;
 }): string | null {
-  if (!state.national || !state.solo || state.replay) {
-    return "Empire founding is available only in a live NATIONAL Solo game.";
+  if (
+    !state.national ||
+    !(state.solo || state.trustedPrivate) ||
+    state.replay
+  ) {
+    return "Empire founding requires a live authorized NATIONAL match.";
   }
   if (!state.spawned) return "Spawn before founding an empire.";
   if (!state.alive || state.spectator) {
@@ -388,14 +393,15 @@ export function foundingUnavailableReason(state: {
 export function nationalWarActionUnavailableReason(state: {
   national: boolean;
   solo: boolean;
+  trustedPrivate?: boolean;
   replay: boolean;
   spawned: boolean;
   alive: boolean;
   spectator: boolean;
   hasPublicPolitics: boolean;
 }): string | null {
-  if (!state.national || !state.solo || state.replay)
-    return "War and peace commands are available only in live NATIONAL Solo.";
+  if (!state.national || !(state.solo || state.trustedPrivate) || state.replay)
+    return "War and peace require a live authorized NATIONAL match.";
   if (!state.spawned) return "Spawn before issuing diplomacy commands.";
   if (!state.alive || state.spectator)
     return "Only a living, active nation may issue diplomacy commands.";

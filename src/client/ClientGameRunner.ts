@@ -96,6 +96,11 @@ import {
   Transport,
 } from "./Transport";
 import {
+  parseTrustedNationalProjection,
+  TrustedNationalProjectionEvent,
+  TrustedNationalStartedEvent,
+} from "./TrustedNationalSession";
+import {
   GRAPHICS_KEY,
   USER_SETTINGS_CHANGED_EVENT,
   UserSettings,
@@ -277,6 +282,25 @@ export function joinLobby(
       );
       void requestTerrainLoad(message.gameMap, message.gameMapSize);
       resolvePrestart();
+    }
+    if (message.type === "national_start") {
+      // Verified lobby -> trusted server session. Do NOT create a browser
+      // GameRunner here; E4's read-only renderer consumes this event.
+      resolvePrestart();
+      clientID = message.myClientID;
+      rememberAdmitted(lobbyConfig.gameID);
+      lobbyConfig.gameStartInfo = message.gameStartInfo;
+      resolveJoin();
+      eventBus.emit(new TrustedNationalStartedEvent(message));
+      return;
+    }
+    if (message.type === "national_projection") {
+      eventBus.emit(
+        new TrustedNationalProjectionEvent(
+          parseTrustedNationalProjection(message.payload, message.tick),
+        ),
+      );
+      return;
     }
     if (message.type === "start") {
       // Trigger prestart for singleplayer games

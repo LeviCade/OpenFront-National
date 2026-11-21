@@ -1,3 +1,4 @@
+import type { ClientID } from "@openfront/engine-api/Schemas";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import type { Execution, Game, Player } from "../game/Game";
@@ -39,6 +40,8 @@ export class NationalFoundEmpireExecution implements Execution {
     /** Optional E1-owned political command; legacy founding remains valid. */
     private politicalCommand: ExecutableNationalCommand | null = null,
     private requestId: string | null = null,
+    /** Immutable server-stamped origin captured BEFORE this action was queued. */
+    private authenticatedClientID: ClientID | null = null,
   ) {}
 
   init(game: Game): void {
@@ -57,6 +60,7 @@ export class NationalFoundEmpireExecution implements Execution {
           this.actor,
           this.politicalCommand?.empireId ?? this.empireId,
           this.requestId,
+          this.authenticatedClientID ?? undefined,
         );
         if (!result.accepted)
           console.warn("NATIONAL founding rejected:", result.reason);
@@ -71,6 +75,7 @@ export class NationalFoundEmpireExecution implements Execution {
             { kind: "found-empire" }
           >,
           this.requestId,
+          this.authenticatedClientID ?? undefined,
         );
         if (!result.accepted)
           console.warn("NATIONAL political command rejected:", result.reason);
@@ -98,6 +103,7 @@ export class NationalFoundEmpireExecution implements Execution {
       empireId: this.empireId,
       politicalCommand: this.politicalCommand,
       requestId: this.requestId,
+      authenticatedClientID: this.authenticatedClientID,
     });
   }
 
@@ -108,6 +114,7 @@ export class NationalFoundEmpireExecution implements Execution {
     this.empireId = s.empireId;
     this.politicalCommand = s.politicalCommand;
     this.requestId = s.requestId;
+    this.authenticatedClientID = s.authenticatedClientID;
   }
 }
 
@@ -179,12 +186,13 @@ const NationalFoundEmpireStateSchema = z.object({
     ])
     .nullable(),
   requestId: z.string().min(1).max(256).nullable(),
+  authenticatedClientID: z.string().min(1).max(256).nullable(),
 });
 type NationalFoundEmpireState = z.infer<typeof NationalFoundEmpireStateSchema>;
 
 export const NationalFoundEmpireExecutionSnapshot = execSnapshotType({
   name: "NationalFoundEmpire",
-  version: 3,
+  version: 4,
   schema: NationalFoundEmpireStateSchema,
   migrations: {
     1: (old: { empireId: string }) => ({ ...old, politicalCommand: null }),
@@ -192,6 +200,7 @@ export const NationalFoundEmpireExecutionSnapshot = execSnapshotType({
       ...old,
       requestId: null,
     }),
+    3: (old: object) => ({ ...old, authenticatedClientID: null }),
   },
   cls: () => NationalFoundEmpireExecution,
 });

@@ -12,6 +12,9 @@ import {
 } from "@openfront/engine-api/Schemas";
 import { createGameRunner } from "./GameRunner";
 
+/** Server-only authoritative engine entry, not the legacy browser path. */
+export { GameRunner, createTrustedNationalGameRunner } from "./GameRunner";
+
 export interface ReplayedWinner {
   // undefined when the turns run out before anyone wins, or the match was
   // cancelled (a winnerless Win update).
