@@ -1,0 +1,56 @@
+name: R10 E6 — One-shot pinned local verification bundle (NO GPU)
+
+on:
+  push:
+    branches:
+      - feature/r10-e6-skybot-gpu-evidence-20261121
+    paths:
+      - .github/workflows/national-r10-e6-local-toolchain.yml
+
+permissions:
+  contents: read
+
+jobs:
+  source-tool-handoff:
+    if: github.repository == 'LeviCade/OpenFront-National' && github.actor == 'LeviCade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - name: Install pinned formatter without running repository scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts npm@12.1.0
+          npm ci --ignore-scripts --no-audit --no-fund
+          node_modules/.bin/oxfmt --version
+          test -d node_modules/@oxfmt/binding-linux-x64-gnu
+          test -d node_modules/oxfmt
+      - name: Package exact E6 source and pinned Linux formatter for local checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > E6_EXACT_SOURCE_SHA.txt
+          tar czf e6-pinned-source-toolchain.tgz \
+            E6_EXACT_SOURCE_SHA.txt \
+            scripts/national-gpu-ci \
+            .github/workflows/national-hardware-acceptance.yml \
+            .github/workflows/national-r10-owner-gpu-diagnostic.yml \
+            .github/workflows/national-r10-e6-local-toolchain.yml \
+            package.json \
+            node_modules/oxfmt \
+            node_modules/@oxfmt/binding-linux-x64-gnu \
+            node_modules/.bin/oxfmt
+          test -s e6-pinned-source-toolchain.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r10-e6-local-pinned-source-toolchain-${{ github.sha }}
+          path: e6-pinned-source-toolchain.tgz
+          if-no-files-found: error
+          retention-days: 1
