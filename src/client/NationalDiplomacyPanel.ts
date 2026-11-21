@@ -22,6 +22,7 @@ import {
   type NationalPoliticalAction,
 } from "./NationalDiplomacyState";
 import { GoToPlayerEvent } from "./TransformHandler";
+import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
 import {
   SendNationalAcceptPeaceIntentEvent,
   SendNationalAcceptEmpireIntentEvent,
@@ -448,12 +449,25 @@ export class NationalDiplomacyPanel extends LitElement {
       : null;
   }
 
+  /** A Private lobby flag is NOT server authorization. */
+  private get trustedPrivateCommandsReady(): boolean {
+    const game = this.game;
+    if (!game || game.config().isReplay() || game.isSpectator()) return false;
+    const cfg = game.config().gameConfig();
+    return (
+      cfg.nationalMode === true &&
+      cfg.gameType === GameType.Private &&
+      hasTrustedNationalPrivateCapability(this.eventBus, game.gameID())
+    );
+  }
+
   private get unavailableReason(): string | null {
     const game = this.game;
     const player = game?.myPlayer();
     return foundingUnavailableReason({
       national: game?.config().gameConfig().nationalMode === true,
       solo: game?.config().gameConfig().gameType === GameType.Singleplayer,
+      trustedPrivate: this.trustedPrivateCommandsReady,
       replay: game?.config().isReplay() === true,
       spawned:
         player !== null &&
@@ -539,6 +553,7 @@ export class NationalDiplomacyPanel extends LitElement {
     return nationalWarActionUnavailableReason({
       national: game?.config().gameConfig().nationalMode === true,
       solo: game?.config().gameConfig().gameType === GameType.Singleplayer,
+      trustedPrivate: this.trustedPrivateCommandsReady,
       replay: game?.config().isReplay() === true,
       spawned:
         player !== null &&
@@ -1001,11 +1016,23 @@ export class NationalDiplomacyPanel extends LitElement {
 
   render() {
     const game = this.game;
+    const mode = game?.config().gameConfig().gameType;
     if (
       game?.config().gameConfig().nationalMode !== true ||
-      game.config().gameConfig().gameType !== GameType.Singleplayer
+      (mode !== GameType.Singleplayer && mode !== GameType.Private)
     ) {
       return nothing;
+    }
+    if (mode === GameType.Private && !this.trustedPrivateCommandsReady) {
+      return html`<section
+        aria-label="NATIONAL diplomacy"
+        data-national-private-capability="blocked"
+        role="status"
+        class="max-w-60 rounded-md bg-slate-950/90 px-3 py-2 text-xs text-amber-200"
+      >
+        NATIONAL Private controls are locked until the server verifies
+        your current active seat and trusted match.
+      </section>`;
     }
     const politics = game.nationalPolitics();
     const ownEmpire = this.memberEmpire;
