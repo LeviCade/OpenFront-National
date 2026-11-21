@@ -119,6 +119,77 @@ function activeEmpireMembers(
   };
 }
 
+/**
+ * Geographic sight is measured in MAP TILES, never land percentage or
+ * unverified client coordinates. The bucket index avoids a global
+ * O(foreign units * nation border length) distance scan on large maps.
+ *
+ * 100-tile border structure/army radius and 200-tile coastline/observing
+ * warship radius are D-017's conservative initial NATIONAL defaults.
+ */
+const BORDER_SIGHT_RADIUS = 100;
+const NAVAL_SIGHT_RADIUS = 200;
+const SIGHT_BUCKET_SIZE = 100;
+
+interface SightAnchor {
+  readonly x: number;
+  readonly y: number;
+  readonly contributorId: string;
+}
+
+type SightIndex = Map<string, SightAnchor[]>;
+
+function sightBucket(x: number, y: number): string {
+  return (
+    Math.floor(x / SIGHT_BUCKET_SIZE) + ":" + Math.floor(y / SIGHT_BUCKET_SIZE)
+  );
+}
+
+function addSightAnchor(
+  index: SightIndex,
+  x: number,
+  y: number,
+  contributorId: string,
+): void {
+  const key = sightBucket(x, y);
+  const entries = index.get(key) ?? [];
+  entries.push({ x, y, contributorId });
+  index.set(key, entries);
+}
+
+/** Returns ONLY the sight-granting real owner, never a hidden asset. */
+function nearestSightContributor(
+  index: SightIndex,
+  x: number,
+  y: number,
+  radius: number,
+): string | null {
+  let source: string | null = null;
+  let distance = radius * radius + 1;
+  const bucketX = Math.floor(x / SIGHT_BUCKET_SIZE);
+  const bucketY = Math.floor(y / SIGHT_BUCKET_SIZE);
+  const bucketReach = Math.ceil(radius / SIGHT_BUCKET_SIZE);
+  for (let bx = bucketX - bucketReach; bx <= bucketX + bucketReach; bx++) {
+    for (let by = bucketY - bucketReach; by <= bucketY + bucketReach; by++) {
+      for (const anchor of index.get(bx + ":" + by) ?? []) {
+        const deltaX = x - anchor.x;
+        const deltaY = y - anchor.y;
+        const squared = deltaX * deltaX + deltaY * deltaY;
+        if (
+          squared <= radius * radius &&
+          (squared < distance ||
+            (squared === distance &&
+              (source === null || anchor.contributorId < source)))
+        ) {
+          distance = squared;
+          source = anchor.contributorId;
+        }
+      }
+    }
+  }
+  return source;
+}
+
 /** Recomputes sight directly from the *current* game at a tick boundary. */
 export function collectLiveNationalObservation(
   game: Game,
@@ -141,6 +212,9 @@ export function collectLiveNationalObservation(
     visibleTiles.add(tile);
     if (!sightOrigin.has(tile)) sightOrigin.set(tile, memberId);
   };
+  const borderSight = new Map<string, SightAnchor[]>();
+  const coastSight = new Map<string, SightAnchor[]>();
+  const warshipSight = new Map<string, SightAnchor[]>();
   const frontierKeys = new Set<string>();
   const frontiers: NationalWorld["frontiers"][number][] = [];
   let unownedFrontier = false;
@@ -159,7 +233,10 @@ export function collectLiveNationalObservation(
     for (const tile of member.tiles()) markVisible(tile, memberId);
     for (const tile of member.borderTiles()) {
       markVisible(tile, memberId);
+      addSightAnchor(borderSight, game.x(tile), game.y(tile), memberId);
+      let coastal = false;
       game.forEachNeighbor(tile, (neighbor) => {
+        if (!game.isLand(neighbor)) coastal = true;
         markVisible(neighbor, memberId);
         const owner = game.owner(neighbor);
         if (!owner.isPlayer()) {
@@ -178,6 +255,9 @@ export function collectLiveNationalObservation(
           access: "land",
         });
       });
+      if (coastal) {
+        addSightAnchor(coastSight, game.x(tile), game.y(tile), memberId);
+      }
     }
   }
 
@@ -228,7 +308,19 @@ export function collectLiveNationalObservation(
   const assets: NationalWorld["assets"][number][] = [];
   const sightGrants: NationalWorld["sightGrants"][number][] = [];
   const tick = game.ticks();
-  for (const unit of game.units()) {
+  const allUnits = game.units();
+  // An observing warship is itself legitimate first-party (or current
+  // empire-shared) intelligence. Never use an enemy warship as a sensor.
+  for (const unit of allUnits) {
+    if (
+      unit.type() !== UnitType.Warship ||
+      !allowedPrincipals.has(unit.owner().id())
+    )
+      continue;
+    const tile = unit.tile();
+    addSightAnchor(warshipSight, game.x(tile), game.y(tile), unit.owner().id());
+  }
+  for (const unit of allUnits) {
     const tile = unit.tile();
     const ownerId = unit.owner().id();
     assets.push({
@@ -239,14 +331,49 @@ export function collectLiveNationalObservation(
       y: game.y(tile),
       strength: unit.troops(),
     });
-    if (!allowedPrincipals.has(ownerId) && visibleTiles.has(tile)) {
-      sightGrants.push({
-        observerId: sightOrigin.get(tile) ?? observerId,
-        assetId: String(unit.id()),
-        source: "border",
-        observedAtTick: tick,
-        expiresAtTick: tick,
-      });
+    if (!allowedPrincipals.has(ownerId)) {
+      const x = game.x(tile);
+      const y = game.y(tile);
+      // FOG-03 extends visibility of BORDER STRUCTURES, not armies or
+      // hidden transports. FOG-05 forbids granting an unseen invasion
+      // force a free 100-tile detection radius just because its tile is
+      // near a country's distant frontier.
+      const fromBorder = visibleTiles.has(tile)
+        ? (sightOrigin.get(tile) ?? observerId)
+        : kind(unit.type()) === "structure"
+          ? nearestSightContributor(borderSight, x, y, BORDER_SIGHT_RADIUS)
+          : null;
+      const isShip =
+        unit.type() === UnitType.Warship ||
+        unit.type() === UnitType.TransportShip ||
+        unit.type() === UnitType.TradeShip;
+      const fromCoast =
+        fromBorder === null && isShip
+          ? nearestSightContributor(coastSight, x, y, NAVAL_SIGHT_RADIUS)
+          : null;
+      const fromWarship =
+        fromBorder === null && fromCoast === null && isShip
+          ? nearestSightContributor(warshipSight, x, y, NAVAL_SIGHT_RADIUS)
+          : null;
+      const contributorId = fromBorder ?? fromCoast ?? fromWarship;
+      if (contributorId !== null) {
+        // The same independently verified visible tile feeds BOTH AI's
+        // NationalObservation and the human GameRunner's packet whitelist.
+        // No sight grant survives a removed empire contributor.
+        markVisible(tile, contributorId);
+        sightGrants.push({
+          observerId: contributorId,
+          assetId: String(unit.id()),
+          source:
+            fromBorder !== null
+              ? "border"
+              : fromCoast !== null
+                ? "coast"
+                : "warship",
+          observedAtTick: tick,
+          expiresAtTick: tick,
+        });
+      }
     }
   }
 

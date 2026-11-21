@@ -111,7 +111,7 @@ describe("E2 Round Five authenticated WAR execution against actual spawned Game"
       {
         type: "national_declare_war",
         scope: "national",
-        nationId: "east-id",
+        nationId: "north-id",
         targetId: "south-id",
         targetKind: "nation",
         clientID: "north-client",
@@ -160,10 +160,10 @@ describe("E2 Round Five authenticated WAR execution against actual spawned Game"
       after.layers.find((x) => x.id === national.id)?.endedTick,
     ).toBeNull();
     expect(game.nationalWarAuthority()?.atWar("north-id", "south-id")).toBe(
-      false,
+      true,
     );
     expect(game.nationalWarAuthority()?.atWar("east-id", "south-id")).toBe(
-      true,
+      false,
     );
 
     // The remaining national layer also requires bilateral consent.

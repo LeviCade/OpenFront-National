@@ -46,7 +46,13 @@ export class NationalFoundEmpireExecution implements Execution {
         if (!result.accepted)
           console.warn("NATIONAL founding rejected:", result.reason);
       } else {
-        this.game.performNationalCommand(this.actor, this.politicalCommand);
+        const result = this.game.performNationalPoliticalCommandWithOutcome(
+          this.actor,
+          this.politicalCommand,
+          this.requestId,
+        );
+        if (!result.accepted)
+          console.warn("NATIONAL political command rejected:", result.reason);
       }
     } catch (err) {
       // A malicious, duplicate or now-illegal command is a deterministic
@@ -123,6 +129,19 @@ const NationalFoundEmpireStateSchema = z.object({
         candidateId: z.string(),
       }),
       z.object({ kind: z.literal("accept-pact"), pactId: z.string() }),
+      z.object({
+        kind: z.literal("propose-pact-amendment"),
+        pactId: z.string(),
+        terms: z.object({
+          admission: z.enum(["leader", "unanimous"]),
+          expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+        }),
+        administratorId: z.string().nullable(),
+      }),
+      z.object({
+        kind: z.literal("approve-pact-amendment"),
+        pactId: z.string(),
+      }),
       z.object({ kind: z.literal("betray-pact"), pactId: z.string() }),
       z.object({
         kind: z.literal("expel-pact"),

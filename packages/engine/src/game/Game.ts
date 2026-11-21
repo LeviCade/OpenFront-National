@@ -58,7 +58,11 @@ import type {
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
-import type { NationalFoundEmpireResult } from "../national/politics/NationalGovernanceState";
+import type {
+  NationalFoundEmpireResult,
+  NationalPoliticalCommandResult,
+  NationalWarCommandOutcome,
+} from "../national/politics/NationalGovernanceState";
 import type {
   NationalWarAuthority,
   NationalWarCommand,
@@ -612,6 +616,16 @@ export interface Game extends GameLike {
   nationalWarState(): NationalWarStateSnapshot | null;
   /** Internal trusted actor; E2 owns external schema and command validation. */
   performNationalWarCommand(actor: Player, command: NationalWarCommand): void;
+  /** E2 consumes the authoritative Game result; legacy direct calls still throw. */
+  performNationalWarCommandWithOutcome(
+    actor: Player,
+    command: NationalWarCommand & { readonly requestId?: string },
+    requestId?: string | null,
+  ): NationalWarCommandOutcome;
+  /** Actor-only WAR outcomes; never broadcast into political/founding results. */
+  nationalWarCommandResults(
+    observer: Player,
+  ): readonly NationalWarCommandOutcome[];
   /** Canonical sorted, unique living/spawned MDA donors; E2 never chooses IDs. */
   nationalMdaAllies(defenderId: PlayerID): readonly PlayerID[];
   /** Canonical read-only source from a real living Game Player. */
@@ -630,6 +644,16 @@ export interface Game extends GameLike {
   nationalCommandResults(
     observer: Player,
   ): readonly NationalFoundEmpireResult[];
+  /** E1-owned journal for authenticated non-founder commands; E3 wires it. */
+  performNationalPoliticalCommandWithOutcome(
+    actor: Player,
+    command: Exclude<NationalCommand, { kind: "found-empire" }>,
+    requestId?: string | null,
+  ): NationalPoliticalCommandResult;
+  /** Detached private outcomes; never mixed into Found Empire result packets. */
+  nationalPoliticalCommandResults(
+    observer: Player,
+  ): readonly NationalPoliticalCommandResult[];
   /** E3 stores each human observer's verified, principal-bound sightings. */
   readNationalObserverMemory(observerId: PlayerID): NationalSightMemory | null;
   writeNationalObserverMemory(

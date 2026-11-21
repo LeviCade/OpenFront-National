@@ -88,6 +88,9 @@ import {
   NationalGovernanceState,
   NationalGovernanceSnapshotSchema,
   type NationalFoundEmpireResult,
+  type NationalPoliticalCommandResult,
+  type NationalWarCommandKind,
+  type NationalWarCommandOutcome,
 } from "../national/politics/NationalGovernanceState";
 import {
   NationalWarStateService,
@@ -648,7 +651,7 @@ export class GameImpl implements Game {
     return this._nationalWar?.snapshot() ?? null;
   }
 
-  /** Trusted engine actor, not a spoofable PlayerID from the browser. */
+  /** Legacy direct Game WAR port: preserves real WarLedger rule exceptions. */
   performNationalWarCommand(actor: Player, command: NationalWarCommand): void {
     if (this._nationalWar === null || this._national === null)
       throw new Error("NATIONAL war: mode not enabled");
@@ -662,6 +665,128 @@ export class GameImpl implements Game {
     }
     this.synchronizeNationalState();
     this._nationalWar.perform(actor.id(), command, this._ticks);
+  }
+
+  /**
+   * Authoritative WAR/peace decision. The existing WarLedger alone mutates
+   * host-owned conflict state; the ONE governance journal owns the outcome.
+   * The request fingerprint excludes engine-generated war/motion IDs, so a
+   * later retry with the same client token can return the original receipt.
+   */
+  performNationalWarCommandWithOutcome(
+    actor: Player,
+    command: NationalWarCommand & { readonly requestId?: string },
+    requestId: string | null = null,
+  ): NationalWarCommandOutcome {
+    if (
+      this._nationalWar === null ||
+      this._national === null ||
+      this._nationalGovernance === null
+    )
+      throw new Error("NATIONAL war: mode not enabled");
+    // No journal entry or state change for a forged Player object, even when
+    // that object supplies a real player ID.
+    if (this._players.get(actor.id()) !== actor)
+      throw new Error("NATIONAL war: forged actor");
+    const suppliedRequestId = requestId ?? command.requestId ?? null;
+    if (
+      suppliedRequestId !== null &&
+      !/^[A-Za-z0-9_-]{1,128}$/.test(suppliedRequestId)
+    )
+      throw new Error("NATIONAL war: invalid request ID");
+
+    const commandKind: NationalWarCommandKind =
+      command.kind === "declare-national" || command.kind === "declare-imperial"
+        ? "national_declare_war"
+        : command.kind === "propose-peace"
+          ? "national_propose_peace"
+          : "national_accept_peace";
+    const intent =
+      command.kind === "declare-national"
+        ? {
+            kind: command.kind,
+            aggressorId: command.aggressorId,
+            targetId: command.targetId,
+          }
+        : command.kind === "declare-imperial"
+          ? {
+              kind: command.kind,
+              aggressor: command.aggressor,
+              target: command.target,
+            }
+          : command.kind === "propose-peace"
+            ? { kind: command.kind, warId: command.warId }
+            : { kind: command.kind, motionId: command.motionId };
+    const fingerprint = JSON.stringify(intent);
+    if (typeof fingerprint !== "string" || fingerprint.length > 4096)
+      throw new Error("NATIONAL war: invalid command payload");
+    const safeId = (id: unknown): string | undefined =>
+      typeof id === "string" && id.length > 0 && id.length <= 256
+        ? id
+        : undefined;
+    const targetId =
+      command.kind === "declare-national"
+        ? command.targetId
+        : command.kind === "declare-imperial"
+          ? command.target.id
+          : command.kind === "propose-peace"
+            ? command.warId
+            : command.motionId;
+    const recordedTargetId = safeId(targetId) ?? "<invalid-target-id>";
+    const warId =
+      command.kind === "declare-national" || command.kind === "declare-imperial"
+        ? safeId(command.warId)
+        : command.kind === "propose-peace"
+          ? safeId(command.warId)
+          : this._nationalWar
+              .snapshot()
+              .wars.motions.find((m) => m.id === command.motionId)?.layerId;
+    const motionId =
+      command.kind === "propose-peace" || command.kind === "accept-peace"
+        ? safeId(command.motionId)
+        : undefined;
+    // A syntactically invalid command must still produce a sanitized receipt
+    // for its verified actor, without running the mutable WarLedger.
+    const hasSafeCommandIds =
+      warId !== undefined &&
+      (command.kind === "declare-national" ||
+        command.kind === "declare-imperial" ||
+        motionId !== undefined);
+    return this._nationalGovernance.recordWarCommand(
+      actor.id(),
+      commandKind,
+      recordedTargetId,
+      this._ticks,
+      suppliedRequestId,
+      fingerprint,
+      { warId, motionId },
+      () => {
+        if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
+          return "actor-inactive";
+        if (!hasSafeCommandIds) return "invalid-war-command";
+        try {
+          this.synchronizeNationalState();
+          this._nationalWar!.perform(actor.id(), command, this._ticks);
+          return "accepted";
+        } catch {
+          // Never expose secret treaty state, stack traces or live internals.
+          return "war-rule";
+        }
+      },
+    );
+  }
+
+  /** Detached, recipient-bound WAR results; E3 owns outbound projection. */
+  nationalWarCommandResults(
+    observer: Player,
+  ): readonly NationalWarCommandOutcome[] {
+    if (
+      this._nationalGovernance === null ||
+      this._players.get(observer.id()) !== observer ||
+      observer.type() !== PlayerType.Human
+    )
+      return [];
+    return this._nationalGovernance.warResultsFor(observer.id());
   }
 
   /**
@@ -920,6 +1045,70 @@ export class GameImpl implements Game {
     )
       return [];
     return this._nationalGovernance.resultsFor(observer.id());
+  }
+
+  /**
+   * Single E1 Game-owned journal: authenticated non-founder transitions now
+   * receive the same sequence/idempotence guarantees as Found Empire.
+   * E2 supplies the server-stamped actor; E3 will expose a separate typed
+   * recipient packet so these cannot masquerade as founding receipts.
+   */
+  performNationalPoliticalCommandWithOutcome(
+    actor: Player,
+    command: Exclude<NationalCommand, { kind: "found-empire" }>,
+    requestId: string | null = null,
+  ): NationalPoliticalCommandResult {
+    if (this._national === null || this._nationalGovernance === null)
+      throw new Error("NATIONAL command journal: mode not enabled");
+    if (this._players.get(actor.id()) !== actor)
+      throw new Error("NATIONAL command journal: forged actor");
+    const targetId = "pactId" in command ? command.pactId : command.empireId;
+    const recordedTargetId =
+      typeof targetId === "string" &&
+      targetId.length > 0 &&
+      targetId.length <= 256
+        ? targetId
+        : "<invalid-target-id>";
+    // Keep the full command identity private in the Game-owned ledger.
+    // Reusing a request ID for different terms/candidate/successor must reject,
+    // even when actor + kind + pact/empire target happen to match.
+    const commandFingerprint = JSON.stringify(command);
+    if (
+      typeof commandFingerprint !== "string" ||
+      commandFingerprint.length > 4096
+    )
+      throw new Error("NATIONAL command journal: invalid command payload");
+    return this._nationalGovernance.recordPoliticalCommand(
+      actor.id(),
+      command.kind,
+      recordedTargetId,
+      this._ticks,
+      requestId,
+      commandFingerprint,
+      () => {
+        if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
+          return "actor-inactive";
+        try {
+          this.performNationalCommand(actor, command);
+          return "accepted";
+        } catch {
+          // Do not transmit internal pact terms, engine state or stack traces.
+          return "political-rule";
+        }
+      },
+    );
+  }
+
+  nationalPoliticalCommandResults(
+    observer: Player,
+  ): readonly NationalPoliticalCommandResult[] {
+    if (
+      this._nationalGovernance === null ||
+      this._players.get(observer.id()) !== observer ||
+      observer.type() !== PlayerType.Human
+    )
+      return [];
+    return this._nationalGovernance.politicalResultsFor(observer.id());
   }
 
   /** Same live reciprocal empire membership check used by E3 sight. */

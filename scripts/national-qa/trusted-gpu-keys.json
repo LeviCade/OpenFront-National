@@ -1,0 +1,5 @@
+{
+  "schema": 1,
+  "description": "Ed25519 SPKI PEM SHA-256 fingerprints enrolled by Conductor only after out-of-band Skybot host key verification",
+  "trustedEd25519PublicKeySha256": []
+}
