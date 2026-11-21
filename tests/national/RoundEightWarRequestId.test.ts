@@ -88,9 +88,7 @@ describe("E2 Round Eight WAR/peace authenticated correlation transport", () => {
     game.executeNextTick();
     const authoritative = (
       game as unknown as {
-        nationalWarCommandResults?: (
-          actor: Player,
-        ) => readonly {
+        nationalWarCommandResults?: (actor: Player) => readonly {
           requestId: string;
           accepted: boolean;
           commandKind: string;
@@ -139,9 +137,7 @@ describe("E2 Round Eight WAR/peace authenticated correlation transport", () => {
     restored.executeNextTick();
     const restoredResults = (
       restored as unknown as {
-        nationalWarCommandResults?: (
-          actor: Player,
-        ) => readonly {
+        nationalWarCommandResults?: (actor: Player) => readonly {
           requestId: string;
           accepted: boolean;
           commandKind: string;
