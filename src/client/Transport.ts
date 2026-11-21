@@ -1339,6 +1339,15 @@ export class Transport {
   }
 
   private sendIntent(intent: Intent) {
+    const cfg = this.lobbyConfig.gameStartInfo?.config;
+    // Host-only NATIONAL Private may accept NO gameplay command before E2
+    // authenticates this exact active socket/seat. This includes spawn and
+    // Attack, not just diplomacy; legacy Private/Solo remain unchanged.
+    if (
+      cfg?.gameType === GameType.Private &&
+      cfg.nationalMode === true &&
+      !this.nationalDiplomacyWireEnabled()
+    ) return;
     if (this.intentGate !== null && !this.intentGate(intent)) return;
     const msg = {
       type: "intent",
