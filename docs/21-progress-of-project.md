@@ -157,6 +157,48 @@ Original M0–M9 milestone weights unchanged. The lower Manager 38–43%
 development progress goal is met; NATIONAL game playability and
 public release are not accepted.
 
+## First Conductor's Fourth Class accepted development-source slice
+
+**38% → 40% (+2 verified).** Five engineers' source changes merged in
+[PR #75](https://github.com/LeviCade/OpenFront-National/pull/75) as
+`1eca57862becf1837c7b048b59a3c75c53ef4954`. Merged tree
+`f6713ca99eb1626adf748f1c329dc9039186fe33` is identical to
+reviewed candidate `f28d601e2fcb6211ff69cab6b9745c36c910edc6`.
+[Reviewed R6 #44934906713](https://github.com/LeviCade/OpenFront-National/actions/runs/44934906713)
+**SUCCESS**: seven source gates, 806 files, 11,668 tests, one
+preexisting skip. Exact merged-head
+[source CI #44939086253](https://github.com/LeviCade/OpenFront-National/actions/runs/44939086253)
+and [independent QA #44939086236](https://github.com/LeviCade/OpenFront-National/actions/runs/44939086236)
+also **SUCCESS**. WAR/MDA/CAS/replay passed on reviewed source.
+
+- **M5 +1:** real emperor-issued, revocable NATIONAL peace delegation
+  affects the original authoritative WAR ledger. A member lawfully
+  negotiates NATIONAL peace with a separately authenticated opponent,
+  cannot negotiate IMPERIAL peace, loses authorization on revocation
+  or third-member succession; forged authority is denied. E1's
+  three and E2's two combined GameRunner tests all executed, including
+  snapshot/replay. This is new military governance, not previously
+  scored accession or crown-transfer mechanics.
+- **M8 +1:** real `NationExecution` bot processes an actual
+  Game-owned rejected WAR outcome, records 180-tick cooldown,
+  chooses a different lawful observed target and attacks through
+  ordinary execution ticks; snapshot/replay. Not re-crediting
+  Round Ten's basic successful bot WAR and attack.
+
+**M7 +0:** candidate-to-emperor invitation consumption remains broken
+in the E4 human interface, identified by E3's later cross-owner test.
+**M9 +0:** no accepted physical NATIONAL GPU game sequence, no
+legitimate trusted-host shared three-human NATIONAL match and no
+independent signed host/cleanup witness. Public release remains
+blocked, including missing music and asset rights.
+
+[Follow-on six-engineer PR #76](https://github.com/LeviCade/OpenFront-National/pull/76)
+is draft and unscored.
+
+**Accounting: 16 opening + 5 R4 + 6 R8 + 6 R9 + 5 R10 + 2
+Fourth Class = 40%.** Milestone weights remain unchanged; the
+Conductor Class grade is a separate 0–4 measure.
+
 ## Scoring controls
 
 - Each new point requires identifiable **real engine or browser**
@@ -166,7 +208,7 @@ public release are not accepted.
   weights are ceilings for new milestone allocation; the prior
   historical 16 remains an unallocated opening estimate rather than
   retroactively invented milestone achievements.
-- **Current: 38%. Round Ten 38–43% target met at its lower bound.** Further points require
+- **Current: 40% verified.** Further points require
   additional accepted integration scenarios and the same CI discipline.
 - Never treat honest-client Solo Web Worker filtering as hostile
   client fog security. A trusted-host server is a separate release gate.
