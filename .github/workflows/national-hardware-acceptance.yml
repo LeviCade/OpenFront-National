@@ -1,4 +1,4 @@
-name: NATIONAL — trusted Skybot GPU gameplay acceptance
+name: NATIONAL — strictly signed Skybot GPU gameplay acceptance
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ concurrency:
 jobs:
   gpu-browser:
     name: Four real game scenarios on one trusted GPU guest
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'LeviCade/OpenFront-National' && github.ref == 'refs/heads/main'
     runs-on: skybot-ci-gpu
     timeout-minutes: 55
     env:
@@ -26,12 +26,14 @@ jobs:
       NATIONAL_CHROME_ANGLE_BACKEND: gl-egl
       NATIONAL_GPU_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
       NATIONAL_GPU_RUNNER_SCALE_SET: skybot-ci-gpu
+      EGL_PLATFORM: surfaceless
       CHROME_BIN: /opt/skybot-gpu-runtime/chrome-headless-shell-linux64/chrome-headless-shell
     steps:
       - name: Confirm authorized default-branch dispatch
         shell: bash
         run: |
           set -euo pipefail
+          test "$GITHUB_REPOSITORY" = LeviCade/OpenFront-National
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF" = refs/heads/main
           [[ "$NATIONAL_GPU_CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
@@ -58,10 +60,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p national-qa-artifacts/gpu
-          BASE_SHA=42e2b5d0a6372737b78178e5be49da7b76383d0a
+          BASE_SHA=0e52b5eeb7490ce83898f2a9696732c7e7d6b21c
           git fetch --no-tags origin \
-            '+refs/heads/stage3/integration-20261115:refs/remotes/origin/stage3/integration-20261115' \
-            '+refs/heads/stage3/round6-combined-acceptance-20261116:refs/remotes/origin/stage3/round6-combined-acceptance-20261116'
+            '+refs/heads/stage3/integration-20261115:refs/remotes/origin/stage3/integration-20261115'
+          if git ls-remote --exit-code --heads origin stage3/r10-reviewed-gpu-20261121 >/dev/null; then
+            git fetch --no-tags origin \
+              '+refs/heads/stage3/r10-reviewed-gpu-20261121:refs/remotes/origin/stage3/r10-reviewed-gpu-20261121'
+          fi
           git cat-file -e "$NATIONAL_GPU_CANDIDATE_SHA^{commit}"
           git merge-base --is-ancestor "$BASE_SHA" "$NATIONAL_GPU_CANDIDATE_SHA" || {
             echo 'REFUSED: candidate predates/diverges from Conductor-approved integration base' >&2
@@ -70,7 +75,7 @@ jobs:
           valid=0
           for staging in \
             refs/remotes/origin/stage3/integration-20261115 \
-            refs/remotes/origin/stage3/round6-combined-acceptance-20261116; do
+            refs/remotes/origin/stage3/r10-reviewed-gpu-20261121; do
             if git show-ref --verify --quiet "$staging" &&
                git merge-base --is-ancestor "$NATIONAL_GPU_CANDIDATE_SHA" "$staging"; then
               valid=1
@@ -85,6 +90,10 @@ jobs:
           git checkout --detach "$NATIONAL_GPU_CANDIDATE_SHA"
           test "$(git rev-parse HEAD)" = "$NATIONAL_GPU_CANDIDATE_SHA"
           printf '%s\n' "$NATIONAL_GPU_CANDIDATE_SHA" > national-qa-artifacts/gpu/sha.txt
+          test -f scripts/national-gpu-ci/run-four-modes.sh || {
+            echo 'BLOCKED: candidate missing E6 four-mode runner' >&2
+            exit 1
+          }
           test -f scripts/national-gpu-ci/sanitize-browser-evidence.mjs || {
             echo 'BLOCKED: candidate lacks reviewed E6 evidence sanitizer' >&2
             exit 1
@@ -160,52 +169,16 @@ jobs:
           test "$(npm --version)" = 12.1.0
           npm run inst
 
-      - name: Run all four real browser scenarios independently
+      - name: Run four independent E5 scenarios / release-signed lane
         id: scenarios
         shell: bash
-        env:
-          EGL_PLATFORM: surfaceless
-        run: |
-          set -uo pipefail
-          mkdir -p national-qa-artifacts/gpu
-          failed=0
-          : > national-qa-artifacts/gpu/scenarios.jsonl
-          for scenario in national-desktop national-mobile legacy-desktop legacy-mobile; do
-            args=()
-            case "$scenario" in
-              national-mobile) args=(--mobile);;
-              legacy-desktop) args=(--legacy);;
-              legacy-mobile) args=(--mobile --legacy);;
-            esac
-            echo "=== RUN $scenario at $NATIONAL_GPU_CANDIDATE_SHA ==="
-            GITHUB_SHA="$NATIONAL_GPU_CANDIDATE_SHA" node scripts/national-qa/browser-gameplay.mjs "${args[@]}" \
-              > "national-qa-artifacts/gpu/$scenario.log" 2>&1
-            status=$?
-            SCENARIO="$scenario" STATUS="$status" node -e '
-              const fs = require("node:fs");
-              fs.appendFileSync("national-qa-artifacts/gpu/scenarios.jsonl",
-                JSON.stringify({scenario:process.env.SCENARIO,
-                  result:Number(process.env.STATUS)===0?"PASS":"FAIL",
-                  exitCode:Number(process.env.STATUS)})+"\n");
-            '
-            echo "$scenario: exit $status"
-            # Do not print or publish raw process logs/console/worker data.
-            if [[ "$status" -ne 0 ]]; then failed=1; fi
-          done
-          if ! node scripts/national-gpu-ci/sanitize-browser-evidence.mjs; then
-            echo 'BLOCKED: public evidence missing, untrusted or mismatched' >&2
-            failed=1
-          fi
-          if [[ "$failed" -ne 0 ]]; then
-            echo 'BLOCKED: at least one required real gameplay scenario failed' >&2
-            exit 1
-          fi
+        run: bash scripts/national-gpu-ci/run-four-modes.sh release
 
       - name: Upload bounded GPU evidence even on failure
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: national-skybot-gpu-${{ inputs.candidate_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: national-qa-artifacts/gpu/public/
+          path: national-qa-artifacts/gpu/public/release/
           if-no-files-found: warn
           retention-days: 14
