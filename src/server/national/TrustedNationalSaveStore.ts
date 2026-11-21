@@ -239,7 +239,7 @@ export function executeTrustedNationalWarCommand<
   ) => AuthenticatedNationalOwner | null,
   command: Command,
 ): Outcome {
-  const actor = boundNationalWarActor(game, gameID, session, resolveSession);
+  const actor = boundNationalWarActor<Actor>(game, gameID, session, resolveSession);
   return game.performNationalWarCommandWithOutcome(actor, command);
 }
 
@@ -257,6 +257,6 @@ export function readTrustedNationalWarOutcomes<
     gameID: string,
   ) => AuthenticatedNationalOwner | null,
 ): readonly Outcome[] {
-  const actor = boundNationalWarActor(game, gameID, session, resolveSession);
+  const actor = boundNationalWarActor<Actor>(game, gameID, session, resolveSession);
   return game.nationalWarCommandResults(actor);
 }
