@@ -344,12 +344,24 @@ export class NationalWarExecution implements Execution {
 
     // No console.warn suppression: unexpected authority failures are errors,
     // never implicit acceptance. The new E1 result port handles rule denials.
-    port.performNationalWarCommand(
-      this.actor,
-      this.requestId === null
-        ? command
-        : { ...command, requestId: this.requestId },
-    );
+    try {
+      port.performNationalWarCommand(
+        this.actor,
+        this.requestId === null
+          ? command
+          : { ...command, requestId: this.requestId },
+      );
+    } catch (error) {
+      // Before E1's authoritative receipt port is merged, an ordinary
+      // same-side peace rejection must not crash the Game tick.
+      // Never fabricate an acceptance or swallow unexpected engine errors.
+      if (
+        command.kind === "accept-peace" &&
+        error instanceof Error &&
+        error.message === "other belligerent must accept peace"
+      ) return;
+      throw error;
+    }
   }
 
   snapshot(w: SnapshotWriter): ExecRecord {
