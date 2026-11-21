@@ -132,7 +132,8 @@ async function setup(
     nationalFoundingOutcome: () => null,
     nationalDiplomacyResults: () => state.diplomacyResults,
     nationalConflicts: () => state.conflicts,
-    nationalConflictsTick: () => state.conflicts ? state.conflictTick ?? state.tick : null,
+    nationalConflictsTick: () =>
+      state.conflicts ? (state.conflictTick ?? state.tick) : null,
     ticks: () => state.tick,
     isSpectator: () => state.spectator,
     inSpawnPhase: () => !state.spawned,
@@ -262,16 +263,18 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       NationalProposePeaceIntentSchema.safeParse(intents()[0]).success,
     ).toBe(true);
     state.tick = 11;
-    state.diplomacyResults = [{
-      type: "national_propose_peace",
-      actorId: "nation-a",
-      recipientId: "nation-a",
-      requestId: intents()[0].requestId,
-      sequence: 7,
-      tick: 11,
-      accepted: false,
-      reason: "political-rule",
-    }];
+    state.diplomacyResults = [
+      {
+        type: "national_propose_peace",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        requestId: intents()[0].requestId,
+        sequence: 7,
+        tick: 11,
+        accepted: false,
+        reason: "political-rule",
+      },
+    ];
     panel.refresh();
     await panel.updateComplete;
     await enter(panel, "#national-peace-motion-id", "national-11-1-5");
@@ -286,7 +289,9 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       NationalAcceptPeaceIntentSchema.safeParse(intents()[1]).success,
     ).toBe(true);
     expect(panel.textContent).not.toContain("Peace accepted");
-    expect(panel.textContent).toMatch(/no success is confirmed|No completed action is confirmed/i);
+    expect(panel.textContent).toMatch(
+      /no success is confirmed|No completed action is confirmed/i,
+    );
   });
 
   it("fails closed for replay, eliminated players, spectators and a non-emperor", async () => {
@@ -427,11 +432,36 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     const valid = projection([canonicalWar], [foreignOffer]);
     expect(readNationalConflicts(valid, "nation-a")).toEqual(valid);
     expect(readNationalConflicts(valid, "nation-b")).toBeNull();
-    expect(readNationalConflicts({ ...valid, version: 2 }, "nation-a")).toBeNull();
-    expect(readNationalConflicts({ ...valid, layers: [canonicalWar, canonicalWar] }, "nation-a")).toBeNull();
-    expect(readNationalConflicts({ ...valid, motions: [{ ...foreignOffer, layerId: "missing" }] }, "nation-a")).toBeNull();
-    expect(readNationalConflicts({ ...valid, layers: [{ ...canonicalWar, endedTick: -1 }] }, "nation-a")).toBeNull();
-    expect(readNationalConflicts({ ...valid, motions: [{ ...foreignOffer, acceptedTick: 11, acceptedBy: null }] }, "nation-a")).toBeNull();
+    expect(
+      readNationalConflicts({ ...valid, version: 2 }, "nation-a"),
+    ).toBeNull();
+    expect(
+      readNationalConflicts(
+        { ...valid, layers: [canonicalWar, canonicalWar] },
+        "nation-a",
+      ),
+    ).toBeNull();
+    expect(
+      readNationalConflicts(
+        { ...valid, motions: [{ ...foreignOffer, layerId: "missing" }] },
+        "nation-a",
+      ),
+    ).toBeNull();
+    expect(
+      readNationalConflicts(
+        { ...valid, layers: [{ ...canonicalWar, endedTick: -1 }] },
+        "nation-a",
+      ),
+    ).toBeNull();
+    expect(
+      readNationalConflicts(
+        {
+          ...valid,
+          motions: [{ ...foreignOffer, acceptedTick: 11, acceptedBy: null }],
+        },
+        "nation-a",
+      ),
+    ).toBeNull();
   });
 
   it("confirms real national WAR only after a matching current authoritative layer, and revokes stale state", async () => {
@@ -440,17 +470,21 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     panel.querySelector<HTMLButtonElement>("#national-declare-war")!.click();
     const requestId = intents()[0].requestId as string;
     state.tick = 11;
-    state.diplomacyResults = [{
-      type: "national_declare_war",
-      actorId: "nation-a",
-      recipientId: "nation-a",
-      requestId,
-      sequence: 9,
-      tick: 11,
-      accepted: true,
-      warId: "war-11",
-    }];
-    state.conflicts = projection([{ ...canonicalWar, startedTick: 11, declaredBy: "nation-b" }]);
+    state.diplomacyResults = [
+      {
+        type: "national_declare_war",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        requestId,
+        sequence: 9,
+        tick: 11,
+        accepted: true,
+        warId: "war-11",
+      },
+    ];
+    state.conflicts = projection([
+      { ...canonicalWar, startedTick: 11, declaredBy: "nation-b" },
+    ]);
     panel.refresh();
     await panel.updateComplete;
     expect(panel.textContent).not.toContain("War confirmed by game");
@@ -458,11 +492,15 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     state.conflicts = projection([{ ...canonicalWar, startedTick: 11 }]);
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.textContent).toContain("War confirmed by game: war-11 is active");
+    expect(panel.textContent).toContain(
+      "War confirmed by game: war-11 is active",
+    );
     expect(panel.textContent).toContain("WAR war-11");
 
     state.tick = 12;
-    state.conflicts = projection([{ ...canonicalWar, startedTick: 11, endedTick: 12 }]);
+    state.conflicts = projection([
+      { ...canonicalWar, startedTick: 11, endedTick: 12 },
+    ]);
     panel.refresh();
     await panel.updateComplete;
     expect(panel.textContent).toContain("has since changed");
@@ -474,37 +512,58 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     state.conflicts = projection();
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.querySelector("#national-peace-war-id")?.tagName).toBe("SELECT");
+    expect(panel.querySelector("#national-peace-war-id")?.tagName).toBe(
+      "SELECT",
+    );
     await choose(panel, "#national-peace-war-id", "war-11");
     panel.querySelector<HTMLButtonElement>("#national-propose-peace")!.click();
     expect(intents()).toHaveLength(1);
     expect(intents()[0].warId).toBe("war-11");
     state.tick = 11;
-    state.diplomacyResults = [{
-      type: "national_propose_peace",
-      actorId: "nation-a",
-      recipientId: "nation-a",
-      requestId: intents()[0].requestId,
-      sequence: 10,
-      tick: 11,
-      accepted: true,
-      warId: "war-11",
-      motionId: "motion-11",
-    }];
-    state.conflicts = projection([canonicalWar], [{
-      id: "motion-11", layerId: "war-11", proposedBy: "nation-a",
-      proposingSide: 0, proposedTick: 11, acceptedTick: null, acceptedBy: null,
-    }]);
+    state.diplomacyResults = [
+      {
+        type: "national_propose_peace",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        requestId: intents()[0].requestId,
+        sequence: 10,
+        tick: 11,
+        accepted: true,
+        warId: "war-11",
+        motionId: "motion-11",
+      },
+    ];
+    state.conflicts = projection(
+      [canonicalWar],
+      [
+        {
+          id: "motion-11",
+          layerId: "war-11",
+          proposedBy: "nation-a",
+          proposingSide: 0,
+          proposedTick: 11,
+          acceptedTick: null,
+          acceptedBy: null,
+        },
+      ],
+    );
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.textContent).toContain("Peace proposal confirmed by game: motion motion-11");
+    expect(panel.textContent).toContain(
+      "Peace proposal confirmed by game: motion motion-11",
+    );
 
     const late = await setup();
     late.state.conflicts = projection([{ ...canonicalWar, endedTick: 11 }]);
     late.panel.refresh();
     await late.panel.updateComplete;
-    expect(late.panel.querySelector<HTMLButtonElement>("#national-propose-peace")?.disabled ?? true).toBe(true);
-    expect(late.panel.querySelector("#national-peace-war-id option[value=\"war-11\"]")).toBeNull();
+    expect(
+      late.panel.querySelector<HTMLButtonElement>("#national-propose-peace")
+        ?.disabled ?? true,
+    ).toBe(true);
+    expect(
+      late.panel.querySelector('#national-peace-war-id option[value="war-11"]'),
+    ).toBeNull();
   });
 
   it("shows a pending opponent motion, then confirms peace only after canonical cessation", async () => {
@@ -512,29 +571,40 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     state.conflicts = projection([canonicalWar], [foreignOffer]);
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.querySelector("#national-peace-motion-id")?.tagName).toBe("SELECT");
+    expect(panel.querySelector("#national-peace-motion-id")?.tagName).toBe(
+      "SELECT",
+    );
     await choose(panel, "#national-peace-motion-id", "motion-12");
     panel.querySelector<HTMLButtonElement>("#national-accept-peace")!.click();
     expect(intents()[0].motionId).toBe("motion-12");
     state.tick = 11;
-    state.diplomacyResults = [{
-      type: "national_accept_peace",
-      actorId: "nation-a",
-      recipientId: "nation-a",
-      requestId: intents()[0].requestId,
-      sequence: 12,
-      tick: 11,
-      accepted: true,
-      warId: "war-11",
-      motionId: "motion-12",
-    }];
+    state.diplomacyResults = [
+      {
+        type: "national_accept_peace",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        requestId: intents()[0].requestId,
+        sequence: 12,
+        tick: 11,
+        accepted: true,
+        warId: "war-11",
+        motionId: "motion-12",
+      },
+    ];
     panel.refresh();
     await panel.updateComplete;
     expect(panel.textContent).not.toContain("Peace accepted by game");
 
-    state.conflicts = projection([{ ...canonicalWar, endedTick: 11 }], [{
-      ...foreignOffer, acceptedTick: 11, acceptedBy: "nation-a",
-    }]);
+    state.conflicts = projection(
+      [{ ...canonicalWar, endedTick: 11 }],
+      [
+        {
+          ...foreignOffer,
+          acceptedTick: 11,
+          acceptedBy: "nation-a",
+        },
+      ],
+    );
     panel.refresh();
     await panel.updateComplete;
     expect(panel.textContent).toContain("Peace accepted by game");
@@ -548,18 +618,38 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     state.tick = 11;
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.querySelector<HTMLButtonElement>("#national-declare-war")!.disabled).toBe(true);
-    expect(panel.querySelector<HTMLButtonElement>("#national-propose-peace")!.disabled).toBe(true);
+    expect(
+      panel.querySelector<HTMLButtonElement>("#national-declare-war")!.disabled,
+    ).toBe(true);
+    expect(
+      panel.querySelector<HTMLButtonElement>("#national-propose-peace")!
+        .disabled,
+    ).toBe(true);
     expect(intents()).toHaveLength(1);
   });
 
   it("rejects future-dated WAR and motion packets, and waits for a same-tick authoritative view", async () => {
     const futureWar = { ...canonicalWar, startedTick: 11 };
-    expect(readNationalConflicts(projection([futureWar]), "nation-a", 10)).toBeNull();
+    expect(
+      readNationalConflicts(projection([futureWar]), "nation-a", 10),
+    ).toBeNull();
     expect(readNationalConflicts(projection(), "nation-a", 10)).not.toBeNull();
-    expect(readNationalConflicts(projection([canonicalWar], [{
-      ...foreignOffer, acceptedTick: 11, acceptedBy: "nation-a",
-    }]), "nation-a", 10)).toBeNull();
+    expect(
+      readNationalConflicts(
+        projection(
+          [canonicalWar],
+          [
+            {
+              ...foreignOffer,
+              acceptedTick: 11,
+              acceptedBy: "nation-a",
+            },
+          ],
+        ),
+        "nation-a",
+        10,
+      ),
+    ).toBeNull();
 
     const { panel, state } = await setup();
     await choose(panel, "#national-war-target", "nation-b");
@@ -567,16 +657,18 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     state.tick = 11;
     state.conflictTick = 10;
     state.conflicts = projection([futureWar]);
-    state.diplomacyResults = [{
-      type: "national_declare_war",
-      actorId: "nation-a",
-      recipientId: "nation-a",
-      requestId: intents()[0].requestId,
-      sequence: 30,
-      tick: 11,
-      accepted: true,
-      warId: "war-11",
-    }];
+    state.diplomacyResults = [
+      {
+        type: "national_declare_war",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        requestId: intents()[0].requestId,
+        sequence: 30,
+        tick: 11,
+        accepted: true,
+        warId: "war-11",
+      },
+    ];
     panel.refresh();
     await panel.updateComplete;
     expect(panel.textContent).not.toContain("War confirmed by game");
@@ -595,19 +687,31 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     state.conflicts = projection([{ ...canonicalWar, startedTick: 11 }]);
     state.diplomacyResults = [
       {
-        type: "national_declare_war", actorId: "nation-a",
-        recipientId: "nation-a", requestId, sequence: 40,
-        tick: 11, accepted: true, warId: "war-11",
+        type: "national_declare_war",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        requestId,
+        sequence: 40,
+        tick: 11,
+        accepted: true,
+        warId: "war-11",
       },
       {
-        type: "national_declare_war", actorId: "nation-a",
-        recipientId: "nation-a", requestId, sequence: 41,
-        tick: 11, accepted: false, reason: "political-rule",
+        type: "national_declare_war",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        requestId,
+        sequence: 41,
+        tick: 11,
+        accepted: false,
+        reason: "political-rule",
       },
     ];
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.textContent).toContain("Conflicting authenticated diplomacy receipts");
+    expect(panel.textContent).toContain(
+      "Conflicting authenticated diplomacy receipts",
+    );
     expect(panel.textContent).not.toContain("War confirmed by game");
   });
 
