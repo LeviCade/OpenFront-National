@@ -27,7 +27,7 @@ jobs:
           set -euo pipefail
           npm install --global --ignore-scripts npm@12.1.0
           npm run inst
-          npm exec -- oxfmt --write tests/national/RoundEightWarRequestId.test.ts
+          npm exec -- oxfmt --write tests/national/RoundEightWarRequestId.test.ts .github/workflows/r9-one-time-final-format.yml
           npm run format:check
       - run: |
           set -euo pipefail
