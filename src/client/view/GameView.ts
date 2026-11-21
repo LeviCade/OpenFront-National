@@ -97,10 +97,20 @@ export class GameView implements GameLike {
   private _nationalPoliticsTick: number | null = null;
   private _nationalAccessionOffers: NationalAccessionView | null = null;
   private _nationalPoliticalResults: readonly NationalPoliticalResult[] = [];
+  private _trustedProjectionReady = false;
 
   /** Strictly a view of the E3 recipient packet, NEVER a browser GameRunner. */
   public isTrustedNationalProjection(): boolean {
     return this._trustedNationalProjection;
+  }
+
+  /** True only after a matching E2 seat receives a validated E3 frame. */
+  public trustedProjectionReady(): boolean {
+    return this._trustedNationalProjection && this._trustedProjectionReady;
+  }
+
+  public markTrustedProjectionReady(): void {
+    if (this._trustedNationalProjection) this._trustedProjectionReady = true;
   }
 
   /**
@@ -110,6 +120,7 @@ export class GameView implements GameLike {
    */
   public resetTrustedProjectionSight(): void {
     if (!this._trustedNationalProjection) return;
+    this._trustedProjectionReady = false;
     this._map.tileStateBuffer().fill(0);
     this._units.clear();
     this._unitStates.clear();
