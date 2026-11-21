@@ -1,6 +1,15 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import {
+  verifyDistinctLiveSessions,
+  verifyPrivateInvitation,
+  reconcilePoliticalReceipt,
+  corroboratePublicEmpire,
+  sanitizePacketEvidence,
+  sanitizeAcceptanceEvent,
+  safeFailureCode,
+} from "../../../scripts/national-qa/browser-r11-political-verdict.mjs";
+import {
   acceptRadialTarget,
   classifyFoundingEvidence,
   describePanel,
@@ -219,5 +228,161 @@ describe("R11 E5 genuine radial and peace authority gates", () => {
         offeredMotion: { ...motion, proposedBy: "someone-else" },
       }).accepted,
     ).toBe(false);
+  });
+});
+
+describe("R11 E5 independent two-principal political acceptance", () => {
+  const empireId = "R11_Browser_QA";
+  const founderId = "legit-a";
+  const candidateId = "legit-b";
+  const gameId = "auth-real-game";
+  const founder = {
+    gameId, actorId: founderId, spectator: false, spawned: true,
+    ownedTiles: 42, tick: 120, politicsTick: 120,
+    empires: [{id:empireId,leaderId:founderId,memberIds:[founderId]}],
+  };
+  const candidate = {
+    gameId, actorId: candidateId, spectator: false, spawned: true,
+    ownedTiles: 31, tick: 120, politicsTick: 120,
+    empires: founder.empires,
+  };
+  const receipt = (type, actorId, targetId, accepted = true) => ({
+    type, actorId, recipientId: actorId, commandTargetId: empireId,
+    requestId: "np_" + "2".repeat(32),
+    sequence: 17, tick: 119, accepted,
+    reason: accepted ? "accepted" : "political-rule",
+  });
+  const args = (type, actorId, targetId, members = [founderId]) => ({
+    type, actorId, targetId, empireId,
+    requestId: "np_" + "2".repeat(32),
+    issuedTick: 118, currentTick: 120, politicsTick: 120,
+    results: [receipt(type, actorId, targetId)],
+    empires: [{id:empireId,leaderId:founderId,memberIds:members}],
+  });
+
+  it("requires independently admitted distinct spawned players in the SAME game", () => {
+    expect(verifyDistinctLiveSessions(founder,candidate,candidateId).accepted).toBe(true);
+    expect(verifyDistinctLiveSessions(founder,{...candidate,actorId:founderId},candidateId).accepted).toBe(false);
+    expect(verifyDistinctLiveSessions(founder,{...candidate,gameId:"another-game"},candidateId).accepted).toBe(false);
+    expect(verifyDistinctLiveSessions(founder,{...candidate,spectator:true},candidateId).accepted).toBe(false);
+    expect(verifyDistinctLiveSessions(founder,{...candidate,spawned:false},candidateId).accepted).toBe(false);
+    expect(verifyDistinctLiveSessions(founder,{...candidate,ownedTiles:0},candidateId).accepted).toBe(false);
+    expect(verifyDistinctLiveSessions(founder,{...candidate,actorId:"unauthorized"},candidateId).accepted).toBe(false);
+  });
+
+  it("never conflates accepted OFFER receipt with the recipient-only private invitation", () => {
+    const offer = {empireId,candidateId,recipientId:candidateId,proposerId:founderId};
+    const valid = {
+      founderId,recipientId:candidateId,empireId,recipientTick:120,
+      founderView:{version:1,recipientId:founderId,offers:[]},
+      recipientView:{version:1,recipientId:candidateId,offers:[offer]},
+    };
+    expect(verifyPrivateInvitation(valid).accepted).toBe(true);
+    expect(verifyPrivateInvitation({...valid,recipientView:null}).accepted).toBe(false);
+    expect(verifyPrivateInvitation({...valid,recipientView:{...valid.recipientView,recipientId:founderId}}).accepted).toBe(false);
+    expect(verifyPrivateInvitation({...valid,recipientView:{...valid.recipientView,offers:[{...offer,candidateId:"other"}]}}).accepted).toBe(false);
+    expect(verifyPrivateInvitation({...valid,recipientView:{...valid.recipientView,offers:[offer,offer]}}).accepted).toBe(false);
+    expect(verifyPrivateInvitation({...valid,founderView:{...valid.founderView,offers:[offer]}}).reason)
+      .toBe("POLITICAL_PRIVATE_INVITATION_LEAKED_TO_SENDER");
+  });
+
+  it("correlates real founder OFFER receipt but does not certify invitation delivery from that alone", () => {
+    const actual = reconcilePoliticalReceipt(args("national_offer_empire",founderId,candidateId));
+    expect(actual).toMatchObject({accepted:true,receiptTick:119});
+    expect(reconcilePoliticalReceipt({
+      ...args("national_offer_empire",founderId,candidateId),
+      results:[],
+    }).reason).toBe("POLITICAL_AUTHENTIC_RECEIPT_ABSENT");
+    expect(reconcilePoliticalReceipt({
+      ...args("national_offer_empire",founderId,candidateId),
+      results:[{...receipt("national_offer_empire",founderId,candidateId),recipientId:candidateId}],
+    }).reason).toBe("POLITICAL_FORGED_OR_FOREIGN_RECEIPT");
+  });
+
+  it("requires authentic recipient ACCEPT receipt AND fresh two-view membership", () => {
+    const before = args("national_accept_empire",candidateId,candidateId);
+    expect(reconcilePoliticalReceipt(before).accepted).toBe(false);
+    const after = {
+      ...before,
+      empires:[{id:empireId,leaderId:founderId,memberIds:[founderId,candidateId]}],
+    };
+    expect(reconcilePoliticalReceipt(after).accepted).toBe(true);
+    const observed = {
+      emperor:{...founder,empires:after.empires},recipient:{...candidate,empires:after.empires},
+      empireId,leaderId:founderId,memberIds:[founderId,candidateId],minTick:119,
+    };
+    expect(corroboratePublicEmpire(observed).accepted).toBe(true);
+    expect(corroboratePublicEmpire({...observed,recipient:{...candidate,politicsTick:118}}).accepted).toBe(false);
+    expect(corroboratePublicEmpire({...observed,recipient:{...candidate,empires:founder.empires}}).accepted).toBe(false);
+  });
+
+  it("only accepts an actual crown receipt with member successor and both fresh leader views", () => {
+    const change = {
+      ...args("national_transfer_crown",founderId,candidateId,[founderId,candidateId]),
+      empires:[{id:empireId,leaderId:candidateId,memberIds:[founderId,candidateId]}],
+    };
+    expect(reconcilePoliticalReceipt(change).accepted).toBe(true);
+    expect(reconcilePoliticalReceipt({...change,empires:founder.empires}).accepted).toBe(false);
+    expect(reconcilePoliticalReceipt({...change,results:[
+      change.results[0],{...change.results[0],accepted:false,reason:"political-rule",sequence:18},
+    ]}).reason).toBe("POLITICAL_CONTRADICTORY_RECEIPTS");
+    expect(reconcilePoliticalReceipt({...change,results:[{...change.results[0],tick:117}]}).accepted).toBe(false);
+    expect(reconcilePoliticalReceipt({...change,results:[{...change.results[0],requestId:"np_"+"f".repeat(32)}]}).accepted).toBe(false);
+  });
+
+  it("sanitizes all foreign receipts, candidate details and private packets from external evidence", () => {
+    const evidence = sanitizePacketEvidence([{
+      tick:120,sequence:2,hasTerritoryDelta:true,
+      publicPolitics:{empires:[{id:"SENSITIVE_EMPIRE"}]},
+      accessionOffers:{offers:[{proposerId:"PRIVATE_PROPOSER"}]},
+      commandResults:[{requestId:"PRIVATE_TOKEN",actorId:"PRIVATE_ACTOR"}],
+      rawFog:{canary:"PRIVATE_FOG"},
+    }]);
+    expect(evidence).toEqual([{
+      tick:120,sequence:2,hasTerritoryDelta:true,
+      hasPublicPolitics:true,hasCurrentConflicts:false,
+      hasRecipientAccessionView:true,commandResultCount:1,
+      hasAuthoritativeAttackDelta:false,hasAuthoritativeMotion:false,
+    }]);
+    const flattened = JSON.stringify(evidence);
+    for(const secret of ["SENSITIVE_EMPIRE","PRIVATE_PROPOSER","PRIVATE_TOKEN","PRIVATE_ACTOR","PRIVATE_FOG"]) {
+      expect(flattened).not.toContain(secret);
+    }
+  });
+});
+
+describe("R11 E5 sanitized physical-browser evidence",()=>{
+  it("never prints raw private invitations, request nonces, URLs or UI body text",()=>{
+    const secret="PRIVATE_RECIPIENT_CANARY_TOKEN";
+    const result=sanitizeAcceptanceEvent({
+      name:"stage-failed",stage:"recipient-invitation",
+      elapsedMs:1250,
+      error:"Error: POLITICAL_PRIVATE_INVITATION_NOT_DELIVERED_OWNER_E3 "+secret,
+      requestId:secret,recipientId:secret,targetId:secret,
+      text:"private human chat "+secret,
+      observed:{body:secret},workerPackets:[{secret}],
+    });
+    const flat=JSON.stringify(result);
+    expect(result.name).toBe("stage-failed");
+    expect(result.stage).toBe("recipient-invitation");
+    expect(result.error).toContain("POLITICAL_PRIVATE_INVITATION");
+    expect(flat).not.toContain(secret);
+    expect(flat).not.toContain("workerPackets");
+    expect(flat).not.toContain("requestId");
+  });
+  it("retains actual screenshot labels, stage identity and unsigned GPU status",()=>{
+    expect(sanitizeAcceptanceEvent({
+      name:"screenshot",label:"political-crown-former-emperor-revoked",
+      packetCount:12,requestId:"np_"+"f".repeat(32),
+    })).toEqual({
+      name:"screenshot",label:"political-crown-former-emperor-revoked",
+      packetCount:12,
+    });
+    expect(sanitizeAcceptanceEvent({
+      name:"strict-hardware-renderer-attestation",accepted:false,
+    })).toEqual({name:"strict-hardware-renderer-attestation",accepted:false});
+    expect(safeFailureCode("random personal PRIVATE CANARY")).toBe(
+      "UNCLASSIFIED_ACCEPTANCE_FAILURE",
+    );
   });
 });

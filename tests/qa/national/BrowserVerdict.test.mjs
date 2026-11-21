@@ -321,6 +321,10 @@ describe("R11 E5 four-mode screenshot fail-closed gate", () => {
               "spawn",
               "found-empire",
               "rejected-founding",
+              "offer-accession",
+              "recipient-invitation",
+              "recipient-acceptance",
+              "transfer-crown",
               "declare-war",
               "map-assault",
               "combat-impact",
@@ -342,5 +346,85 @@ describe("R11 E5 four-mode screenshot fail-closed gate", () => {
       expect(report.gameplayPassed).toBe(false);
       expect(report.path).toBe(config.report);
     }
+  });
+});
+
+describe("R11 E5 combined political+WAR four-mode verdict cannot fake success", () => {
+  const complete = [
+    "home","solo","national-mode","start","spawn","found-empire",
+    "rejected-founding","offer-accession","recipient-invitation",
+    "recipient-acceptance","transfer-crown","declare-war","map-assault",
+    "combat-impact","propose-peace","accept-peace",
+  ].map(stage=>({name:"stage-complete",stage}));
+  const screenshots = [
+    "home","solo-modal","game-hud","spawn-unobstructed-map",
+    "player-spawned","founding-request","confirmed-empire",
+    "political-offer-accepted","political-member-joined-founders-view",
+    "political-crown-former-emperor-revoked","declared-war-live",
+    "radial-attack-enabled","map-assault-confirmed",
+    "combat-impact-canonical","peace-motion-proposed","peace-accepted-ended-war",
+  ].map(label=>({name:"screenshot",label}));
+  const proofs = [
+    {name:"political-recipient-private-invitation",recipientOnly:true,secondAuthenticatedSession:true,originatingOfferReceiptMatched:true},
+    {name:"political-accept-real-recipient-click",differentPrincipal:true,realCdpInput:true},
+    {name:"political-membership-confirmed-by-both",recipientAccepted:true,founderRosterAgrees:true},
+    {name:"political-crown-confirmed-by-both",formerEmperorRevoked:true,successorIsDifferentPrincipal:true},
+    {name:"peace-real-opponent-click",differentPrincipal:true,realCdpInput:true},
+    {name:"authoritative-peace-accepted",differentPrincipal:true,warEndedInBothViews:true},
+  ];
+  it("fails if an apparent full UI flow never proved independently authenticated players",()=>{
+    for(const mode of ["national-desktop","national-mobile"]) {
+      const base = {exactSource:"a".repeat(40),events:[...complete,...screenshots]};
+      const fail=summarizeBrowserReport(base,0,mode);
+      expect(fail.missingStages).toEqual([]);
+      expect(fail.missingScreenshots).toEqual([]);
+      expect(fail.failureClass).toBe("AUTHENTIC_MULTI_PRINCIPAL_EVIDENCE_MISSING");
+      expect(fail.authenticMultiPrincipalEvidence).toBe(false);
+      expect(fail.gameplayPassed).toBe(false);
+    }
+  });
+  it("rejects each missing / forged principal, private invitation and bilateral roster proof",()=>{
+    for(const [index,record] of proofs.entries()) {
+      for(const variation of [
+        proofs.filter((_,i)=>i!==index),
+        proofs.map((r,i)=>i===index?{...r,...Object.fromEntries(
+          Object.entries(record).filter(([k,v])=>k!=="name"&&v===true)
+            .map(([k])=>[k,false]),
+        )}:r),
+      ]) {
+        const result=summarizeBrowserReport({
+          exactSource:"a".repeat(40),events:[...complete,...screenshots,...variation],
+        },0,"national-mobile");
+        expect(result.authenticMultiPrincipalEvidence).toBe(false);
+        expect(result.gameplayPassed).toBe(false);
+      }
+    }
+  });
+  it("reports complete stage + screenshots + distinct principal markers separately from signed hardware",()=>{
+    const result=summarizeBrowserReport({
+      exactSource:"b".repeat(40),events:[...complete,...screenshots,...proofs],
+    },0,"national-desktop");
+    expect(result.authenticMultiPrincipalEvidence).toBe(true);
+    expect(result.missingStages).toEqual([]);
+    expect(result.missingScreenshots).toEqual([]);
+    expect(result.gameplayPassed).toBe(true);
+    // A diagnostic browser stage success is NOT signed independent release.
+    expect(result.signedHardwareAttested).toBe(false);
+    expect(result.publicReleasePassed).toBe(false);
+  });
+  it("preserves first failed political stage without leaking packet secrets",()=>{
+    const r=summarizeBrowserReport({
+      exactSource:"c".repeat(40),
+      stage:"recipient-invitation",
+      events:[{name:"stage-complete",stage:"offer-accession"},
+        {name:"stage-failed",stage:"recipient-invitation"}],
+      errors:[{stage:"recipient-invitation",
+        error:"POLITICAL_SECOND_AUTHORIZED_BROWSER_SESSION_MISSING_OWNER_E2_E4_E6 rawPRIVATE"}],
+      workerPackets:[{privateInvitation:"SECRET" }],
+    },1,"national-mobile");
+    expect(r.failedStage).toBe("recipient-invitation");
+    expect(r.failureHint).toBe("POLITICAL_SECOND_SESSION_MISSING");
+    expect(JSON.stringify(r)).not.toContain("rawPRIVATE");
+    expect(JSON.stringify(r)).not.toContain("SECRET");
   });
 });

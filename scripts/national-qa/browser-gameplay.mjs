@@ -31,6 +31,16 @@ import {
   distinctPeacePrincipal,
 } from "./browser-r11-verdict.mjs";
 import { reconcileDiplomacyEvidence } from "./browser-verdict.mjs";
+import {
+  verifyDistinctLiveSessions,
+  verifyPrivateInvitation,
+  reconcilePoliticalReceipt,
+  corroboratePublicEmpire,
+  sanitizePacketEvidence,
+  sanitizeAcceptanceEvent,
+  safeFailureCode,
+} from "./browser-r11-political-verdict.mjs";
+import { connectAuthenticatedPeer } from "./browser-r11-peer.mjs";
 import { verifyHardwareWebgl } from "./gpu-attestation.mjs";
 import {
   assertSoloLaunch,
@@ -77,7 +87,9 @@ function record(name, extra = {}) {
     elapsedMs: Math.round(performance.now() - start),
     ...extra,
   });
-  console.info("QA_R5 " + JSON.stringify(records.at(-1)));
+  console.info("QA_R5 " + JSON.stringify(
+    sanitizeAcceptanceEvent(records.at(-1)),
+  ));
 }
 
 function persist() {
@@ -90,15 +102,27 @@ function persist() {
       process.env.NATIONAL_REQUIRE_HARDWARE_GPU === "1",
     viewport: mobile ? "390x844 mobile" : "1280x800 desktop",
     stage,
-    events: records,
-    errors,
-    workerPackets: observed.slice(-240),
-    console: browserConsole.slice(-240),
-    networkErrors: browserNetworkErrors.slice(-120),
+    events: records.map(sanitizeAcceptanceEvent).filter(Boolean),
+    errors: errors.map(e=>({
+      stage:typeof e?.stage==="string"?e.stage:stage,
+      error:safeFailureCode(e?.error ?? e),
+    })),
+    workerPackets: sanitizePacketEvidence(observed),
+    console: browserConsole.slice(-240).map(({severity}) => ({severity})),
+    networkErrors: browserNetworkErrors.slice(-120).map(
+      ({error,blockedReason}) => ({
+        failed: !!error, blocked: !!blockedReason,
+      }),
+    ),
     runtimeAssetRequests: runtimeAssetRequests.slice(-500),
     restrictedRuntimeAssets: restrictedRuntimeAssets.slice(-80),
     actualHardware: hardwareCapabilities,
-    submittedFounding,
+    submittedFounding: submittedFounding ? {
+      authenticRequestObserved: /^nf_[a-f0-9]{32}$/.test(submittedFounding.requestId ?? ""),
+      requestFingerprint: typeof submittedFounding.requestId === "string"
+        ? createHash("sha256").update(submittedFounding.requestId).digest("hex").slice(0,16)
+        : null,
+    } : null,
     elapsedMs: Math.round(performance.now() - start),
   };
   writeFileSync(
@@ -228,6 +252,7 @@ const probe = `(() => {
       if (!candidate || typeof candidate !== 'object') continue;
       if (Number.isSafeInteger(candidate.tick)) info.tick = candidate.tick;
       if (candidate.nationalPolitics) info.publicPolitics = candidate.nationalPolitics;
+      if (candidate.nationalAccessionOffers) info.accessionOffers = candidate.nationalAccessionOffers;
       if (candidate.nationalCommandResults) info.commandResults = candidate.nationalCommandResults;
       if (candidate.nationalConflicts) info.publicConflicts = candidate.nationalConflicts;
       if (candidate.packedAttackUpdates?.length > 0) info.hasAuthoritativeAttackDelta = true;
@@ -399,6 +424,8 @@ async function main() {
     ws.addEventListener("error", reject, { once: true });
   });
   const send = cdp(ws);
+  let politicalPeer = null;
+  let peacePeer = null;
   const evaluate = async (expression) => {
     const res = await send("Runtime.evaluate", {
       expression,
@@ -626,6 +653,49 @@ async function main() {
         actorId: p?.id?.() ?? null,
       };
     })()`);
+  const primaryPoliticalObservation = () =>
+    evaluate(`(() => {
+      const panel=document.querySelector('national-diplomacy-panel');
+      const g=panel?.game, p=g?.myPlayer?.();
+      if(!g||!p)return null;
+      return {
+        gameId:g.gameID?.() ?? null,actorId:p.id?.() ?? null,
+        tick:g.ticks?.() ?? null,politicsTick:g.nationalPoliticsTick?.() ?? null,
+        spectator:g.isSpectator?.() ?? true,spawned:p.hasSpawned?.()===true,
+        ownedTiles:p.numTilesOwned?.() ?? 0,
+        empires:g.nationalPolitics?.()?.empires ?? null,
+        accessionOffers:g.nationalAccessionOffers?.() ?? null,
+        politicalResults:g.nationalPoliticalResults?.() ?? null,
+      };
+    })()`);
+  const watchPrimaryPoliticalIntent = async (type) => {
+    if (!["offer","crown"].includes(type))
+      throw Error("POLITICAL_WATCH_TYPE_UNKNOWN");
+    const attached=await evaluate(
+      "(async()=>{" +
+      "const panel=document.querySelector('national-diplomacy-panel');" +
+      "if(!panel?.eventBus||!panel?.game?.myPlayer())return false;" +
+      "const T=await import('/src/client/Transport.ts');" +
+      "window.__e5PrimaryPoliticalClicks=[];" +
+      "const klass=" + (type==="offer"
+        ? "T.SendNationalOfferEmpireIntentEvent"
+        : "T.SendNationalTransferCrownIntentEvent") + ";" +
+      "panel.eventBus.on(klass,e=>window.__e5PrimaryPoliticalClicks.push({" +
+        "requestId:e.requestId,empireId:e.empireId," +
+        "targetId:e.candidateId??e.successorId??null}));" +
+      "return true;})()",
+    );
+    if (!attached) throw Error("POLITICAL_REAL_EVENTBUS_OBSERVER_MISSING_OWNER_E4");
+  };
+  const primaryPoliticalClick = () =>
+    evaluate("window.__e5PrimaryPoliticalClicks?.[0] ?? null");
+  const openPeer = async (portValue) =>
+    connectAuthenticatedPeer({
+      port:portValue,primaryPort:port,cdp,dispatchSoloPointer,mobile,
+      record,screenshot:async (label,b64) => {
+        writeFileSync(join(reportDir,label+".png"),Buffer.from(b64,"base64"));
+      },
+    });
   const panelObservation = () =>
     evaluate(
       "(() => {" +
@@ -1104,7 +1174,11 @@ async function main() {
       await capture("game-hud");
     });
     await step("spawn", async () => {
-      await setPanelExpanded(true);
+      // E4 starts collapsed while the player is pre-spawn. Never open it.
+      // Inspect real aria-expanded state and only CLOSE if it is open.
+      const initialPanel = await panelObservation();
+      if (!initialPanel?.valid) throw Error("SPAWN_DIPLOMACY_PANEL_STATE_MISSING");
+      record("spawn-observed-panel", {initiallyExpanded:initialPanel.expanded});
       const before = await gameObservation();
       if (!before || !Number.isSafeInteger(before.tick)) {
         throw Error("SPAWN_GAMEVIEW_UNAVAILABLE");
@@ -1236,7 +1310,7 @@ async function main() {
             "results:g.nationalFoundingResults?.() ?? []," +
             "publicEmpires:g.nationalPolitics?.()?.empires ?? null," +
             "uiConfirmed:/Confirmed by game: your nation founded/.test(panel.innerText)," +
-            "snapshotTick:g.ticks?.() ?? null };" +
+            "snapshotTick:g.nationalPoliticsTick?.() ?? null };" +
             "})()",
         );
         if (!observedState) throw Error("FOUNDING_GAMEVIEW_DISAPPEARED");
@@ -1342,7 +1416,7 @@ async function main() {
             p.commandResults?.some(
               (r) =>
                 r.type === "national_found_empire" &&
-                r.empireId === "R5_Browser_QA" &&
+                r.empireId === "R11_Browser_QA" &&
                 r.requestId === duplicateRequestId &&
                 r.accepted === false,
             ),
@@ -1356,6 +1430,200 @@ async function main() {
         throw Error("Engine did not reject duplicate founded empire");
       record("authoritative-duplicate-rejected");
       await capture("founding-rejected");
+    });
+    // Only REAL authenticated browser sessions can discharge these stages.
+    // A standalone Solo match with a single human cannot fabricate a second.
+    const empireId="R11_Browser_QA";
+    let candidateId=null;
+    let accessionRequest=null;
+    let accessionReceiptTick=null;
+    await step("offer-accession",async()=>{
+      await setPanelExpanded(true);
+      const before=await primaryPoliticalObservation();
+      if(!before?.actorId || before.spectator || !before.spawned ||
+         !Number.isSafeInteger(before.tick))
+        throw Error("POLITICAL_FOUNDING_SESSION_UNAVAILABLE_OWNER_E2_E4");
+      const own=before.empires?.find(e=>e.id===empireId);
+      if(!own || own.leaderId!==before.actorId ||
+         !own.memberIds?.includes(before.actorId))
+        throw Error("POLITICAL_FOUNDING_ROSTER_NOT_CURRENT_OWNER_E1_E3");
+      await watchPrimaryPoliticalIntent("offer");
+      candidateId=await chooseNativeSelect("#national-accession-candidate")
+        .catch(()=>{throw Error("POLITICAL_NO_LIVING_RECIPIENT_IN_UI_OWNER_E2_E4");});
+      if(candidateId===before.actorId)
+        throw Error("POLITICAL_SELF_ACCESSION_OFFER_FORBIDDEN");
+      await clickSelector("#national-offer-accession");
+      accessionRequest=await primaryPoliticalClick();
+      if(accessionRequest?.empireId!==empireId ||
+         accessionRequest.targetId!==candidateId ||
+         !/^np_[a-f0-9]{32}$/.test(accessionRequest?.requestId??""))
+        throw Error("POLITICAL_OFFER_REAL_CLICK_NOT_OBSERVED_OWNER_E4");
+      record("political-offer-real-click",{
+        actorCorrelated:true,targetCorrelated:true,
+        requestFingerprint:createHash("sha256")
+          .update(accessionRequest.requestId).digest("hex").slice(0,16),
+      });
+      const accepted=await poll(async()=>{
+        const state=await primaryPoliticalObservation();
+        if(state?.actorId!==before.actorId || state.gameId!==before.gameId)
+          throw Error("POLITICAL_FOUNDER_PRINCIPAL_CHANGED_OWNER_E2_E4");
+        const verdict=reconcilePoliticalReceipt({
+          type:"national_offer_empire",requestId:accessionRequest.requestId,
+          actorId:before.actorId,empireId,targetId:candidateId,
+          issuedTick:before.tick,currentTick:state.tick,
+          politicsTick:state.politicsTick,results:state.politicalResults,
+          empires:state.empires,
+        });
+        if(verdict.reason.startsWith("POLITICAL_ENGINE_REJECTED") ||
+           verdict.reason.startsWith("POLITICAL_FORGED") ||
+           verdict.reason.startsWith("POLITICAL_CONTRADICTORY"))
+          throw Error(verdict.reason+"_OWNER_"+verdict.owner);
+        return verdict.accepted?verdict:null;
+      },"actual founder offer receipt and current public roster",55,225);
+      accessionReceiptTick=accepted.receiptTick;
+      record("political-offer-engine-accepted",{
+        receiptTick:accepted.receiptTick,sequence:accepted.sequence,
+        invitationDelivered:false,
+      });
+      await capture("political-offer-accepted");
+    });
+    await step("recipient-invitation",async()=>{
+      // E6 provisions an independently admitted, ALREADY LIVE browser.
+      // The E5 harness neither creates a tab nor changes a player identity.
+      politicalPeer=await openPeer(process.env.NATIONAL_QA_PEER_CDP_PORT);
+      const founder=await primaryPoliticalObservation();
+      const recipient=await politicalPeer.observe();
+      const distinct=verifyDistinctLiveSessions(founder,recipient,candidateId);
+      if(!distinct.accepted)
+        throw Error(distinct.reason+"_OWNER_"+distinct.owner);
+      const received=await poll(async()=>{
+        const fresh=await politicalPeer.observe();
+        if(fresh?.actorId!==candidateId||fresh.gameId!==founder.gameId||
+           fresh.spectator||!fresh.spawned||fresh.ownedTiles<=0)
+          throw Error("POLITICAL_RECIPIENT_SESSION_CHANGED_OWNER_E2_E4");
+        if(!Number.isSafeInteger(fresh.tick) ||
+           fresh.tick<accessionReceiptTick)return null;
+        const owner=await primaryPoliticalObservation();
+        const verdict=verifyPrivateInvitation({
+          founderId:founder.actorId,recipientId:candidateId,empireId,
+          recipientView:fresh.accessionOffers,recipientTick:fresh.tick,
+          founderView:owner?.accessionOffers,
+        });
+        if(verdict.reason==="POLITICAL_PRIVATE_INVITATION_LEAKED_TO_SENDER" ||
+           verdict.reason==="POLITICAL_FOREIGN_INVITATION_IN_RECIPIENT_VIEW")
+          throw Error(verdict.reason+"_OWNER_E3");
+        return verdict.accepted?verdict:null;
+      },"recipient-only authenticated accession offer in separate browser",40,225);
+      if(!received.accepted)
+        throw Error("POLITICAL_PRIVATE_INVITATION_UNCONFIRMED_OWNER_E3");
+      record("political-recipient-private-invitation",{
+        recipientOnly:true,secondAuthenticatedSession:true,
+        originatingOfferReceiptMatched:true,
+      });
+      await politicalPeer.ensurePanel();
+      // Never publish screenshots of a recipient-only private UI.
+    });
+    await step("recipient-acceptance",async()=>{
+      if(!politicalPeer || !candidateId)
+        throw Error("POLITICAL_AUTHENTIC_RECIPIENT_ABSENT");
+      const before=await politicalPeer.observe();
+      const founder=await primaryPoliticalObservation();
+      const matching=verifyDistinctLiveSessions(founder,before,candidateId);
+      if(!matching.accepted)
+        throw Error(matching.reason+"_OWNER_"+matching.owner);
+      await politicalPeer.watchIntent("accept-empire");
+      await politicalPeer.select("#national-invitation-empire",empireId);
+      await politicalPeer.click("#national-accept-accession");
+      const click=await politicalPeer.observedClick();
+      if(click?.empireId!==empireId || click.candidateId!==candidateId ||
+         !/^np_[a-f0-9]{32}$/.test(click?.requestId??""))
+        throw Error("POLITICAL_ACCEPT_NATIVE_CLICK_NOT_OBSERVED_OWNER_E4");
+      record("political-accept-real-recipient-click",{
+        differentPrincipal:true,realCdpInput:true,
+      });
+      // Never publish screenshots of a recipient-only private UI.
+      const accepted=await poll(async()=>{
+        const state=await politicalPeer.observe();
+        if(state?.actorId!==candidateId || state.gameId!==before.gameId)
+          throw Error("POLITICAL_ACCEPT_SESSION_REPLACED_OWNER_E2_E4");
+        const verdict=reconcilePoliticalReceipt({
+          type:"national_accept_empire",requestId:click.requestId,
+          actorId:candidateId,empireId,targetId:candidateId,
+          issuedTick:before.tick,currentTick:state.tick,
+          politicsTick:state.politicsTick,
+          results:state.politicalResults,empires:state.empires,
+        });
+        if(verdict.reason.startsWith("POLITICAL_ENGINE_REJECTED") ||
+           verdict.reason.startsWith("POLITICAL_FORGED") ||
+           verdict.reason.startsWith("POLITICAL_CONTRADICTORY"))
+          throw Error(verdict.reason+"_OWNER_"+verdict.owner);
+        if(!verdict.accepted)return null;
+        const founderNow=await primaryPoliticalObservation();
+        const corroborated=corroboratePublicEmpire({
+          emperor:founderNow,recipient:state,empireId,
+          leaderId:founder.actorId,memberIds:[founder.actorId,candidateId],
+          minTick:verdict.receiptTick,
+        });
+        return corroborated.accepted?verdict:null;
+      },"independent accepting principal, exact receipt and both current rosters",55,225);
+      record("political-membership-confirmed-by-both",{
+        recipientAccepted:true,founderRosterAgrees:true,
+        receiptTick:accepted.receiptTick,
+      });
+      await capture("political-member-joined-founders-view");
+      // Never publish screenshots of a recipient-only private UI.
+    });
+    await step("transfer-crown",async()=>{
+      const before=await primaryPoliticalObservation();
+      if(!before?.actorId||!politicalPeer)
+        throw Error("POLITICAL_CROWN_FOUNDER_SESSION_MISSING");
+      await watchPrimaryPoliticalIntent("crown");
+      await chooseNativeSelect("#national-crown-successor",candidateId);
+      await clickSelector("#national-transfer-crown");
+      const request=await primaryPoliticalClick();
+      if(request?.targetId!==candidateId||request.empireId!==empireId ||
+         !/^np_[a-f0-9]{32}$/.test(request?.requestId??""))
+        throw Error("POLITICAL_CROWN_CLICK_NOT_ACTUAL_OWNER_E4");
+      record("political-real-crown-click",{
+        successorMatched:true,realCdpInput:true,
+      });
+      const done=await poll(async()=>{
+        const founder=await primaryPoliticalObservation();
+        const recipient=await politicalPeer.observe();
+        if(founder?.actorId!==before.actorId ||
+           recipient?.actorId!==candidateId ||
+           founder.gameId!==before.gameId ||
+           recipient.gameId!==before.gameId)
+          throw Error("POLITICAL_CROWN_ACTOR_CHANGED_OWNER_E2_E4");
+        const verdict=reconcilePoliticalReceipt({
+          type:"national_transfer_crown",requestId:request.requestId,
+          actorId:before.actorId,empireId,targetId:candidateId,
+          issuedTick:before.tick,currentTick:founder.tick,
+          politicsTick:founder.politicsTick,
+          results:founder.politicalResults,empires:founder.empires,
+        });
+        if(verdict.reason.startsWith("POLITICAL_ENGINE_REJECTED")||
+           verdict.reason.startsWith("POLITICAL_FORGED")||
+           verdict.reason.startsWith("POLITICAL_CONTRADICTORY"))
+          throw Error(verdict.reason+"_OWNER_"+verdict.owner);
+        if(!verdict.accepted)return null;
+        const agree=corroboratePublicEmpire({
+          emperor:founder,recipient,empireId,leaderId:candidateId,
+          memberIds:[founder.actorId,candidateId],minTick:verdict.receiptTick,
+        });
+        if(!agree.accepted)return null;
+        const revoked=await evaluate(
+          "document.querySelector('#national-offer-accession')===null&&"+
+          "document.querySelector('#national-transfer-crown')===null",
+        );
+        return revoked?verdict:null;
+      },"genuine crown transfer + former emperor loses controls + both rosters",55,225);
+      record("political-crown-confirmed-by-both",{
+        receiptTick:done.receiptTick,formerEmperorRevoked:true,
+        successorIsDifferentPrincipal:true,
+      });
+      await capture("political-crown-former-emperor-revoked");
+      // Never publish screenshots of a recipient-only private UI.
     });
     // Save/restore is a separate protected-server gate. Do not block the
     // concrete WAR→attack→peace slice behind an unavailable browser save UI.
@@ -1707,73 +1975,84 @@ async function main() {
       await capture("peace-motion-proposed");
     });
     await step("accept-peace", async () => {
-      if (!peaceMotionId) throw Error("NO_ENGINE_PEACE_MOTION_ID");
-      // A nation cannot accept its OWN proposed peace via a fake second
-      // principal. E1/E4 must expose a real opposing actor turn/session.
-      const stateBeforeAccept = await currentConflicts();
-      const offer = stateBeforeAccept?.projection?.motions?.find(
-        (motion) => motion.id === peaceMotionId,
-      );
-      const layer = stateBeforeAccept?.projection?.layers?.find(
-        (candidate) => candidate.id === warId,
-      );
-      const opposition = distinctPeacePrincipal({
-        proposerId: offer?.proposedBy,
-        acceptorId: stateBeforeAccept?.actorId,
-        motionId: peaceMotionId,
-        warId,
-        offeredMotion: offer,
-        warLayer: layer,
+      if (!peaceMotionId || !warId || !warTargetId)
+        throw Error("PEACE_CANONICAL_REFERENCES_MISSING");
+      const proposer=await primaryPoliticalObservation();
+      if(!proposer?.actorId||proposer.spectator)
+        throw Error("PEACE_REAL_PROPOSER_MISSING");
+      const peerCandidate=politicalPeer ? await politicalPeer.observe() : null;
+      if(peerCandidate?.actorId === warTargetId) {
+        peacePeer=politicalPeer;
+      } else {
+        // The opponent is a genuine live WAR counterparty, not a fake second
+        // sender on the same EventBus or a forged GameView.myPlayer() result.
+        peacePeer=await openPeer(process.env.NATIONAL_QA_PEACE_CDP_PORT);
+      }
+      const before=await peacePeer.observe();
+      const valid=verifyDistinctLiveSessions(proposer,before,warTargetId);
+      if(!valid.accepted)
+        throw Error(valid.reason+"_OWNER_"+valid.owner);
+      const proposal=before.conflicts?.motions?.find(m=>m.id===peaceMotionId);
+      const layer=before.conflicts?.layers?.find(w=>w.id===warId);
+      const permitted=distinctPeacePrincipal({
+        proposerId:proposer.actorId,acceptorId:before.actorId,
+        motionId:peaceMotionId,warId,
+        offeredMotion:proposal,warLayer:layer,
       });
-      if (!opposition.accepted) {
-        throw Error("PEACE_OPPOSING_AUTHORIZED_SESSION_REQUIRED_OWNER_E2_E4");
-      }
-      await chooseNativeSelect("#national-peace-motion-id", peaceMotionId);
-      const before = await currentConflicts();
-      await clickSelector("#national-accept-peace");
-      const request = await evaluate(
-        "window.__nationalQaDiplomacyRequests?.find(x=>x.type==='national_accept_peace') ?? null",
-      );
-      if (
-        !request ||
-        request.motionId !== peaceMotionId ||
-        !/^nc_[a-f0-9]{32}$/.test(request.requestId)
-      ) {
-        throw Error(
-          "PEACE_ACCEPTANCE_NOT_SUBMITTED_BY_REAL_OPPOSING_PRINCIPAL",
+      if(!permitted.accepted)
+        throw Error("PEACE_OPPOSING_PRINCIPAL_CANNOT_ACCEPT_"+permitted.reason+"_OWNER_E2_E4");
+      await peacePeer.ensurePanel();
+      await peacePeer.watchIntent("accept-peace");
+      await peacePeer.select("#national-peace-motion-id",peaceMotionId);
+      await peacePeer.click("#national-accept-peace");
+      const clicked=await peacePeer.observedClick();
+      if(clicked?.motionId!==peaceMotionId ||
+         !/^nc_[a-f0-9]{32}$/.test(clicked?.requestId??""))
+        throw Error("PEACE_SECOND_PRINCIPAL_REAL_CLICK_MISSING_OWNER_E4");
+      record("peace-real-opponent-click",{
+        differentPrincipal:true,realCdpInput:true,
+        requestFingerprint:createHash("sha256")
+          .update(clicked.requestId).digest("hex").slice(0,16),
+      });
+      // Never publish screenshots of a recipient-only private UI.
+      const accepted=await poll(async()=>{
+        const state=await peacePeer.observe();
+        if(state?.gameId!==before.gameId ||
+           state.actorId!==warTargetId)
+          throw Error("PEACE_OPPONENT_SESSION_CHANGED_OWNER_E2_E4");
+        const matched=reconcileDiplomacyEvidence(
+          [{commandResults:state.diplomacyResults??[]}],{
+            type:"national_accept_peace",
+            requestId:clicked.requestId,actorId:before.actorId,
+            issuedTick:before.tick,warId,motionId:peaceMotionId,
+            projection:state.conflicts,
+            projectionTick:state.conflictsTick,
+          },
         );
-      }
-      const accepted = await poll(
-        async () => {
-          const state = await currentConflicts();
-          const result = reconcileDiplomacyEvidence(await worker(), {
-            type: request.type,
-            requestId: request.requestId,
-            actorId: before?.actorId,
-            issuedTick: before?.tick,
-            warId,
-            motionId: peaceMotionId,
-            projection: state?.projection,
-            projectionTick: state?.projectionTick,
-          });
-          return result.accepted
-            ? result
-            : result.reason === "ENGINE_REJECTED_ACTION"
-              ? { rejected: true, reason: "ENGINE_REJECTED_PEACE_ACCEPTANCE" }
-              : null;
-        },
-        "authentic opposing peace acceptance + ended public war layer",
-        90,
-        350,
-      );
-      if (accepted.rejected) throw Error(accepted.reason);
-      record("authoritative-peace-accepted", {
-        warId,
-        motionId: peaceMotionId,
-        receiptTick: accepted.receiptTick,
-        sequence: accepted.sequence,
+        if(matched.reason==="ENGINE_REJECTED_ACTION")
+          throw Error("PEACE_AUTHENTIC_ENGINE_REJECTED_OWNER_E2");
+        if(!matched.accepted)return null;
+        const original=await currentConflicts();
+        const originalWar=original?.projection?.layers?.find(x=>x.id===warId);
+        const originalMotion=original?.projection?.motions?.find(
+          m=>m.id===peaceMotionId,
+        );
+        if(originalWar?.endedTick!==originalMotion?.acceptedTick ||
+           originalWar?.endedTick===null ||
+           originalMotion?.acceptedBy!==before.actorId ||
+           !Number.isSafeInteger(original?.projectionTick) ||
+           original.projectionTick<matched.receiptTick)
+          return null;
+        if(!/Peace accepted by game/i.test(state.peaceStatus??""))
+          return null;
+        return matched;
+      },"separate opponent real CDP acceptance + receipt + both ended WAR views",55,225);
+      record("authoritative-peace-accepted",{
+        differentPrincipal:true,warEndedInBothViews:true,
+        receiptTick:accepted.receiptTick,sequence:accepted.sequence,
       });
       await capture("peace-accepted-ended-war");
+      // Never publish screenshots of a recipient-only private UI.
     });
     // This browser scenario is not a public-release verdict. Trusted saved
     // game restoration, replay/victory and hostile-client private state must
@@ -1781,6 +2060,8 @@ async function main() {
   } finally {
     await worker().catch(() => {});
     persist();
+    politicalPeer?.close();
+    if(peacePeer && peacePeer !== politicalPeer) peacePeer.close();
     ws.close();
   }
 }
@@ -1788,7 +2069,7 @@ async function main() {
 try {
   await main();
 } catch (error) {
-  console.error("QA_R5_BROWSER_FAILURE " + String(error));
+  console.error("QA_R5_BROWSER_FAILURE " + safeFailureCode(error));
   errors.push({ stage, error: String(error) });
   process.exitCode = 1;
 } finally {
