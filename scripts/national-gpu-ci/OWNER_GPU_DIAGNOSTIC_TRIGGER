@@ -1,0 +1,13 @@
+OPENFRONT NATIONAL - R10 SIX-ENGINEER GPU DIAGNOSTIC AUTHORIZATION
+
+Conductor-reviewed exact six-engineer source SHA: 6c2452ef001c0b8dfebd87aee87c27a01a2afbdc
+Combined draft PR: https://github.com/LeviCade/OpenFront-National/pull/62
+Purpose: owner-only unsigned four-mode physical Skybot diagnostic using
+E4's NATIONAL difficulty button, E5's real browser interaction/impact checks,
+and E6's corrected fail-closed collector.
+
+This is NOT public release approval, signed host attestation, or a completion-score increment.
+Official progress remains 33% until integrated exact-head acceptance.
+
+Expected output: each mode's actual first failed gameplay stage and bounded evidence.
+Do not upload private guest logs, secrets, or raw worker packets.
