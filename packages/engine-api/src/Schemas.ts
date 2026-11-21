@@ -51,6 +51,7 @@ export type Intent =
   | NationalOfferEmpireIntent
   | NationalAcceptEmpireIntent
   | NationalTransferCrownIntent
+  | NationalSetPeaceDelegationIntent
   | NationalDeclareWarIntent
   | NationalProposePeaceIntent
   | NationalAcceptPeaceIntent;
@@ -103,6 +104,9 @@ export type NationalAcceptEmpireIntent = z.infer<
 >;
 export type NationalTransferCrownIntent = z.infer<
   typeof NationalTransferCrownIntentSchema
+>;
+export type NationalSetPeaceDelegationIntent = z.infer<
+  typeof NationalSetPeaceDelegationIntentSchema
 >;
 
 export type NationalDeclareWarIntent = z.infer<
