@@ -104,6 +104,23 @@ export class GameView implements GameLike {
   }
 
   /**
+   * E3 observer-map reset (new socket or lost empire sight). Erase every
+   * previously visible owner and unit before processing the new authorized
+   * page. Do NOT retain old enemy locations as "last known" facts.
+   */
+  public resetTrustedProjectionSight(): void {
+    if (!this._trustedNationalProjection) return;
+    this._map.tileStateBuffer().fill(0);
+    this._units.clear();
+    this._unitStates.clear();
+    this._unitsByOwner.clear();
+    this._unitsByOwnerStale = true;
+    this.toDelete.clear();
+    this.unitGrid = new UnitGrid<UnitView>(this._map);
+    this.invalidateNationalPoliticalView();
+  }
+
+  /**
    * Radial Attack can be offered for a currently sighted opposing tile.
    * This is UI eligibility ONLY; the authoritative host may reject the intent.
    * Never infer targets from unsighted tiles, hidden game state or other clients.
