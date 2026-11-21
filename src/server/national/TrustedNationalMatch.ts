@@ -14,14 +14,34 @@ import {
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import {
   type ClientID,
+  type GameConfig,
   IntentSchema,
   type StampedIntent,
   StampedIntentSchema,
   type Turn,
 } from "@openfront/engine-api/Schemas";
-import { GameRunner } from "@openfront/engine/GameRunner";
 import { createHash } from "node:crypto";
 import type { Client } from "../Client";
+
+/**
+ * Narrow server-owned execution port. Inject the trusted GameRunner from the
+ * authenticated host assembly; the server layer may depend on engine-api
+ * contracts, never import the engine implementation directly.
+ */
+export interface TrustedNationalRunnerPort {
+  readonly game: {
+    config(): { gameConfig(): GameConfig };
+    playerByClientID(clientID: ClientID): { type(): PlayerType } | null;
+    ticks(): number;
+  };
+  registerTrustedNationalRecipient(
+    clientID: ClientID,
+    deliver: (packet: GameUpdateViewData) => void,
+  ): void;
+  removeTrustedNationalRecipient(clientID: ClientID): void;
+  addTurn(turn: Turn): void;
+  executeNextTick(): boolean;
+}
 
 export interface NationalTickReceipt {
   readonly tick: number;
@@ -46,7 +66,7 @@ export class TrustedNationalMatch {
 
   constructor(
     readonly gameID: string,
-    private readonly runner: GameRunner,
+    private readonly runner: TrustedNationalRunnerPort,
     admittedPlayers: readonly Client[],
     private readonly deliver: (
       client: Client,
