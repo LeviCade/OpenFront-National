@@ -10,25 +10,25 @@ import {
   NationalPrivateCapabilityChangedEvent,
   revokeTrustedNationalPrivateCapability,
   type NationalPrivateCapabilityContext,
+  type TrustedNationalStartLike,
 } from "../../../src/client/NationalPrivateCapability";
 
-const packet = {
-  type: "national_capability",
-  version: 1,
+const startInfo = {
   gameID: "actual-private-match",
-  clientID: "seat-a",
-  active: true,
-} as const;
-
+  config: { gameType: GameType.Private, nationalMode: true },
+  players: [{ clientID: "seat-a" }, { clientID: "seat-b" }],
+} as WireGameStartInfo;
+const packet: TrustedNationalStartLike = {
+  type: "national_start",
+  gameStartInfo: startInfo,
+  myClientID: "seat-a",
+  tick: 12,
+};
 function context(): NationalPrivateCapabilityContext {
   return {
-    gameID: packet.gameID,
-    start: {
-      gameID: packet.gameID,
-      config: { gameType: GameType.Private, nationalMode: true },
-      players: [{ clientID: "seat-a" }, { clientID: "seat-b" }],
-    } as WireGameStartInfo,
-    startClientID: packet.clientID,
+    gameID: startInfo.gameID,
+    start: startInfo,
+    startClientID: "seat-a",
     remoteSocketOpen: true,
     sessionReady: true,
     replay: false,
@@ -36,11 +36,11 @@ function context(): NationalPrivateCapabilityContext {
   };
 }
 
-describe("Class Five E4 trusted NATIONAL Private gate", () => {
-  it("requires exact server-approved remote start, seat, match and live state", () => {
+describe("Class Five E4 native E2 national_start gate", () => {
+  it("admits only the exact authenticated active Private NATIONAL match and seat", () => {
     expect(eligibleTrustedNationalPrivateSeat(context(), packet)).toBe(true);
     const wrong: NationalPrivateCapabilityContext[] = [
-      { ...context(), gameID: "other-game" },
+      { ...context(), gameID: "other" },
       { ...context(), startClientID: "seat-b" },
       { ...context(), startClientID: null },
       { ...context(), start: null },
@@ -51,55 +51,37 @@ describe("Class Five E4 trusted NATIONAL Private gate", () => {
       {
         ...context(),
         start: {
-          ...context().start!,
-          config: { gameType: GameType.Private, nationalMode: false },
-        } as WireGameStartInfo,
-      },
-      {
-        ...context(),
-        start: {
-          ...context().start!,
+          ...startInfo,
           config: { gameType: GameType.Singleplayer, nationalMode: true },
         } as WireGameStartInfo,
       },
       {
         ...context(),
-        start: {
-          ...context().start!,
-          players: [{ clientID: "seat-b" }],
-        } as WireGameStartInfo,
+        start: { ...startInfo, players: [{ clientID: "seat-b" }] } as WireGameStartInfo,
       },
     ];
-    for (const invalid of wrong) {
+    for (const invalid of wrong)
       expect(eligibleTrustedNationalPrivateSeat(invalid, packet)).toBe(false);
-    }
-    expect(eligibleTrustedNationalPrivateSeat(context(), { ...packet, gameID: "wrong" })).toBe(false);
-    expect(eligibleTrustedNationalPrivateSeat(context(), { ...packet, active: false })).toBe(false);
+    expect(eligibleTrustedNationalPrivateSeat(context(), { ...packet, tick: -1 })).toBe(false);
+    expect(eligibleTrustedNationalPrivateSeat(context(), { ...packet, myClientID: "seat-c" })).toBe(false);
+    expect(eligibleTrustedNationalPrivateSeat(context(), { ...packet, type: "start" } as unknown as TrustedNationalStartLike)).toBe(false);
+    expect(eligibleTrustedNationalPrivateSeat(context(), { ...packet, gameStartInfo: { ...startInfo, gameID: "other" } })).toBe(false);
+    expect(eligibleTrustedNationalPrivateSeat(context(), { ...packet, gameStartInfo: { ...startInfo, config: { gameType: GameType.Private, nationalMode: false } } as WireGameStartInfo })).toBe(false);
   });
 
-  it("a room flag or event alone never grants commands; explicit revocation clears the match", () => {
+  it("cannot approve from arbitrary event bus status or legacy Private flag", () => {
     const bus = new EventBus();
-    const seen: boolean[] = [];
-    bus.on(NationalPrivateCapabilityChangedEvent, (event) => seen.push(event.ready));
-    expect(hasTrustedNationalPrivateCapability(bus, packet.gameID)).toBe(false);
-    bus.emit(new NationalPrivateCapabilityChangedEvent(packet.gameID, true));
-    expect(hasTrustedNationalPrivateCapability(bus, packet.gameID)).toBe(false);
+    const events: boolean[] = [];
+    bus.on(NationalPrivateCapabilityChangedEvent, (event) => events.push(event.ready));
+    expect(hasTrustedNationalPrivateCapability(bus, context().gameID)).toBe(false);
+    bus.emit(new NationalPrivateCapabilityChangedEvent(context().gameID, true));
+    expect(hasTrustedNationalPrivateCapability(bus, context().gameID)).toBe(false);
     expect(acceptTrustedNationalPrivateCapability(bus, packet, context())).toBe(true);
-    expect(hasTrustedNationalPrivateCapability(bus, packet.gameID)).toBe(true);
-    expect(hasTrustedNationalPrivateCapability(bus, "another-match")).toBe(false);
-    expect(acceptTrustedNationalPrivateCapability(bus, { ...packet, active: false }, context())).toBe(false);
-    expect(hasTrustedNationalPrivateCapability(bus, packet.gameID)).toBe(false);
-    expect(acceptTrustedNationalPrivateCapability(bus, packet, context())).toBe(true);
-    revokeTrustedNationalPrivateCapability(bus, packet.gameID);
-    expect(hasTrustedNationalPrivateCapability(bus, packet.gameID)).toBe(false);
-    expect(seen).toEqual([true, true, false, true, false]);
-  });
-
-  it("a previous game's capability never authorizes a different match", () => {
-    const bus = new EventBus();
-    expect(acceptTrustedNationalPrivateCapability(bus, packet, context())).toBe(true);
-    expect(hasTrustedNationalPrivateCapability(bus, "new-game")).toBe(false);
-    expect(acceptTrustedNationalPrivateCapability(bus, { ...packet, gameID: "new-game" }, context())).toBe(false);
-    expect(hasTrustedNationalPrivateCapability(bus, packet.gameID)).toBe(false);
+    expect(hasTrustedNationalPrivateCapability(bus, context().gameID)).toBe(true);
+    expect(hasTrustedNationalPrivateCapability(bus, "another-game")).toBe(false);
+    revokeTrustedNationalPrivateCapability(bus, context().gameID);
+    expect(hasTrustedNationalPrivateCapability(bus, context().gameID)).toBe(false);
+    expect(acceptTrustedNationalPrivateCapability(bus, packet, { ...context(), replay: true })).toBe(false);
+    expect(events).toEqual([true, true, false, false]);
   });
 });
