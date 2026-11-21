@@ -27,7 +27,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "HEAD_SHA_WRITTEN_BY_CREATE_FILE"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/stage3/class5-six-owner-acceptance-20261121)"
           npx --no-install oxfmt --write scripts/national-gpu-ci/skybot-host-witness.mjs scripts/national-gpu-ci/skybot-host-witness.test.mjs
           npx --no-install oxfmt --check scripts/national-gpu-ci/skybot-host-witness.mjs scripts/national-gpu-ci/skybot-host-witness.test.mjs
           git add -- scripts/national-gpu-ci/skybot-host-witness.mjs scripts/national-gpu-ci/skybot-host-witness.test.mjs
