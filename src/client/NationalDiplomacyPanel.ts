@@ -1190,7 +1190,11 @@ export class NationalDiplomacyPanel extends LitElement {
                         ${this.pendingAttempt.actorId}). Submitted at Game tick
                         ${this.pendingAttempt.issuedTick}; current Game tick
                         ${game.ticks()}, pause
-                        ${game.isPaused?.() === true\n                          ? "active"\n                          : game.isPaused?.() === false\n                            ? "inactive"\n                            : "unknown"},
+                        ${game.isPaused?.() === true
+                          ? "active"
+                          : game.isPaused?.() === false
+                            ? "inactive"
+                            : "unknown"},
                         public roster tick
                         ${game.nationalPoliticsTick?.() ?? "unavailable"}.
                         ${this.pendingAttempt.acceptedResultSeen
