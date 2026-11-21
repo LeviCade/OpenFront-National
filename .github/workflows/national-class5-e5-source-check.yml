@@ -1,0 +1,47 @@
+name: NATIONAL Class Five E5 - source-only isolated verification
+on:
+  push:
+    branches: [feature/class5-e5-physical-solo-playability-20261121]
+    paths:
+      - "scripts/national-qa/browser-gameplay.mjs"
+      - "scripts/national-qa/browser-r11-verdict.mjs"
+      - "scripts/national-qa/browser-r11-political-verdict.mjs"
+      - "tests/qa/national/RoundElevenBrowserActions.test.mjs"
+      - ".github/workflows/national-class5-e5-source-check.yml"
+permissions:
+  contents: read
+jobs:
+  e5-source:
+    name: Pinned E5 JS syntax + source Vitest + lint + format
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Check JS syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in scripts/national-qa/browser-gameplay.mjs scripts/national-qa/browser-r11-verdict.mjs scripts/national-qa/browser-r11-political-verdict.mjs tests/qa/national/RoundElevenBrowserActions.test.mjs; do
+            node --check "$f"
+          done
+      - name: Run actual isolated source unit tests (not hardware)
+        run: npx --no-install vitest run --project node tests/qa/national/RoundElevenBrowserActions.test.mjs
+      - name: Lint touched files
+        run: npx --no-install oxlint scripts/national-qa/browser-gameplay.mjs scripts/national-qa/browser-r11-verdict.mjs scripts/national-qa/browser-r11-political-verdict.mjs tests/qa/national/RoundElevenBrowserActions.test.mjs
+      - name: Check pinned formatting and emit exact source diff on RED
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(scripts/national-qa/browser-gameplay.mjs scripts/national-qa/browser-r11-verdict.mjs scripts/national-qa/browser-r11-political-verdict.mjs tests/qa/national/RoundElevenBrowserActions.test.mjs)
+          if ! npx --no-install oxfmt --check "${files[@]}"; then
+            npx --no-install oxfmt --write "${files[@]}"
+            git diff -- "${files[@]}"
+            exit 1
+          fi
