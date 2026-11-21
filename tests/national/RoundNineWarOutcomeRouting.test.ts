@@ -37,8 +37,9 @@ async function spawned(): Promise<Game> {
 function queue(
   game: Game,
   command: Record<string, unknown>,
-  clientID: string,
+  clientID: string | null,
 ): void {
+  if (clientID === null) throw new Error("Missing fixture client identity");
   const intent = StampedIntentSchema.parse({ ...command, clientID });
   game.addExecution(
     new Executor(game, "r9-war-outcomes", undefined).createExec(intent),
