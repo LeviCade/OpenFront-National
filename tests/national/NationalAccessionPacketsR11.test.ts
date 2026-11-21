@@ -21,30 +21,10 @@ import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
-const A = new PlayerInfo(
-  "Emperor",
-  PlayerType.Human,
-  "R11CLIA1",
-  "R11ACTA1",
-);
-const B = new PlayerInfo(
-  "Invitee",
-  PlayerType.Human,
-  "R11CLIB1",
-  "R11ACTB1",
-);
-const C = new PlayerInfo(
-  "Foreign",
-  PlayerType.Human,
-  "R11CLIC1",
-  "R11ACTC1",
-);
-const D = new PlayerInfo(
-  "Reverse",
-  PlayerType.Human,
-  "R11CLID1",
-  "R11ACTD1",
-);
+const A = new PlayerInfo("Emperor", PlayerType.Human, "R11CLIA1", "R11ACTA1");
+const B = new PlayerInfo("Invitee", PlayerType.Human, "R11CLIB1", "R11ACTB1");
+const C = new PlayerInfo("Foreign", PlayerType.Human, "R11CLIC1", "R11ACTC1");
+const D = new PlayerInfo("Reverse", PlayerType.Human, "R11CLID1", "R11ACTD1");
 const EMPIRE = "r11_real_empire";
 const PLAYERS = [A, B, C, D];
 
@@ -331,28 +311,32 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
       ...legitimate,
       // The base packet is a correctly typed, but foreign, founder receipt.
       // Its recipient differs from the GameRunner viewer so it must vanish.
-      nationalCommandResults: [{
-        type: "national_found_empire",
-        recipientId: B.id,
-        actorId: B.id,
-        accepted: true,
-        sequence: 123,
-        tick: 0,
-        requestId: "forged_approval",
-        empireId: EMPIRE,
-        reason: "accepted",
-      }],
+      nationalCommandResults: [
+        {
+          type: "national_found_empire",
+          recipientId: B.id,
+          actorId: B.id,
+          accepted: true,
+          sequence: 123,
+          tick: 0,
+          requestId: "forged_approval",
+          empireId: EMPIRE,
+          reason: "accepted",
+        },
+      ],
     };
     const forged = {
       ...poisoned,
       nationalAccessionOffers: {
         version: 1,
         recipientId: C.id,
-        offers: [{
-          ...realOffer,
-          recipientId: C.id,
-          secretTerms: "PRIVATE_PACT_CANARY",
-        }],
+        offers: [
+          {
+            ...realOffer,
+            recipientId: C.id,
+            secretTerms: "PRIVATE_PACT_CANARY",
+          },
+        ],
       },
       privatePolitics: { terms: "PRIVATE_PACT_CANARY", hiddenTroops: 999991 },
     };

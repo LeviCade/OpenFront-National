@@ -93,9 +93,11 @@ function live(game: Game) {
 function memory(bot: NationExecution): NationalPlannerMemory | null {
   // Inspect the real E2 NationExecution memory to prove ordinary-tick
   // consumption, never write the field or fabricate an E1 command receipt.
-  return (bot as unknown as {
-    readonly nationalPlannerMemory: NationalPlannerMemory | null;
-  }).nationalPlannerMemory;
+  return (
+    bot as unknown as {
+      readonly nationalPlannerMemory: NationalPlannerMemory | null;
+    }
+  ).nationalPlannerMemory;
 }
 
 describe("R11 actual E1 rejection -> E3 cooldown -> E2 alternate attack", () => {
