@@ -429,11 +429,21 @@ async function main() {
           const css = getComputedStyle(el);
           if (!rect.width || !rect.height || css.display === 'none' || css.visibility === 'hidden') continue;
           if (${requireEnabled} && (el.disabled || el.getAttribute('aria-disabled') === 'true')) continue;
-          found.push({ text, x: Math.round(rect.x + rect.width/2), y: Math.round(rect.y + rect.height/2), checked: !!el.checked });
+          found.push({ text, element: el, checked: !!el.checked });
         }
       };
       walk(root);
-      return found.sort((a,b) => a.text.length-b.text.length)[0] ?? null;
+      const picked = found.sort((a,b) => a.text.length-b.text.length)[0];
+      if (!picked) return null;
+      picked.element.scrollIntoView({ block: "center", inline: "nearest" });
+      const bounds = picked.element.getBoundingClientRect();
+      if (bounds.width <= 0 || bounds.height <= 0) return null;
+      return {
+        text: picked.text,
+        checked: picked.checked,
+        x: Math.round(bounds.x + bounds.width / 2),
+        y: Math.round(bounds.y + bounds.height / 2),
+      };
     })()`);
   const hit = async (x, y) => {
     if (mobile) {
@@ -476,6 +486,7 @@ async function main() {
         evaluate(`(() => {
       const node = window.__nationalQaFind(${JSON.stringify(selector)});
       if (!node || node.disabled) return null;
+      node.scrollIntoView({ block: "center", inline: "nearest" });
       const bounds = node.getBoundingClientRect();
       return bounds.width && bounds.height
         ? { x: bounds.x + bounds.width/2, y: bounds.y + bounds.height/2 }
@@ -492,6 +503,7 @@ async function main() {
         evaluate(`(() => {
       const element = window.__nationalQaFind(${JSON.stringify(selector)});
       if (!element || element.disabled) return null;
+      element.scrollIntoView({ block: "center", inline: "nearest" });
       const rect=element.getBoundingClientRect();
       return rect.width && rect.height ? { x:rect.x+rect.width/2, y:rect.y+rect.height/2 } : null;
     })()`),
