@@ -231,6 +231,28 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
         "legacy-player-action",
       ];
   const missingStages = required.filter((s) => !completed.includes(s));
+  const requiredScreenshots = scenario.startsWith("national-")
+    ? [
+        "home", "solo-modal", "game-hud", "player-spawned",
+        "confirmed-empire", "declared-war-live", "map-assault-confirmed",
+        "combat-impact-canonical", "peace-motion-proposed",
+        "peace-accepted-ended-war",
+      ]
+    : ["home", "solo-modal", "legacy-ffa-game-hud", "legacy-player-action"];
+  const capturedNames = Array.isArray(report?.events)
+    ? report.events.flatMap(e =>
+        e?.name === "screenshot" && typeof e.label === "string"
+          ? [e.label]
+          : typeof e?.name === "string" &&
+              Number.isSafeInteger(e.packetCount) &&
+              Number.isSafeInteger(e.assetRequests)
+            ? [e.name] // Historical pre-R11 capture used the label as name.
+            : [],
+      )
+    : [];
+  const missingScreenshots = requiredScreenshots.filter(
+    label => !capturedNames.includes(label),
+  );
   const code = Number.isInteger(exitCode) ? exitCode : -1;
   const hardware = (report?.events ?? []).some(
     (event) =>
@@ -287,11 +309,16 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
         ? "GAMEPLAY_STAGE_FAILED"
         : missingStages.length
           ? "REQUIRED_STAGES_MISSING"
-          : null,
+          : missingScreenshots.length
+            ? "REQUIRED_SCREENSHOTS_MISSING"
+            : null,
     missingStages,
+    missingScreenshots,
     webglShadersMatch: shader,
     signedHardwareAttested: hardware,
-    gameplayPassed: code === 0 && missingStages.length === 0,
+    gameplayPassed:
+      code === 0 && missingStages.length === 0 &&
+      missingScreenshots.length === 0,
     publicReleasePassed: false,
   };
 }
