@@ -624,7 +624,15 @@ export class NationalDiplomacyPanel extends LitElement {
     const canIssueWar =
       warReason === null &&
       this.eventBus !== null &&
+      this.lastDiplomacySubmission === null &&
       (this.warScope === "national" || isEmperor);
+    const conflicts = game.nationalConflicts?.() ?? null;
+    const peaceWars = this.eligiblePeaceWars();
+    const peaceMotions = this.eligiblePeaceMotions();
+    const canIssuePeace =
+      warReason === null &&
+      this.eventBus !== null &&
+      this.lastDiplomacySubmission === null;
     return html`
       <section
         class="text-white w-[min(25rem,calc(100vw-1rem))] max-w-full rounded-xl border border-amber-400/50 bg-slate-950/95 shadow-xl backdrop-blur-sm overflow-hidden"
@@ -899,11 +907,17 @@ export class NationalDiplomacyPanel extends LitElement {
                 <div class="border-t border-white/15 pt-3 space-y-3">
                   <h2 class="font-semibold text-amber-200">Peace</h2>
                   <p class="text-xs text-slate-300">
-                    The authoritative public war/motion list is not yet
-                    available. These advanced commands require an exact ID
-                    recorded by the engine; no acceptance is inferred from
-                    submitting them.
+                    ${conflicts
+                      ? "Choose a live engine-issued war or peace-motion ID. The engine still decides authorization."
+                      : "The authoritative public war/motion list is not yet available. Advanced commands require an externally verified engine-issued ID; submitting proves nothing."}
                   </p>
+                  ${conflicts
+                    ? html`<div aria-label="Current conflicts" class="space-y-1 text-xs text-slate-300">
+                        <p>Current active wars: ${conflicts.layers.filter((layer) => layer.endedTick === null).length}; pending peace motions: ${conflicts.motions.filter((motion) => motion.acceptedTick === null).length}.</p>
+                        ${conflicts.layers.filter((layer) => layer.endedTick === null).map((layer) => html`<p class="break-all">WAR ${layer.id}: ${layer.first.id} vs. ${layer.second.id}</p>`)}
+                        ${conflicts.motions.filter((motion) => motion.acceptedTick === null).map((motion) => html`<p class="break-all">Peace motion ${motion.id} for WAR ${motion.layerId}</p>`)}
+                      </div>`
+                    : nothing}
                   <form
                     class="space-y-2"
                     @submit=${(event: SubmitEvent) => this.submitPeace(event, "propose")}
@@ -914,25 +928,36 @@ export class NationalDiplomacyPanel extends LitElement {
                     >
                       Engine war ID
                     </label>
-                    <input
-                      id="national-peace-war-id"
-                      type="text"
-                      required
-                      maxlength="256"
-                      autocomplete="off"
-                      class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
-                      .value=${this.warIdDraft}
-                      @input=${(event: Event) =>
-                        (this.warIdDraft = (
-                          event.target as HTMLInputElement
-                        ).value)}
-                      ?disabled=${warReason !== null}
-                    />
+                    ${conflicts
+                      ? html`<select
+                          id="national-peace-war-id"
+                          required
+                          class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                          .value=${this.warIdDraft}
+                          @change=${(event: Event) =>
+                            (this.warIdDraft = (event.target as HTMLSelectElement).value)}
+                          ?disabled=${!canIssuePeace || peaceWars.length === 0}
+                        >
+                          <option value="">Choose a current active WAR</option>
+                          ${peaceWars.map((war) => html`<option value=${war.id}>${war.id} · ${war.first.id} vs. ${war.second.id}</option>`)}
+                        </select>`
+                      : html`<input
+                          id="national-peace-war-id"
+                          type="text"
+                          required
+                          maxlength="256"
+                          autocomplete="off"
+                          class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                          .value=${this.warIdDraft}
+                          @input=${(event: Event) =>
+                            (this.warIdDraft = (event.target as HTMLInputElement).value)}
+                          ?disabled=${!canIssuePeace}
+                        />`}
                     <button
                       id="national-propose-peace"
                       type="submit"
                       class="rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 disabled:opacity-50"
-                      ?disabled=${warReason !== null || !this.eventBus || !this.warIdDraft.trim()}
+                      ?disabled=${!canIssuePeace || !this.warIdDraft.trim() || (conflicts !== null && !peaceWars.some((war) => war.id === this.warIdDraft))}
                     >
                       Propose peace
                     </button>
@@ -947,25 +972,36 @@ export class NationalDiplomacyPanel extends LitElement {
                     >
                       Engine peace motion ID
                     </label>
-                    <input
-                      id="national-peace-motion-id"
-                      type="text"
-                      required
-                      maxlength="256"
-                      autocomplete="off"
-                      class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
-                      .value=${this.motionIdDraft}
-                      @input=${(event: Event) =>
-                        (this.motionIdDraft = (
-                          event.target as HTMLInputElement
-                        ).value)}
-                      ?disabled=${warReason !== null}
-                    />
+                    ${conflicts
+                      ? html`<select
+                          id="national-peace-motion-id"
+                          required
+                          class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                          .value=${this.motionIdDraft}
+                          @change=${(event: Event) =>
+                            (this.motionIdDraft = (event.target as HTMLSelectElement).value)}
+                          ?disabled=${!canIssuePeace || peaceMotions.length === 0}
+                        >
+                          <option value="">Choose a pending peace motion</option>
+                          ${peaceMotions.map((motion) => html`<option value=${motion.id}>${motion.id} · WAR ${motion.layerId}</option>`)}
+                        </select>`
+                      : html`<input
+                          id="national-peace-motion-id"
+                          type="text"
+                          required
+                          maxlength="256"
+                          autocomplete="off"
+                          class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                          .value=${this.motionIdDraft}
+                          @input=${(event: Event) =>
+                            (this.motionIdDraft = (event.target as HTMLInputElement).value)}
+                          ?disabled=${!canIssuePeace}
+                        />`}
                     <button
                       id="national-accept-peace"
                       type="submit"
                       class="rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 disabled:opacity-50"
-                      ?disabled=${warReason !== null || !this.eventBus || !this.motionIdDraft.trim()}
+                      ?disabled=${!canIssuePeace || !this.motionIdDraft.trim() || (conflicts !== null && !peaceMotions.some((motion) => motion.id === this.motionIdDraft))}
                     >
                       Accept peace
                     </button>
