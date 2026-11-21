@@ -186,6 +186,11 @@ describe("C2 E2 REAL WebSocket three-account NATIONAL server", () => {
     }
     expect((await verifyClientToken(forgedToken)).type).toBe("error");
     let canonical: GameRunner | null = null;
+    const requireCanonical = (): GameRunner => {
+      const runner: GameRunner | null = canonical;
+      if (runner === null) throw new Error("trusted host never created runner");
+      return runner;
+    };
     const game = makeGame({
       id: MATCH_ID,
       creatorPersistentID: ACCOUNT_UUIDS[0],
@@ -405,7 +410,7 @@ describe("C2 E2 REAL WebSocket three-account NATIONAL server", () => {
     await new Promise(resolve => setTimeout(resolve, 140));
     expect(receipt(c, abandonedToken)).toBeUndefined();
     expect(receipt(replacement, abandonedToken)).toBeUndefined();
-    const authoritativeGame = (canonical as GameRunner).game;
+    const authoritativeGame = requireCanonical().game;
     expect(
       authoritativeGame
         .nationalPoliticalCommandResults(authoritativeGame.player(SEAT_IDS[1]))
