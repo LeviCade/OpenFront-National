@@ -1,9 +1,14 @@
 import { GameType } from "@openfront/engine-api/game/GameTypes";
 import type { EventBus, GameEvent } from "@openfront/shared/EventBus";
-import type {
-  ServerNationalCapabilityMessage,
-  WireGameStartInfo,
-} from "@openfront/shared/WireSchemas";
+import type { WireGameStartInfo } from "@openfront/shared/WireSchemas";
+
+/** E2's native trusted start message, not an E4-created wire variant. */
+export interface TrustedNationalStartLike {
+  readonly type: "national_start";
+  readonly gameStartInfo: WireGameStartInfo;
+  readonly myClientID: string;
+  readonly tick: number;
+}
 
 /**
  * Connection-scoped UI permission granted only by the actual decoded server
@@ -35,32 +40,36 @@ export interface NationalPrivateCapabilityContext {
 /** No legacy Private, bogus client actor, replay or stale start may pass. */
 export function eligibleTrustedNationalPrivateSeat(
   context: NationalPrivateCapabilityContext,
-  packet: ServerNationalCapabilityMessage,
+  packet: TrustedNationalStartLike,
 ): boolean {
   return (
-    packet.version === 1 &&
-    packet.active === true &&
+    packet.type === "national_start" &&
+    Number.isSafeInteger(packet.tick) &&
+    packet.tick >= 0 &&
     context.remoteSocketOpen &&
     context.sessionReady &&
     !context.replay &&
     !context.spectator &&
     context.start?.gameID === context.gameID &&
-    packet.gameID === context.gameID &&
+    packet.gameStartInfo.gameID === context.gameID &&
+    packet.gameStartInfo.config.gameType === GameType.Private &&
+    packet.gameStartInfo.config.nationalMode === true &&
     context.start.config.gameType === GameType.Private &&
     context.start.config.nationalMode === true &&
     context.startClientID !== null &&
-    packet.clientID === context.startClientID &&
-    context.start.players.some((player) => player.clientID === packet.clientID)
+    packet.myClientID === context.startClientID &&
+    context.start.players.some((player) => player.clientID === packet.myClientID) &&
+    packet.gameStartInfo.players.some((player) => player.clientID === packet.myClientID)
   );
 }
 
 /**
- * Invoked by Transport only after decoding a frame from its own authenticated
+ * Invoked by Transport only after decoding E2 national_start from its own authenticated
  * websocket. No room setting or arbitrary event-bus broadcast calls this.
  */
 export function acceptTrustedNationalPrivateCapability(
   bus: EventBus,
-  packet: ServerNationalCapabilityMessage,
+  packet: TrustedNationalStartLike,
   context: NationalPrivateCapabilityContext,
 ): boolean {
   const ready = eligibleTrustedNationalPrivateSeat(context, packet);
@@ -68,8 +77,8 @@ export function acceptTrustedNationalPrivateCapability(
     revokeTrustedNationalPrivateCapability(bus, context.gameID);
     return false;
   }
-  accepted.set(bus, { gameID: packet.gameID, clientID: packet.clientID });
-  bus.emit(new NationalPrivateCapabilityChangedEvent(packet.gameID, true));
+  accepted.set(bus, { gameID: context.gameID, clientID: packet.myClientID });
+  bus.emit(new NationalPrivateCapabilityChangedEvent(context.gameID, true));
   return true;
 }
 
