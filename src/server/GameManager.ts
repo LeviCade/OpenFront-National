@@ -14,7 +14,7 @@ import {
 import { Logger } from "winston";
 import WebSocket from "ws";
 import { Client } from "./Client";
-import { GamePhase, GameServer, JoinResult } from "./GameServer";
+import { GamePhase, GameServer, JoinResult, type NationalReconnectPrincipal } from "./GameServer";
 import { Gatekeeper, noopGatekeeper } from "./Gatekeeper";
 import { ClientAuth, clientAuth } from "./JoinVerify";
 
