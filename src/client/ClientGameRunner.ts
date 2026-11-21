@@ -96,6 +96,7 @@ import {
   Transport,
 } from "./Transport";
 import {
+  materializeTrustedNationalUpdate,
   parseTrustedNationalProjection,
   TrustedNationalProjectionEvent,
   TrustedNationalStartedEvent,
@@ -160,6 +161,10 @@ export function joinLobby(
   const transport = new Transport(lobbyConfig, eventBus);
 
   let currentGameRunner: ClientGameRunner | null = null;
+  let creatingTrustedGame = false;
+  // Map+WebGL setup is asynchronous. Hold real E3 packets only while loading;
+  // never manufacture a fake update or fork a canonical browser GameRunner.
+  let bufferedTrustedProjections: TrustedNationalProjectionEvent[] = [];
 
   const onconnect = async () => {
     // Drop the tag if the ownership check failed; the server re-checks anyway.
@@ -284,22 +289,66 @@ export function joinLobby(
       resolvePrestart();
     }
     if (message.type === "national_start") {
-      // Verified lobby -> trusted server session. Do NOT create a browser
-      // GameRunner here; E4's read-only renderer consumes this event.
+      // E2 is the ONLY simulator. Create the existing WebGL map, real input
+      // handler and UI, but do not initialize a WorkerClient or GameRunner.
       resolvePrestart();
       clientID = message.myClientID;
       rememberAdmitted(lobbyConfig.gameID);
       lobbyConfig.gameStartInfo = message.gameStartInfo;
       resolveJoin();
       eventBus.emit(new TrustedNationalStartedEvent(message));
+      if (currentGameRunner !== null) {
+        // E2 must supply a fresh recipient resync on rejoin. Until then the
+        // existing view is intentionally blocked by Transport's revoked gate.
+        return;
+      }
+      if (creatingTrustedGame) return;
+      creatingTrustedGame = true;
+      void createClientGame(
+        lobbyConfig,
+        clientID,
+        eventBus,
+        transport,
+        userSettings,
+        terrainLoad,
+        terrainMapFileLoader,
+        true,
+      )
+        .then((runner) => {
+          currentGameRunner = runner;
+          runner.start();
+          for (const buffered of bufferedTrustedProjections) {
+            eventBus.emit(buffered);
+          }
+          bufferedTrustedProjections = [];
+        })
+        .catch((error) => {
+          bufferedTrustedProjections = [];
+          console.error("Failed to mount trusted NATIONAL map", error);
+          showErrorModal(
+            "NATIONAL projection map failed to load",
+            error instanceof Error ? error.message : String(error),
+            lobbyConfig.gameID,
+            clientID,
+            true,
+            false,
+            "error_modal.connection_error",
+          );
+        })
+        .finally(() => {
+          creatingTrustedGame = false;
+        });
       return;
     }
     if (message.type === "national_projection") {
-      eventBus.emit(
-        new TrustedNationalProjectionEvent(
-          parseTrustedNationalProjection(message.payload, message.tick),
-        ),
+      const projection = new TrustedNationalProjectionEvent(
+        parseTrustedNationalProjection(message.payload, message.tick),
       );
+      if (currentGameRunner) {
+        eventBus.emit(projection);
+      } else if (creatingTrustedGame && bufferedTrustedProjections.length < 12) {
+        bufferedTrustedProjections.push(projection);
+      }
       return;
     }
     if (message.type === "start") {
@@ -724,6 +773,7 @@ async function createClientGame(
   userSettings: UserSettings,
   terrainLoad: Promise<TerrainMapData> | null,
   mapLoader: GameMapLoader,
+  trustedNationalProjection = false,
 ): Promise<ClientGameRunner> {
   if (lobbyConfig.gameStartInfo === undefined) {
     throw new Error("missing gameStartInfo");
@@ -747,12 +797,17 @@ async function createClientGame(
   // Kick off the font-atlas fetch so it overlaps with worker init; the
   // render passes need it parsed before createWebGLView runs.
   const atlasDataLoad = preloadAtlasData();
-  const worker = new WorkerClient(
-    lobbyConfig.gameStartInfo,
-    clientID,
-    lobbyConfig.snapshot,
-  );
-  await worker.initialize();
+  // Trusted NATIONAL is a view-only session. Constructing WorkerClient
+  // would launch a SECOND browser-side simulation and leak canonical state.
+  // Native panel/radial input reads sanitized GameView projections instead.
+  const worker = trustedNationalProjection
+    ? ({ cleanup: () => {} } as unknown as WorkerClient)
+    : new WorkerClient(
+        lobbyConfig.gameStartInfo,
+        clientID,
+        lobbyConfig.snapshot,
+      );
+  if (!trustedNationalProjection) await worker.initialize();
   await atlasDataLoad;
   const gameView = new GameView(
     worker,
@@ -764,6 +819,7 @@ async function createClientGame(
     lobbyConfig.gameStartInfo.gameID,
     lobbyConfig.gameStartInfo.players,
     lobbyConfig.snapshot !== undefined,
+    trustedNationalProjection,
   );
 
   // Transparent fullscreen overlay used purely as the pointer-event /
@@ -981,6 +1037,7 @@ async function createClientGame(
       disposeRenderer,
       metrics,
       health,
+      trustedNationalProjection,
     );
   } catch (err) {
     soundManager.dispose();
@@ -1008,6 +1065,46 @@ export class ClientGameRunner {
   private healthTimer: ReturnType<typeof setInterval> | null = null;
   private healthPaused = false;
   private healthIndicators: GameHealthIndicators | null = null;
+  private trustedLastTick = -1;
+  private trustedProjectionActive = false;
+  private readonly onTrustedNationalProjection = (
+    event: TrustedNationalProjectionEvent,
+  ): void => {
+    if (
+      !this.isActive ||
+      !this.trustedNationalProjection ||
+      !this.trustedProjectionActive ||
+      !hasTrustedNationalPrivateCapability(this.eventBus, this.lobby.gameID)
+    ) return;
+    try {
+      const update = materializeTrustedNationalUpdate(
+        event.projection,
+        this.trustedLastTick,
+      );
+      this.gameView.update(update);
+      this.trustedLastTick = update.tick;
+      this.myPlayer = this.clientID
+        ? this.gameView.playerByClientID(this.clientID)
+        : null;
+      this.webglBuilder?.update(this.gameView);
+      this.renderer.tick();
+      this.health.recordTurn(performance.now());
+      this.updateHealth();
+    } catch (error) {
+      // A malformed or out-of-order packet may never re-enable controls by
+      // accident. Fail closed; E2 must resync and provide a fresh trusted start.
+      this.trustedProjectionActive = false;
+      this.gameView.invalidateNationalPoliticalView();
+      console.error("NATIONAL projected view rejected", error);
+    }
+  };
+  private readonly onTrustedTransportStatus = (
+    event: NationalTransportStatusEvent,
+  ): void => {
+    if (event.gameID !== this.lobby.gameID || event.ready) return;
+    this.trustedProjectionActive = false;
+    this.gameView.invalidateNationalPoliticalView();
+  };
 
   private updateHealth = (): void => {
     const status = this.health.update(performance.now(), {
@@ -1045,6 +1142,7 @@ export class ClientGameRunner {
     private disposeRenderer: (() => void) | null = null,
     private metrics: GameMetrics | null = null,
     private health: GameHealth = new GameHealth(),
+    private readonly trustedNationalProjection = false,
   ) {
     this.lastMessageTime = Date.now();
   }
@@ -1115,6 +1213,24 @@ export class ClientGameRunner {
 
     this.renderer.initialize();
     this.input.initialize();
+    if (this.trustedNationalProjection) {
+      // The existing GPU/terrain renderer and all native input/HUD layers are
+      // live. Their data source is E3's signed-by-server recipient stream,
+      // NOT WorkerClient/turns or a locally constructed authoritative Game.
+      this.trustedProjectionActive = hasTrustedNationalPrivateCapability(
+        this.eventBus,
+        this.lobby.gameID,
+      );
+      this.eventBus.on(
+        TrustedNationalProjectionEvent,
+        this.onTrustedNationalProjection,
+      );
+      this.eventBus.on(
+        NationalTransportStatusEvent,
+        this.onTrustedTransportStatus,
+      );
+      return;
+    }
     this.worker.start((gu: GameUpdateViewData | ErrorUpdate) => {
       if (this.lobby.gameStartInfo === undefined) {
         throw new Error("missing gameStartInfo");
@@ -1310,6 +1426,17 @@ export class ClientGameRunner {
   }
 
   public stop() {
+    if (this.trustedNationalProjection) {
+      this.eventBus.off(
+        TrustedNationalProjectionEvent,
+        this.onTrustedNationalProjection,
+      );
+      this.eventBus.off(
+        NationalTransportStatusEvent,
+        this.onTrustedTransportStatus,
+      );
+      this.trustedProjectionActive = false;
+    }
     if (this.healthTimer !== null) clearInterval(this.healthTimer);
     this.healthTimer = null;
     document.removeEventListener("visibilitychange", this.updateHealth);
