@@ -37,6 +37,8 @@ import {
   PANEL_TOGGLE,
   describePanel,
   unobstructedCanvasPoint,
+  soloSpawnFractions,
+  classifySoloBattleEvidence,
   classifyFoundingEvidence,
   acceptRadialTarget,
   distinctPeacePrincipal,
@@ -1202,15 +1204,22 @@ async function main() {
         );
       }
       await capture("game-hud");
-      const live = await gameObservation();
+      const live = await poll(
+        async () => {
+          const view = await gameObservation();
+          return view?.gameType === "Singleplayer" &&
+            view.gameId &&
+            view.actorId &&
+            Number.isSafeInteger(view.tick)
+            ? view
+            : null;
+        },
+        "real NATIONAL Solo client admission and live GameView",
+        35,
+        200,
+      ).catch(() => null);
       const packets = await worker();
-      if (
-        live?.gameType !== "Singleplayer" ||
-        !live.gameId ||
-        !live.actorId ||
-        !Number.isSafeInteger(live.tick)
-      )
-        throw Error("SOLO_TRANSPORT_ADMISSION_NOT_OBSERVED");
+      if (!live) throw Error("SOLO_TRANSPORT_ADMISSION_NOT_OBSERVED");
       record("solo-transport-admission-observed", {
         gameTypeIsSolo: true,
         actorPresent: true,
@@ -1241,19 +1250,8 @@ async function main() {
       await capture("diplomacy-before-spawn");
       await setPanelExpanded(false);
       await capture("spawn-unobstructed-map");
-      // Deterministic CDP tap search; the canvas-hit test rejects overlays.
-      // Six fixed samples missed valid mobile land on prior hardware.
-      const locations = [
-        [0.55, 0.55],
-        [0.4, 0.4],
-        [0.6, 0.42],
-        [0.3, 0.55],
-        [0.7, 0.6],
-        [0.2, 0.4],
-        ...[0.25, 0.4, 0.55, 0.7, 0.82].flatMap((v) =>
-          [0.2, 0.35, 0.5, 0.65, 0.8].map((u) => [u, v]),
-        ),
-      ];
+      // Every CDP tap must still hit a genuinely unobstructed map canvas.
+      const locations = soloSpawnFractions();
       let actualSpawn = before.spawned && before.ownedTiles > 0 ? before : null;
       let unobstructedInputs = 0;
       let obstructedSamples = 0;
@@ -1859,6 +1857,7 @@ async function main() {
     let warId = null;
     let warTargetId = null;
     let combatBaseline = null;
+    let soloBattleAttack = null;
     let peaceMotionId = null;
     await step("declare-war", async () => {
       // The accession recipient is now in our empire. WAR requires a
@@ -2154,17 +2153,27 @@ async function main() {
               (p.hasAuthoritativeAttackDelta === true ||
                 p.hasAuthoritativeMotion === true),
           );
-          return (
-            Number.isSafeInteger(attackCount) &&
+          return Number.isSafeInteger(attackCount) &&
             attackCount > previousOutgoing &&
             resultFromEngine
-          );
+            ? { attackCount }
+            : null;
         },
         "actual own outgoing attack plus authoritative combat packet",
         60,
         300,
       );
       if (!authoritative) throw Error("MAP_ASSAULT_LACKS_OWN_ENGINE_ATTACK");
+      if (soloOnly) {
+        soloBattleAttack = {
+          targetId: warTargetId,
+          emitted: attacks,
+          before: combatBaseline,
+          outgoingBefore: previousOutgoing,
+          outgoingAfter: authoritative.attackCount,
+          firstSequence: lastSequence,
+        };
+      }
       record("actual-war-map-assault", {
         input: mobile ? "touch" : "mouse",
         dispatched: attacks.length,
@@ -2203,6 +2212,19 @@ async function main() {
         300,
       );
       if (!impact) throw Error("REAL_WAR_DAMAGE_NOT_OBSERVED");
+      if (soloOnly) {
+        const proof = classifySoloBattleEvidence({
+          ...soloBattleAttack,
+          after: impact,
+          packets: await worker(),
+        });
+        if (!proof.accepted) throw Error(proof.reason);
+        record("solo-real-battle-engine-correlated", {
+          opponentDamaged: true,
+          troopLoss: proof.troopLoss,
+          territoryLoss: proof.territoryLoss,
+        });
+      }
       record("authoritative-combat-impact", {
         warId,
         targetId: warTargetId,
