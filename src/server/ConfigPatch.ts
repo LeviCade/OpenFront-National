@@ -1,4 +1,4 @@
-import { GameMode } from "@openfront/engine-api/game/GameTypes";
+import { GameMode, GameType } from "@openfront/engine-api/game/GameTypes";
 import { GameConfig, GameConfigPatch } from "@openfront/engine-api/Schemas";
 import { adjustForTeams } from "@openfront/engine-lib/game/TeamAssignment";
 
@@ -88,6 +88,21 @@ export function applyGameConfigPatch(
   }
   for (const key of NULLABLE_KEYS) {
     copyNullable(target, rest, key);
+  }
+  // NATIONAL shared matches must be deliberate, hosted PRIVATE FFA games.
+  // The caller, GameServer.authorizeIntent, admits update_game_config only
+  // from the authenticated lobby creator before start, and never on a listed
+  // lobby. Non-FFA and public games retain their existing legacy behavior.
+  // No client can grant itself a seat, principal or sovereign authority here.
+  if (target.gameType === GameType.Private) {
+    if (target.gameMode === GameMode.FFA) {
+      if (patch.nationalMode !== undefined) {
+        target.nationalMode = patch.nationalMode;
+      }
+    } else if (target.nationalMode === true) {
+      // Switching out of FFA atomically disables a previously enabled mode.
+      target.nationalMode = false;
+    }
   }
   // The host's player cap: null lifts it, undefined leaves it alone. Lowering
   // it below the seated count kicks no one; it only turns away further
