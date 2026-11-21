@@ -4,7 +4,7 @@
  * console, URL and host diagnostics. None of those raw files leave the guest.
  * This publisher explicitly allowlists scalar acceptance observations.
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, lstatSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const MODES = [
@@ -13,8 +13,23 @@ export const MODES = [
   "legacy-desktop",
   "legacy-mobile",
 ];
-const SCREENSHOT = /^[a-z0-9][a-z0-9-]{0,60}[.]png$/;
-const STAGE = /^[a-z][a-z0-9-]{0,60}$/;
+const STAGES = new Set([
+  "boot", "home", "solo", "legacy-ffa", "national-mode", "start",
+  "spawn", "found-empire", "rejected-founding", "save-restore", "sovereign-victory",
+]);
+const SCREENSHOTS = new Set([
+  "home", "solo-modal", "legacy-ffa-game-hud", "national-enabled",
+  "game-hud", "diplomacy-before-spawn", "player-spawned",
+  "founding-request", "confirmed-empire", "founding-rejected",
+  "saved-confirmed", "restored-roster", "sovereign-victory",
+]);
+const PNG_MAGIC = Buffer.from("89504e470d0a1a0a", "hex");
+const screenshotName = (value) => {
+  if (!value.endsWith(".png")) return false;
+  const label = value.slice(0, -4);
+  return SCREENSHOTS.has(label) ||
+    (label.startsWith("failure-") && STAGES.has(label.slice(8)));
+};
 const SHA = /^[a-f0-9]{40}$/;
 const VERIFIED = new Set([
   "SIGNED_HOST_BACKED_VIRGL_VERIFIED",
@@ -23,7 +38,7 @@ const VERIFIED = new Set([
 const number = (value) =>
   Number.isSafeInteger(value) && value >= 0 ? value : null;
 const stage = (value) =>
-  typeof value === "string" && STAGE.test(value) ? value : null;
+  STAGES.has(value) ? value : null;
 
 export function summarizeBrowserEvidence(report, expectedSha) {
   const sourceMatches =
@@ -37,10 +52,7 @@ export function summarizeBrowserEvidence(report, expectedSha) {
   const renderer = sourceHardware?.unmaskedRenderer;
   const rendererSafe =
     typeof renderer === "string" &&
-    renderer.length <= 180 &&
-    /virgl/i.test(renderer) &&
-    /Intel.*HD Graphics 4600/i.test(renderer) &&
-    !/swiftshader|llvmpipe|lavapipe|softpipe|software/i.test(renderer)
+    /^ANGLE [(]Mesa, virgl [(]Mesa Intel[(]R[)] HD Graphics 4600 [(]HSW GT2[)][)], OpenGL ES 3[.]2[)]$/.test(renderer)
       ? renderer
       : null;
   return {
@@ -100,7 +112,12 @@ export function publishEvidence(root, expectedSha) {
   // Never publish arbitrary strings copied from JSON lines or the browser.
   const recorded = new Map();
   for (const line of lines.slice(0, 16)) {
-    const candidate = JSON.parse(line);
+    let candidate;
+    try {
+      candidate = JSON.parse(line);
+    } catch {
+      continue;
+    }
     if (
       MODES.includes(candidate?.scenario) &&
       !recorded.has(candidate.scenario) &&
@@ -111,14 +128,14 @@ export function publishEvidence(root, expectedSha) {
   let valid = lines.length === MODES.length && recorded.size === MODES.length;
   const result = {
     schema: 1,
-    expectedSourceSha: SHA.test(expectedSha || "") ? expectedSha : null,
+    expectedSourceSha: SHA.test(expectedSha ?? "") ? expectedSha : null,
     modes: {},
   };
   for (const mode of MODES) {
     const origin = join(root, "browser-" + mode);
     const file = join(origin, "acceptance.json");
     let raw = null;
-    if (existsSync(file) && statSync(file).size <= 4_000_000) {
+    if (existsSync(file) && lstatSync(file).isFile() && lstatSync(file).size <= 4_000_000) {
       try {
         raw = JSON.parse(readFileSync(file, "utf8"));
       } catch {
@@ -127,16 +144,18 @@ export function publishEvidence(root, expectedSha) {
     }
     const summary = summarizeBrowserEvidence(raw, expectedSha);
     const status = recorded.get(mode);
-    if (!summary.sourceMatches || status?.result !== "PASS" && status?.result !== "FAIL") valid = false;
+    if (!summary.sourceMatches || (status?.result !== "PASS" && status?.result !== "FAIL")) valid = false;
     if (status?.result === "PASS" && !summary.hardware.proofAccepted) valid = false;
     const images = [];
     if (existsSync(origin)) {
       const outputDir = join(publicDir, mode);
       mkdirSync(outputDir, { recursive: true });
       for (const name of readdirSync(origin).sort()) {
-        if (!SCREENSHOT.test(name) || images.length >= 30) continue;
+        if (!screenshotName(name) || images.length >= 30) continue;
         const path = join(origin, name);
-        if (!statSync(path).isFile() || statSync(path).size > 8_000_000) continue;
+        const info = lstatSync(path);
+        if (!info.isFile() || info.size > 8_000_000 || info.size < PNG_MAGIC.length) continue;
+        if (!readFileSync(path).subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC)) continue;
         copyFileSync(path, join(outputDir, name));
         images.push(name);
       }

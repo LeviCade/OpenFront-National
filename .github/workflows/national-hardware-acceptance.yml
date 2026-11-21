@@ -85,6 +85,18 @@ jobs:
           git checkout --detach "$NATIONAL_GPU_CANDIDATE_SHA"
           test "$(git rev-parse HEAD)" = "$NATIONAL_GPU_CANDIDATE_SHA"
           printf '%s\n' "$NATIONAL_GPU_CANDIDATE_SHA" > national-qa-artifacts/gpu/sha.txt
+          test -f scripts/national-gpu-ci/sanitize-browser-evidence.mjs || {
+            echo 'BLOCKED: candidate lacks reviewed E6 evidence sanitizer' >&2
+            exit 1
+          }
+          test -f scripts/national-qa/trusted-gpu-keys.json || {
+            echo 'BLOCKED: candidate lacks E5 trust-root enrollment source' >&2
+            exit 1
+          }
+          grep -Fq 'gl-egl' scripts/national-qa/browser-gameplay.mjs || {
+            echo 'BLOCKED: E5 reviewed gl-egl browser harness absent' >&2
+            exit 1
+          }
           printf 'SOURCE_ADMISSION=PASS\n' | tee national-qa-artifacts/gpu/source-admission.txt
 
       - name: Inspect guest GPU and trusted hardware-proof availability
@@ -166,7 +178,7 @@ jobs:
               legacy-mobile) args=(--mobile --legacy);;
             esac
             echo "=== RUN $scenario at $NATIONAL_GPU_CANDIDATE_SHA ==="
-            node scripts/national-qa/browser-gameplay.mjs "${args[@]}" \
+            GITHUB_SHA="$NATIONAL_GPU_CANDIDATE_SHA" node scripts/national-qa/browser-gameplay.mjs "${args[@]}" \
               > "national-qa-artifacts/gpu/$scenario.log" 2>&1
             status=$?
             SCENARIO="$scenario" STATUS="$status" node -e '
@@ -177,9 +189,13 @@ jobs:
                   exitCode:Number(process.env.STATUS)})+"\n");
             '
             echo "$scenario: exit $status"
-            tail -n 24 "national-qa-artifacts/gpu/$scenario.log" || true
+            # Do not print or publish raw process logs/console/worker data.
             if [[ "$status" -ne 0 ]]; then failed=1; fi
           done
+          if ! node scripts/national-gpu-ci/sanitize-browser-evidence.mjs; then
+            echo 'BLOCKED: public evidence missing, untrusted or mismatched' >&2
+            failed=1
+          fi
           if [[ "$failed" -ne 0 ]]; then
             echo 'BLOCKED: at least one required real gameplay scenario failed' >&2
             exit 1
@@ -190,6 +206,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: national-skybot-gpu-${{ inputs.candidate_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: national-qa-artifacts/
+          path: national-qa-artifacts/gpu/public/
           if-no-files-found: warn
           retention-days: 14

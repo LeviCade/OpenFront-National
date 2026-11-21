@@ -32,3 +32,7 @@ After the job, host/operator evidence must confirm disposable VM teardown, overl
 ## Known limitation
 
 Manual dispatch is not available until reviewed default-branch promotion. E6 tools can read GitHub run evidence, but cannot directly operate the physical Skybot host or supply the missing independent signer. The job will remain red or unrun until those prerequisites are satisfied. This is intended fail-closed behavior.
+
+## Public artifact confidentiality
+
+The original browser keeps its rich CDP, worker, console, URL and failure logs inside the disposable guest. E6's `sanitize-browser-evidence.mjs` publishes *only* allowlisted scenario status, exact candidate SHA, stage names, receipt counts, accepted hardware/renderer/pixel observations, and expected PNG screenshots. It rejects symlinks, non-PNG data and unrecognized stages. **No raw `acceptance.json`, process logs, hardware inventory, console or worker packet objects are uploaded.** The scope-specific child `GITHUB_SHA` is explicitly the reviewed checkout SHA, not the default-branch workflow SHA. Full E5 local assertions still execute against the original evidence.
