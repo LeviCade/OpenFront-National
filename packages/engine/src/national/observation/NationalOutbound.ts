@@ -221,7 +221,12 @@ export function projectNationalPublicConflict(
     )
       continue;
     const layer = visibleLayers.get(motion.layerId);
-    if (!layer || !canNegotiate(layer)) continue;
+    if (
+      !layer ||
+      !canNegotiate(layer) ||
+      (layer.endedTick !== null && motion.acceptedTick === null)
+    )
+      continue;
     if (
       !publicId(motion.id) ||
       !publicId(motion.layerId) ||

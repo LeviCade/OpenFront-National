@@ -62,11 +62,7 @@ async function activeWar() {
 }
 
 function publicWar(game: Game, observer: string | null) {
-  return projectNationalPublicConflict(
-    game,
-    observer,
-    game.ticks(),
-  );
+  return projectNationalPublicConflict(game, observer, game.ticks());
 }
 
 type R9Packet = GameUpdateViewData & {
@@ -229,7 +225,9 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
       "covert-donor",
       "transport-destination-123",
       "secretRoute",
-    ]) expect(encoded).not.toContain(secret);
+    ]) {
+      expect(encoded).not.toContain(secret);
+    }
     expect(projection.layers.map((w) => w.id)).toEqual([warId]);
   });
 
@@ -329,7 +327,7 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
         requestId: "nc_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         accepted: false,
         tick: game.ticks(),
-        reason: "political-rule",
+        reason: "war-rule",
       },
     ];
     Object.defineProperty(game, "nationalWarCommandResults", {
@@ -355,6 +353,98 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
       }),
     ]);
     expect(results[1]).not.toHaveProperty("motionId");
+  });
+
+  it("joins the real E1 WAR journal to GameRunner, never fabricating results on branches without that port", async () => {
+    const game = await activeWar();
+    const source = game as Game & {
+      nationalWarCommandResults?: (
+        actor: Player,
+      ) => readonly { requestId: string; accepted: boolean }[];
+    };
+    const northView = liveRunner(game, north.clientID!);
+    const southView = liveRunner(game, south.clientID!);
+    const spectatorView = liveRunner(game);
+
+    if (typeof source.nationalWarCommandResults !== "function") {
+      // Standalone E3 has no E1 WAR journal; public WAR observation is NOT
+      // evidence that the original command was accepted.
+      expect(northView().nationalConflicts?.layers[0]?.id).toBe(warId);
+      expect(southView()).not.toHaveProperty("nationalCommandResults");
+      expect(spectatorView()).not.toHaveProperty("nationalCommandResults");
+      return;
+    }
+
+    const command = game.performNationalWarCommand.bind(game) as unknown as (
+      actor: Player,
+      request:
+        | { kind: "propose-peace"; warId: string; motionId: string }
+        | { kind: "accept-peace"; motionId: string },
+      requestId: string,
+    ) => { accepted: boolean; requestId: string };
+    const proposalId = "nc_1234567890abcdef1234567890abcdef";
+    const acceptanceId = "nc_abcdef1234567890abcdef1234567890";
+    const proposal = command(
+      game.player(north.id),
+      { kind: "propose-peace", warId, motionId },
+      proposalId,
+    );
+    expect(proposal).toMatchObject({ accepted: true, requestId: proposalId });
+    const owner = northView();
+    expect(owner.nationalCommandResults).toEqual([
+      expect.objectContaining({
+        type: "national_propose_peace",
+        recipientId: north.id,
+        actorId: north.id,
+        accepted: true,
+        requestId: proposalId,
+        warId,
+        motionId,
+        sequence: expect.any(Number),
+      }),
+    ]);
+    expect(owner.nationalConflicts?.motions[0]?.id).toBe(motionId);
+    expect(southView()).not.toHaveProperty("nationalCommandResults");
+    expect(spectatorView()).not.toHaveProperty("nationalCommandResults");
+
+    const acceptance = command(
+      game.player(south.id),
+      { kind: "accept-peace", motionId },
+      acceptanceId,
+    );
+    expect(acceptance).toMatchObject({
+      accepted: true,
+      requestId: acceptanceId,
+    });
+    const southResult = southView();
+    expect(southResult.nationalCommandResults).toEqual([
+      expect.objectContaining({
+        type: "national_accept_peace",
+        actorId: south.id,
+        recipientId: south.id,
+        accepted: true,
+        requestId: acceptanceId,
+        warId,
+        motionId,
+        sequence: expect.any(Number),
+      }),
+    ]);
+    expect(southResult.nationalConflicts?.layers[0]?.endedTick).not.toBeNull();
+    expect(
+      southResult.nationalConflicts?.motions[0]?.acceptedTick,
+    ).not.toBeNull();
+    expect(northView()).not.toHaveProperty("nationalCommandResults");
+    expect(spectatorView()).not.toHaveProperty("nationalCommandResults");
+
+    const { bytes, again, restored } = await roundTrip(game, "plains");
+    expect([...again]).toEqual([...bytes]);
+    expect(liveRunner(restored, north.clientID!)()).not.toHaveProperty(
+      "nationalCommandResults",
+    );
+    expect(liveRunner(restored, south.clientID!)()).not.toHaveProperty(
+      "nationalCommandResults",
+    );
+    expect(publicWar(restored, south.id)?.layers[0]?.endedTick).not.toBeNull();
   });
 
   it("direct outbound filter refuses foreign, future and malformed result IDs", async () => {
