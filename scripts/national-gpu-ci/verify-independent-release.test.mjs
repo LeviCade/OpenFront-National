@@ -56,7 +56,7 @@ function fixture() {
     runId: "44920010367",
     runAttempt: "1",
     jobId: "14920010367",
-    runnerName: "skybot-gpu-openfront-national-452d86d9",
+    runnerName: "skybot-ci-gpu-test-runner",
     runnerId: "12345",
     challenge,
     runStartedAtMs: RUN_START,

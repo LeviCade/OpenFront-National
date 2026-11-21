@@ -16,7 +16,6 @@ import {
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
 import type { GameConfig } from "@openfront/engine-api/Schemas";
-import { EngineConfig } from "@openfront/engine/configuration/EngineConfig";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";

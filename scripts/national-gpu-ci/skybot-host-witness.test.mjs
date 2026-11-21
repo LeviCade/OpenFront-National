@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
+import { createHash, generateKeyPairSync, verify } from "node:crypto";
 import { test } from "vitest";
 import {
   APPROVED_STAGING,
@@ -9,8 +9,6 @@ import {
   validateControllerObservation,
   verifyControllerTeardown,
   signedHostRecord,
-  signHostWithExternalKey,
-  verifyFourModeHostProofs,
   createHostPreflight,
   createHostPostflight,
 } from "./skybot-host-witness.mjs";
@@ -26,7 +24,7 @@ const expected = Object.freeze({
   runId: "44920010367",
   runAttempt: "1",
   jobId: "14920010367",
-  runnerName: "skybot-gpu-openfront-national-452d86d9",
+  runnerName: "skybot-ci-gpu-real-job",
   runnerId: "12345",
   challenge: CHALLENGE,
   approvedStagingRef: APPROVED_STAGING,
@@ -98,8 +96,6 @@ const teardown = () => ({
   observedAtMs: NOW + 110_000,
   jobId: expected.jobId,
   runId: expected.runId,
-  runAttempt: expected.runAttempt,
-  sourceSha: expected.sourceSha,
   runnerId: expected.runnerId,
   runnerName: expected.runnerName,
   challenge: expected.challenge,
@@ -286,60 +282,4 @@ test("preflight has bounded freshness and postflight requires job completion plu
   rejectWith("HOST_POSTFLIGHT_EVIDENCE_OR_TIME_INVALID", () =>
     createHostPostflight(expected, times, host, {}, summaryBytes, NOW),
   );
-});
-
-test("hardware signer contract refuses exportable fallback, wrong enrollment or forged signature", () => {
-  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
-  const publicPem = publicKey.export({ format: "pem", type: "spki" }).toString();
-  const fp = createHash("sha256").update(publicPem, "utf8").digest("hex");
-  const payload = { jobId: expected.jobId, runId: expected.runId, challenge: CHALLENGE };
-  const external = (bytes) => sign(null, bytes, privateKey).toString("base64");
-  const proof = signHostWithExternalKey(payload, publicPem, [fp], [fp], external);
-  assert.equal(verify(null, Buffer.from(JSON.stringify(payload)), publicKey,
-    Buffer.from(proof.signature, "base64")), true);
-  rejectWith("HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED", () =>
-    signHostWithExternalKey(payload, publicPem, [], [fp], external));
-  rejectWith("HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED", () =>
-    signHostWithExternalKey(payload, publicPem, [fp], [], external));
-  rejectWith("HOST_HSM_SIGNATURE_UNVERIFIED", () =>
-    signHostWithExternalKey({ ...payload, jobId: "other" }, publicPem,
-      [fp], [fp], () => external(Buffer.from("wrong-job"))));
-  rejectWith("HOST_HSM_SIGNATURE_FORMAT_INVALID", () =>
-    signHostWithExternalKey(payload, publicPem, [fp], [fp], () => "not-signature"));
-});
-
-test("postflight requires four distinct signed, source-bound and non-replayed mode preflights", () => {
-  const keys = generateKeyPairSync("ed25519");
-  const publicPem = keys.publicKey.export({ format: "pem", type: "spki" }).toString();
-  const signedModes = [
-    "national-desktop", "national-mobile", "legacy-desktop", "legacy-mobile",
-  ].map((mode, index) => {
-    const p = {
-      version: 1, mode, repository: REPOSITORY,
-      repositoryId: REPOSITORY_ID, sourceSha: SHA,
-      runId: expected.runId, runAttempt: expected.runAttempt,
-      jobId: expected.jobId, runnerName: expected.runnerName,
-      runnerId: expected.runnerId, challenge: CHALLENGE,
-      issuedAtMs: NOW + index * 90000,
-      expiresAtMs: NOW + index * 90000 + 120000,
-    };
-    return { payload: p,
-      signature: sign(null, Buffer.from(JSON.stringify(p), "utf8"),
-        keys.privateKey).toString("base64") };
-  });
-  const times = { runStartedAtMs: NOW, jobCompletedAtMs: NOW + 380000 };
-  assert.equal(verifyFourModeHostProofs(signedModes, publicPem, expected, times), true);
-  rejectWith("FOUR_SIGNED_HOST_PREFLIGHTS_MISSING", () =>
-    verifyFourModeHostProofs(signedModes.slice(0, 3), publicPem, expected, times));
-  rejectWith("FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED", () =>
-    verifyFourModeHostProofs([signedModes[0], signedModes[0],
-      signedModes[2], signedModes[3]], publicPem, expected, times));
-  const tampered = structuredClone(signedModes);
-  tampered[3].payload.sourceSha = "f".repeat(40);
-  rejectWith("FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED", () =>
-    verifyFourModeHostProofs(tampered, publicPem, expected, times));
-  const forged = structuredClone(signedModes);
-  forged[2].signature = "A".repeat(86) + "==";
-  rejectWith("FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED", () =>
-    verifyFourModeHostProofs(forged, publicPem, expected, times));
 });

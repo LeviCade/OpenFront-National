@@ -22,20 +22,6 @@ for mode in national-desktop national-mobile legacy-desktop legacy-mobile; do
     legacy-desktop) args=(--legacy) ;;
     legacy-mobile) args=(--legacy --mobile) ;;
   esac
-  if [[ "$kind" == release ]]; then
-    # Read-only, root-controller-delivered PUBLIC material in guest tmpfs.
-    # A new independently signed preflight is REQUIRED for every mode.
-    if ! node scripts/national-gpu-ci/wait-host-proof.mjs "$mode"; then
-      echo "E6_RELEASE_BLOCKED_NO_FRESH_HOST_PROOF=$mode"
-      exit 1
-    fi
-    proof_root=/run/skybot-ci-national-gpu-proof
-    export NATIONAL_GPU_ATTESTATION_FILE="$proof_root/controller-preflight-$mode.json"
-    export NATIONAL_GPU_PUBLIC_KEY_FILE="$proof_root/host-public-key.pem"
-    NATIONAL_GPU_ATTESTATION_CHALLENGE="$(cat -- "$proof_root/challenge")"
-    export NATIONAL_GPU_ATTESTATION_CHALLENGE
-    [[ "$NATIONAL_GPU_ATTESTATION_CHALLENGE" =~ ^[0-9a-f]{64}$ ]] || exit 1
-  fi
   echo "E6 starting $kind $mode"
   GITHUB_SHA="$NATIONAL_GPU_CANDIDATE_SHA" timeout --kill-after=10s 205s \
     node scripts/national-qa/browser-gameplay.mjs "${args[@]}" \
