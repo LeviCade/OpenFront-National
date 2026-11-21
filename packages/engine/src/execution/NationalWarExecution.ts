@@ -321,7 +321,8 @@ export class NationalWarExecution implements Execution {
         // Returning without a receipt is fail-closed; NEVER claim acceptance.
         if (
           error instanceof Error &&
-          error.message === "NATIONAL command journal: reused foreign request ID"
+          error.message ===
+            "NATIONAL command journal: reused foreign request ID"
         )
           return;
         throw error;
