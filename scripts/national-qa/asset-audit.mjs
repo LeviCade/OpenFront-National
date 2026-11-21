@@ -75,7 +75,7 @@ function scan(dir) {
       const bytes = readFileSync(p);
       provenance.push({
         path: p,
-        category: /\\.(woff2?|ttf)$/i.test(p) ? "font" : "audio",
+        category: /[.](woff2?|ttf)$/i.test(p) ? "font" : "audio",
         bytes: bytes.length,
         sha256: createHash("sha256").update(bytes).digest("hex"),
         resourceDirectoryLicense: "CC BY-SA 4.0 / resources/LICENSE",
@@ -93,7 +93,7 @@ const musicSources = [
 ];
 const musicCallSites = musicSources.flatMap((source) =>
   readFileSync(source, "utf8")
-    .split(/\\r?\\n/)
+    .split(String.fromCharCode(10))
     .flatMap((line, index) =>
       Array.from(
         line.matchAll(/sounds[/]music[/][a-z0-9-]+[.]mp3/g),

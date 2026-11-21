@@ -11,7 +11,7 @@ import { verify as verifySignature } from "node:crypto";
 const SOFTWARE =
   /swiftshader|llvmpipe|softpipe|softwar(?:e|er)|swrast|lavapipe|basic render driver|microsoft basic|mesa offscreen|google swiftshader/i;
 const GENERIC =
-  /^(webgl|webkit webgl|webgl 2\\.0|angle|unknown|unavailable|none|n\\/a)$/i;
+  /^(webgl|webkit webgl|webgl 2[.]0|angle|unknown|unavailable|none|n[/]a)$/i;
 const PIXEL = [51, 102, 153, 255];
 const isPixel = (value) =>
   Array.isArray(value) &&
