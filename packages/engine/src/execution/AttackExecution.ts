@@ -172,6 +172,19 @@ export class AttackExecution implements Execution {
     this.startTroops ??= this.mg
       .config()
       .attackAmount(this._owner, this.target);
+    // A forged, malformed or zero-strength NATIONAL click is not an attack.
+    // Reject it before touching the attacker balance, MDA ledger, alliance
+    // state or embargoes. Ship-created attacks are also checked below after
+    // their trusted in-flight troop amount is resolved.
+    if (
+      mg.nationalPoliticalAuthority() !== null &&
+      (this.startTroops === null ||
+        !Number.isFinite(this.startTroops) ||
+        this.startTroops <= 0)
+    ) {
+      this.active = false;
+      return;
+    }
     if (this.removeTroops) {
       this.startTroops = Math.min(this._owner.troops(), this.startTroops);
       // Take the amount that was actually deducted, not the amount asked for.
@@ -179,6 +192,18 @@ export class AttackExecution implements Execution {
       // holding troops the owner never paid for — and retreat refunds the
       // combined total, turning the leftover fractions into free troops.
       this.startTroops = this._owner.removeTroops(this.startTroops);
+    }
+    // A sub-one-troop click rounds down to zero on the real PlayerImpl, and
+    // a penniless player cannot generate a hostile side effect for free.
+    // Preserve the old FFA semantics; NATIONAL requires an actual force.
+    if (
+      mg.nationalPoliticalAuthority() !== null &&
+      (this.startTroops === null ||
+        !Number.isFinite(this.startTroops) ||
+        this.startTroops < 1)
+    ) {
+      this.active = false;
+      return;
     }
     this.attack = this._owner.createAttack(
       this.target,

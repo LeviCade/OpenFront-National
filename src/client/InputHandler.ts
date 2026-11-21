@@ -1408,6 +1408,19 @@ export class InputHandler {
         }
         if (this.uiState.ghostStructure !== null) {
           this.eventBus.emit(new TouchGhostPlacementEvent(event.x, event.y));
+        } else if (
+          this.gameView.config?.().gameConfig?.().nationalMode === true &&
+          this.gameView.config?.().isReplay?.() !== true
+        ) {
+          // The spawn path is exactly the existing desktop map action.
+          // Later taps open the same real engine-authorized radial used by a
+          // mouse context click; it asks Player.actions(tile) before Attack.
+          // Never issue a direct attack from an arbitrary touch coordinate.
+          if (this.gameView.inSpawnPhase()) {
+            this.eventBus.emit(new MouseUpEvent(event.x, event.y));
+          } else {
+            this.eventBus.emit(new ContextMenuEvent(event.x, event.y));
+          }
         } else {
           this.eventBus.emit(new TouchEvent(event.x, event.y));
         }

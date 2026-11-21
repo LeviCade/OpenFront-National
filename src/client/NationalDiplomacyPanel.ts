@@ -533,20 +533,24 @@ export class NationalDiplomacyPanel extends LitElement {
     );
   }
 
+  /** Candidate visibility is NOT a replacement for E1's authority checks. */
   private ourWarSide(layer: NationalPublicWarLayer): 0 | 1 | null {
     const actorId = this.game?.myPlayer()?.id();
     if (!actorId) return null;
     const empire = this.memberEmpire;
-    const sideId =
-      layer.scope === "national"
-        ? actorId
-        : empire?.leaderId === actorId
-          ? empire.id
-          : null;
-    const kind = layer.scope === "national" ? "nation" : "empire";
-    if (!sideId) return null;
-    if (layer.first.kind === kind && layer.first.id === sideId) return 0;
-    if (layer.second.kind === kind && layer.second.id === sideId) return 1;
+    const canRepresent = (side: NationalPublicWarLayer["first"]): boolean => {
+      if (side.kind === "nation") {
+        return (
+          side.id === actorId ||
+          (layer.scope === "national" &&
+            empire?.leaderId === actorId &&
+            empire.memberIds.includes(side.id))
+        );
+      }
+      return empire?.id === side.id && empire.leaderId === actorId;
+    };
+    if (canRepresent(layer.first)) return 0;
+    if (canRepresent(layer.second)) return 1;
     return null;
   }
 
@@ -586,8 +590,12 @@ export class NationalDiplomacyPanel extends LitElement {
       return;
     }
     const projection = this.game?.nationalConflicts?.() ?? null;
+    if (!projection) {
+      this.diplomacyError =
+        "Awaiting authoritative WAR/peace state. No manual or guessed IDs are permitted.";
+      return;
+    }
     if (
-      projection &&
       !(
         action === "propose"
           ? this.eligiblePeaceWars()
@@ -616,6 +624,11 @@ export class NationalDiplomacyPanel extends LitElement {
         .find((player) => player.id() === id)
         ?.name() ?? id
     );
+  }
+
+  /** Drop HUD focus so the player can use ordinary map controls. */
+  private closeForMap(): void {
+    this.expanded = false;
   }
 
   private handlePanelKeyDown(event: KeyboardEvent): void {
@@ -659,7 +672,18 @@ export class NationalDiplomacyPanel extends LitElement {
     const canIssuePeace =
       warReason === null &&
       this.eventBus !== null &&
+      conflicts !== null &&
       this.lastDiplomacySubmission === null;
+    const combatWars =
+      conflicts?.layers.filter(
+        (layer) => layer.endedTick === null && this.ourWarSide(layer) !== null,
+      ) ?? [];
+    // Real GameRunner player attack projection only, not an intent counter.
+    const observedOutgoingAttacks =
+      game
+        .myPlayer()
+        ?.outgoingAttacks?.()
+        .filter((attack) => !attack.retreating).length ?? 0;
     return html`
       <section
         class="text-white w-[min(25rem,calc(100vw-1rem))] max-w-full rounded-xl border border-amber-400/50 bg-slate-950/95 shadow-xl backdrop-blur-sm overflow-hidden"
@@ -669,7 +693,7 @@ export class NationalDiplomacyPanel extends LitElement {
       >
         <button
           type="button"
-          class="flex w-full items-center justify-between gap-3 px-4 py-3 font-bold text-left text-sm hover:bg-amber-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
+          class="flex w-full min-h-12 items-center justify-between gap-3 px-4 py-3 font-bold text-left text-sm hover:bg-amber-400/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
           aria-controls="national-diplomacy-content"
           aria-expanded=${String(this.expanded)}
           @click=${() => (this.expanded = !this.expanded)}
@@ -681,12 +705,21 @@ export class NationalDiplomacyPanel extends LitElement {
           this.expanded
             ? html`<div
                 id="national-diplomacy-content"
-                class="px-4 pb-4 space-y-4 max-h-[min(65vh,32rem)] overflow-y-auto text-sm"
+                class="px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-4 max-h-[min(70dvh,calc(100dvh-8rem))] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] text-sm"
               >
                 <p class="text-xs text-slate-300">
-                  Empire membership and leadership are verified from game state.
-                  Requests do not become successful until the game confirms
-                  them.
+                  Choose a nation, declare WAR, then fight on the actual game
+                  map. Membership and outcomes come only from the engine.
+                </p>
+                <p
+                  data-national-map-instructions
+                  class="text-xs text-slate-300"
+                >
+                  ${
+                    game.inSpawnPhase()
+                      ? "Spawn first: click or tap an unoccupied land tile."
+                      : "Battle: right-click opposing territory on desktop, or tap it on mobile, then choose the enabled Attack action."
+                  }
                 </p>
                 ${
                   politics
@@ -784,7 +817,7 @@ export class NationalDiplomacyPanel extends LitElement {
                             autocomplete="off"
                             autocapitalize="off"
                             spellcheck="false"
-                            class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-white focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50"
+                            class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base text-white focus-visible:outline-2 focus-visible:outline-amber-300 disabled:opacity-50"
                             placeholder="e.g. Atlas_Empire"
                             aria-describedby="national-id-help"
                             .value=${this.draftEmpireId}
@@ -802,7 +835,7 @@ export class NationalDiplomacyPanel extends LitElement {
                           </p>
                           <button
                             type="submit"
-                            class="rounded-lg bg-amber-400 px-4 py-2 font-bold text-slate-950 hover:bg-amber-300 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
+                            class="min-h-11 rounded-lg bg-amber-400 px-4 py-2 font-bold text-slate-950 hover:bg-amber-300 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
                             ?disabled=${!canFound || !this.eventBus}
                           >
                             ${this.pendingEmpireId ? "Awaiting game result…" : "Found Empire"}
@@ -844,7 +877,7 @@ export class NationalDiplomacyPanel extends LitElement {
                     </label>
                     <select
                       id="national-war-scope"
-                      class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                      class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base focus-visible:outline-2 focus-visible:outline-amber-300"
                       .value=${this.warScope}
                       @change=${(event: Event) => {
                         this.warScope = (event.target as HTMLSelectElement)
@@ -868,7 +901,7 @@ export class NationalDiplomacyPanel extends LitElement {
                             </label>
                             <select
                               id="national-war-target-kind"
-                              class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                              class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base focus-visible:outline-2 focus-visible:outline-amber-300"
                               .value=${this.warTargetKind}
                               @change=${(event: Event) => {
                                 this.warTargetKind = (
@@ -892,7 +925,7 @@ export class NationalDiplomacyPanel extends LitElement {
                     <select
                       id="national-war-target"
                       required
-                      class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                      class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base focus-visible:outline-2 focus-visible:outline-amber-300"
                       .value=${this.warTargetId}
                       @change=${(event: Event) =>
                         (this.warTargetId = (
@@ -911,7 +944,7 @@ export class NationalDiplomacyPanel extends LitElement {
                     <button
                       id="national-declare-war"
                       type="submit"
-                      class="rounded-lg bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-500 disabled:opacity-50"
+                      class="min-h-11 rounded-lg bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-white disabled:opacity-50"
                       ?disabled=${!canIssueWar || warTargets.length === 0 || !this.warTargetId}
                     >
                       Declare
@@ -936,8 +969,8 @@ export class NationalDiplomacyPanel extends LitElement {
                   <p class="text-xs text-slate-300">
                     ${
                       conflicts
-                        ? "Choose a live engine-issued war or peace-motion ID. The engine still decides authorization."
-                        : "The authoritative public war/motion list is not yet available. Advanced commands require an externally verified engine-issued ID; submitting proves nothing."
+                        ? "Choose a real engine-issued WAR or motion ID. The game still decides constitutional authority."
+                        : "Awaiting authoritative current conflicts. Peace controls remain unavailable until the game sends live IDs."
                     }
                   </p>
                   ${
@@ -947,19 +980,67 @@ export class NationalDiplomacyPanel extends LitElement {
                           class="space-y-1 text-xs text-slate-300"
                         >
                           <p>
-                            Current active wars:
+                            Active layers:
                             ${conflicts.layers.filter((layer) => layer.endedTick === null).length};
                             pending peace motions:
                             ${conflicts.motions.filter((motion) => motion.acceptedTick === null).length}.
                           </p>
-                          ${conflicts.layers.filter((layer) => layer.endedTick === null).map((layer) => html`<p class="break-all">WAR ${layer.id}: ${layer.first.id} vs. ${layer.second.id}</p>`)}
-                          ${conflicts.motions.filter((motion) => motion.acceptedTick === null).map((motion) => html`<p class="break-all">Peace motion ${motion.id} for WAR ${motion.layerId}</p>`)}
+                          ${conflicts.layers.map(
+                            (layer) =>
+                              html`<p class="break-all">
+                                WAR ${layer.id} · ${layer.first.id} vs
+                                ${layer.second.id} ·
+                                ${layer.endedTick === null ? "ACTIVE" : "ENDED"}
+                              </p>`,
+                          )}
+                          ${conflicts.motions.map(
+                            (motion) =>
+                              html`<p class="break-all">
+                                Motion ${motion.id} for WAR ${motion.layerId} ·
+                                ${motion.acceptedTick === null ? "PENDING" : "ACCEPTED"}
+                              </p>`,
+                          )}
+                        </div>`
+                      : nothing
+                  }
+                  ${
+                    combatWars.length
+                      ? html`<div
+                          data-national-map-combat
+                          class="rounded-lg border border-cyan-400/40 bg-cyan-900/25 p-3 space-y-2"
+                        >
+                          <strong>⚔️ War is active — attack on the map</strong>
+                          <p class="text-xs">
+                            Close this panel, then right-click enemy land
+                            (desktop) or tap it (mobile). Choose Attack in the
+                            existing map menu. The engine decides whether troops
+                            move. Use the normal troop-ratio control to set how
+                            many are sent.
+                          </p>
+                          <p
+                            data-national-live-attacks
+                            class="text-xs"
+                            role="status"
+                          >
+                            Observed live outgoing map attacks:
+                            ${observedOutgoingAttacks}. This is reported from
+                            game state, not from clicking Attack.
+                          </p>
+                          <button
+                            id="national-return-to-map"
+                            type="button"
+                            class="min-h-11 rounded-lg border border-cyan-300 px-4 py-2 font-semibold text-white focus-visible:outline-2 focus-visible:outline-white"
+                            @click=${this.closeForMap}
+                          >
+                            Return to map
+                          </button>
                         </div>`
                       : nothing
                   }
                   <form
                     class="space-y-2"
-                    @submit=${(event: SubmitEvent) => this.submitPeace(event, "propose")}
+                    @submit=${(event: SubmitEvent) =>
+                      this.submitPeace(event, "propose")}
                   >
                     <label
                       for="national-peace-war-id"
@@ -967,51 +1048,43 @@ export class NationalDiplomacyPanel extends LitElement {
                     >
                       Engine war ID
                     </label>
-                    ${
-                      conflicts
-                        ? html`<select
-                            id="national-peace-war-id"
-                            required
-                            class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
-                            .value=${this.warIdDraft}
-                            @change=${(event: Event) =>
-                              (this.warIdDraft = (
-                                event.target as HTMLSelectElement
-                              ).value)}
-                            ?disabled=${!canIssuePeace || peaceWars.length === 0}
-                          >
-                            <option value="">
-                              Choose a current active WAR
-                            </option>
-                            ${peaceWars.map((war) => html`<option value=${war.id}>${war.id} · ${war.first.id} vs. ${war.second.id}</option>`)}
-                          </select>`
-                        : html`<input
-                            id="national-peace-war-id"
-                            type="text"
-                            required
-                            maxlength="256"
-                            autocomplete="off"
-                            class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
-                            .value=${this.warIdDraft}
-                            @input=${(event: Event) =>
-                              (this.warIdDraft = (
-                                event.target as HTMLInputElement
-                              ).value)}
-                            ?disabled=${!canIssuePeace}
-                          />`
-                    }
+                    <select
+                      id="national-peace-war-id"
+                      required
+                      class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base focus-visible:outline-2 focus-visible:outline-amber-300"
+                      .value=${this.warIdDraft}
+                      @change=${(event: Event) =>
+                        (this.warIdDraft = (
+                          event.target as HTMLSelectElement
+                        ).value)}
+                      ?disabled=${!canIssuePeace || peaceWars.length === 0}
+                    >
+                      <option value="">Choose an active WAR</option>
+                      ${peaceWars.map(
+                        (war) =>
+                          html`<option value=${war.id}>
+                            ${war.id} · ${war.first.id} vs ${war.second.id}
+                          </option>`,
+                      )}
+                    </select>
                     <button
                       id="national-propose-peace"
                       type="submit"
-                      class="rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 disabled:opacity-50"
-                      ?disabled=${!canIssuePeace || !this.warIdDraft.trim() || (conflicts !== null && !peaceWars.some((war) => war.id === this.warIdDraft))}
+                      class="min-h-11 rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 focus-visible:outline-2 focus-visible:outline-white disabled:opacity-50"
+                      ?disabled=${
+                        !canIssuePeace ||
+                        !this.warIdDraft.trim() ||
+                        (conflicts !== null &&
+                          !peaceWars.some((war) => war.id === this.warIdDraft))
+                      }
                     >
                       Propose peace
                     </button>
                   </form>
                   <form
                     class="space-y-2"
-                    @submit=${(event: SubmitEvent) => this.submitPeace(event, "accept")}
+                    @submit=${(event: SubmitEvent) =>
+                      this.submitPeace(event, "accept")}
                   >
                     <label
                       for="national-peace-motion-id"
@@ -1019,44 +1092,39 @@ export class NationalDiplomacyPanel extends LitElement {
                     >
                       Engine peace motion ID
                     </label>
-                    ${
-                      conflicts
-                        ? html`<select
-                            id="national-peace-motion-id"
-                            required
-                            class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
-                            .value=${this.motionIdDraft}
-                            @change=${(event: Event) =>
-                              (this.motionIdDraft = (
-                                event.target as HTMLSelectElement
-                              ).value)}
-                            ?disabled=${!canIssuePeace || peaceMotions.length === 0}
-                          >
-                            <option value="">
-                              Choose a pending peace motion
-                            </option>
-                            ${peaceMotions.map((motion) => html`<option value=${motion.id}>${motion.id} · WAR ${motion.layerId}</option>`)}
-                          </select>`
-                        : html`<input
-                            id="national-peace-motion-id"
-                            type="text"
-                            required
-                            maxlength="256"
-                            autocomplete="off"
-                            class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
-                            .value=${this.motionIdDraft}
-                            @input=${(event: Event) =>
-                              (this.motionIdDraft = (
-                                event.target as HTMLInputElement
-                              ).value)}
-                            ?disabled=${!canIssuePeace}
-                          />`
-                    }
+                    <select
+                      id="national-peace-motion-id"
+                      required
+                      class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base focus-visible:outline-2 focus-visible:outline-amber-300"
+                      .value=${this.motionIdDraft}
+                      @change=${(event: Event) =>
+                        (this.motionIdDraft = (
+                          event.target as HTMLSelectElement
+                        ).value)}
+                      ?disabled=${!canIssuePeace || peaceMotions.length === 0}
+                    >
+                      <option value="">
+                        Choose an opponent's peace motion
+                      </option>
+                      ${peaceMotions.map(
+                        (motion) =>
+                          html`<option value=${motion.id}>
+                            ${motion.id} · WAR ${motion.layerId}
+                          </option>`,
+                      )}
+                    </select>
                     <button
                       id="national-accept-peace"
                       type="submit"
-                      class="rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 disabled:opacity-50"
-                      ?disabled=${!canIssuePeace || !this.motionIdDraft.trim() || (conflicts !== null && !peaceMotions.some((motion) => motion.id === this.motionIdDraft))}
+                      class="min-h-11 rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 focus-visible:outline-2 focus-visible:outline-white disabled:opacity-50"
+                      ?disabled=${
+                        !canIssuePeace ||
+                        !this.motionIdDraft.trim() ||
+                        (conflicts !== null &&
+                          !peaceMotions.some(
+                            (motion) => motion.id === this.motionIdDraft,
+                          ))
+                      }
                     >
                       Accept peace
                     </button>
@@ -1065,6 +1133,7 @@ export class NationalDiplomacyPanel extends LitElement {
                     class="text-xs text-amber-200"
                     role="status"
                     aria-live="polite"
+                    aria-busy=${String(this.lastDiplomacySubmission !== null)}
                     data-national-diplomacy-status
                   >
                     ${this.diplomacyStatus ?? nothing}

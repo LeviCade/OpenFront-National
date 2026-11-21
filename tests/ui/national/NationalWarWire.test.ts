@@ -172,17 +172,6 @@ async function choose(
   await panel.updateComplete;
 }
 
-async function enter(
-  panel: NationalDiplomacyPanel,
-  selector: string,
-  value: string,
-) {
-  const input = panel.querySelector<HTMLInputElement>(selector)!;
-  input.value = value;
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  await panel.updateComplete;
-}
-
 afterEach(() => {
   for (const transport of transports.splice(0)) transport.leaveGame();
   for (const node of mounted.splice(0)) node.remove();
@@ -248,14 +237,17 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     expect(intents()[0]).not.toHaveProperty("clientID");
   });
 
-  it("submits real peace proposal and acceptance schema intents without implying agreement", async () => {
+  it("uses actual game-issued WAR and motion IDs for both peace intents", async () => {
     const { panel, state } = await setup();
-    await enter(panel, "#national-peace-war-id", "national-10-1-4");
+    state.conflicts = projection([canonicalWar], [foreignOffer]);
+    panel.refresh();
+    await panel.updateComplete;
+    await choose(panel, "#national-peace-war-id", "war-11");
     panel.querySelector<HTMLButtonElement>("#national-propose-peace")!.click();
     expect(intents()).toEqual([
       {
         type: "national_propose_peace",
-        warId: "national-10-1-4",
+        warId: "war-11",
         requestId: expect.stringMatching(/^nc_[0-9a-f]{32}$/),
       },
     ]);
@@ -277,21 +269,18 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     ];
     panel.refresh();
     await panel.updateComplete;
-    await enter(panel, "#national-peace-motion-id", "national-11-1-5");
+    await choose(panel, "#national-peace-motion-id", "motion-12");
     panel.querySelector<HTMLButtonElement>("#national-accept-peace")!.click();
     expect(intents()[1]).toEqual({
       type: "national_accept_peace",
-      motionId: "national-11-1-5",
+      motionId: "motion-12",
       requestId: expect.stringMatching(/^nc_[0-9a-f]{32}$/),
     });
     expect(intents()[1].requestId).not.toBe(intents()[0].requestId);
     expect(
       NationalAcceptPeaceIntentSchema.safeParse(intents()[1]).success,
     ).toBe(true);
-    expect(panel.textContent).not.toContain("Peace accepted");
-    expect(panel.textContent).not.toContain(
-      "Peace settlement confirmed by game",
-    );
+    expect(panel.textContent).not.toContain("Peace accepted by game");
   });
 
   it("fails closed for replay, eliminated players, spectators and a non-emperor", async () => {
@@ -713,6 +702,100 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       "Conflicting authenticated diplomacy receipts",
     );
     expect(panel.textContent).not.toContain("War confirmed by game");
+  });
+
+  it("does not offer guessed WAR/motion IDs when authoritative state is missing", async () => {
+    const { panel } = await setup();
+    const war = panel.querySelector<HTMLSelectElement>(
+      "#national-peace-war-id",
+    )!;
+    const motion = panel.querySelector<HTMLSelectElement>(
+      "#national-peace-motion-id",
+    )!;
+    expect(war.tagName).toBe("SELECT");
+    expect(motion.tagName).toBe("SELECT");
+    expect(war.disabled).toBe(true);
+    expect(motion.disabled).toBe(true);
+    expect(panel.textContent).toContain(
+      "Awaiting authoritative current conflicts",
+    );
+    // Even manually forged submission cannot bypass state validation.
+    (panel as any).warIdDraft = "fabricated-id";
+    panel
+      .querySelector<HTMLButtonElement>("#national-propose-peace")!
+      .closest("form")!
+      .dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    expect(intents()).toHaveLength(0);
+    await panel.updateComplete;
+    expect(panel.textContent).toContain("No manual or guessed IDs");
+  });
+
+  it("lets an independent nation respond to a real imperial peace proposal", async () => {
+    const { panel, state } = await setup();
+    state.conflicts = projection(
+      [
+        {
+          id: "imperial-war",
+          scope: "imperial",
+          first: { kind: "empire", id: "Atlas" },
+          second: { kind: "nation", id: "nation-a" },
+          declaredBy: "nation-b",
+          startedTick: 10,
+          endedTick: null,
+        },
+      ],
+      [
+        {
+          id: "imperial-motion",
+          layerId: "imperial-war",
+          proposedBy: "nation-b",
+          proposingSide: 0,
+          proposedTick: 10,
+          acceptedTick: null,
+          acceptedBy: null,
+        },
+      ],
+    );
+    panel.refresh();
+    await panel.updateComplete;
+    const opt = panel.querySelector<HTMLOptionElement>(
+      '#national-peace-motion-id option[value="imperial-motion"]',
+    );
+    expect(opt).not.toBeNull();
+    await choose(panel, "#national-peace-motion-id", "imperial-motion");
+    panel.querySelector<HTMLButtonElement>("#national-accept-peace")!.click();
+    expect(intents()[0]).toMatchObject({
+      type: "national_accept_peace",
+      motionId: "imperial-motion",
+    });
+  });
+
+  it("offers a real map-combat handoff without inventing an attack or suppressing the HUD", async () => {
+    const { panel, state } = await setup();
+    state.conflicts = projection();
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).toContain(
+      "Battle: right-click opposing territory",
+    );
+    expect(
+      panel.querySelector("[data-national-live-attacks]")?.textContent,
+    ).toMatch(/Observed live outgoing map attacks:\s*0/);
+    expect(panel.querySelector("[data-national-map-combat]")).not.toBeNull();
+    const back = panel.querySelector<HTMLButtonElement>(
+      "#national-return-to-map",
+    )!;
+    expect(back.className).toContain("min-h-11");
+    back.click();
+    await panel.updateComplete;
+    expect(
+      panel
+        .querySelector<HTMLButtonElement>(
+          'button[aria-controls="national-diplomacy-content"]',
+        )
+        ?.getAttribute("aria-expanded"),
+    ).toBe("false");
+    expect(intents()).toHaveLength(0);
   });
 
   it("fails closed on malformed, foreign and non-cryptographic receipt IDs", () => {

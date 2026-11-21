@@ -688,6 +688,12 @@ export function foundEmpire(
   );
   const next = copy(world);
   removePactMember(next, founderId);
+  // The founder is no longer an independent accession candidate. Invalidate
+  // every outstanding invitation before validating the new exclusive roster.
+  // Otherwise a sovereign's earlier invitation could block founding forever.
+  next.accessionOffers = next.accessionOffers.filter(
+    (offer) => offer.candidateId !== founderId,
+  );
   next.empires.push({
     id: empireId,
     leaderId: founderId,
