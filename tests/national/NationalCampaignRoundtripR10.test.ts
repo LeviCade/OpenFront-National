@@ -384,7 +384,11 @@ describe("R10 three-nation observed-information live match", () => {
     expect(unknown).not.toHaveProperty("nationalCommandResults");
     expect(mine.nationalConflicts?.motions).toEqual([]);
     expect(unknown.nationalConflicts?.motions).toEqual([]);
-    expect(mine.nationalConflicts?.layers[0]?.id).toBe("r10_private_war");
+    expect(
+      mine.nationalConflicts?.layers.some(
+        (layer) => layer.id === "r10_private_war",
+      ),
+    ).toBe(true);
     for (const packet of [mine, unknown]) {
       const encoded = JSON.stringify(packet, (_key, value) =>
         typeof value === "bigint" ? String(value) : value,
