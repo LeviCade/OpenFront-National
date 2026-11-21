@@ -1,9 +1,20 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "vitest";
-import { MODES, publishEvidence, summarizeBrowserEvidence } from "./sanitize-browser-evidence.mjs";
+import {
+  MODES,
+  publishEvidence,
+  summarizeBrowserEvidence,
+} from "./sanitize-browser-evidence.mjs";
 
 const SHA = "a".repeat(40);
 const PIXEL = [51, 102, 153, 255];
@@ -71,11 +82,20 @@ test("redacted report reveals only schema-listed performance and GPU evidence", 
 });
 
 test("mismatched source or absent independently verified hardware never passes", () => {
-  assert.equal(summarizeBrowserEvidence(sample(), "b".repeat(40)).sourceMatches, false);
-  assert.equal(summarizeBrowserEvidence(sample(), SHA).hardware.proofAccepted, true);
+  assert.equal(
+    summarizeBrowserEvidence(sample(), "b".repeat(40)).sourceMatches,
+    false,
+  );
+  assert.equal(
+    summarizeBrowserEvidence(sample(), SHA).hardware.proofAccepted,
+    true,
+  );
   const forged = sample();
   forged.events = [{ ...verified, accepted: false }];
-  assert.equal(summarizeBrowserEvidence(forged, SHA).hardware.proofAccepted, false);
+  assert.equal(
+    summarizeBrowserEvidence(forged, SHA).hardware.proofAccepted,
+    false,
+  );
 });
 
 test("publish four separate reports; reject absent proof and nonmatching source", () => {
@@ -84,19 +104,23 @@ test("publish four separate reports; reject absent proof and nonmatching source"
     mkdirSync(join(dir, "gpu"), { recursive: true });
     writeFileSync(
       join(dir, "gpu", "scenarios.jsonl"),
-      MODES.map((scenario) => JSON.stringify({ scenario, result: "PASS", exitCode: 0 })).join(
-        "\n",
-      ) + "\n",
+      MODES.map((scenario) =>
+        JSON.stringify({ scenario, result: "PASS", exitCode: 0 }),
+      ).join("\n") + "\n",
     );
     for (const mode of MODES) {
       const target = join(
         dir,
-        mode.startsWith("legacy-") ? "browser-legacy-ffa-" + mode.split("-")[1] : "browser-" + mode,
+        mode.startsWith("legacy-")
+          ? "browser-legacy-ffa-" + mode.split("-")[1]
+          : "browser-" + mode,
       );
       mkdirSync(target, { recursive: true });
       const report = sample();
       report.hardwareAcceptanceRequired = true;
-      report.viewport = mode.endsWith("mobile") ? "390x844 mobile" : "1280x800 desktop";
+      report.viewport = mode.endsWith("mobile")
+        ? "390x844 mobile"
+        : "1280x800 desktop";
       report.actualHardware.webgl1 = {
         supported: true,
         contextLost: false,
@@ -128,14 +152,20 @@ test("publish four separate reports; reject absent proof and nonmatching source"
     }
     assert.equal(publishEvidence(dir, SHA), true);
     const published = JSON.parse(
-      readFileSync(join(dir, "gpu", "public", "release", "summary.json"), "utf8"),
+      readFileSync(
+        join(dir, "gpu", "public", "release", "summary.json"),
+        "utf8",
+      ),
     );
     assert.deepEqual(Object.keys(published.modes), MODES);
     assert.equal(published.allModesPass, true);
     assert.equal(published.lane, "release");
     for (const mode of MODES) {
       const modeData = JSON.parse(
-        readFileSync(join(dir, "gpu", "public", "release", mode + ".json"), "utf8"),
+        readFileSync(
+          join(dir, "gpu", "public", "release", mode + ".json"),
+          "utf8",
+        ),
       );
       assert.equal(modeData.reportPresent, true);
       assert.equal(modeData.outcome, "PASS");
@@ -149,18 +179,30 @@ test("publish four separate reports; reject absent proof and nonmatching source"
     assert.ok(!JSON.stringify(published).includes("UNPUBLISHABLE"));
     assert.equal(publishEvidence(dir, SHA, "diagnostic"), false);
     const unsigned = JSON.parse(
-      readFileSync(join(dir, "gpu", "public", "diagnostic", "summary.json"), "utf8"),
+      readFileSync(
+        join(dir, "gpu", "public", "diagnostic", "summary.json"),
+        "utf8",
+      ),
     );
     assert.equal(unsigned.releaseCertified, false);
     assert.equal(unsigned.hostCleanupVerified, false);
     assert.equal(unsigned.lane, "diagnostic");
-    assert.equal(unsigned.modes["legacy-desktop"].hardware.proofAccepted, false);
+    assert.equal(
+      unsigned.modes["legacy-desktop"].hardware.proofAccepted,
+      false,
+    );
     const changed = sample();
     changed.exactSource = "b".repeat(40);
-    writeFileSync(join(dir, "browser-national-mobile", "acceptance.json"), JSON.stringify(changed));
+    writeFileSync(
+      join(dir, "browser-national-mobile", "acceptance.json"),
+      JSON.stringify(changed),
+    );
     assert.equal(publishEvidence(dir, SHA), false);
     const invalid = JSON.parse(
-      readFileSync(join(dir, "gpu", "public", "release", "national-mobile.json"), "utf8"),
+      readFileSync(
+        join(dir, "gpu", "public", "release", "national-mobile.json"),
+        "utf8",
+      ),
     );
     assert.equal(invalid.reason, "SOURCE_MISMATCH");
     assert.equal(invalid.outcome, "UNVERIFIED");
@@ -179,9 +221,10 @@ test("symlink named .png does not permit reading arbitrary filesystem content", 
     symlinkSync(join(dir, "secret.txt"), join(browser, "home.png"));
     assert.equal(publishEvidence(dir, SHA), false);
     assert.ok(
-      !readFileSync(join(dir, "gpu", "public", "release", "summary.json"), "utf8").includes(
-        "UNPUBLISHABLE_TOKEN_FROM_SYMLINK",
-      ),
+      !readFileSync(
+        join(dir, "gpu", "public", "release", "summary.json"),
+        "utf8",
+      ).includes("UNPUBLISHABLE_TOKEN_FROM_SYMLINK"),
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -194,13 +237,16 @@ test("missing report and wrong viewport never turn exit zero into an accepted ga
     mkdirSync(join(dir, "gpu"), { recursive: true });
     writeFileSync(
       join(dir, "gpu", "scenarios.jsonl"),
-      MODES.map((scenario) => JSON.stringify({ scenario, result: "PASS", exitCode: 0 })).join(
-        "\n",
-      ) + "\n",
+      MODES.map((scenario) =>
+        JSON.stringify({ scenario, result: "PASS", exitCode: 0 }),
+      ).join("\n") + "\n",
     );
     assert.equal(publishEvidence(dir, SHA, "diagnostic"), false);
     const output = JSON.parse(
-      readFileSync(join(dir, "gpu", "public", "diagnostic", "summary.json"), "utf8"),
+      readFileSync(
+        join(dir, "gpu", "public", "diagnostic", "summary.json"),
+        "utf8",
+      ),
     );
     assert.equal(output.releaseCertified, false);
     assert.equal(output.allModesPass, false);

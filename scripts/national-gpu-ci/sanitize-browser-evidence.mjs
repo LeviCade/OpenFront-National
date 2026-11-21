@@ -15,7 +15,12 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-export const MODES = ["national-desktop", "national-mobile", "legacy-desktop", "legacy-mobile"];
+export const MODES = [
+  "national-desktop",
+  "national-mobile",
+  "legacy-desktop",
+  "legacy-mobile",
+];
 export const REPORT_FOLDERS = Object.freeze({
   "national-desktop": "browser-national-desktop",
   "national-mobile": "browser-national-mobile",
@@ -23,7 +28,9 @@ export const REPORT_FOLDERS = Object.freeze({
   "legacy-mobile": "browser-legacy-ffa-mobile",
 });
 const pixelMatches = (value) =>
-  Array.isArray(value) && value.length === 4 && [51, 102, 153, 255].every((n, i) => value[i] === n);
+  Array.isArray(value) &&
+  value.length === 4 &&
+  [51, 102, 153, 255].every((n, i) => value[i] === n);
 const STAGES = new Set([
   "boot",
   "home",
@@ -57,19 +64,32 @@ const PNG_IEND = Buffer.from("0000000049454e44ae426082", "hex");
 const screenshotName = (value) => {
   if (!value.endsWith(".png")) return false;
   const label = value.slice(0, -4);
-  return SCREENSHOTS.has(label) || (label.startsWith("failure-") && STAGES.has(label.slice(8)));
+  return (
+    SCREENSHOTS.has(label) ||
+    (label.startsWith("failure-") && STAGES.has(label.slice(8)))
+  );
 };
 const SHA = /^[a-f0-9]{40}$/;
-const VERIFIED = new Set(["SIGNED_HOST_BACKED_VIRGL_VERIFIED", "SIGNED_PHYSICAL_GPU_VERIFIED"]);
-const number = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : null);
+const VERIFIED = new Set([
+  "SIGNED_HOST_BACKED_VIRGL_VERIFIED",
+  "SIGNED_PHYSICAL_GPU_VERIFIED",
+]);
+const number = (value) =>
+  Number.isSafeInteger(value) && value >= 0 ? value : null;
 const stage = (value) => (STAGES.has(value) ? value : null);
 
 export function summarizeBrowserEvidence(report, expectedSha) {
   const sourceMatches =
-    typeof expectedSha === "string" && SHA.test(expectedSha) && report?.exactSource === expectedSha;
+    typeof expectedSha === "string" &&
+    SHA.test(expectedSha) &&
+    report?.exactSource === expectedSha;
   const events = Array.isArray(report?.events) ? report.events : [];
-  const packets = Array.isArray(report?.workerPackets) ? report.workerPackets : [];
-  const attest = events.find((entry) => entry?.name === "strict-hardware-renderer-attestation");
+  const packets = Array.isArray(report?.workerPackets)
+    ? report.workerPackets
+    : [];
+  const attest = events.find(
+    (entry) => entry?.name === "strict-hardware-renderer-attestation",
+  );
   const sourceHardware = report?.actualHardware?.webgl;
   const renderer = sourceHardware?.unmaskedRenderer;
   const rendererSafe =
@@ -88,7 +108,9 @@ export function summarizeBrowserEvidence(report, expectedSha) {
       proofAccepted: attest?.accepted === true && VERIFIED.has(attest?.reason),
       verdict: VERIFIED.has(attest?.reason) ? attest.reason : null,
       renderer: rendererSafe,
-      webgl1ShaderPixel: Array.isArray(report?.actualHardware?.webgl1?.shaderPixel)
+      webgl1ShaderPixel: Array.isArray(
+        report?.actualHardware?.webgl1?.shaderPixel,
+      )
         ? report.actualHardware.webgl1.shaderPixel
             .filter((n) => Number.isInteger(n) && n >= 0 && n <= 255)
             .slice(0, 4)
@@ -127,7 +149,9 @@ export function summarizeBrowserEvidence(report, expectedSha) {
       ),
     },
     errorCount: Array.isArray(report?.errors) ? report.errors.length : 0,
-    networkFailureCount: Array.isArray(report?.networkErrors) ? report.networkErrors.length : 0,
+    networkFailureCount: Array.isArray(report?.networkErrors)
+      ? report.networkErrors.length
+      : 0,
     restrictedAssetCount: Array.isArray(report?.restrictedRuntimeAssets)
       ? report.restrictedRuntimeAssets.length
       : 0,
@@ -171,7 +195,11 @@ export function publishEvidence(root, expectedSha, kind = "release") {
     const origin = join(root, REPORT_FOLDERS[mode]);
     const file = join(origin, "acceptance.json");
     let raw = null;
-    if (existsSync(file) && lstatSync(file).isFile() && lstatSync(file).size <= 4_000_000) {
+    if (
+      existsSync(file) &&
+      lstatSync(file).isFile() &&
+      lstatSync(file).size <= 4_000_000
+    ) {
       try {
         raw = JSON.parse(readFileSync(file, "utf8"));
       } catch {
@@ -180,17 +208,24 @@ export function publishEvidence(root, expectedSha, kind = "release") {
     }
     const summary = summarizeBrowserEvidence(raw, expectedSha);
     const status = recorded.get(mode);
-    const expectedViewport = mode.endsWith("mobile") ? "390x844 mobile" : "1280x800 desktop";
+    const expectedViewport = mode.endsWith("mobile")
+      ? "390x844 mobile"
+      : "1280x800 desktop";
     const actualViewport =
       raw?.viewport === "390x844 mobile" || raw?.viewport === "1280x800 desktop"
         ? raw.viewport
         : null;
-    if (!summary.sourceMatches || (status?.result !== "PASS" && status?.result !== "FAIL"))
+    if (
+      !summary.sourceMatches ||
+      (status?.result !== "PASS" && status?.result !== "FAIL")
+    )
       valid = false;
     const historicalEvents = Array.isArray(raw?.events) ? raw.events : [];
-    const hasEvent = (name) => historicalEvents.some((event) => event?.name === name);
+    const hasEvent = (name) =>
+      historicalEvents.some((event) => event?.name === name);
     const stageComplete = mode.startsWith("legacy-")
-      ? summary.completedStages.includes("legacy-ffa") && hasEvent("legacy-ffa-verified")
+      ? summary.completedStages.includes("legacy-ffa") &&
+        hasEvent("legacy-ffa-verified")
       : summary.completedStages.includes("sovereign-victory") &&
         hasEvent("authoritative-empire-accepted") &&
         hasEvent("authoritative-duplicate-rejected") &&
@@ -206,15 +241,19 @@ export function publishEvidence(root, expectedSha, kind = "release") {
       pixelMatches(gl2.shaderPixel) &&
       typeof gl1.unmaskedRenderer === "string" &&
       /virgl/i.test(gl1.unmaskedRenderer) &&
-      !/swiftshader|llvmpipe|lavapipe|softpipe|software|swrast/i.test(gl1.unmaskedRenderer) &&
+      !/swiftshader|llvmpipe|lavapipe|softpipe|software|swrast/i.test(
+        gl1.unmaskedRenderer,
+      ) &&
       summary.hardware.renderer !== null;
     const signed =
       kind === "release" &&
       raw?.hardwareAcceptanceRequired === true &&
       summary.hardware.proofAccepted === true;
-    const laneMatches = raw?.hardwareAcceptanceRequired === (kind === "release");
+    const laneMatches =
+      raw?.hardwareAcceptanceRequired === (kind === "release");
     const viewportMatches = actualViewport === expectedViewport;
-    const statusExitMatches = status?.result === (status?.exitCode === 0 ? "PASS" : "FAIL");
+    const statusExitMatches =
+      status?.result === (status?.exitCode === 0 ? "PASS" : "FAIL");
     const reportedPass = status?.result === "PASS";
     const scenarioAccepted =
       summary.sourceMatches &&
@@ -247,7 +286,8 @@ export function publishEvidence(root, expectedSha, kind = "release") {
                 ? "GPU_OBSERVATION_INCOMPLETE"
                 : status.exitCode !== 0
                   ? summary.stageReached
-                    ? "GAMEPLAY_STAGE_" + summary.stageReached.toUpperCase().replaceAll("-", "_")
+                    ? "GAMEPLAY_STAGE_" +
+                      summary.stageReached.toUpperCase().replaceAll("-", "_")
                     : "BROWSER_PROCESS_FAILURE"
                   : !stageComplete
                     ? "GAMEPLAY_INCOMPLETE"
@@ -307,14 +347,18 @@ export function publishEvidence(root, expectedSha, kind = "release") {
   result.schema = 2;
   result.lane = kind;
   result.exactCandidateSha = SHA.test(expectedSha ?? "") ? expectedSha : null;
-  result.allModesPass = valid && MODES.every((mode) => result.modes[mode].outcome === "PASS");
+  result.allModesPass =
+    valid && MODES.every((mode) => result.modes[mode].outcome === "PASS");
   result.classification =
     kind === "diagnostic"
       ? "UNSIGNED_DIAGNOSTIC_NOT_RELEASE"
       : "E5_BROWSER_SIGNED_GATE_PENDING_HOST_CLEANUP";
   result.releaseCertified = false;
   result.hostCleanupVerified = false;
-  writeFileSync(join(publicDir, "summary.json"), JSON.stringify(result, null, 2) + "\n");
+  writeFileSync(
+    join(publicDir, "summary.json"),
+    JSON.stringify(result, null, 2) + "\n",
+  );
   return result.allModesPass;
 }
 
@@ -326,6 +370,8 @@ if (process.argv[1]?.endsWith("sanitize-browser-evidence.mjs")) {
     process.env.NATIONAL_GPU_CANDIDATE_SHA,
     kind,
   );
-  console.info("PUBLIC_GPU_EVIDENCE=" + (valid ? "VALID" : "INCOMPLETE_OR_UNTRUSTED"));
+  console.info(
+    "PUBLIC_GPU_EVIDENCE=" + (valid ? "VALID" : "INCOMPLETE_OR_UNTRUSTED"),
+  );
   if (!valid) process.exitCode = 1;
 }
