@@ -86,6 +86,7 @@ describe("E2 Round Nine WAR execution to E1-owned outcome port", () => {
         targetId: south.id,
       }),
       "r9_forged_claim",
+      south.clientID,
     );
     expect(game.nationalWarState()).toEqual(before);
   });
@@ -123,6 +124,7 @@ describe("E2 Round Nine WAR execution to E1-owned outcome port", () => {
         warId: "stale-war",
       }),
       "r9_replayed_click",
+      north.clientID,
     );
     expect(outcome).toHaveBeenCalledWith(
       game.player(north.id),
@@ -131,6 +133,7 @@ describe("E2 Round Nine WAR execution to E1-owned outcome port", () => {
         motionId: "stale-motion",
       }),
       "r9_replayed_click",
+      north.clientID,
     );
     expect(game.nationalWarAuthority()?.atWar(north.id, south.id)).toBe(false);
   });
@@ -187,6 +190,7 @@ describe("E2 Round Nine WAR execution to E1-owned outcome port", () => {
         target: { kind: "nation", id: south.id },
       }),
       null,
+      north.clientID,
     );
     expect(game.nationalWarAuthority()?.atWar(north.id, south.id)).toBe(false);
   });

@@ -62,7 +62,7 @@ describe("GameLifecycle", () => {
     expect(archive).not.toHaveBeenCalled();
     expect(log.error).not.toHaveBeenCalled();
     expect(log.info).toHaveBeenCalledWith(
-      "game not started, not archiving game",
+      "game not eligible for legacy archive",
     );
     // The lobby-info broadcast the join armed is gone too.
     expect(vi.getTimerCount()).toBe(0);

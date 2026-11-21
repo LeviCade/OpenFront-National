@@ -29,7 +29,7 @@ import {
 import {
   createTrustedNationalGameRunner,
   type GameRunner,
-} from "@openfront/engine/GameRunner";
+} from "@openfront/engine/WinnerReplay";
 import { isAdminRole } from "@openfront/shared/ApiSchemas";
 import { CloseCode, CloseReason } from "@openfront/shared/CloseCodes";
 import { GameEnv } from "@openfront/shared/configuration/Env";

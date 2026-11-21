@@ -671,7 +671,7 @@ export class GameImpl implements Game {
     authenticatedClientID?: ClientID,
   ): void {
     if (this._players.get(actor.id()) !== actor)
-      throw new Error("NATIONAL: forged actor");
+      throw new Error("NATIONAL: unauthenticated forged actor");
     if (
       this._config.nationalMode() &&
       this._config.gameConfig().gameType === GameType.Private &&

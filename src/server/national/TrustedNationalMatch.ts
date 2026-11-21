@@ -19,7 +19,7 @@ import {
   StampedIntentSchema,
   type Turn,
 } from "@openfront/engine-api/Schemas";
-import { GameRunner } from "@openfront/engine/GameRunner";
+import { GameRunner } from "@openfront/engine/WinnerReplay";
 import { createHash, randomUUID } from "node:crypto";
 import WebSocket from "ws";
 import type { Client } from "../Client";

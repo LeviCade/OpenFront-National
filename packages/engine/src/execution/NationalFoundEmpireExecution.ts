@@ -186,10 +186,7 @@ const NationalFoundEmpireStateSchema = z.object({
     ])
     .nullable(),
   requestId: z.string().min(1).max(256).nullable(),
-  authenticatedClientID: z
-    .string()
-    .regex(/^[A-Za-z0-9]{8,10}$/)
-    .nullable(),
+  authenticatedClientID: z.string().min(1).max(256).nullable(),
 });
 type NationalFoundEmpireState = z.infer<typeof NationalFoundEmpireStateSchema>;
 

@@ -60,7 +60,7 @@ function seat(clientID: string, account: string): Client {
     "127.0.0.1",
     clientID,
     null,
-    {} as Client["ws"],
+    { readyState: 1 } as Client["ws"],
     undefined,
     account,
     [],
