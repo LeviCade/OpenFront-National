@@ -610,7 +610,9 @@ export interface Game extends GameLike {
   /** Enumerates public empire leaders/members and warning/victory facts only. */
   nationalPublicPoliticalView(): NationalPublicPoliticalView | null;
   /** Private pending invitations addressed only to this authenticated human. */
-  nationalAccessionOffers(observer: Player): readonly NationalAccessionOfferView[];
+  nationalAccessionOffers(
+    observer: Player,
+  ): readonly NationalAccessionOfferView[];
   nationalVictoryRoster(): LastSovereignResult | null;
   nationalUngovernableWarnings(): readonly NationalUngovernableWarning[];
   /** Canonical E2 WarLedger-backed live query, never a mutable ledger. */

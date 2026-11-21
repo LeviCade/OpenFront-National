@@ -5,6 +5,7 @@ import { NationalFoundEmpireExecution } from "@openfront/engine/execution/Nation
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
+import { GameRunner } from "@openfront/engine/GameRunner";
 import type { NationalCommand } from "@openfront/engine/national/NationalRuntime";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
@@ -94,6 +95,10 @@ function politicalReceipts(game: Game, playerId: string) {
 
 function privateSnapshot(game: Game) {
   return readVersioned(GameSnapshot, snapshotGameData(game).game);
+}
+
+function last<T>(values: readonly T[]): T | undefined {
+  return values[values.length - 1];
 }
 
 describe("Round Ten live sovereignty: authenticated Game execution and replay", () => {
@@ -194,7 +199,7 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
         { kind: "accept-empire", empireId: "r10-empire-a", candidateId: B },
         "r10-outside-forgery",
       );
-      expect(politicalReceipts(g, D).at(-1)).toMatchObject({
+      expect(last(politicalReceipts(g, D))).toMatchObject({
         actorId: D,
         recipientId: D,
         accepted: false,
@@ -208,19 +213,19 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
         { kind: "accept-empire", empireId: "r10-empire-a", candidateId: B },
         "r10-consent-b",
       );
-      expect(politicalReceipts(g, B).at(-1)).toMatchObject({
+      expect(last(politicalReceipts(g, B))).toMatchObject({
         requestId: "r10-consent-b",
         actorId: B,
         recipientId: B,
         commandKind: "accept-empire",
         accepted: true,
       });
-      expect(g.nationalPoliticalAuthority()?.membersOf("r10-empire-a")).toEqual(
-        [A, B],
-      );
-      expect(g.nationalPoliticalAuthority()?.membersOf("r10-empire-c")).toEqual(
-        [C],
-      );
+      expect(
+        g.nationalPoliticalAuthority()?.membersOf("r10-empire-a"),
+      ).toEqual([A, B]);
+      expect(
+        g.nationalPoliticalAuthority()?.membersOf("r10-empire-c"),
+      ).toEqual([C]);
       expect(g.nationalAccessionOffers(g.player(B))).toEqual([]);
       expect(privateSnapshot(g).national?.politics.pacts).toEqual([]);
       expect(g.nationalVictoryRoster()).toBeNull();
@@ -233,8 +238,10 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
         { kind: "accept-empire", empireId: "r10-empire-c", candidateId: B },
         "r10-stale-consent",
       );
-      expect(politicalReceipts(g, B).at(-1)?.accepted).toBe(false);
-      expect(g.nationalPoliticalAuthority()?.empireOf(B)).toBe("r10-empire-a");
+      expect(last(politicalReceipts(g, B))?.accepted).toBe(false);
+      expect(g.nationalPoliticalAuthority()?.empireOf(B)).toBe(
+        "r10-empire-a",
+      );
     }
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
   });
@@ -250,26 +257,34 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
     );
     expect(game.nationalAccessionOffers(game.player(B))).toHaveLength(1);
     foundFromWire(game, B, "r10-founder-b", "r10-founder-b-id");
-    expect(game.nationalCommandResults(game.player(B)).at(-1)).toMatchObject({
+    expect(last(game.nationalCommandResults(game.player(B)))).toMatchObject({
       accepted: true,
       requestId: "r10-founder-b-id",
     });
     expect(game.nationalAccessionOffers(game.player(B))).toEqual([]);
-    expect(game.nationalPoliticalAuthority()?.empireOf(B)).toBe("r10-founder-b");
+    expect(game.nationalPoliticalAuthority()?.empireOf(B)).toBe(
+      "r10-founder-b",
+    );
     expect(game.nationalPublicPoliticalView()?.empires).toHaveLength(2);
     const { restored } = await roundTrip(game, "plains");
     for (const g of [game, restored]) {
       politicalExecution(
         g,
         B,
-        { kind: "accept-empire", empireId: "r10-founder-a", candidateId: B },
+        {
+          kind: "accept-empire",
+          empireId: "r10-founder-a",
+          candidateId: B,
+        },
         "r10-outdated-offer",
       );
-      expect(politicalReceipts(g, B).at(-1)).toMatchObject({
+      expect(last(politicalReceipts(g, B))).toMatchObject({
         accepted: false,
         reason: "political-rule",
       });
-      expect(g.nationalPoliticalAuthority()?.empireOf(B)).toBe("r10-founder-b");
+      expect(g.nationalPoliticalAuthority()?.empireOf(B)).toBe(
+        "r10-founder-b",
+      );
     }
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
   });
@@ -322,7 +337,11 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
     expect(
       game.performNationalWarCommandWithOutcome(
         game.player(B),
-        { kind: "propose-peace", motionId: "r10-premature", warId: "r10-national-layer" },
+        {
+          kind: "propose-peace",
+          motionId: "r10-premature",
+          warId: "r10-national-layer",
+        },
         "r10-peace-premature",
       ).accepted,
     ).toBe(false);
@@ -332,7 +351,7 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
       { kind: "transfer-crown", empireId: "r10-war-empire", successorId: B },
       "r10-crown-forgery",
     );
-    expect(politicalReceipts(game, D).at(-1)?.accepted).toBe(false);
+    expect(last(politicalReceipts(game, D))?.accepted).toBe(false);
 
     politicalExecution(
       game,
@@ -340,7 +359,7 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
       { kind: "transfer-crown", empireId: "r10-war-empire", successorId: B },
       "r10-valid-crown",
     );
-    expect(politicalReceipts(game, A).at(-1)).toMatchObject({
+    expect(last(politicalReceipts(game, A))).toMatchObject({
       commandKind: "transfer-crown",
       recipientId: A,
       accepted: true,
@@ -352,18 +371,28 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
     const { restored } = await roundTrip(game, "plains");
 
     for (const g of [game, restored]) {
-      expect(g.nationalPoliticalAuthority()?.emperorOf("r10-war-empire")).toBe(B);
+      expect(g.nationalPoliticalAuthority()?.emperorOf("r10-war-empire")).toBe(
+        B,
+      );
       expect(g.nationalWarState()?.wars.layers).toEqual(layers);
       expect(
         g.performNationalWarCommandWithOutcome(
           g.player(A),
-          { kind: "propose-peace", motionId: "r10-former-ruler", warId: "r10-imperial-layer" },
+          {
+            kind: "propose-peace",
+            motionId: "r10-former-ruler",
+            warId: "r10-imperial-layer",
+          },
           "r10-rejected-old-ruler",
         ).accepted,
       ).toBe(false);
       const motionImperial = g.performNationalWarCommandWithOutcome(
         g.player(B),
-        { kind: "propose-peace", motionId: "r10-imperial-peace", warId: "r10-imperial-layer" },
+        {
+          kind: "propose-peace",
+          motionId: "r10-imperial-peace",
+          warId: "r10-imperial-layer",
+        },
         "r10-imperial-proposal",
       );
       expect(motionImperial.accepted).toBe(true);
@@ -375,14 +404,22 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
         ).accepted,
       ).toBe(true);
       const afterImperial = g.nationalWarState()?.wars.layers;
-      expect(afterImperial?.find((w) => w.id === "r10-imperial-layer")?.endedTick).not.toBeNull();
-      expect(afterImperial?.find((w) => w.id === "r10-national-layer")?.endedTick).toBeNull();
+      expect(
+        afterImperial?.find((w) => w.id === "r10-imperial-layer")?.endedTick,
+      ).not.toBeNull();
+      expect(
+        afterImperial?.find((w) => w.id === "r10-national-layer")?.endedTick,
+      ).toBeNull();
       expect(g.nationalWarAuthority()?.atWar(B, D)).toBe(true);
 
       expect(
         g.performNationalWarCommandWithOutcome(
           g.player(B),
-          { kind: "propose-peace", motionId: "r10-national-peace", warId: "r10-national-layer" },
+          {
+            kind: "propose-peace",
+            motionId: "r10-national-peace",
+            warId: "r10-national-layer",
+          },
           "r10-national-proposal",
         ).accepted,
       ).toBe(true);
@@ -394,7 +431,9 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
         ).accepted,
       ).toBe(true);
       expect(g.nationalWarAuthority()?.atWar(B, D)).toBe(false);
-      expect(g.nationalPoliticalAuthority()?.membersOf("r10-war-empire")).toEqual([A, B]);
+      expect(
+        g.nationalPoliticalAuthority()?.membersOf("r10-war-empire"),
+      ).toEqual([A, B]);
       expect(g.nationalVictoryRoster()).toBeNull();
     }
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
@@ -437,9 +476,9 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
     );
     expect(game.nationalAccessionOffers(game.player(A))).toEqual([]);
     expect(game.nationalAccessionOffers(game.player(B))).toEqual([]);
-    expect(game.nationalPoliticalAuthority()?.emperorOf("r10-crown-consent")).toBe(
-      B,
-    );
+    expect(
+      game.nationalPoliticalAuthority()?.emperorOf("r10-crown-consent"),
+    ).toBe(B);
     const { restored } = await roundTrip(game, "plains");
     for (const g of [game, restored]) {
       politicalExecution(
@@ -452,7 +491,7 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
         },
         "r10-stale-crown-consent",
       );
-      expect(politicalReceipts(g, B).at(-1)?.accepted).toBe(false);
+      expect(last(politicalReceipts(g, B))?.accepted).toBe(false);
       politicalExecution(
         g,
         A,
@@ -463,7 +502,7 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
         },
         "r10-old-emperor-offer",
       );
-      expect(politicalReceipts(g, A).at(-1)?.accepted).toBe(false);
+      expect(last(politicalReceipts(g, A))?.accepted).toBe(false);
       politicalExecution(
         g,
         B,
@@ -474,7 +513,7 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
         },
         "r10-new-emperor-offer",
       );
-      expect(politicalReceipts(g, B).at(-1)?.accepted).toBe(true);
+      expect(last(politicalReceipts(g, B))?.accepted).toBe(true);
       expect(g.nationalAccessionOffers(g.player(C))).toMatchObject([
         { candidateId: C, proposerId: B, recipientId: C },
       ]);
@@ -488,13 +527,127 @@ describe("Round Ten live sovereignty: authenticated Game execution and replay", 
         },
         "r10-new-crown-consent",
       );
-      expect(politicalReceipts(g, C).at(-1)?.accepted).toBe(true);
-      expect(g.nationalPoliticalAuthority()?.membersOf("r10-crown-consent")).toEqual(
-        [A, B, C],
-      );
+      expect(last(politicalReceipts(g, C))?.accepted).toBe(true);
+      expect(
+        g.nationalPoliticalAuthority()?.membersOf("r10-crown-consent"),
+      ).toEqual([A, B, C]);
       expect(g.nationalVictoryRoster()).toBeNull();
     }
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
   });
 
+  it("runs founding, accession and succession in real GameRunner ticks with deterministic replay", async () => {
+    const game = await setup("plains", { nationalMode: true }, principals);
+    const publishedTicks: number[] = [];
+    const seed = "r10-signed-action";
+    const runner = new GameRunner(
+      game,
+      new Executor(game, seed, principals[0].clientID!),
+      (packet) => {
+        if ("updates" in packet) publishedTicks.push(packet.tick);
+      },
+      principals[0].clientID!,
+    );
+    runner.init();
+    for (let i = 0; i < principals.length; i++) {
+      const [x, y] = positions[i];
+      game.addExecution(
+        new SpawnExecution(seed, principals[i], game.ref(x, y)),
+      );
+    }
+    const advance = (r: GameRunner): void => {
+      r.addTurn({ turnNumber: r.game.ticks(), intents: [] });
+      expect(r.executeNextTick()).toBe(true);
+    };
+    advance(runner);
+    advance(runner);
+    for (const actor of principals)
+      expect(game.player(actor.id).hasSpawned()).toBe(true);
+
+    runner.addTurn({
+      turnNumber: game.ticks(),
+      intents: [
+        {
+          type: "national_found_empire",
+          empireId: "r10-runner-empire",
+          requestId: "r10-runner-found",
+          clientID: principals[0].clientID!,
+        },
+      ],
+    });
+    expect(runner.executeNextTick()).toBe(true);
+    advance(runner);
+    expect(last(game.nationalCommandResults(game.player(A)))).toMatchObject({
+      requestId: "r10-runner-found",
+      actorId: A,
+      accepted: true,
+    });
+
+    const political = (
+      actorId: string,
+      command: Exclude<NationalCommand, { kind: "found-empire" }>,
+      requestId: string,
+    ): void => {
+      game.addExecution(
+        new NationalFoundEmpireExecution(
+          game.player(actorId),
+          "",
+          command,
+          requestId,
+        ),
+      );
+      advance(runner);
+      advance(runner);
+    };
+    // E2 still needs to expose the three nonfounder variants through wire.
+    // Here their existing E1 queue runs under the actual GameRunner scheduler.
+    political(
+      A,
+      { kind: "offer-empire", empireId: "r10-runner-empire", candidateId: B },
+      "r10-runner-offer",
+    );
+    expect(game.nationalAccessionOffers(game.player(B))).toHaveLength(1);
+    political(
+      B,
+      { kind: "accept-empire", empireId: "r10-runner-empire", candidateId: B },
+      "r10-runner-accept",
+    );
+    political(
+      A,
+      {
+        kind: "transfer-crown",
+        empireId: "r10-runner-empire",
+        successorId: B,
+      },
+      "r10-runner-crown",
+    );
+    expect(
+      game.nationalPoliticalAuthority()?.emperorOf("r10-runner-empire"),
+    ).toBe(B);
+    expect(
+      game.nationalPoliticalAuthority()?.membersOf("r10-runner-empire"),
+    ).toEqual([A, B]);
+    expect(game.nationalVictoryRoster()).toBeNull();
+    expect(politicalReceipts(game, B)).toMatchObject([
+      { requestId: "r10-runner-accept", recipientId: B, accepted: true },
+    ]);
+    expect(publishedTicks.length).toBeGreaterThan(4);
+
+    const { restored, bytes, again } = await roundTrip(game, "plains");
+    expect(again).toEqual(bytes);
+    const restoredRunner = new GameRunner(
+      restored,
+      new Executor(restored, seed, principals[0].clientID!),
+      () => {},
+      principals[0].clientID!,
+    );
+    for (let i = 0; i < 4; i++) {
+      advance(runner);
+      advance(restoredRunner);
+      expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
+    }
+    expect(restored.nationalPublicPoliticalView()?.empires).toEqual([
+      { id: "r10-runner-empire", leaderId: B, memberIds: [A, B] },
+    ]);
+  });
 });
