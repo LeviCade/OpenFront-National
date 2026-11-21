@@ -23,6 +23,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { reconcileDiplomacyEvidence } from "./browser-verdict.mjs";
+import {
+  assertSoloLaunch,
+  assertSoloSelection,
+  dispatchSoloPointer,
+  NATIONAL_BUTTON_LABEL,
+  NATIONAL_BUTTON_SELECTOR,
+} from "./solo-selection.mjs";
 import { verifyHardwareWebgl } from "./gpu-attestation.mjs";
 
 const mobile = process.argv.includes("--mobile");
@@ -276,6 +283,24 @@ const probe = `(() => {
   Object.defineProperty(window, '__nationalQaWorkerEvidence', {
     value: packets, configurable: false, writable: false,
   });
+  // Observe only the genuine bubbling Solo launch. Do not modify its detail.
+  const soloLaunches = [];
+  document.addEventListener('join-lobby', (event) => {
+    const config = event.detail?.gameStartInfo?.config;
+    if (!config) return;
+    soloLaunches.push({
+      origin: event.target?.localName ?? null,
+      source: event.detail?.source ?? null,
+      gameType: config.gameType ?? null,
+      gameMode: config.gameMode ?? null,
+      difficulty: config.difficulty ?? null,
+      hasNationalMode: Object.prototype.hasOwnProperty.call(config, 'nationalMode'),
+      nationalMode: config.nationalMode ?? null,
+    });
+  }, true);
+  Object.defineProperty(window, '__nationalQaSoloLaunches', {
+    value: soloLaunches, configurable: false, writable: false,
+  });
 })();`;
 
 async function main() {
@@ -446,32 +471,10 @@ async function main() {
       };
     })()`);
   const hit = async (x, y) => {
-    if (mobile) {
-      await send("Input.dispatchTouchEvent", {
-        type: "touchStart",
-        touchPoints: [{ x, y, id: 1 }],
-      });
-      await send("Input.dispatchTouchEvent", {
-        type: "touchEnd",
-        touchPoints: [],
-      });
-      record("actual-touch-input", { x: Math.round(x), y: Math.round(y) });
-      return;
-    }
-    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
-    await send("Input.dispatchMouseEvent", {
-      type: "mousePressed",
-      x,
-      y,
-      button: "left",
-      clickCount: 1,
-    });
-    await send("Input.dispatchMouseEvent", {
-      type: "mouseReleased",
-      x,
-      y,
-      button: "left",
-      clickCount: 1,
+    const route = await dispatchSoloPointer(send, mobile, x, y);
+    record(route === "touch" ? "actual-touch-input" : "actual-mouse-input", {
+      x: Math.round(x),
+      y: Math.round(y),
     });
   };
   const click = async (label, scope = "", attempts = 90) => {
@@ -479,6 +482,103 @@ async function main() {
     await hit(target.x, target.y);
     record("clicked", { label, text: target.text });
     return target;
+  };
+  const nationalSelection = () =>
+    evaluate(`(() => {
+      const button = window.__nationalQaFind("button[data-national-difficulty]");
+      const modal = window.__nationalQaFind('single-player-modal');
+      if (!button || !modal) return null;
+      return {
+        label: button.getAttribute('aria-label'),
+        pressed: button.getAttribute('aria-pressed'),
+        disabled: button.disabled === true,
+        nationalMode: modal.nationalMode === true,
+        difficulty: modal.selectedDifficulty,
+        gameMode: modal.gameMode,
+      };
+    })()`);
+  const selectNational = async () => {
+    const before = await nationalSelection();
+    if (!before || before.label !== NATIONAL_BUTTON_LABEL) {
+      throw Error("NATIONAL_DIFFICULTY_BUTTON_MISSING_OR_MISLABELED");
+    }
+    if (!before.disabled && before.pressed !== "true") {
+      await clickSelector(NATIONAL_BUTTON_SELECTOR);
+    }
+    const selected = await poll(
+      async () => {
+        const state = await nationalSelection();
+        return state?.pressed === "true" &&
+          state.nationalMode === true &&
+          state.difficulty === "Impossible" ? state : null;
+      },
+      "E4 NATIONAL difficulty selected via native Chrome input",
+      40,
+      150,
+    );
+    assertSoloSelection(selected, true);
+    record("national-difficulty-selected", {
+      ariaPressed: selected.pressed,
+      difficulty: selected.difficulty,
+      gameMode: selected.gameMode,
+      via: mobile ? "touch" : "mouse",
+    });
+  };
+  const selectOrdinaryImpossible = async () => {
+    const target = await poll(
+      () =>
+        evaluate(`(() => {
+          const settings = window.__nationalQaFind('game-config-settings');
+          const normal = [...(settings?.querySelectorAll('button') ?? [])].find(
+            (button) =>
+              !button.hasAttribute('data-national-difficulty') &&
+              [...button.querySelectorAll('difficulty-display')].some(
+                (display) => display.difficultyKey === 'Impossible'
+              )
+          );
+          if (!normal || normal.disabled) return null;
+          normal.scrollIntoView({ block: 'center', inline: 'nearest' });
+          const rect = normal.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0
+            ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+            : null;
+        })()`),
+      "ordinary Impossible difficulty in live E4 Solo",
+      40,
+      150,
+    );
+    await hit(target.x, target.y);
+    const ordinary = await poll(
+      async () => {
+        const state = await nationalSelection();
+        return state?.pressed === "false" &&
+          state.nationalMode === false &&
+          state.difficulty === "Impossible" ? state : null;
+      },
+      "ordinary Impossible deselects NATIONAL",
+      40,
+      150,
+    );
+    assertSoloSelection(ordinary, false);
+    record("ordinary-solo-difficulty-restored", {
+      ariaPressed: ordinary.pressed,
+      difficulty: ordinary.difficulty,
+      via: mobile ? "touch" : "mouse",
+    });
+  };
+  const confirmLaunch = async (national) => {
+    const launches = await poll(
+      async () => {
+        const events = await evaluate(
+          "window.__nationalQaSoloLaunches?.slice(0, 2) ?? []",
+        );
+        return Array.isArray(events) && events.length > 0 ? events : null;
+      },
+      "real bubbling single-player join-lobby event",
+      80,
+      175,
+    );
+    record("actual-singleplayer-launch-config", assertSoloLaunch(launches, national));
   };
   const clickSelector = async (selector) => {
     const target = await poll(
@@ -773,28 +873,29 @@ async function main() {
     });
     await step("solo", async () => {
       await click("^solo$", "", 80);
-      await poll(
-        () =>
-          evaluate(
-            "!!document.querySelector('single-player-modal input[aria-label=\"Enable NATIONAL sovereignty in Solo\"]')",
-          ),
-        "Solo modal controls",
+      const control = await poll(
+        nationalSelection,
+        "E4 NATIONAL difficulty button visible in Solo modal",
+        40,
+        150,
       );
+      if (control.label !== NATIONAL_BUTTON_LABEL) {
+        throw Error("NATIONAL_SOLO_BUTTON_ACCESSIBILITY_CONTRACT_MISMATCH");
+      }
+      if (control.pressed !== "false" || control.nationalMode) {
+        throw Error("NATIONAL_MUST_NOT_DEFAULT_ON");
+      }
       await capture("solo-modal");
     });
     if (legacy) {
+      await step("legacy-configuration", async () => {
+        await selectNational();
+        await selectOrdinaryImpossible();
+        await capture("legacy-difficulty-restored");
+      });
       await step("legacy-ffa", async () => {
-        const national = await locate(
-          "Enable NATIONAL sovereignty in Solo",
-          "single-player-modal",
-          false,
-        );
-        if (!national || national.checked) {
-          throw Error(
-            "Legacy FFA did not start from an unselected NATIONAL checkbox",
-          );
-        }
         await click("start|play", "single-player-modal", 65);
+        await confirmLaunch(false);
         const ffaStatus = await poll(
           () =>
             evaluate(`(() => {
@@ -898,23 +999,12 @@ async function main() {
       return;
     }
     await step("national-mode", async () => {
-      const checkbox = await locate(
-        "Enable NATIONAL sovereignty in Solo",
-        "single-player-modal",
-      );
-      if (!checkbox) throw Error("NATIONAL opt-in control missing");
-      if (!checkbox.checked) await hit(checkbox.x, checkbox.y);
-      await poll(
-        () =>
-          evaluate(
-            "document.querySelector('single-player-modal input[aria-label=\"Enable NATIONAL sovereignty in Solo\"]')?.checked === true",
-          ),
-        "NATIONAL selected",
-      );
+      await selectNational();
       await capture("national-enabled");
     });
     await step("start", async () => {
       await click("start|play", "single-player-modal", 65);
+      await confirmLaunch(true);
       const launch = await poll(
         () =>
           evaluate(`(() => {
@@ -1113,6 +1203,8 @@ async function main() {
     // concrete WAR→attack→peace slice behind an unavailable browser save UI.
     // Do not treat this separation as a release-security pass.
     let warId = null;
+    let warTargetId = null;
+    let combatBaseline = null;
     let peaceMotionId = null;
     await step("declare-war", async () => {
       const hooked = await evaluate(
@@ -1177,6 +1269,7 @@ async function main() {
       );
       if (matched.rejected) throw Error(matched.reason);
       warId = matched.warId;
+      warTargetId = targetId;
       record("authoritative-war-declared", {
         warId,
         receiptTick: matched.receiptTick,
@@ -1197,6 +1290,24 @@ async function main() {
           "})()",
       );
       if (!listened) throw Error("REAL_MAP_ATTACK_OBSERVER_UNAVAILABLE");
+      if (!warTargetId) throw Error("WAR_TARGET_NOT_AUTHENTICATED");
+      combatBaseline = await evaluate(
+        "(() => {" +
+          "const g=window.__nationalQaFind('national-diplomacy-panel')?.game;" +
+          "const t=g?.players?.()?.find(p=>p.id?.()===" +
+          JSON.stringify(warTargetId) + ");" +
+          "return t ? {id:t.id(),troops:t.troops?.() ?? null," +
+          "tiles:t.numTilesOwned?.() ?? null} : null;" +
+          "})()",
+      );
+      if (
+        !combatBaseline ||
+        !Number.isFinite(combatBaseline.troops) ||
+        !Number.isSafeInteger(combatBaseline.tiles) ||
+        combatBaseline.tiles <= 0
+      ) {
+        throw Error("CANONICAL_WAR_TARGET_BASELINE_UNAVAILABLE");
+      }
       const existing = await worker();
       const lastSequence = Math.max(0, ...existing.map((p) => p.sequence ?? 0));
       const previousOutgoing = await evaluate(
@@ -1262,6 +1373,47 @@ async function main() {
       });
       await capture("map-assault-confirmed");
       await click("NATIONAL.*Diplomacy", "national-diplomacy-panel", 35);
+    });
+    await step("combat-impact", async () => {
+      if (!combatBaseline || combatBaseline.id !== warTargetId) {
+        throw Error("COMBAT_DAMAGE_BASELINE_MISSING");
+      }
+      const impact = await poll(
+        async () => {
+          const state = await evaluate(
+            "(() => {" +
+              "const g=window.__nationalQaFind('national-diplomacy-panel')?.game;" +
+              "const t=g?.players?.()?.find(p=>p.id?.()===" +
+              JSON.stringify(warTargetId) + ");" +
+              "return t ? {id:t.id(),troops:t.troops?.() ?? null," +
+              "tiles:t.numTilesOwned?.() ?? null} : null;" +
+              "})()",
+          );
+          if (
+            !state ||
+            !Number.isFinite(state.troops) ||
+            !Number.isSafeInteger(state.tiles)
+          ) {
+            return null;
+          }
+          return state.troops < combatBaseline.troops ||
+            state.tiles < combatBaseline.tiles
+            ? state
+            : null;
+        },
+        "engine-derived war target troop loss or territory loss",
+        120,
+        300,
+      );
+      if (!impact) throw Error("REAL_WAR_DAMAGE_NOT_OBSERVED");
+      record("authoritative-combat-impact", {
+        targetId: warTargetId,
+        enemyTroopsBefore: combatBaseline.troops,
+        enemyTroopsAfter: impact.troops,
+        enemyTilesBefore: combatBaseline.tiles,
+        enemyTilesAfter: impact.tiles,
+      });
+      await capture("combat-impact-canonical");
     });
     await step("propose-peace", async () => {
       if (!warId) throw Error("NO_GAME_ISSUED_WAR_ID_FOR_PEACE");

@@ -28,3 +28,13 @@ The `trusted-gpu-keys.json` allowlist remains intentionally empty pending indepe
 ## Negative testing and evidence hygiene
 
 For real GameRunner independently verify forged actor claims, nonexistent/foreign clients, expired recipients and fog, replay collisions, conflicting or foreign receipts, raw state export denial, and deterministic snapshot/replay. Reports written in the guest can contain private packet material and must **not** be uploaded to a public GitHub workflow unchanged. E6 must sanitize, bound and redact every exported summary, keeping genuine raw logs/PNG private to approved operators. Never publish request tokens, full snapshots, network query credentials or private fog.
+
+## Round Ten second wave — E4 Solo difficulty control
+
+The old `input[aria-label="Enable NATIONAL sovereignty in Solo"]` checkbox **does not exist** in E4. The independent browser harness now discovers `button[data-national-difficulty]` through nested shadow roots and requires the exact accessibility name `NATIONAL sovereignty mode, Solo Free For All at Impossible difficulty`. A physical CDP pointer/touch click must change both `aria-pressed` and the modal's real NATIONAL selection. Desktop uses mouse move/press/release; mobile uses touchStart/touchEnd. No simulated click or direct UI state modification is permitted.
+
+The NATIONAL browser lane then observes the actual bubbling `join-lobby` event from `single-player-modal`, requiring `Singleplayer`, `Free For All`, `Impossible`, and an **explicit** `nationalMode: true`. The legacy lane first selects NATIONAL, clicks the ordinary Impossible difficulty button and verifies `aria-pressed="false"`, `nationalMode=false`, and the real launch config **omits** the `nationalMode` field. Duplicate/missing launch events fail.
+
+A new `combat-impact` stage requires the engine-derived opposing nation's troop count or owned-tile count to **decrease** against the baseline captured before the actual attack. A dispatched attack without resulting enemy damage does not satisfy the WAR→damage criterion. The first `stage-failed` event wins the report; cleanup errors cannot overwrite the original blocker. A missing report fails, even with exit code zero.
+
+The four canonical report locations remain `browser-national-desktop/acceptance.json`, `browser-national-mobile/acceptance.json`, `browser-legacy-ffa-desktop/acceptance.json` and `browser-legacy-ffa-mobile/acceptance.json` under `national-qa-artifacts/`. The E5 branch predates E4's new UI, so a browser run of E5 **alone** may correctly fail at `solo`. The Conductor must carry E5's harness onto the combined E4 source for a qualified UI verdict. A hosted SwiftShader run is only diagnostic, never signed physical-GPU acceptance.

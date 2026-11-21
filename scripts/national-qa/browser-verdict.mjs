@@ -179,20 +179,38 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
     "map-assault",
     "propose-peace",
     "accept-peace",
+    "legacy-configuration",
     "legacy-ffa",
     "legacy-player-action",
+    "combat-impact",
   ]);
   const normalizedStage = (value) =>
     typeof value === "string" && safeStages.has(value)
       ? value
       : "UNKNOWN_STAGE";
-  const lastError = Array.isArray(report?.errors) ? report.errors.at(-1) : null;
+  // First observed failure wins. Cleanup errors and later repeats must never
+  // overwrite the stage that actually blocked the user's game.
+  const firstEventFailure = Array.isArray(report?.events)
+    ? report.events.find(
+        (event) =>
+          event?.name === "stage-failed" &&
+          typeof event.stage === "string",
+      )
+    : null;
+  const firstError = Array.isArray(report?.errors)
+    ? report.errors.find(
+        (error) => error && typeof error.stage === "string",
+      )
+    : null;
+  const lastError = firstError;
   const failedStage =
-    typeof lastError?.stage === "string"
-      ? normalizedStage(lastError.stage)
-      : typeof report?.stage === "string" && exitCode !== 0
-        ? normalizedStage(report.stage)
-        : null;
+    typeof firstEventFailure?.stage === "string"
+      ? normalizedStage(firstEventFailure.stage)
+      : typeof firstError?.stage === "string"
+        ? normalizedStage(firstError.stage)
+        : typeof report?.stage === "string" && exitCode !== 0
+          ? normalizedStage(report.stage)
+          : null;
   const required = scenario.startsWith("national-")
     ? [
         "home",
@@ -204,10 +222,17 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
         "rejected-founding",
         "declare-war",
         "map-assault",
+        "combat-impact",
         "propose-peace",
         "accept-peace",
       ]
-    : ["home", "solo", "legacy-ffa", "legacy-player-action"];
+    : [
+        "home",
+        "solo",
+        "legacy-configuration",
+        "legacy-ffa",
+        "legacy-player-action",
+      ];
   const missingStages = required.filter((s) => !completed.includes(s));
   const code = Number.isInteger(exitCode) ? exitCode : -1;
   const hardware = (report?.events ?? []).some(
@@ -260,11 +285,13 @@ export function summarizeBrowserReport(report, exitCode, scenario) {
       return match?.[0] ?? (lastError ? "UNCLASSIFIED_STAGE_FAILURE" : null);
     })(),
     failureClass:
-      code !== 0
-        ? "GAMEPLAY_STAGE_FAILED"
-        : missingStages.length
-          ? "REQUIRED_STAGES_MISSING"
-          : null,
+      !report
+        ? "REPORT_MISSING"
+        : code !== 0
+          ? "GAMEPLAY_STAGE_FAILED"
+          : missingStages.length
+            ? "REQUIRED_STAGES_MISSING"
+            : null,
     missingStages,
     webglShadersMatch: shader,
     signedHardwareAttested: hardware,

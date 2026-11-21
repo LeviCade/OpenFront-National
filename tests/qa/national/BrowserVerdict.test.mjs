@@ -244,3 +244,70 @@ describe("R10 E5 four-mode report evidence", () => {
     expect(JSON.stringify(summary)).not.toContain("private");
   });
 });
+
+describe("R10 E5 first-failure preservation and evidence absence", () => {
+  it("reports the first actual browser failure, not a later cleanup error", () => {
+    const summary = summarizeBrowserReport(
+      {
+        stage: "start",
+        events: [
+          { name: "stage-complete", stage: "home" },
+          { name: "stage-failed", stage: "solo" },
+          { name: "stage-failed", stage: "start" },
+        ],
+        errors: [
+          { stage: "start", error: "follow-on error" },
+          { stage: "solo", error: "prior root cause" },
+        ],
+      },
+      1,
+      "national-mobile",
+    );
+    expect(summary.failedStage).toBe("solo");
+    expect(summary.gameplayPassed).toBe(false);
+  });
+
+  it("never treats exit zero with a missing report as a passing game", () => {
+    const summary = summarizeBrowserReport(null, 0, "legacy-ffa-desktop");
+    expect(summary.reported).toBe(false);
+    expect(summary.failureClass).toBe("REPORT_MISSING");
+    expect(summary.gameplayPassed).toBe(false);
+  });
+
+  it("requires combat impact and legacy difficulty reversal as real stages", () => {
+    const national = summarizeBrowserReport(
+      {
+        events: [
+          { name: "stage-complete", stage: "map-assault" },
+        ],
+      },
+      0,
+      "national-desktop",
+    );
+    expect(national.missingStages).toContain("combat-impact");
+    const legacy = summarizeBrowserReport(
+      {
+        events: [
+          { name: "stage-complete", stage: "legacy-ffa" },
+        ],
+      },
+      0,
+      "legacy-ffa-mobile",
+    );
+    expect(legacy.missingStages).toContain("legacy-configuration");
+  });
+
+  it("four report filenames retain -ffa- for both legacy viewports", () => {
+    expect(Object.keys(SCENARIOS).sort()).toEqual([
+      "legacy-ffa-desktop",
+      "legacy-ffa-mobile",
+      "national-desktop",
+      "national-mobile",
+    ]);
+    expect(
+      Object.values(SCENARIOS).every((entry) =>
+        entry.report.endsWith("/acceptance.json"),
+      ),
+    ).toBe(true);
+  });
+});
