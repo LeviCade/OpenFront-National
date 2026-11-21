@@ -48,6 +48,84 @@ export function unobstructedCanvasPoint(doc, canvas, fractions) {
   return null;
 }
 
+/**
+ * Deterministic, genuine pointer search for mobile and desktop spawn.
+ * Coordinates never prove land ownership; CDP + GameView must establish it.
+ */
+export function soloSpawnFractions() {
+  const points = [
+    [0.55, 0.55],
+    [0.4, 0.4],
+    [0.6, 0.42],
+    [0.3, 0.55],
+    [0.7, 0.6],
+    [0.2, 0.4],
+  ];
+  for (const y of [0.25, 0.4, 0.55, 0.7, 0.82]) {
+    for (const x of [0.2, 0.35, 0.5, 0.65, 0.8]) {
+      if (!points.some(([u, v]) => u === x && v === y)) points.push([x, y]);
+    }
+  }
+  return points;
+}
+
+/** A real click is insufficient without engine packets and opponent damage. */
+export function classifySoloBattleEvidence({
+  targetId,
+  emitted,
+  before,
+  after,
+  outgoingBefore,
+  outgoingAfter,
+  packets,
+  firstSequence,
+}) {
+  if (
+    typeof targetId !== "string" ||
+    !targetId ||
+    before?.id !== targetId ||
+    after?.id !== targetId ||
+    !Number.isSafeInteger(before?.tiles) ||
+    !Number.isSafeInteger(after?.tiles)
+  )
+    return { accepted: false, reason: "SOLO_COMBAT_TARGET_INVALID" };
+  if (
+    !Array.isArray(emitted) ||
+    !emitted.some(
+      (e) =>
+        e?.targetId === targetId && Number.isFinite(e.troops) && e.troops > 0,
+    )
+  )
+    return { accepted: false, reason: "SOLO_REAL_RADIAL_ATTACK_ABSENT" };
+  if (
+    !Number.isSafeInteger(outgoingBefore) ||
+    !Number.isSafeInteger(outgoingAfter) ||
+    outgoingAfter <= outgoingBefore ||
+    !Number.isSafeInteger(firstSequence) ||
+    !Array.isArray(packets) ||
+    !packets.some(
+      (p) =>
+        p?.sequence > firstSequence &&
+        (p.hasAuthoritativeAttackDelta === true ||
+          p.hasAuthoritativeMotion === true),
+    )
+  )
+    return { accepted: false, reason: "SOLO_ATTACK_ENGINE_DELTA_ABSENT" };
+  const troopLoss =
+    Number.isFinite(before.troops) &&
+    Number.isFinite(after.troops) &&
+    after.troops < before.troops;
+  const territoryLoss = after.tiles < before.tiles;
+  if (!troopLoss && !territoryLoss)
+    return { accepted: false, reason: "SOLO_OPPONENT_DAMAGE_ABSENT" };
+  return {
+    accepted: true,
+    reason: "SOLO_REAL_RADIAL_COMBAT_IMPACT",
+    troopLoss,
+    territoryLoss,
+  };
+}
+
 export function classifyFoundingEvidence({
   actorId,
   empireId,
