@@ -22,6 +22,9 @@ import {
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { createHash, randomUUID } from "node:crypto";
 import WebSocket from "ws";
+import { encodeNationalViewPayload } from "@openfront/shared/NationalViewWire";
+import { encodeServerMessage } from "@openfront/shared/ZbinWire";
+import type { ServerNationalViewMessage } from "@openfront/shared/WireSchemas";
 import type { Client } from "../Client";
 
 export interface NationalTickReceipt {
@@ -130,7 +133,26 @@ export class TrustedNationalMatch {
         (packet) => {
           // GameRunner has already called E3 session.projectGameUpdate.
           // Packet is an independent recipient-filtered object, not Game.
-          if (active()) this.deliver(client, packet);
+          if (!active()) return;
+          // Canonical authenticated server→socket emission: NEVER a raw Turn,
+          // GameRunner frame, GameSnapshot or E1 private journal. Only E3's
+          // recipient-checked packet may reach this exact admitted socket.
+          try {
+            const payload = encodeNationalViewPayload(packet);
+            const wire = encodeServerMessage(
+              { type: "national_view", payload } satisfies ServerNationalViewMessage,
+              undefined,
+            );
+            admittedSocket.send(wire);
+            // Existing match acceptance callback is observation/telemetry,
+            // not an alternative raw network delivery channel.
+            this.deliver(client, packet);
+          } catch {
+            // A dead socket or oversize/invalid payload must fail closed,
+            // without leaking a sensitive serialization error or ending the
+            // canonical Game tick for the other authenticated seats.
+            this.revokeRecipient(client);
+          }
         },
       );
     }
