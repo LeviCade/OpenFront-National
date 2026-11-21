@@ -35,6 +35,8 @@ import {
  */
 export interface TrustedNationalServerConnection {
   readonly clientID: ClientID | null;
+  /** Server-minted immutable identity of THIS socket, not the match. */
+  readonly sessionId: string;
   isConnected(): boolean;
   isSpectator(): boolean;
 }
@@ -58,6 +60,7 @@ export type NationalServerPoliticalPacket = Pick<
  */
 export class NationalServerRecipientSession {
   private readonly originalClientID: ClientID | null;
+  private readonly originalSessionId: string;
   private readonly principalId: string | null;
   private readonly outbound: NationalOutboundFilter;
   private receiptDelivery: NationalResultDeliveryState =
@@ -71,6 +74,10 @@ export class NationalServerRecipientSession {
     if (!game.config().nationalMode()) {
       throw new Error("NATIONAL trusted server projection in legacy mode");
     }
+    if (typeof connection.sessionId !== "string" || connection.sessionId.length < 1) {
+      throw new Error("NATIONAL trusted server connection identity required");
+    }
+    this.originalSessionId = connection.sessionId;
     this.originalClientID = connection.clientID;
     const player =
       connection.isConnected() &&
@@ -102,7 +109,10 @@ export class NationalServerRecipientSession {
       this.close();
       return null;
     }
-    if (this.connection.clientID !== this.originalClientID) {
+    if (
+      this.connection.clientID !== this.originalClientID ||
+      this.connection.sessionId !== this.originalSessionId
+    ) {
       this.close();
       return null;
     }

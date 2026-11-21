@@ -5,10 +5,7 @@
  * This test does not claim a server-hosted NATIONAL multiplayer transport.
  */
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
-import {
-  GameUpdateType,
-  type GameUpdateViewData,
-} from "@openfront/engine-api/game/GameUpdates";
+import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
@@ -92,9 +89,11 @@ function command(
   };
 }
 
+let connectionSerial = 0;
 function binding(clientID: string | null, spectator = false) {
   return {
     clientID,
+    sessionId: "trusted-socket-" + ++connectionSerial,
     connected: true,
     spectator,
     isConnected() {
@@ -222,11 +221,16 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
     ).toEqual([
       expect.objectContaining({ candidateId: B.id, recipientId: B.id }),
     ]);
+    // The old socket cannot emit after disconnect; a distinct authenticated
+    // connection may read the still-live E1 invitation, not old receipts.
+    sendB.link.connected = false;
+    expect(sendB.server.projectPolitics()).toBeNull();
+    const rejoined = outgoing(game, B.clientID!);
+    expect(rejoined.server.projectPolitics()?.nationalAccessionOffers?.offers).toHaveLength(1);
+    expect(rejoined.server.projectPolitics()?.nationalCommandResults).toBeUndefined();
     ruler.send(command("national_transfer_crown", "4", A.clientID!, D.id));
     expect(game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(D.id);
-    expect(
-      sendB.server.projectPolitics()?.nationalAccessionOffers?.offers,
-    ).toEqual([]);
+    expect(rejoined.server.projectPolitics()?.nationalAccessionOffers?.offers).toEqual([]);
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
     const reconnectB = outgoing(restored, B.clientID!);
@@ -329,6 +333,13 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
     expect(c.server.projectPolitics()).toBeNull();
     c.link.clientID = C.clientID!;
     expect(c.server.projectPolitics()).toBeNull();
+    // Same valid client ID on a different physical socket must not resurrect
+    // another authenticated session's private delivery cursor.
+    const recycled = outgoing(game, C.clientID!);
+    recycled.link.sessionId = "different-authenticated-socket";
+    expect(recycled.server.projectPolitics()).toBeNull();
+    const freshA = outgoing(game, A.clientID!);
+    expect(freshA.server.projectPolitics()?.nationalCommandResults).toBeUndefined();
     a.link.connected = false;
     expect(a.server.projectPolitics()).toBeNull();
     a.link.connected = true;

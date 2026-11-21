@@ -30,3 +30,4 @@ jobs:
       - name: Four focused real-game NATIONAL suites
         run: npx --no-install vitest run --project node tests/national/NationalServerOutboundClass4.test.ts tests/national/NationalAccessionPacketsR11.test.ts tests/national/RoundElevenDelegatedPeaceWire.test.ts tests/national/NationalBotRejectionRoundtripR11.test.ts
 # rerun after real-Game matrix refinement
+# check immutable host socket nonce and reconnect freshness
