@@ -131,11 +131,15 @@ export class EngineConfig extends Config {
     isReplay: boolean,
     listed: boolean = false,
     spectator: boolean = false,
+    trustedServerNational: boolean = false,
   ) {
     super(gameConfig, isReplay, listed, spectator);
+    // Only a server-owned runner can use Private NATIONAL. Existing browser,
+    // replay and Solo call sites still fail closed on multiplayer.
     if (
       gameConfig.nationalMode === true &&
-      (gameConfig.gameType !== GameType.Singleplayer ||
+      ( (gameConfig.gameType !== GameType.Singleplayer &&
+          !(trustedServerNational && gameConfig.gameType === GameType.Private)) ||
         gameConfig.gameMode !== GameMode.FFA ||
         gameConfig.tutorial === true ||
         gameConfig.rankedType !== undefined)
