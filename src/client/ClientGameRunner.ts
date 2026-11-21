@@ -1181,7 +1181,25 @@ export class ClientGameRunner {
   private readonly onTrustedTransportStatus = (
     event: NationalTransportStatusEvent,
   ): void => {
-    if (event.gameID !== this.lobby.gameID || event.ready) return;
+    if (event.gameID !== this.lobby.gameID) return;
+    if (event.ready) {
+      // A new E2 national_start admitted the original authenticated account.
+      // E3 must begin a fresh currently-visible page sweep, never resume an
+      // old cached territory map/receipt after a disconnected socket.
+      if (!hasTrustedNationalPrivateCapability(this.eventBus, this.lobby.gameID))
+        return;
+      this.trustedProjectionActive = true;
+      this.trustedLastTick = -1;
+      this.trustedExpectedCursor = 0;
+      this.gameView.resetTrustedProjectionSight();
+      this.trustedMapResetUpload?.();
+      if (this.trustedStatus) {
+        this.trustedStatus.dataset.trustedNationalMap = "loading";
+        this.trustedStatus.textContent =
+          "NATIONAL · Reauthenticated — awaiting fresh visible terrain";
+      }
+      return;
+    }
     this.trustedProjectionActive = false;
     this.gameView.resetTrustedProjectionSight();
     this.trustedMapResetUpload?.();
@@ -1558,7 +1576,11 @@ export class ClientGameRunner {
   }
 
   private inputEvent(event: MouseUpEvent) {
-    if (!this.isActive || this.renderer.uiState.ghostStructure !== null) {
+    if (
+      !this.isActive ||
+      (this.trustedNationalProjection && !this.gameView.trustedProjectionReady()) ||
+      this.renderer.uiState.ghostStructure !== null
+    ) {
       return;
     }
     const cell = this.renderer.transformHandler.screenToWorldCoordinates(
@@ -1747,6 +1769,8 @@ export class ClientGameRunner {
   }
 
   private doGroundAttackUnderCursor(): void {
+    if (this.trustedNationalProjection && !this.gameView.trustedProjectionReady())
+      return;
     const tile = this.getTileUnderCursor();
     if (tile === null) {
       return;

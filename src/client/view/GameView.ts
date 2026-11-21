@@ -139,6 +139,7 @@ export class GameView implements GameLike {
   public trustedVisibleAttack(playerID: string, tile: TileRef | undefined): boolean {
     if (
       !this._trustedNationalProjection ||
+      !this._trustedProjectionReady ||
       tile === undefined ||
       this.inSpawnPhase() ||
       !this.isValidRef(tile) ||
@@ -1150,7 +1151,11 @@ export class GameView implements GameLike {
     return this._config;
   }
   isSpectator(): boolean {
-    return !this.myPlayer()?.isAlive() || this._config.isReplay();
+    return (
+      (this._trustedNationalProjection && !this._trustedProjectionReady) ||
+      !this.myPlayer()?.isAlive() ||
+      this._config.isReplay()
+    );
   }
   units(...types: UnitType[]): UnitView[] {
     if (types.length === 0) {
