@@ -258,11 +258,47 @@ export function planNationalInterest(
     throw new Error("cadenceTicks must be a positive integer");
   }
   const updated = updateNationalDiplomaticMemory(observation, previous);
+  const activeEnemies = deriveNationalWarSides(
+    observation.wars,
+    observation.observerId,
+  ).enemies;
+  // A publicly observed WAR end invalidates the previous live campaign.
+  // No confidential peace motion or other actor's result is consulted.
+  const newlyEndedWar = observation.diplomaticEvents.some(
+    (event) =>
+      event.kind === "war-ended" &&
+      (previous.lastProcessedEvent === null ||
+        event.tick > previous.lastProcessedEvent.tick ||
+        (event.tick === previous.lastProcessedEvent.tick &&
+          event.id > previous.lastProcessedEvent.id)),
+  );
+  const obsoleteTarget =
+    newlyEndedWar &&
+    previous.objective === "expand" &&
+    previous.targetId !== null &&
+    !activeEnemies.has(previous.targetId)
+      ? previous.targetId
+      : null;
+  const rejectedWarTargets = (updated.memory.rejectedWarTargets ?? []).filter(
+    (entry) =>
+      entry.retryAfterTick > observation.tick &&
+      entry.targetId !== obsoleteTarget,
+  );
+  if (obsoleteTarget !== null) {
+    rejectedWarTargets.push({
+      targetId: obsoleteTarget,
+      retryAfterTick: observation.tick + DEFAULT_RETRY_TICKS,
+    });
+  }
   const memory = {
     ...updated.memory,
-    rejectedWarTargets: (updated.memory.rejectedWarTargets ?? []).filter(
-      (entry) => entry.retryAfterTick > observation.tick,
-    ),
+    rejectedWarTargets: rejectedWarTargets
+      .sort(
+        (a, b) =>
+          a.retryAfterTick - b.retryAfterTick ||
+          cmp(a.targetId, b.targetId),
+      )
+      .slice(-REJECTED_TARGET_LIMIT),
   };
   if (observation.tick < memory.nextPlanningTick && !updated.sawNewEvent) {
     return { planned: false, decision: null, memory };
