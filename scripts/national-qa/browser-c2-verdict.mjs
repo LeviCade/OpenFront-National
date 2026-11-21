@@ -295,6 +295,32 @@ export function classifySoloOrLegacy({
       "E4/E5",
     );
   }
+  const consoleErrorCount = Array.isArray(report?.console)
+    ? report.console.filter(
+        (entry) =>
+          entry?.severity === "error" || entry?.severity === "exception",
+      ).length
+    : null;
+  add(consoleErrorCount === 0, "BROWSER_CONSOLE_ERRORS_UNREVIEWED", "E4/E5");
+  // Browser reporter already applies safeFailureCode to original text.
+  // Reject arbitrary input here as defense against secret-bearing error logs.
+  const reported = Array.isArray(report?.errors) ? report.errors[0] : null;
+  const code = reported?.error;
+  const safeCode =
+    typeof code === "string" &&
+    (/^[A-Z][A-Z0-9_]{4,90}$/.test(code) ||
+      code === "REAL_CHROMIUM_GPU_REQUIRED: WebGL gate")
+      ? code
+      : null;
+  const stageOwner = safeCode?.startsWith("REAL_CHROMIUM_GPU_REQUIRED")
+    ? "E6/DIAGNOSTIC_ENVIRONMENT"
+    : safeCode?.startsWith("SPAWN")
+      ? "E4/E5"
+      : safeCode?.startsWith("FOUNDING")
+        ? "E1/E3/E4"
+        : safeCode?.startsWith("POLITICAL")
+          ? "E2/E3/E4"
+          : "E5";
   const gameplay = failures.length === 0 ? "PASS" : "FAIL";
   return {
     mode,
@@ -302,16 +328,13 @@ export function classifySoloOrLegacy({
     gameplay,
     hardware: "BLOCKED",
     hardwareReason: "E6_INDEPENDENT_PHYSICAL_HOST_WITNESS_REQUIRED",
-    firstFailure: failures[0] ?? null,
+    firstFailure: safeCode
+      ? error(safeCode, stageOwner)
+      : failures[0] ?? null,
     checksFailed: failures,
     completedStages: completed.slice(0, 24),
     firstFailedStage: firstFailure?.stage ?? report?.errors?.[0]?.stage ?? null,
-    consoleErrorCount: Array.isArray(report?.console)
-      ? report.console.filter(
-          (entry) =>
-            entry?.severity === "error" || entry?.severity === "exception",
-        ).length
-      : null,
+    consoleErrorCount,
     networkErrorCount: Array.isArray(report?.networkErrors)
       ? report.networkErrors.filter((entry) => entry?.failed).length
       : null,
@@ -349,7 +372,7 @@ export function verifyPrivateBrowserTopology(sessions) {
         s.connected !== true ||
         s.browserTargetType !== "page" ||
         typeof s.browserProduct !== "string" ||
-        !s.browserProduct.startsWith("Chrome/"),
+        !/^(?:HeadlessChrome|Chrome)\/[0-9]/.test(s.browserProduct),
     )
   )
     return {
