@@ -1,0 +1,46 @@
+name: Class Five E3 authenticated socket wire acceptance
+on:
+  push:
+    branches:
+      - feature/class5-e3-principal-wire-fanout-20261121
+    paths:
+      - .github/workflows/class5-e3-wire-qa.yml
+permissions:
+  contents: read
+jobs:
+  exact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Pinned npm
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Pinned install
+        run: npm run inst
+      - name: Check and capture pinned formatter output for E3-owned files
+        shell: bash
+        run: |
+          files=(
+            packages/engine/src/GameRunner.ts
+            src/server/national/TrustedNationalMatch.ts
+            packages/shared/src/NationalViewWire.ts
+            packages/shared/src/WireSchemas.ts
+            tests/national/TrustedNationalServerAuthority.test.ts
+            tests/national/ClassFivePrincipalWireFanout.test.ts
+          )
+          npx --no-install oxfmt --write "${files[@]}"
+          for f in "${files[@]}"; do
+            echo "E3_FORMAT_BLOB_BEGIN:$f"
+            base64 -w0 "$f"
+            echo
+            echo "E3_FORMAT_BLOB_END:$f"
+          done
+      - name: Actual whole-source TypeScript
+        run: npm run typecheck
+      - name: Focused E1/E2/E3/E4 real Game and wire tests
+        run: npx --no-install vitest run --project node tests/national/ClassFivePrincipalWireFanout.test.ts tests/national/TrustedNationalServerAuthority.test.ts tests/national/NationalServerOutboundClass4.test.ts tests/national/NationalAccessionPacketsR11.test.ts tests/national/RoundElevenDelegatedPeaceWire.test.ts tests/national/NationalBotRejectionRoundtripR11.test.ts
+      - name: Pinned source lint
+        run: npm run lint
