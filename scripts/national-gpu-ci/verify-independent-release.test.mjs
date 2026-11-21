@@ -185,7 +185,7 @@ function fixture() {
   };
 }
 
-void test("synthetic signed preflight and postflight bind all four modes and all screenshots", () => {
+test("synthetic signed preflight and postflight bind all four modes and all screenshots", () => {
   const f = fixture();
   try {
     const result = verifyIndependentRelease(f.args);
@@ -200,7 +200,7 @@ void test("synthetic signed preflight and postflight bind all four modes and all
   }
 });
 
-void test("empty/mismatched pinned roots and guest-provided key always reject", () => {
+test("empty/mismatched pinned roots and guest-provided key always reject", () => {
   const f = fixture();
   try {
     assert.equal(
@@ -234,7 +234,7 @@ void test("empty/mismatched pinned roots and guest-provided key always reject", 
   }
 });
 
-void test("tampered Ed25519 signature or source/run/runner/nonce binding rejects", () => {
+test("tampered Ed25519 signature or source/run/runner/nonce binding rejects", () => {
   const f = fixture();
   try {
     const mutated = {
@@ -270,7 +270,7 @@ void test("tampered Ed25519 signature or source/run/runner/nonce binding rejects
   }
 });
 
-void test("freshness and post-job ordering are mandatory", () => {
+test("freshness and post-job ordering are mandatory", () => {
   const f = fixture();
   try {
     f.preflight.issuedAtMs = RUN_START - 300_000;
@@ -295,7 +295,7 @@ void test("freshness and post-job ordering are mandatory", () => {
   }
 });
 
-void test("every physical teardown and deregistration fact must be signed true", () => {
+test("every physical teardown and deregistration fact must be signed true", () => {
   const f = fixture();
   try {
     for (const name of Object.keys(SIGNED_CLEANUP)) {
@@ -315,7 +315,7 @@ void test("every physical teardown and deregistration fact must be signed true",
   }
 });
 
-void test("missing, divergent, symlinked and modified screenshots fail closed", () => {
+test("missing, divergent, symlinked and modified screenshots fail closed", () => {
   const f = fixture();
   try {
     const p = join(f.root, "legacy-desktop", "home.png");
@@ -346,7 +346,7 @@ void test("missing, divergent, symlinked and modified screenshots fail closed", 
   }
 });
 
-void test("wrong lane, missing mode, failing NATIONAL gameplay and forged guest certification reject", () => {
+test("wrong lane, missing mode, failing NATIONAL gameplay and forged guest certification reject", () => {
   const f = fixture();
   try {
     const mutate = (fn) => {
@@ -396,7 +396,7 @@ void test("wrong lane, missing mode, failing NATIONAL gameplay and forged guest 
   }
 });
 
-void test("evidence summary digest cannot be swapped after host postflight signature", () => {
+test("evidence summary digest cannot be swapped after host postflight signature", () => {
   const f = fixture();
   try {
     f.args.summaryBytes = Buffer.from(
