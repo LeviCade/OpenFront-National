@@ -22,7 +22,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket, WebSocketServer } from "ws";
 import { parseTrustedNationalProjection } from "../../src/client/TrustedNationalSession";
 import { Client } from "../../src/server/Client";
-import type { GameServer } from "../../src/server/GameServer";
 import { ServerEnv } from "../../src/server/ServerEnv";
 import { verifyClientToken } from "../../src/server/jwt";
 import { cid, makeGame } from "../util/GameServerHarness";
