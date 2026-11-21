@@ -3956,3 +3956,77 @@ describe("GhostStructure Hotkeys tapping/Scrolling", () => {
     expect(ratioEvents[1].attackRatio).toBeLessThan(0);
   });
 });
+
+
+describe("NATIONAL human touch map actions", () => {
+  function tapNational(
+    nationalMode: boolean,
+    replay: boolean,
+    spawnPhase: boolean,
+    ghostStructure: UnitType | null = null,
+  ) {
+    const bus = new EventBus();
+    const events: { kind: string; x: number; y: number }[] = [];
+    bus.on(ContextMenuEvent, (e) =>
+      events.push({ kind: "context", x: e.x, y: e.y }),
+    );
+    bus.on(TouchEvent, (e) =>
+      events.push({ kind: "touch", x: e.x, y: e.y }),
+    );
+    bus.on(TouchGhostPlacementEvent, (e) =>
+      events.push({ kind: "ghost", x: e.x, y: e.y }),
+    );
+    const game = {
+      inSpawnPhase: () => spawnPhase,
+      config: () => ({
+        gameConfig: () => ({ nationalMode }),
+        isReplay: () => replay,
+      }),
+    } as unknown as GameView;
+    const handler = new InputHandler(
+      game,
+      { attackRatio: 0.2, ghostStructure, rocketDirectionUp: true } as UIState,
+      document.createElement("canvas"),
+      bus,
+    );
+    try {
+      const down = new PointerEvent("pointerdown", {
+        button: 0, clientX: 122, clientY: 211,
+        pointerId: 7, pointerType: "touch",
+      });
+      const up = new PointerEvent("pointerup", {
+        button: 0, clientX: 122, clientY: 211,
+        pointerId: 7, pointerType: "touch",
+      });
+      handler["onPointerDown"](down);
+      handler["onPointerUp"](up);
+      return events;
+    } finally {
+      handler.destroy();
+    }
+  }
+
+  it("opens the real engine-authorized radial for a NATIONAL spawn tap", () => {
+    expect(tapNational(true, false, true)).toEqual([
+      { kind: "context", x: 122, y: 211 },
+    ]);
+  });
+
+  it("opens the same native radial for NATIONAL enemy-map touch, never an automatic attack", () => {
+    expect(tapNational(true, false, false)).toEqual([
+      { kind: "context", x: 122, y: 211 },
+    ]);
+  });
+
+  it("preserves legacy FFA, replay and ghost-placement touch semantics", () => {
+    expect(tapNational(false, false, false)).toEqual([
+      { kind: "touch", x: 122, y: 211 },
+    ]);
+    expect(tapNational(true, true, false)).toEqual([
+      { kind: "touch", x: 122, y: 211 },
+    ]);
+    expect(tapNational(true, false, false, UnitType.City)).toEqual([
+      { kind: "ghost", x: 122, y: 211 },
+    ]);
+  });
+});
