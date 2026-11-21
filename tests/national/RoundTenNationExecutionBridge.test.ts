@@ -155,8 +155,12 @@ describe("R10 E2 real NationExecution -> E1 outcome -> AttackExecution", () => {
     ).toBe(true);
 
     const active = game.nationalWarState()!.wars.layers.find(
-      (layer) => layer.first.activeMemberIds.includes(A) &&
-        layer.second.activeMemberIds.includes(B),
+      (layer) =>
+        layer.endedTick === null &&
+        layer.first.kind === "nation" &&
+        layer.first.id === A &&
+        layer.second.kind === "nation" &&
+        layer.second.id === B,
     );
     expect(active).toBeDefined();
     const proposed = game.performNationalWarCommandWithOutcome(
