@@ -1,0 +1,27 @@
+name: R11 E1 ephemeral focused formatter + test
+on:
+  push:
+    branches:
+      - tooling/r11-e1-oxfmt-20261121
+permissions:
+  contents: read
+jobs:
+  targeted:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned source tools
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run R11 E1 focused live GameRunner acceptance
+        run: npx --no-install vitest run tests/national/RoundElevenImperialPeaceDelegation.test.ts --reporter=verbose
+      - name: Emit exact pinned formatting patch
+        if: always()
+        shell: bash
+        run: |
+          set -eu
+          npx --no-install oxfmt --write packages/engine/src/game/GameImpl.ts packages/engine/src/national/NationalRuntime.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/national/politics/sovereignty.ts tests/national/RoundElevenImperialPeaceDelegation.test.ts
+          git diff -- packages/engine/src/game/GameImpl.ts packages/engine/src/national/NationalRuntime.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/national/politics/sovereignty.ts tests/national/RoundElevenImperialPeaceDelegation.test.ts
