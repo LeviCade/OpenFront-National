@@ -5,7 +5,6 @@ import {
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
-import type { NationalPublicConflictView } from "@openfront/engine/national/observation/NationalOutbound";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { NationExecution } from "@openfront/engine/execution/NationExecution";
@@ -19,6 +18,7 @@ import {
   recordNationalWarOutcome,
 } from "@openfront/engine/national/ai/NationalPlanner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
+import type { NationalPublicConflictView } from "@openfront/engine/national/observation/NationalOutbound";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
@@ -114,9 +114,9 @@ describe("R10 three-nation observed-information live match", () => {
     const bravoObservation = observation(game, AI_B);
     expect(alphaObservation.unownedFrontier).toBe(false);
     expect(bravoObservation.unownedFrontier).toBe(false);
-    expect(
-      alphaObservation.frontiers.some((f) => f.targetId === AI_B),
-    ).toBe(true);
+    expect(alphaObservation.frontiers.some((f) => f.targetId === AI_B)).toBe(
+      true,
+    );
 
     const planned = planNationalInterest(
       alphaObservation,
@@ -129,12 +129,10 @@ describe("R10 three-nation observed-information live match", () => {
       rationale: "reachable-opportunity",
     });
     // No global opponent strength/controllerKind appears in either plan.
-    expect(alphaObservation.nations[0]).not.toHaveProperty(
-      "controllerKind",
-    );
-    expect(alphaObservation.nations.find((n) => n.id === HUMAN)).not.toHaveProperty(
-      "troops",
-    );
+    expect(alphaObservation.nations[0]).not.toHaveProperty("controllerKind");
+    expect(
+      alphaObservation.nations.find((n) => n.id === HUMAN),
+    ).not.toHaveProperty("troops");
 
     // The third participant exercises real political authority in this same
     // match, rather than serving as a fictitious planner target.
@@ -143,41 +141,30 @@ describe("R10 three-nation observed-information live match", () => {
       empireId: "r10_charlie_empire",
     });
     expect(
-      game.nationalPublicPoliticalView()?.empires.some(
-        (e) => e.id === "r10_charlie_empire",
-      ),
+      game
+        .nationalPublicPoliticalView()
+        ?.empires.some((e) => e.id === "r10_charlie_empire"),
     ).toBe(true);
 
     const startingTroops = game.player(AI_A).troops();
-    const warCalls = vi.spyOn(game, "performNationalWarCommand");
     const attackCalls = vi.spyOn(game, "addExecution");
     for (let i = 0; i < 150; i++) game.executeNextTick();
-    // Game.performNationalWarCommand returns VOID (legacy E2 legal port).
-    // The canonical Game-owned WAR layer, not a fabricated return value,
-    // proves whether the real AI's actual declaration was accepted.
-    const botDeclaration = warCalls.mock.calls.some(
-      ([actor, command]) =>
-        actor.id() === AI_A &&
-        command.kind === "declare-national" &&
-        command.aggressorId === AI_A &&
-        command.targetId === AI_B,
+    // Only live NationExecution bots can declare for Alpha in this match.
+    // The canonical Game-owned WAR layer is authoritative in both the R9
+    // direct-command and R10 outcome-acknowledging execution implementations.
+    const botDeclaration = game.nationalWarState()?.wars.layers.some(
+      (layer) =>
+        layer.endedTick === null &&
+        layer.declaredBy === AI_A &&
+        layer.first.id === AI_A &&
+        layer.second.id === AI_B,
     );
     const attacks = attackCalls.mock.calls
       .flat()
       .filter((execution) => execution instanceof AttackExecution);
-    warCalls.mockRestore();
     attackCalls.mockRestore();
 
     expect(botDeclaration).toBe(true);
-    expect(
-      game.nationalWarState()?.wars.layers.some(
-        (layer) =>
-          layer.endedTick === null &&
-          layer.declaredBy === AI_A &&
-          layer.first.id === AI_A &&
-          layer.second.id === AI_B,
-      ),
-    ).toBe(true);
     expect(game.nationalWarAuthority()?.atWar(AI_A, AI_B)).toBe(true);
     expect(attacks.length).toBeGreaterThan(0);
     expect(
@@ -188,9 +175,9 @@ describe("R10 three-nation observed-information live match", () => {
     // No fake battle result: actual WAR layers and real troop debits remain
     // authoritative. A live campaign remains the planner's local priority.
     const active = observation(game, AI_A);
-    expect(
-      deriveNationalWarSides(active.wars, AI_A).enemies.has(AI_B),
-    ).toBe(true);
+    expect(deriveNationalWarSides(active.wars, AI_A).enemies.has(AI_B)).toBe(
+      true,
+    );
     const next = planNationalInterest(
       active,
       initialNationalPlannerMemory(AI_A),
@@ -206,16 +193,13 @@ describe("R10 three-nation observed-information live match", () => {
 
   it("replans on public WAR endings with deterministic replay", async () => {
     const game = await realThreeNationMatch();
-    const start = game.performNationalWarCommandWithOutcome(
-      game.player(AI_A),
-      {
-        kind: "declare-national",
-        warId: "r10_ai_live_war",
-        aggressorId: AI_A,
-        targetId: AI_B,
-        requestId: "r10_ai_live_request",
-      },
-    );
+    const start = game.performNationalWarCommandWithOutcome(game.player(AI_A), {
+      kind: "declare-national",
+      warId: "r10_ai_live_war",
+      aggressorId: AI_A,
+      targetId: AI_B,
+      requestId: "r10_ai_live_request",
+    });
     expect(start.accepted).toBe(true);
     const during = observation(game, AI_A);
     expect(during.diplomaticEvents).toEqual(
@@ -271,9 +255,7 @@ describe("R10 three-nation observed-information live match", () => {
     expect(replanned.planned).toBe(true);
     expect(replanned.decision?.targetId).not.toBe(AI_B);
     expect(replanned.memory.rejectedWarTargets).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ targetId: AI_B }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ targetId: AI_B })]),
     );
 
     const { bytes, again, restored } = await roundTrip(game, "plains");
@@ -287,16 +269,13 @@ describe("R10 three-nation observed-information live match", () => {
   it("turns real rejected WAR receipts into bounded alternative plans", async () => {
     const game = await realThreeNationMatch();
     // A settled layer retains its canonical ID, so reusing it must fail.
-    const first = game.performNationalWarCommandWithOutcome(
-      game.player(AI_A),
-      {
-        kind: "declare-national",
-        warId: "r10_reserved_layer",
-        aggressorId: AI_A,
-        targetId: AI_B,
-        requestId: "r10_first_legitimate",
-      },
-    );
+    const first = game.performNationalWarCommandWithOutcome(game.player(AI_A), {
+      kind: "declare-national",
+      warId: "r10_reserved_layer",
+      aggressorId: AI_A,
+      targetId: AI_B,
+      requestId: "r10_first_legitimate",
+    });
     expect(first.accepted).toBe(true);
     expect(
       game.performNationalWarCommandWithOutcome(game.player(AI_A), {
@@ -342,9 +321,9 @@ describe("R10 three-nation observed-information live match", () => {
     expect(memory.rejectedWarTargets).toEqual([
       { targetId: HUMAN, retryAfterTick: observed.tick + 180 },
     ]);
-    expect(
-      recordNationalWarOutcome(observed, memory, rejected),
-    ).toEqual(memory);
+    expect(recordNationalWarOutcome(observed, memory, rejected)).toEqual(
+      memory,
+    );
     const chosen = planNationalInterest(observed, memory, 30);
     expect(chosen.decision?.targetId).toBe(AI_A);
     expect(chosen.decision?.targetId).not.toBe(HUMAN);

@@ -1,3 +1,9 @@
+import type {
+  NationId,
+  NationalObservation,
+  NationalWarView,
+  PublicDiplomaticEventKind,
+} from "../observation/NationalObservation";
 /**
  * Candidate-neutral NATIONAL strategic planner (D-002; AI-01, AI-02, AI-04).
  * This module has no Game/Player imports: it cannot query hidden state.
@@ -5,12 +11,6 @@
  * legality, cost and actual effects when NATIONAL is wired into M0.
  */
 import type { NationalWarCommandOutcome } from "../politics/NationalGovernanceState";
-import type {
-  NationId,
-  NationalObservation,
-  NationalWarView,
-  PublicDiplomaticEventKind,
-} from "../observation/NationalObservation";
 
 /**
  * Nations on the SAME side are comrades, NOT enemies.
@@ -149,8 +149,7 @@ export function recordNationalWarOutcome(
   // An obsolete/foreign target cannot seed knowledge the AI never observed.
   if (
     !observation.frontiers.some(
-      (f) =>
-        f.access === "land" && f.targetId === outcome.commandTargetId,
+      (f) => f.access === "land" && f.targetId === outcome.commandTargetId,
     )
   )
     return previous;
@@ -169,8 +168,7 @@ export function recordNationalWarOutcome(
   }
   remaining.sort(
     (a, b) =>
-      a.retryAfterTick - b.retryAfterTick ||
-      cmp(a.targetId, b.targetId),
+      a.retryAfterTick - b.retryAfterTick || cmp(a.targetId, b.targetId),
   );
   return {
     ...previous,
@@ -287,8 +285,7 @@ export function planNationalInterest(
   // Do not grow legacy NationExecution v2 snapshots with a spurious empty
   // optional key. E2 owns the codec for genuinely observed WAR outcomes.
   const memory: NationalPlannerMemory =
-    obsoleteTarget === null &&
-    updated.memory.rejectedWarTargets === undefined
+    obsoleteTarget === null && updated.memory.rejectedWarTargets === undefined
       ? updated.memory
       : {
           ...updated.memory,
