@@ -84,7 +84,10 @@ export interface NationalPublicConflictView {
     readonly id: string;
     readonly scope: "national" | "imperial";
     readonly first: { readonly kind: "nation" | "empire"; readonly id: string };
-    readonly second: { readonly kind: "nation" | "empire"; readonly id: string };
+    readonly second: {
+      readonly kind: "nation" | "empire";
+      readonly id: string;
+    };
     readonly declaredBy: string;
     readonly startedTick: number;
     readonly endedTick: number | null;
@@ -149,7 +152,10 @@ export function projectNationalPublicConflict(
   const snapshot = game.nationalWarState();
   if (snapshot === null) return undefined;
   const layers: NationalPublicConflictView["layers"][number][] = [];
-  const visibleLayers = new Map<string, (typeof snapshot.wars.layers)[number]>();
+  const visibleLayers = new Map<
+    string,
+    (typeof snapshot.wars.layers)[number]
+  >();
   for (const layer of snapshot.wars.layers) {
     if (
       layer.startedTick > tick ||
@@ -197,9 +203,10 @@ export function projectNationalPublicConflict(
       !authority.nationAlive(actorId)
     )
       return false;
-    const authorizedSide = (
-      side: { readonly kind: "nation" | "empire"; readonly id: string },
-    ): boolean => {
+    const authorizedSide = (side: {
+      readonly kind: "nation" | "empire";
+      readonly id: string;
+    }): boolean => {
       if (layer.scope === "imperial")
         return side.kind === "nation"
           ? side.id === actorId
@@ -488,7 +495,9 @@ export class NationalOutboundFilter {
         : undefined;
 
     const proposedResults = (
-      data as unknown as { nationalCommandResults?: readonly OutboundNationalResult[] }
+      data as unknown as {
+        nationalCommandResults?: readonly OutboundNationalResult[];
+      }
     ).nationalCommandResults;
     // A second independent scope check prevents an accidental caller from
     // attaching the E1 journal for another actor to this viewer's packet.
@@ -519,8 +528,7 @@ export class NationalOutboundFilter {
                   /^[A-Za-z0-9_-]{1,128}$/.test(item.requestId) &&
                   (item.accepted
                     ? publicId(item.warId) && item.motionId === undefined
-                    : item.warId === undefined &&
-                      item.motionId === undefined)
+                    : item.warId === undefined && item.motionId === undefined)
                 );
               if (
                 item.type === "national_propose_peace" ||
@@ -530,8 +538,7 @@ export class NationalOutboundFilter {
                   /^[A-Za-z0-9_-]{1,128}$/.test(item.requestId) &&
                   (item.accepted
                     ? publicId(item.warId) && publicId(item.motionId)
-                    : item.warId === undefined &&
-                      item.motionId === undefined)
+                    : item.warId === undefined && item.motionId === undefined)
                 );
               return publicId(item.commandTargetId);
             })

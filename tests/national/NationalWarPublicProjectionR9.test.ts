@@ -185,7 +185,9 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     const foreignPacket = liveRunner(game, third.clientID!)();
     const spectatorPacket = liveRunner(game)();
     for (const packet of [northPacket, foreignPacket, spectatorPacket]) {
-      expect(packet.nationalConflicts?.layers.map((w) => w.id)).toEqual([warId]);
+      expect(packet.nationalConflicts?.layers.map((w) => w.id)).toEqual([
+        warId,
+      ]);
       expect(packet).not.toHaveProperty("nationalCommandResults");
     }
     game.performNationalWarCommand(game.player(north.id), {
@@ -284,8 +286,16 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     );
     const delivered = northView();
     expect(delivered.nationalCommandResults).toEqual([
-      expect.objectContaining({ sequence: 30, requestId: second.requestId, warId }),
-      expect.objectContaining({ sequence: 31, requestId: first.requestId, warId }),
+      expect.objectContaining({
+        sequence: 30,
+        requestId: second.requestId,
+        warId,
+      }),
+      expect.objectContaining({
+        sequence: 31,
+        requestId: first.requestId,
+        warId,
+      }),
     ]);
     expect(JSON.stringify(delivered)).not.toContain("8765432");
     expect(northView()).not.toHaveProperty("nationalCommandResults");
@@ -296,11 +306,13 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
 
     const state = emptyNationalResultDeliveryState();
     journal.splice(0, journal.length, first, { ...first });
-    expect(actorNationalResults(game, game.player(north.id), state)).toHaveLength(1);
+    expect(
+      actorNationalResults(game, game.player(north.id), state),
+    ).toHaveLength(1);
     journal.push({ ...first, sequence: 33 });
-    expect(() => actorNationalResults(game, game.player(north.id), state)).toThrow(
-      /conflicting authoritative founder receipts/,
-    );
+    expect(() =>
+      actorNationalResults(game, game.player(north.id), state),
+    ).toThrow(/conflicting authoritative founder receipts/);
     const freshRead = () =>
       actorNationalResults(
         game,
