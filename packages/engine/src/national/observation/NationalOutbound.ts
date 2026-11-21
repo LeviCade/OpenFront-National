@@ -123,6 +123,7 @@ const resultTypes = new Set([
   "national_offer_empire",
   "national_accept_empire",
   "national_transfer_crown",
+  "national_set_peace_delegation",
   "national_found_pact",
   "national_invite_pact",
   "national_accept_pact",

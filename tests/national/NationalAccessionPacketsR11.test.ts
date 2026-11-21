@@ -328,7 +328,7 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
     const forged = {
       ...poisoned,
       nationalAccessionOffers: {
-        version: 1,
+        version: 1 as const,
         recipientId: C.id,
         offers: [
           {
