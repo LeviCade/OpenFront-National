@@ -187,15 +187,7 @@ export function validatePublicHandoff(mode, expected, now = Date.now()) {
       "utf8",
     ),
   ).trustedEd25519PublicKeySha256;
-  verifyPublicModeProof(
-    mode,
-    signed,
-    pem,
-    challenge,
-    trusted,
-    expected,
-    now,
-  );
+  verifyPublicModeProof(mode, signed, pem, challenge, trusted, expected, now);
   return signed.payload;
 }
 async function cli() {
@@ -215,7 +207,8 @@ async function cli() {
       // Public repository API, no credential/token or private job data.
       const response = await fetch(
         "https://api.github.com/repos/LeviCade/OpenFront-National/actions/runs/" +
-          expected.runId + "/jobs?per_page=100",
+          expected.runId +
+          "/jobs?per_page=100",
         {
           headers: {
             Accept: "application/vnd.github+json",
