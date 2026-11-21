@@ -66,7 +66,8 @@ export class SocketIngress {
       if (
         client.ws !== admittedSocket ||
         admittedSocket.readyState !== WebSocket.OPEN
-      ) return;
+      )
+        return;
       try {
         this.receive(client, message);
       } catch (error) {
@@ -88,7 +89,10 @@ export class SocketIngress {
     });
     admittedSocket.on("error", (error: Error) => {
       if ((error as any).code === "WS_ERR_UNEXPECTED_RSV_1") {
-        admittedSocket.close(CloseCode.ProtocolError, CloseReason.ProtocolError);
+        admittedSocket.close(
+          CloseCode.ProtocolError,
+          CloseReason.ProtocolError,
+        );
       }
     });
 

@@ -842,16 +842,15 @@ export class GameServer {
     // Rejected attempts must not close or displace the legitimate owner.
     if (
       this.gameConfig.nationalMode === true &&
-      (
-        !nationalPrincipal ||
+      (!nationalPrincipal ||
         nationalPrincipal.subject !== persistentID ||
         nationalPrincipal.publicId !== client.publicId ||
         !client.claims ||
         !client.publicId ||
         client.spectator ||
-        this.clients.isKicked(persistentID)
-      )
-    ) return false;
+        this.clients.isKicked(persistentID))
+    )
+      return false;
 
     this.log.info("client rejoining", { clientID, lastTurn });
     // Also closes the old WebSocket, to prevent resource leaks.

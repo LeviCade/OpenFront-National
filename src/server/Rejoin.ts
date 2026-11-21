@@ -19,7 +19,17 @@ export function rejoinOrClose(
   lastTurn: number,
   nationalPrincipal?: NationalReconnectPrincipal,
 ): void {
-  if (gm.rejoinClient(ws, persistentID, gameID, lastTurn, undefined, nationalPrincipal)) return;
+  if (
+    gm.rejoinClient(
+      ws,
+      persistentID,
+      gameID,
+      lastTurn,
+      undefined,
+      nationalPrincipal,
+    )
+  )
+    return;
   // An ended game stays in GameManager until its next tick prunes it; to
   // the rejoining client it is already gone.
   const game = gm.game(gameID);

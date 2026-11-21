@@ -46,7 +46,9 @@ function verified(index: number): Client {
     publicId: publics[index],
     username: ["Alpha", "Bravo", "Charlie"][index],
     // The real Worker obtains this from a validated signed account token.
-    claims: { sub: "verified-persistent-" + index } as NonNullable<Client["claims"]>,
+    claims: { sub: "verified-persistent-" + index } as NonNullable<
+      Client["claims"]
+    >,
   });
 }
 
@@ -254,7 +256,8 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
     const freshWs = makeMockWs();
     expect(
       game.rejoinClient(freshWs as any, a.persistentID, 0, undefined, {
-        subject: a.persistentID, publicId: a.publicId!,
+        subject: a.persistentID,
+        publicId: a.publicId!,
       }),
     ).toBe(true);
     expect(freshWs.sent(ctx).some((m) => m.type === "national_start")).toBe(
