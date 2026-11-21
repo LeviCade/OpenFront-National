@@ -67,7 +67,7 @@ async function realThreeNationMatch(): Promise<Game> {
   for (let y = 0; y < game.height(); y++) {
     for (let x = 0; x < game.width(); x++) {
       const tile = game.ref(x, y);
-      if (!game.isLand(tile) || game.isImpassable(tile)) continue;
+      if (!game.isLand(tile)) continue;
       const id = x < firstLimit ? AI_A : x < secondLimit ? AI_B : HUMAN;
       game.player(id).conquer(tile);
     }
@@ -130,7 +130,7 @@ describe("R10 three-nation observed-information live match", () => {
       rationale: "reachable-opportunity",
     });
     // No global opponent strength/controllerKind appears in either plan.
-    expect(alphaObservation.nations).not.toHaveProperty(
+    expect(alphaObservation.nations[0]).not.toHaveProperty(
       "controllerKind",
     );
     expect(alphaObservation.nations.find((n) => n.id === HUMAN)).not.toHaveProperty(
@@ -210,7 +210,7 @@ describe("R10 three-nation observed-information live match", () => {
     expect(during.diplomaticEvents).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: "war-started:r10_ai_live_war",
+          id: "war:0:started:r10_ai_live_war",
           kind: "war-started",
           public: true,
         }),
@@ -249,7 +249,7 @@ describe("R10 three-nation observed-information live match", () => {
     expect(after.diplomaticEvents).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: "war-ended:r10_ai_live_war",
+          id: "war:1:ended:r10_ai_live_war",
           kind: "war-ended",
           public: true,
         }),
