@@ -599,12 +599,16 @@ export class Transport {
           this.handlePoolRedirect(msg.gameID);
           return;
         }
-        if (msg.type === "start") {
+        if (msg.type === "start" || msg.type === "national_start") {
           // Seed the dictionary from the same players array, in the same
           // order, that the server seeded its own from.
           this.zbinCtx = createGameWireContext(msg.gameStartInfo.players);
         }
-        if (msg.type === "lobby_info" || msg.type === "start") {
+        if (
+          msg.type === "lobby_info" ||
+          msg.type === "start" ||
+          msg.type === "national_start"
+        ) {
           // Admitted, so the redirect that sent us here is spent: drop the
           // source's latch so it can route this player again later. Any other
           // frame proves nothing — a full sibling sends an error frame first.
@@ -615,7 +619,11 @@ export class Transport {
           }
         }
         this.isSessionReady = true;
-        if (msg.type === "lobby_info" || msg.type === "start") {
+        if (
+          msg.type === "lobby_info" ||
+          msg.type === "start" ||
+          msg.type === "national_start"
+        ) {
           this.eventBus.emit(
             new NationalTransportStatusEvent(true, this.lobbyConfig.gameID),
           );
