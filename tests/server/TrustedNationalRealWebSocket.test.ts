@@ -376,5 +376,36 @@ describe("C2 E2 REAL WebSocket three-account NATIONAL server", () => {
     expect(starts(spectator)).toHaveLength(0);
     expect(recipientPackets(spectator)).toHaveLength(0);
     expect(acceptedSockets).toBe(4); // 3 entrants + A original-seat replacement
+
+    // Freeze the authoritative tick, queue B's genuine socket command, then
+    // physically disconnect B before execution. Replacing or killing a
+    // socket must cancel its still-uncommitted capabilities.
+    send(replacement, {
+      type: "intent", intent: { type: "toggle_pause", paused: true },
+    });
+    await waitFor(() => game.isPaused(), "authenticated host pauses game");
+    const abandonedToken = "c2_disconnected_pending_command";
+    send(b, { type: "intent", intent: {
+      type: "national_found_empire",
+      empireId: "must-not-commit",
+      requestId: abandonedToken,
+    } });
+    await new Promise(resolve => setTimeout(resolve, 45));
+    b.ws.close();
+    await waitFor(() => game.numClients() === 2, "B physical socket disconnect");
+    send(replacement, {
+      type: "intent", intent: { type: "toggle_pause", paused: false },
+    });
+    await waitFor(() => !game.isPaused(), "A resumes canonical server");
+    await new Promise(resolve => setTimeout(resolve, 140));
+    expect(receipt(c, abandonedToken)).toBeUndefined();
+    expect(receipt(replacement, abandonedToken)).toBeUndefined();
+    const authoritativeGame = (canonical as GameRunner).game;
+    expect(
+      authoritativeGame
+        .nationalPoliticalCommandResults(authoritativeGame.player(SEAT_IDS[1]))
+        .find((r) => r.requestId === abandonedToken),
+    ).toBeUndefined();
+    expect(b.ws.readyState).not.toBe(WebSocket.OPEN);
   });
 });
