@@ -105,7 +105,9 @@ async function rig(mapName: string, starts: number[]) {
       const target = sockets.find((s) => s.client === client);
       if (!target) throw new Error("unrecognized host seat");
       const payload = encodeNationalRecipientProjection(packet);
-      target.socket.send(encodeServerMessage({
+      // E2's real GameServer emits on Client.ws AFTER an original-seat
+      // reconnect. Do not pin this test delivery to the first socket object.
+      (client.ws as unknown as Socket).send(encodeServerMessage({
         type: "national_projection", tick: packet.tick, payload,
       }, undefined));
     },
