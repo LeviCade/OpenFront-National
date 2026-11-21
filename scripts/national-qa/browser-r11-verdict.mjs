@@ -63,8 +63,7 @@ export function soloSpawnFractions() {
   ];
   for (const y of [0.25, 0.4, 0.55, 0.7, 0.82]) {
     for (const x of [0.2, 0.35, 0.5, 0.65, 0.8]) {
-      if (!points.some(([u, v]) => u === x && v === y))
-        points.push([x, y]);
+      if (!points.some(([u, v]) => u === x && v === y)) points.push([x, y]);
     }
   }
   return points;
@@ -94,9 +93,7 @@ export function classifySoloBattleEvidence({
     !Array.isArray(emitted) ||
     !emitted.some(
       (e) =>
-        e?.targetId === targetId &&
-        Number.isFinite(e.troops) &&
-        e.troops > 0,
+        e?.targetId === targetId && Number.isFinite(e.troops) && e.troops > 0,
     )
   )
     return { accepted: false, reason: "SOLO_REAL_RADIAL_ATTACK_ABSENT" };

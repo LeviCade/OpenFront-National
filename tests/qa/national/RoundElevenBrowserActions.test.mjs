@@ -239,9 +239,9 @@ describe("Class Five E5 NATIONAL Solo native gameplay evidence", () => {
       troopLoss: true,
       territoryLoss: true,
     });
-    expect(
-      classifySoloBattleEvidence({ ...valid, emitted: [] }).reason,
-    ).toBe("SOLO_REAL_RADIAL_ATTACK_ABSENT");
+    expect(classifySoloBattleEvidence({ ...valid, emitted: [] }).reason).toBe(
+      "SOLO_REAL_RADIAL_ATTACK_ABSENT",
+    );
     expect(
       classifySoloBattleEvidence({
         ...valid,
