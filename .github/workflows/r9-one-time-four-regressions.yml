@@ -60,3 +60,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "test(stage3): accept E1/E2/E3/E4 targeted real WAR and diplomacy regressions"
           git push origin HEAD:refs/heads/stage3/round9-combined-acceptance-20261121
+
+# Round Nine rerun: north sovereign settles the surviving national layer.
