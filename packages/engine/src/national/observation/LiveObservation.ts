@@ -437,7 +437,7 @@ export function collectLiveNationalObservation(
         tick - layer.startedTick <= DIPLOMACY_WINDOW_TICKS
       ) {
         diplomaticEvents.push({
-          id: `war-started:${layer.id}`,
+          id: `war:0:started:${layer.id}`,
           tick: layer.startedTick,
           actorId: layer.declaredBy,
           kind: "war-started",
@@ -450,7 +450,7 @@ export function collectLiveNationalObservation(
         tick - layer.endedTick <= DIPLOMACY_WINDOW_TICKS
       ) {
         diplomaticEvents.push({
-          id: `war-ended:${layer.id}`,
+          id: `war:1:ended:${layer.id}`,
           tick: layer.endedTick,
           // The declarer identifies the public WAR record, not the
           // confidential recipient/acceptor of any peace motion.
