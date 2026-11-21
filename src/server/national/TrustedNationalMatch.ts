@@ -20,7 +20,8 @@ import {
   type Turn,
 } from "@openfront/engine-api/Schemas";
 import { GameRunner } from "@openfront/engine/GameRunner";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import WebSocket from "ws";
 import type { Client } from "../Client";
 
 export interface NationalTickReceipt {
@@ -40,6 +41,8 @@ const MANAGEMENT_INTENTS = new Set([
 
 export class TrustedNationalMatch {
   private readonly seats = new Map<ClientID, Client>();
+  /** The exact admitted physical socket, not reusable clientID identity. */
+  private readonly activeSocket = new Map<ClientID, () => boolean>();
   private readonly requestIds = new Map<ClientID, Set<string>>();
   private readonly committed: Turn[] = [];
   private intents: StampedIntent[] = [];
@@ -102,13 +105,38 @@ export class TrustedNationalMatch {
     }
     // Register projections only after validating every seat. The GameRunner
     // itself verifies clientID -> real PlayerID on each subsequent tick.
-    for (const client of admittedPlayers) {
-      runner.registerTrustedNationalRecipient(client.clientID, (packet) => {
-        if (this.seats.get(client.clientID) === client && !client.spectator) {
-          this.deliver(client, packet);
-        }
-      });
-    }
+    for (const client of admittedPlayers) this.registerSeat(client);
+  }
+
+  /** E2's verified Client and original physical socket are authoritative.
+   * A reconnect always receives a NEW E3 cursor and server-minted nonce.
+   */
+  private registerSeat(client: Client): void {
+    const admittedSocket = client.ws;
+    const sessionId = randomUUID();
+    const active = () =>
+      this.seats.get(client.clientID) === client &&
+      client.ws === admittedSocket &&
+      admittedSocket.readyState === WebSocket.OPEN &&
+      !client.spectator &&
+      !!client.claims &&
+      !!client.publicId;
+    this.activeSocket.set(client.clientID, active);
+    this.runner.registerTrustedNationalRecipient(
+      client.clientID,
+      {
+        clientID: client.clientID,
+        sessionId,
+        isConnected: active,
+        isSpectator: () => client.spectator,
+      },
+      (packet) => {
+        // The runner already passed the host-only frame through E3's ONE
+        // principal-bound projection. E2 GameServer alone owns encoding and
+        // sending the existing national_projection wire variant.
+        if (active()) this.deliver(client, packet);
+      },
+    );
   }
 
   /**
@@ -119,6 +147,7 @@ export class TrustedNationalMatch {
   submit(sender: Client, candidate: unknown): boolean {
     if (
       this.seats.get(sender.clientID) !== sender ||
+      this.activeSocket.get(sender.clientID)?.() !== true ||
       sender.spectator ||
       !sender.claims ||
       !sender.publicId
@@ -147,22 +176,6 @@ export class TrustedNationalMatch {
     }
     this.intents.push(stamped);
     return true;
-  }
-
-  /** Authenticated host-only connection status; NEVER accepted from socket input. */
-  recordServerDisconnect(clientID: ClientID, disconnected: boolean): void {
-    if (!this.seats.has(clientID)) return;
-    this.intents.push(
-      StampedIntentSchema.parse({
-        type: "mark_disconnected",
-        clientID,
-        isDisconnected: disconnected,
-      }),
-    );
-  }
-
-  currentTick(): number {
-    return this.runner.game.ticks();
   }
 
   /** One deterministic simulation step, performed ONLY by the trusted host. */
@@ -194,10 +207,24 @@ export class TrustedNationalMatch {
       .digest("hex");
   }
 
-  /**
-   * A legitimate account reconnects to its ORIGINAL Game seat; create a fresh
-   * E3 recipient cursor but never replay prior private packet history or
-   * accept a new principal claiming the old clientID.
+  /** E2 GameServer host-only disconnect status; never client admin intent. */
+  recordServerDisconnect(clientID: ClientID, disconnected: boolean): void {
+    if (!this.seats.has(clientID)) return;
+    this.intents.push(
+      StampedIntentSchema.parse({
+        type: "mark_disconnected",
+        clientID,
+        isDisconnected: disconnected,
+      }),
+    );
+  }
+
+  currentTick(): number {
+    return this.runner.game.ticks();
+  }
+
+  /** New physical socket for the SAME verified account/seat. Historical
+   * command receipts must NOT replay, current pending invitations may.
    */
   resumeRecipient(client: Client): boolean {
     if (
@@ -205,22 +232,21 @@ export class TrustedNationalMatch {
       !client.claims ||
       !client.publicId ||
       client.spectator ||
+      client.ws.readyState !== WebSocket.OPEN ||
       this.runner.game.playerByClientID(client.clientID)?.type() !==
         PlayerType.Human
     )
       return false;
     this.runner.removeTrustedNationalRecipient(client.clientID);
-    this.runner.registerTrustedNationalRecipient(client.clientID, (packet) => {
-      if (this.seats.get(client.clientID) === client && !client.spectator) {
-        this.deliver(client, packet);
-      }
-    });
+    this.activeSocket.delete(client.clientID);
+    this.registerSeat(client);
     return true;
   }
 
   /** Revokes private E3 delivery. Already-committed turns remain canonical. */
   revokeRecipient(client: Client): void {
     if (this.seats.get(client.clientID) !== client) return;
+    this.activeSocket.delete(client.clientID);
     this.runner.removeTrustedNationalRecipient(client.clientID);
   }
 }

@@ -1,0 +1,30 @@
+name: Class Five E2 E3 exact real wire integration acceptance
+on:
+  push:
+    branches:
+      - probe/class5-e2-e3-real-wire-acceptance-20261121
+    paths:
+      - .github/workflows/class5-e2-e3-accepted-probe.yml
+permissions:
+  contents: read
+jobs:
+  integrated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Pinned npm
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Pinned install
+        run: npm run inst
+      - name: Exact pinned source formatting
+        run: npx --no-install oxfmt --check packages/engine/src/GameRunner.ts src/server/national/TrustedNationalMatch.ts tests/national/TrustedNationalServerAuthority.test.ts tests/national/ClassFivePrincipalWireFanout.test.ts
+      - name: Whole-source TypeScript
+        run: npm run typecheck
+      - name: Seven E1+E2+E3+E4 GameServer and hostile recipient suites
+        run: npx --no-install vitest run --project node tests/national/ClassFiveTrustedLobbyTransport.test.ts tests/national/ClassFivePrincipalWireFanout.test.ts tests/national/TrustedNationalServerAuthority.test.ts tests/national/NationalServerOutboundClass4.test.ts tests/national/NationalAccessionPacketsR11.test.ts tests/national/RoundElevenDelegatedPeaceWire.test.ts tests/national/NationalBotRejectionRoundtripR11.test.ts
+      - name: Pinned lint
+        run: npm run lint
