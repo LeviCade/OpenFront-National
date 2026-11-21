@@ -56,7 +56,7 @@ function publicWar(game: Game, observer: string | null) {
 }
 
 type R9Packet = GameUpdateViewData & {
-  nationalConflict?: NationalPublicConflictView;
+  nationalConflicts?: NationalPublicConflictView;
 };
 
 function liveRunner(game: Game, clientID?: string) {
@@ -80,16 +80,18 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
   it("only publishes real active WAR IDs and participant-visible pending motion IDs, including after replay", async () => {
     const game = await activeWar();
     const spectator = publicWar(game, null)!;
-    expect(spectator.wars).toEqual([
+    expect(spectator.layers).toEqual([
       {
         id: warId,
         scope: "national",
         first: { kind: "nation", id: north.id },
         second: { kind: "nation", id: south.id },
         startedTick: expect.any(Number),
+        declaredBy: north.id,
+        endedTick: null,
       },
     ]);
-    expect(spectator.peaceMotions).toEqual([]);
+    expect(spectator.motions).toEqual([]);
 
     // A real canonical peace command; nothing is inferred from a queued click.
     game.performNationalWarCommand(game.player(north.id), {
@@ -97,25 +99,41 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
       motionId,
       warId,
     });
-    expect(publicWar(game, north.id)?.peaceMotions).toEqual([
-      { id: motionId, warId, proposedBy: north.id, proposedTick: expect.any(Number) },
+    expect(publicWar(game, north.id)?.motions).toEqual([
+      {
+        id: motionId,
+        layerId: warId,
+        proposedBy: north.id,
+        proposingSide: 0,
+        proposedTick: expect.any(Number),
+        acceptedTick: null,
+        acceptedBy: null,
+      },
     ]);
-    expect(publicWar(game, south.id)?.peaceMotions).toHaveLength(1);
-    expect(publicWar(game, third.id)?.peaceMotions).toEqual([]);
-    expect(publicWar(game, null)?.peaceMotions).toEqual([]);
+    expect(publicWar(game, south.id)?.motions).toHaveLength(1);
+    expect(publicWar(game, third.id)?.motions).toEqual([]);
+    expect(publicWar(game, null)?.motions).toEqual([]);
 
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
     expect(publicWar(restored, north.id)).toEqual(publicWar(game, north.id));
-    expect(publicWar(restored, third.id)?.peaceMotions).toEqual([]);
+    expect(publicWar(restored, third.id)?.motions).toEqual([]);
 
     game.performNationalWarCommand(game.player(south.id), {
       kind: "accept-peace",
       motionId,
     });
     expect(game.nationalWarAuthority()?.atWar(north.id, south.id)).toBe(false);
-    expect(publicWar(game, north.id)?.wars).toEqual([]);
-    expect(publicWar(game, south.id)?.peaceMotions).toEqual([]);
+    expect(publicWar(game, north.id)?.layers).toEqual([
+      expect.objectContaining({ id: warId, endedTick: game.ticks() }),
+    ]);
+    expect(publicWar(game, south.id)?.motions).toEqual([
+      expect.objectContaining({
+        id: motionId,
+        acceptedBy: south.id,
+        acceptedTick: game.ticks(),
+      }),
+    ]);
   });
 
   it("GameRunner emits real public conflicts but never emits command success from war roster alone", async () => {
@@ -124,7 +142,7 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     const foreignPacket = liveRunner(game, third.clientID!)();
     const spectatorPacket = liveRunner(game)();
     for (const packet of [northPacket, foreignPacket, spectatorPacket]) {
-      expect(packet.nationalConflict?.wars.map((w) => w.id)).toEqual([warId]);
+      expect(packet.nationalConflicts?.layers.map((w) => w.id)).toEqual([warId]);
       expect(packet).not.toHaveProperty("nationalCommandResults");
     }
     game.performNationalWarCommand(game.player(north.id), {
@@ -134,8 +152,8 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     });
     const owner = liveRunner(game, north.clientID!)();
     const nonparticipant = liveRunner(game, third.clientID!)();
-    expect(owner.nationalConflict?.peaceMotions[0]?.id).toBe(motionId);
-    expect(nonparticipant.nationalConflict?.peaceMotions).toEqual([]);
+    expect(owner.nationalConflicts?.motions[0]?.id).toBe(motionId);
+    expect(nonparticipant.nationalConflicts?.motions).toEqual([]);
   });
 
   it("deep-whitelists WAR data and never forwards levy, attack plans or hidden motion metadata", async () => {
@@ -148,8 +166,8 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
         secretPlans: "unannounced-attack-753159",
         levy: { secretTroops: 87654321, donors: ["covert-donor"] },
         wars: {
-          ...original.wars,
-          layers: original.wars.layers.map((layer) => ({
+          ...original.layers,
+          layers: original.layers.layers.map((layer) => ({
             ...layer,
             secretRoute: "transport-destination-123",
           })),
@@ -165,7 +183,7 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
       "transport-destination-123",
       "secretRoute",
     ]) expect(encoded).not.toContain(secret);
-    expect(projection.wars.map((w) => w.id)).toEqual([warId]);
+    expect(projection.layers.map((w) => w.id)).toEqual([warId]);
   });
 
   it("forged, foreign, reordered and duplicate WAR journal entries never become unrelated click results", async () => {
