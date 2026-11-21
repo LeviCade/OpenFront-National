@@ -216,6 +216,7 @@ export class NationalGovernanceState {
     suppliedRequestId: string | null,
     commandFingerprint: string,
     perform: () => FoundEmpireReason,
+    mayReplayAccepted?: () => boolean,
   ): NationalPoliticalCommandResult {
     return politicalResultView(
       this.recordCommand(
@@ -226,6 +227,8 @@ export class NationalGovernanceState {
         perform,
         commandKind,
         commandFingerprint,
+        null,
+        mayReplayAccepted,
       ),
     );
   }
@@ -240,6 +243,7 @@ export class NationalGovernanceState {
     commandFingerprint: string,
     references: { warId?: string; motionId?: string },
     perform: () => NationalWarCommandReason,
+    mayReplayAccepted?: () => boolean,
   ): NationalWarCommandOutcome {
     return warResultView(
       this.recordCommand(
@@ -251,6 +255,7 @@ export class NationalGovernanceState {
         commandKind,
         commandFingerprint,
         { recipientId: actorId, ...references },
+        mayReplayAccepted,
       ),
     );
   }
@@ -268,6 +273,7 @@ export class NationalGovernanceState {
       warId?: string;
       motionId?: string;
     } | null = null,
+    mayReplayAccepted?: () => boolean,
   ): NationalFoundEmpireResult {
     if (
       commandKind !== null &&
@@ -313,6 +319,11 @@ export class NationalGovernanceState {
         (existing.commandFingerprint ?? null) !== commandFingerprint
       )
         throw new Error("NATIONAL command journal: reused foreign request ID");
+      // A once-accepted response is NOT a transferable authorization token.
+      // Check the incumbent sovereign using the Game-owned political/WAR
+      // state before returning it. Do not mutate or replace old receipts.
+      if (existing.accepted && mayReplayAccepted && !mayReplayAccepted())
+        throw new Error("NATIONAL: stale sovereign replay authority");
       return { ...existing };
     }
     if (this.nextSequence === Number.MAX_SAFE_INTEGER)

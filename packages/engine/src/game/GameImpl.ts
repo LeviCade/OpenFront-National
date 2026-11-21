@@ -815,6 +815,9 @@ export class GameImpl implements Game {
           return "war-rule";
         }
       },
+      () =>
+        this._nationalWar?.mayReplayAsCurrentSovereign(actor.id(), command) ===
+        true,
     );
   }
 
@@ -1115,6 +1118,30 @@ export class GameImpl implements Game {
   }
 
   /**
+   * Accepted political receipts remain immutable historical evidence, not an
+   * evergreen crown credential. Crown, policy and accession replay must be
+   * evaluated against the current emperor, not the former command owner.
+   * This reads the one canonical politics authority and stores no epoch.
+   */
+  private mayReplayAsCurrentPoliticalSovereign(
+    actorId: PlayerID,
+    command: Exclude<NationalCommand, { kind: "found-empire" }>,
+  ): boolean {
+    const authority = this.nationalPoliticalAuthority();
+    if (!authority?.alive(actorId)) return false;
+    if (command.kind === "transfer-crown" ||
+        command.kind === "set-national-peace-delegation")
+      return authority.emperorOf(command.empireId) === actorId;
+    if (command.kind === "offer-empire" || command.kind === "accept-empire") {
+      if (actorId === command.candidateId)
+        return command.kind === "accept-empire" ||
+          authority.empireOf(actorId) === null;
+      return authority.emperorOf(command.empireId) === actorId;
+    }
+    return true;
+  }
+
+  /**
    * Single E1 Game-owned journal: authenticated non-founder transitions now
    * receive the same sequence/idempotence guarantees as Found Empire.
    * E2 supplies the server-stamped actor; E3 will expose a separate typed
@@ -1163,6 +1190,7 @@ export class GameImpl implements Game {
           return "political-rule";
         }
       },
+      () => this.mayReplayAsCurrentPoliticalSovereign(actor.id(), command),
     );
   }
 
