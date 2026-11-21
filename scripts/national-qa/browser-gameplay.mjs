@@ -12,7 +12,13 @@
  */
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -64,7 +70,8 @@ function persist() {
       process.env.NATIONAL_GPU_CANDIDATE_SHA ??
       process.env.GITHUB_SHA ??
       "local-working-tree",
-    hardwareAcceptanceRequired: process.env.NATIONAL_REQUIRE_HARDWARE_GPU === "1",
+    hardwareAcceptanceRequired:
+      process.env.NATIONAL_REQUIRE_HARDWARE_GPU === "1",
     viewport: mobile ? "390x844 mobile" : "1280x800 desktop",
     stage,
     events: records,
@@ -301,7 +308,9 @@ async function main() {
     angleBackend !== "gl-egl" &&
     angleBackend !== "vulkan"
   ) {
-    throw new Error("NATIONAL_CHROME_ANGLE_BACKEND must be gl, gl-egl or vulkan");
+    throw new Error(
+      "NATIONAL_CHROME_ANGLE_BACKEND must be gl, gl-egl or vulkan",
+    );
   }
   const virglSurfaceless = angleBackend === "gl-egl";
   const hardwareOnly = process.env.NATIONAL_REQUIRE_HARDWARE_GPU === "1";
@@ -309,30 +318,34 @@ async function main() {
   // normal game WebGL gate and is forbidden in real hardware acceptance.
   const softwareDiagnostic =
     !hardwareOnly && process.env.NATIONAL_QA_SOFTWARE_CDP === "1";
-  spawnChild(process.env.CHROME_BIN ?? "google-chrome", [
-    "--headless=new",
-    ...(virglSurfaceless ? ["--ozone-platform=headless"] : []),
-    "--no-sandbox",
-    "--disable-dev-shm-usage",
-    "--enable-webgl",
-    "--ignore-gpu-blocklist",
-    ...(hardwareOnly ? ["--disable-software-rasterizer"] : []),
-    ...(softwareDiagnostic
-      ? [
-          "--use-gl=angle",
-          "--use-angle=swiftshader",
-          "--enable-unsafe-swiftshader",
-        ]
-      : angleBackend
-        ? ["--use-gl=angle", "--use-angle=" + angleBackend]
-        : []),
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--remote-allow-origins=*",
-    "--user-data-dir=" + profile,
-    "--remote-debugging-port=" + port,
-    "about:blank",
-  ], virglSurfaceless ? { EGL_PLATFORM: "surfaceless" } : {});
+  spawnChild(
+    process.env.CHROME_BIN ?? "google-chrome",
+    [
+      "--headless=new",
+      ...(virglSurfaceless ? ["--ozone-platform=headless"] : []),
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--enable-webgl",
+      "--ignore-gpu-blocklist",
+      ...(hardwareOnly ? ["--disable-software-rasterizer"] : []),
+      ...(softwareDiagnostic
+        ? [
+            "--use-gl=angle",
+            "--use-angle=swiftshader",
+            "--enable-unsafe-swiftshader",
+          ]
+        : angleBackend
+          ? ["--use-gl=angle", "--use-angle=" + angleBackend]
+          : []),
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--remote-allow-origins=*",
+      "--user-data-dir=" + profile,
+      "--remote-debugging-port=" + port,
+      "about:blank",
+    ],
+    virglSurfaceless ? { EGL_PLATFORM: "surfaceless" } : {},
+  );
   const pages = await poll(async () => {
     const res = await fetch("http://127.0.0.1:" + port + "/json/list", {
       signal: AbortSignal.timeout(1200),
@@ -642,7 +655,10 @@ async function main() {
         const keyFingerprint = trustedKey
           ? createHash("sha256").update(trustedKey, "utf8").digest("hex")
           : null;
-        if (!Array.isArray(approvedKeys) || !approvedKeys.includes(keyFingerprint)) {
+        if (
+          !Array.isArray(approvedKeys) ||
+          !approvedKeys.includes(keyFingerprint)
+        ) {
           throw Error("GPU_RELEASE_TRUST_ROOT_NOT_ENROLLED_OR_MISMATCH");
         }
         const attestation = verifyHardwareWebgl(hardwareCapabilities, {

@@ -36,11 +36,11 @@ This statement is documentation for required notice; verify placement in the fin
 
 These literal playback references are present in the E5 source branch but the resource files are absent:
 
-| Source reference | Referenced resource |
-| --- | --- |
-| `src/client/sound/SoundManager.ts:20` | `resources/sounds/music/gameplay.mp3` |
+| Source reference                      | Referenced resource                     |
+| ------------------------------------- | --------------------------------------- |
+| `src/client/sound/SoundManager.ts:20` | `resources/sounds/music/gameplay.mp3`   |
 | `src/client/sound/SoundManager.ts:21` | `resources/sounds/music/gameplay-2.mp3` |
 | `src/client/sound/SoundManager.ts:22` | `resources/sounds/music/gameplay-3.mp3` |
-| `src/client/sound/MenuMusic.ts:213` | `resources/sounds/music/menu-theme.mp3` |
+| `src/client/sound/MenuMusic.ts:213`   | `resources/sounds/music/menu-theme.mp3` |
 
 The source-only auditor now records `musicCallSites` with precise file+line details, in addition to `missingMusic`. Missing paths are not authorization to download upstream protected music. Close the runtime music gap only by **properly licensed/original replacements** with provenance records, or by a verified graceful playback fallback demonstrated in real browser gameplay (including no unexpected asset requests, console errors or broken controls). The strict release audit continues to fail pending clearance.

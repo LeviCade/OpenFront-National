@@ -53,8 +53,11 @@ function witnessed(renderer = intelVirgl) {
   };
   const seal = () => ({
     payload,
-    signature: sign(null, Buffer.from(JSON.stringify(payload)), keys.privateKey)
-      .toString("base64"),
+    signature: sign(
+      null,
+      Buffer.from(JSON.stringify(payload)),
+      keys.privateKey,
+    ).toString("base64"),
   });
   return {
     payload,
@@ -71,9 +74,7 @@ function witnessed(renderer = intelVirgl) {
 describe("NATIONAL signed hardware release attestation", () => {
   it("accepts only real separately signed Intel HD 4600 KVM/VirGL chain", () => {
     const evidence = witnessed();
-    expect(
-      verifyHardwareWebgl(browser(), evidence.options),
-    ).toMatchObject({
+    expect(verifyHardwareWebgl(browser(), evidence.options)).toMatchObject({
       accepted: true,
       reason: "SIGNED_HOST_BACKED_VIRGL_VERIFIED",
     });
@@ -84,7 +85,9 @@ describe("NATIONAL signed hardware release attestation", () => {
       accepted: false,
       reason: "INDEPENDENT_HARDWARE_PROOF_MISSING",
     });
-    expect(verifyHardwareWebgl(browser("NVIDIA GeForce RTX 4070"))).toMatchObject({
+    expect(
+      verifyHardwareWebgl(browser("NVIDIA GeForce RTX 4070")),
+    ).toMatchObject({
       accepted: false,
       reason: "INDEPENDENT_HARDWARE_PROOF_MISSING",
     });
@@ -97,68 +100,98 @@ describe("NATIONAL signed hardware release attestation", () => {
     "Microsoft Basic Render Driver",
     "lavapipe Vulkan",
     "software rasterizer",
-  ])("rejects forbidden software renderer regardless of proof: %s", (renderer) => {
-    expect(verifyHardwareWebgl(browser(renderer), witnessed(renderer).options))
-      .toMatchObject({
+  ])(
+    "rejects forbidden software renderer regardless of proof: %s",
+    (renderer) => {
+      expect(
+        verifyHardwareWebgl(browser(renderer), witnessed(renderer).options),
+      ).toMatchObject({
         accepted: false,
         reason: "SOFTWARE_RENDERER_FORBIDDEN",
       });
-  });
+    },
+  );
 
   it("rejects missing/lost WebGL2 or WebGL1 and missing shaders", () => {
     const trust = witnessed().options;
     expect(verifyHardwareWebgl(null, trust).accepted).toBe(false);
-    expect(verifyHardwareWebgl({ ...browser(), webgl1: null }, trust).accepted)
-      .toBe(false);
-    expect(verifyHardwareWebgl({
-      ...browser(),
-      webgl: { ...browser().webgl, contextLost: true },
-    }, trust).accepted).toBe(false);
-    expect(verifyHardwareWebgl({
-      ...browser(),
-      webgl1: { ...browser().webgl1, shaderPixel: null },
-    }, trust)).toMatchObject({
+    expect(
+      verifyHardwareWebgl({ ...browser(), webgl1: null }, trust).accepted,
+    ).toBe(false);
+    expect(
+      verifyHardwareWebgl(
+        {
+          ...browser(),
+          webgl: { ...browser().webgl, contextLost: true },
+        },
+        trust,
+      ).accepted,
+    ).toBe(false);
+    expect(
+      verifyHardwareWebgl(
+        {
+          ...browser(),
+          webgl1: { ...browser().webgl1, shaderPixel: null },
+        },
+        trust,
+      ),
+    ).toMatchObject({
       accepted: false,
       reason: "WEBGL_SHADER_PROOF_FAILED",
     });
-    expect(verifyHardwareWebgl(browser("WebKit WebGL"), trust).accepted)
-      .toBe(false);
+    expect(verifyHardwareWebgl(browser("WebKit WebGL"), trust).accepted).toBe(
+      false,
+    );
   });
 
   it("rejects untrusted signatures, counterfeit keys and tampered witnesses", () => {
     const witness = witnessed();
     const forged = witnessed().options.signedProof;
-    expect(verifyHardwareWebgl(browser(), {
-      ...witness.options, signedProof: forged,
-    }).accepted).toBe(false);
+    expect(
+      verifyHardwareWebgl(browser(), {
+        ...witness.options,
+        signedProof: forged,
+      }).accepted,
+    ).toBe(false);
     witness.payload.guest.backend = "swiftshader";
-    expect(verifyHardwareWebgl(browser(), witness.options).accepted).toBe(false);
+    expect(verifyHardwareWebgl(browser(), witness.options).accepted).toBe(
+      false,
+    );
     witness.options.signedProof = witness.seal();
-    expect(verifyHardwareWebgl(browser(), witness.options).accepted).toBe(false);
+    expect(verifyHardwareWebgl(browser(), witness.options).accepted).toBe(
+      false,
+    );
   });
 
   it.each(["sourceSha", "runId", "runAttempt", "runnerName", "challenge"])(
     "rejects stale or replayed attestation for different %s",
     (field) => {
       const witness = witnessed();
-      expect(verifyHardwareWebgl(browser(), {
-        ...witness.options,
-        expected: { ...expected, [field]: "wrong" },
-      }).accepted).toBe(false);
+      expect(
+        verifyHardwareWebgl(browser(), {
+          ...witness.options,
+          expected: { ...expected, [field]: "wrong" },
+        }).accepted,
+      ).toBe(false);
     },
   );
 
   it("rejects expired witness and unverifiable physical GPU/virgl host", () => {
     const witness = witnessed();
-    expect(verifyHardwareWebgl(browser(), {
-      ...witness.options, now: 1_800_000_100_000,
-    })).toMatchObject({
+    expect(
+      verifyHardwareWebgl(browser(), {
+        ...witness.options,
+        now: 1_800_000_100_000,
+      }),
+    ).toMatchObject({
       accepted: false,
       reason: "HARDWARE_PROOF_EXPIRED_OR_INVALID",
     });
     witness.payload.host.physicallyVerified = false;
     witness.options.signedProof = witness.seal();
-    expect(verifyHardwareWebgl(browser(), witness.options).accepted).toBe(false);
+    expect(verifyHardwareWebgl(browser(), witness.options).accepted).toBe(
+      false,
+    );
     witness.payload.host.physicallyVerified = true;
     witness.payload.host.virglTransportVerified = false;
     witness.options.signedProof = witness.seal();
@@ -181,7 +214,9 @@ describe("NATIONAL signed hardware release attestation", () => {
     };
     witness.payload.guest.backend = "direct";
     witness.options.signedProof = witness.seal();
-    expect(verifyHardwareWebgl(browser(renderer), witness.options)).toMatchObject({
+    expect(
+      verifyHardwareWebgl(browser(renderer), witness.options),
+    ).toMatchObject({
       accepted: true,
       reason: "SIGNED_PHYSICAL_GPU_VERIFIED",
     });

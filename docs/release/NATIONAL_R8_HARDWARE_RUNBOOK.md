@@ -12,7 +12,7 @@ The historical E5 PR #39 HEAD `b1ae75edcaefcc10c26c8d3e6c25d88e4892e58c` passed 
 
 The observed Skybot device is Intel HD Graphics 4600 / 8086:0412 on i915 renderD128 via hardware-backed VirGL/KVM. Its GL-EGL launch change from draft PR #43 was incorporated into E5's browser harness without relaxing WebGL gates. E6 owns the workflow using verified `skybot-ci-gpu` runner and pinned `/opt/skybot-gpu-runtime/chrome-headless-shell-linux64/chrome-headless-shell`, on a trusted approved exact candidate. Do not add a duplicate workflow or commit GPU machine/controller changes in E5.
 
-Before any browser can pass, Conductor must enroll the independently verified Skybot Ed25519 **public key fingerprint** in `scripts/national-qa/trusted-gpu-keys.json`, after confirming the private signing key stays *only* outside the disposable guest/job/browser. The checked-in allowlist initially contains no keys: a missing signer or untrusted key **fails closed**. E6 must provide a fresh signed witness + source/run/attempt/runner/challenge context per the normative contract.
+Before any browser can pass, Conductor must enroll the independently verified Skybot Ed25519 **public key fingerprint** in `scripts/national-qa/trusted-gpu-keys.json`, after confirming the private signing key stays _only_ outside the disposable guest/job/browser. The checked-in allowlist initially contains no keys: a missing signer or untrusted key **fails closed**. E6 must provide a fresh signed witness + source/run/attempt/runner/challenge context per the normative contract.
 
 ## Execute genuine four-mode gameplay
 
