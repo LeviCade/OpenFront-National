@@ -1,0 +1,31 @@
+name: C4 E1 one-shot host authority verification
+on:
+  push:
+    branches:
+      - tooling/class4-e1-focused-verification-20261121
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: E1 real GameRunner + typecheck + pinned formatter
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned source tools
+        run: |
+          npm install -g npm@12.1.0
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run actual E1 authority regression on Game and Executor
+        run: npx --no-install vitest run tests/national/ClassFourTrustedHostAuthority.test.ts tests/national/RoundElevenImperialPeaceDelegation.test.ts tests/national/RoundElevenDelegatedPeaceWire.test.ts --reporter=verbose
+      - name: Full source typecheck
+        if: always()
+        run: npm run inst
+      - name: Emit exact pinned formatter output only for E1-owned files
+        if: always()
+        run: |
+          npx --no-install oxfmt --write packages/engine/src/game/Game.ts packages/engine/src/game/GameImpl.ts tests/national/ClassFourTrustedHostAuthority.test.ts
+          git diff -- packages/engine/src/game/Game.ts packages/engine/src/game/GameImpl.ts tests/national/ClassFourTrustedHostAuthority.test.ts
