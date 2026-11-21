@@ -22,8 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           npx --no-install oxfmt --write src/client/NationalDiplomacyPanel.ts src/client/hud/GameRenderer.ts src/client/hud/layers/RadialMenu.ts src/client/controllers/NationalMapTargetController.ts tests/ui/national/NationalHumanMapInputR11.test.ts
-          npm run typecheck
-          npx --no-install vitest run tests/ui/national/NationalHumanMapInputR11.test.ts tests/ui/national/NationalPoliticalControlsR11.test.ts
+
           python3 - <<'PY'
           import base64
           for key, path in [
@@ -36,4 +35,6 @@ jobs:
               with open(path,"rb") as f:
                   print("E4_FORMATTED_" + key + "=" + base64.b64encode(f.read()).decode("ascii"))
           PY
+          npm run typecheck
+          npx --no-install vitest run tests/ui/national/NationalHumanMapInputR11.test.ts tests/ui/national/NationalPoliticalControlsR11.test.ts
           git diff --check

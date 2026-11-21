@@ -216,7 +216,7 @@ describe("R11 actual NATIONAL map input and target-aware radial projection", () 
     radial.setParams(params);
     const container = document.querySelector(".radial-menu-container")!;
     expect(container.getAttribute("data-target-player-id")).toBe("nation-b");
-    radial.setParams({ ...params, selected: actor });
+    radial.setParams({ ...params, selected: actor } as unknown as MenuElementParams);
     expect(container.hasAttribute("data-target-player-id")).toBe(false);
     state.replay = true;
     radial.setParams(params);
