@@ -18,7 +18,14 @@ interface AuthoritativeFounderOutcome {
   readonly accepted: boolean;
   readonly tick: number;
   readonly reason: string;
-  readonly commandKind?: NationalPoliticalKind | NationalWarKind;
+  readonly commandKind?:
+    | NationalPoliticalKind
+    | NationalWarKind
+    | "national_declare_war"
+    | "national_propose_peace"
+    | "national_accept_peace";
+  /** E1 WAR results have an explicit independent authenticated recipient. */
+  readonly recipientId?: string;
   /** E1 may use a typed result name or command kind on the WAR read port. */
   readonly kind?: NationalWarKind;
   readonly type?: "national_declare_war" | "national_propose_peace" | "national_accept_peace";
@@ -125,6 +132,8 @@ const VALID_REASONS = new Set([
   "actor-inactive",
   "invalid-empire-id",
   "political-rule",
+  "invalid-war-command",
+  "war-rule",
 ]);
 
 function validRecord(record: AuthoritativeFounderOutcome, game: Game): void {
@@ -137,10 +146,14 @@ function validRecord(record: AuthoritativeFounderOutcome, game: Game): void {
     typeof record.requestId !== "string" ||
     record.requestId.length < 1 ||
     record.requestId.length > 256 ||
+    (record.recipientId !== undefined && !safeId(record.recipientId)) ||
     (record.empireId !== undefined &&
       (typeof record.empireId !== "string" ||
         record.empireId.length > 256)) ||
     (record.commandKind === undefined && !safeId(record.empireId)) ||
+    (record.commandKind !== undefined &&
+      Object.prototype.hasOwnProperty.call(WAR_TYPES, record.commandKind) &&
+      !safeId(record.recipientId)) ||
     (record.commandKind !== undefined &&
       !Object.prototype.hasOwnProperty.call(
         POLITICAL_TYPES,
@@ -196,16 +209,15 @@ function readActorJournal(
     ...war.map((record) => {
       // Normalize only explicit authoritative E1 WAR result types. No type is
       // derived from a public conflict or a client-submitted command.
+      const sourceKind = record.commandKind ?? record.kind ?? record.type;
       const kind =
-        record.commandKind ??
-        record.kind ??
-        (record.type === "national_declare_war"
+        sourceKind === "national_declare_war"
           ? "declare-national"
-          : record.type === "national_propose_peace"
+          : sourceKind === "national_propose_peace"
             ? "propose-peace"
-            : record.type === "national_accept_peace"
+            : sourceKind === "national_accept_peace"
               ? "accept-peace"
-              : undefined);
+              : sourceKind;
       if (
         record.kind !== undefined &&
         record.commandKind !== undefined &&
@@ -260,11 +272,17 @@ export function actorNationalResults(
     // E1's resultsFor(actor) already scopes the journal. Recheck here so a
     // future engine change cannot send a foreign actor's private receipt.
     if (record.actorId !== actor.id()) continue;
+    if (
+      record.recipientId !== undefined &&
+      record.recipientId !== actor.id()
+    )
+      continue;
     validRecord(record, game);
     const proof = JSON.stringify([
       record.sequence,
       record.requestId,
       record.actorId,
+      record.recipientId ?? null,
       record.empireId,
       record.accepted,
       record.tick,

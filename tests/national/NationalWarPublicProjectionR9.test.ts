@@ -211,8 +211,9 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
       requestId: string;
       actorId: string;
       empireId: string;
-      commandKind: "declare-national";
+      commandKind: "national_declare_war";
       commandTargetId: string;
+      recipientId: string;
       warId: string;
       tick: number;
       accepted: boolean;
@@ -231,8 +232,9 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
       requestId,
       actorId,
       empireId: warId,
-      commandKind: "declare-national",
+      commandKind: "national_declare_war",
       commandTargetId: warId,
+      recipientId: actorId,
       warId,
       tick: game.ticks(),
       accepted: true,
@@ -277,7 +279,9 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
       {
         sequence: 21,
         actorId: north.id,
-        type: "national_declare_war" as const,
+        commandKind: "national_declare_war" as const,
+        recipientId: north.id,
+        commandTargetId: south.id,
         requestId: "nc_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         accepted: true,
         tick: game.ticks(),
@@ -287,7 +291,9 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
       {
         sequence: 22,
         actorId: north.id,
-        type: "national_propose_peace" as const,
+        commandKind: "national_propose_peace" as const,
+        recipientId: north.id,
+        commandTargetId: warId,
         requestId: "nc_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         accepted: false,
         tick: game.ticks(),

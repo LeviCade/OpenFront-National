@@ -127,6 +127,8 @@ const politicalReason = new Set([
   "actor-inactive",
   "invalid-empire-id",
   "political-rule",
+  "invalid-war-command",
+  "war-rule",
 ]);
 
 /** Keep end/acceptance proof briefly for the UI, never permanent history. */
