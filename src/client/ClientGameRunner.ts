@@ -100,6 +100,7 @@ import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability
 import {
   materializeTrustedNationalUpdate,
   parseTrustedNationalProjection,
+  readTrustedNationalObserverMap,
   TrustedNationalProjectionEvent,
   TrustedNationalStartedEvent,
 } from "./TrustedNationalSession";
@@ -837,6 +838,21 @@ async function createClientGame(
   inputOverlay.style.touchAction = "none";
   document.body.appendChild(inputOverlay);
 
+  // Exposes E3's CURRENT public tick/roster and own-resource data beside the
+  // real WebGL map. It is not an overlay which fabricates tiles or blocks spawn.
+  const trustedStatus = trustedNationalProjection
+    ? document.createElement("aside")
+    : null;
+  if (trustedStatus) {
+    trustedStatus.id = "trusted-national-projection-status";
+    trustedStatus.dataset.trustedNationalMap = "loading";
+    trustedStatus.setAttribute("aria-live", "polite");
+    trustedStatus.style.cssText =
+      "position:fixed;bottom:10px;left:10px;z-index:70;max-width:min(340px,calc(100vw - 20px));padding:7px 11px;border:1px solid rgba(251,191,36,.6);border-radius:9px;background:rgba(9,18,34,.91);color:#f8fafc;font:12px/1.5 system-ui,sans-serif;pointer-events:none";
+    trustedStatus.textContent = "NATIONAL · Awaiting authorized terrain and roster…";
+    document.body.appendChild(trustedStatus);
+  }
+
   // Main.ts creates the mixer on page load; fall back for entry points that
   // start a game without it (tests, embedded shells).
   const soundManager = new SoundManager(
@@ -998,6 +1014,7 @@ async function createClientGame(
       view.dispose();
       glCanvas.remove();
       inputOverlay.remove();
+      trustedStatus?.remove();
     };
 
     console.log(
@@ -1040,6 +1057,14 @@ async function createClientGame(
       metrics,
       health,
       trustedNationalProjection,
+      trustedNationalProjection
+        ? () =>
+            view.uploadTileAndTrailState(
+              gameView.frameData().tileState,
+              gameView.frameData().trailState,
+            )
+        : null,
+      trustedStatus,
     );
   } catch (err) {
     soundManager.dispose();
@@ -1069,6 +1094,7 @@ export class ClientGameRunner {
   private healthIndicators: GameHealthIndicators | null = null;
   private trustedLastTick = -1;
   private trustedProjectionActive = false;
+  private trustedExpectedCursor = 0;
   private readonly onTrustedNationalProjection = (
     event: TrustedNationalProjectionEvent,
   ): void => {
@@ -1079,15 +1105,62 @@ export class ClientGameRunner {
       !hasTrustedNationalPrivateCapability(this.eventBus, this.lobby.gameID)
     ) return;
     try {
+      const observerMap = readTrustedNationalObserverMap(
+        event.projection.nationalObserverMap,
+        event.projection.tick,
+      );
+      if (observerMap !== null) {
+        if (
+          observerMap.width !== this.gameView.width() ||
+          observerMap.height !== this.gameView.height() ||
+          (!observerMap.reset &&
+            observerMap.cursor !== this.trustedExpectedCursor)
+        ) throw new Error("NATIONAL observer-map dimensions or page cursor mismatch");
+        if (observerMap.reset) {
+          this.gameView.resetTrustedProjectionSight();
+          this.webglBuilder?.clearCaches();
+          this.trustedExpectedCursor = 0;
+        }
+        if (observerMap.cursor !== this.trustedExpectedCursor) {
+          throw new Error("NATIONAL observer-map paging interrupted");
+        }
+      }
       const update = materializeTrustedNationalUpdate(
         event.projection,
         this.trustedLastTick,
       );
       this.gameView.update(update);
-      this.trustedLastTick = update.tick;
       this.myPlayer = this.clientID
         ? this.gameView.playerByClientID(this.clientID)
         : null;
+      if (
+        observerMap !== null &&
+        this.myPlayer !== null &&
+        observerMap.observerId !== this.myPlayer.id()
+      ) throw new Error("NATIONAL observer-map principal is not the authenticated seat");
+      if (observerMap !== null) {
+        this.trustedExpectedCursor = observerMap.nextCursor ?? 0;
+        if (observerMap.reset) this.trustedMapResetUpload?.();
+        if (this.trustedStatus) {
+          this.trustedStatus.dataset.trustedNationalMap =
+            observerMap.nextCursor === null ? "visible" : "paging";
+          const publicAlive = observerMap.countries.filter((c) => c.alive).length;
+          this.trustedStatus.textContent =
+            "👑 NATIONAL · TICK " + update.tick +
+            " · " + (observerMap.nextCursor === null
+              ? "Visible terrain synchronized"
+              : "Loading visible terrain…") +
+            " · " + publicAlive + " nations" +
+            " · " + observerMap.units.length + " visible units" +
+            " · Your troops " +
+            Math.floor(observerMap.ownResources.troops).toLocaleString();
+        }
+      } else if (this.trustedStatus) {
+        this.trustedStatus.textContent =
+          "NATIONAL · Tick " + update.tick + " · Awaiting E3 visible-map pages";
+      }
+      this.trustedLastTick = update.tick;
+      this.gameView.markTrustedProjectionReady();
       this.webglBuilder?.update(this.gameView);
       this.renderer.tick();
       this.health.recordTurn(performance.now());
@@ -1096,7 +1169,12 @@ export class ClientGameRunner {
       // A malformed or out-of-order packet may never re-enable controls by
       // accident. Fail closed; E2 must resync and provide a fresh trusted start.
       this.trustedProjectionActive = false;
-      this.gameView.invalidateNationalPoliticalView();
+      this.gameView.resetTrustedProjectionSight();
+      this.trustedMapResetUpload?.();
+      if (this.trustedStatus) {
+        this.trustedStatus.dataset.trustedNationalMap = "blocked";
+        this.trustedStatus.textContent = "NATIONAL · Invalid server projection — controls disabled";
+      }
       console.error("NATIONAL projected view rejected", error);
     }
   };
@@ -1105,7 +1183,13 @@ export class ClientGameRunner {
   ): void => {
     if (event.gameID !== this.lobby.gameID || event.ready) return;
     this.trustedProjectionActive = false;
-    this.gameView.invalidateNationalPoliticalView();
+    this.gameView.resetTrustedProjectionSight();
+    this.trustedMapResetUpload?.();
+    if (this.trustedStatus) {
+      this.trustedStatus.dataset.trustedNationalMap = "disconnected";
+      this.trustedStatus.textContent =
+        "NATIONAL · Connection lost — map and commands disabled";
+    }
   };
 
   private updateHealth = (): void => {
@@ -1145,6 +1229,8 @@ export class ClientGameRunner {
     private metrics: GameMetrics | null = null,
     private health: GameHealth = new GameHealth(),
     private readonly trustedNationalProjection = false,
+    private readonly trustedMapResetUpload: (() => void) | null = null,
+    private readonly trustedStatus: HTMLElement | null = null,
   ) {
     this.lastMessageTime = Date.now();
   }
