@@ -28,9 +28,18 @@ function seat(clientID: string, publicId: string): Client {
   // Only the Worker may actually construct an authenticated Client in prod.
   // Tests supply its independently verified account fields explicitly.
   return new Client(
-    clientID, "persistent-" + clientID, {} as NonNullable<Client["claims"]>,
-    null, undefined, "127.0.0.1", clientID, null,
-    {} as Client["ws"], undefined, publicId, [],
+    clientID,
+    "persistent-" + clientID,
+    {} as NonNullable<Client["claims"]>,
+    null,
+    undefined,
+    "127.0.0.1",
+    clientID,
+    null,
+    {} as Client["ws"],
+    undefined,
+    publicId,
+    [],
   );
 }
 
@@ -48,25 +57,27 @@ async function match() {
   );
   for (let i = 0; i < humans.length; i++) {
     game.addExecution(
-      new SpawnExecution(
-        GAME_ID,
-        humans[i],
-        game.ref(i === 0 ? 20 : 80, 20),
-      ),
+      new SpawnExecution(GAME_ID, humans[i], game.ref(i === 0 ? 20 : 80, 20)),
     );
   }
   game.executeNextTick();
   game.executeNextTick();
 
   const runner = new GameRunner(
-    game, new Executor(game, GAME_ID, undefined), () => {}, undefined,
+    game,
+    new Executor(game, GAME_ID, undefined),
+    () => {},
+    undefined,
   );
   const a = seat("TRUSTEDA1", "verified-account-a");
   const b = seat("TRUSTEDB1", "verified-account-b");
   const sentA: GameUpdateViewData[] = [];
   const sentB: GameUpdateViewData[] = [];
   const authority = new TrustedNationalMatch(
-    GAME_ID, runner, [a, b], (client, packet) => {
+    GAME_ID,
+    runner,
+    [a, b],
+    (client, packet) => {
       if (client === a) sentA.push(packet);
       if (client === b) sentB.push(packet);
     },
@@ -84,33 +95,59 @@ describe("Fourth Class / E2 trusted Private NATIONAL host", () => {
     expect(() => new EngineConfig(args, false)).toThrow(
       "NATIONAL requires unranked Solo Free For All",
     );
-    expect(() => new EngineConfig(args, false, false, false, true)).not.toThrow();
-    expect(() =>
-      new EngineConfig({ ...args, gameType: GameType.Public }, false, false, false, true),
+    expect(
+      () => new EngineConfig(args, false, false, false, true),
+    ).not.toThrow();
+    expect(
+      () =>
+        new EngineConfig(
+          { ...args, gameType: GameType.Public },
+          false,
+          false,
+          false,
+          true,
+        ),
     ).toThrow();
-    expect(() =>
-      new EngineConfig({ ...args, gameMode: GameMode.Team }, false, false, false, true),
+    expect(
+      () =>
+        new EngineConfig(
+          { ...args, gameMode: GameMode.Team },
+          false,
+          false,
+          false,
+          true,
+        ),
     ).toThrow();
   });
 
   it("stamps real distinct authenticated humans, executes a real tick and privately fans out E3 packets", async () => {
     const { authority, a, b, humans, sentA, sentB } = await match();
 
-    expect(authority.submit(a, {
-      type: "national_found_empire",
-      empireId: "empire-alpha",
-      requestId: "request-from-a",
-      clientID: b.clientID, // deliberately forged; the schema drops it
-    })).toBe(true);
-    expect(authority.submit(a, {
-      type: "national_found_empire",
-      empireId: "empire-alpha",
-      requestId: "request-from-a",
-    })).toBe(false);
-    expect(authority.submit({ ...a } as Client, {
-      type: "national_found_empire", empireId: "forged", requestId: "fake",
-    })).toBe(false);
-    expect(authority.submit(a, { type: "toggle_pause", paused: true })).toBe(false);
+    expect(
+      authority.submit(a, {
+        type: "national_found_empire",
+        empireId: "empire-alpha",
+        requestId: "request-from-a",
+        clientID: b.clientID, // deliberately forged; the schema drops it
+      }),
+    ).toBe(true);
+    expect(
+      authority.submit(a, {
+        type: "national_found_empire",
+        empireId: "empire-alpha",
+        requestId: "request-from-a",
+      }),
+    ).toBe(false);
+    expect(
+      authority.submit({ ...a } as Client, {
+        type: "national_found_empire",
+        empireId: "forged",
+        requestId: "fake",
+      }),
+    ).toBe(false);
+    expect(authority.submit(a, { type: "toggle_pause", paused: true })).toBe(
+      false,
+    );
     expect(authority.submit(b, { type: "mark_disconnected" })).toBe(false);
 
     const receipt = authority.tick();
@@ -122,14 +159,30 @@ describe("Fourth Class / E2 trusted Private NATIONAL host", () => {
     expect(sentA[0]).not.toBe(sentB[0]);
     expect(sentA[0].tick).toBe(receipt.tick);
     expect(sentB[0].tick).toBe(receipt.tick);
-    expect((sentA[0] as GameUpdateViewData & { nationalConflicts?: { recipientId: string } }).nationalConflicts?.recipientId).toBe(humans[0].id);
-    expect((sentB[0] as GameUpdateViewData & { nationalConflicts?: { recipientId: string } }).nationalConflicts?.recipientId).toBe(humans[1].id);
-    expect(sentA[0].nationalCommandResults?.every(
-      (result) => result.actorId === humans[0].id,
-    )).not.toBe(false);
-    expect(sentB[0].nationalCommandResults?.some(
-      (result) => result.actorId === humans[0].id,
-    ) ?? false).toBe(false);
+    expect(
+      (
+        sentA[0] as GameUpdateViewData & {
+          nationalConflicts?: { recipientId: string };
+        }
+      ).nationalConflicts?.recipientId,
+    ).toBe(humans[0].id);
+    expect(
+      (
+        sentB[0] as GameUpdateViewData & {
+          nationalConflicts?: { recipientId: string };
+        }
+      ).nationalConflicts?.recipientId,
+    ).toBe(humans[1].id);
+    expect(
+      sentA[0].nationalCommandResults?.every(
+        (result) => result.actorId === humans[0].id,
+      ),
+    ).not.toBe(false);
+    expect(
+      sentB[0].nationalCommandResults?.some(
+        (result) => result.actorId === humans[0].id,
+      ) ?? false,
+    ).toBe(false);
 
     authority.revokeRecipient(b);
     authority.tick();
@@ -139,27 +192,41 @@ describe("Fourth Class / E2 trusted Private NATIONAL host", () => {
 
   it("rejects fake extra players, anonymous seats and duplicate accounts", async () => {
     const { runner, a, b } = await match();
-    expect(() => new TrustedNationalMatch(GAME_ID, runner, [a], () => {})).toThrow(
-      "two real authenticated humans",
-    );
+    expect(
+      () => new TrustedNationalMatch(GAME_ID, runner, [a], () => {}),
+    ).toThrow("two real authenticated humans");
     const anonymous = seat("TRUSTEDB1", "other");
     // Runtime fields cannot be assigned (readonly), so model an untrusted
     // attempt without changing the authentic fixture.
-    const guest = Object.assign(Object.create(Object.getPrototypeOf(anonymous)), anonymous, {
-      claims: null,
-    }) as Client;
-    expect(() => new TrustedNationalMatch(GAME_ID, runner, [a, guest], () => {})).toThrow(
-      "unauthenticated",
-    );
-    const repeatedAccount = Object.assign(Object.create(Object.getPrototypeOf(b)), b, {
-      publicId: a.publicId,
-    }) as Client;
-    expect(() =>
-      new TrustedNationalMatch(GAME_ID, runner, [a, repeatedAccount], () => {}),
+    const guest = Object.assign(
+      Object.create(Object.getPrototypeOf(anonymous)),
+      anonymous,
+      {
+        claims: null,
+      },
+    ) as Client;
+    expect(
+      () => new TrustedNationalMatch(GAME_ID, runner, [a, guest], () => {}),
+    ).toThrow("unauthenticated");
+    const repeatedAccount = Object.assign(
+      Object.create(Object.getPrototypeOf(b)),
+      b,
+      {
+        publicId: a.publicId,
+      },
+    ) as Client;
+    expect(
+      () =>
+        new TrustedNationalMatch(
+          GAME_ID,
+          runner,
+          [a, repeatedAccount],
+          () => {},
+        ),
     ).toThrow("duplicate");
     const invented = seat("NOTINREALGAME", "legitimate-different-account");
-    expect(() =>
-      new TrustedNationalMatch(GAME_ID, runner, [a, invented], () => {}),
+    expect(
+      () => new TrustedNationalMatch(GAME_ID, runner, [a, invented], () => {}),
     ).toThrow("real Game registry");
   });
 

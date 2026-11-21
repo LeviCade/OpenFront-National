@@ -138,8 +138,8 @@ export class EngineConfig extends Config {
     // replay and Solo call sites still fail closed on multiplayer.
     if (
       gameConfig.nationalMode === true &&
-      ( (gameConfig.gameType !== GameType.Singleplayer &&
-          !(trustedServerNational && gameConfig.gameType === GameType.Private)) ||
+      ((gameConfig.gameType !== GameType.Singleplayer &&
+        !(trustedServerNational && gameConfig.gameType === GameType.Private)) ||
         gameConfig.gameMode !== GameMode.FFA ||
         gameConfig.tutorial === true ||
         gameConfig.rankedType !== undefined)

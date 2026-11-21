@@ -93,7 +93,11 @@ async function createGameRunnerInternal(
   trustedServerNational: boolean,
 ): Promise<GameRunner> {
   const config = new EngineConfig(
-    gameStart.config, false, gameStart.listed, false, trustedServerNational,
+    gameStart.config,
+    false,
+    gameStart.listed,
+    false,
+    trustedServerNational,
   );
   const gameMap = await loadGameMap(gameStart.config, map);
   const random = new PseudoRandom(simpleHash(gameStart.gameID));
@@ -213,12 +217,15 @@ export class GameRunner {
 
   // Server-owned NATIONAL: independent E3 state and command-result cursor for
   // each authenticated human. Never put fullPacket or the Game on the wire.
-  private readonly trustedNationalRecipients = new Map<ClientID, {
-    playerId: PlayerID;
-    filter: NationalOutboundFilter;
-    results: NationalResultDeliveryState;
-    deliver: (packet: GameUpdateViewData) => void;
-  }>();
+  private readonly trustedNationalRecipients = new Map<
+    ClientID,
+    {
+      playerId: PlayerID;
+      filter: NationalOutboundFilter;
+      results: NationalResultDeliveryState;
+      deliver: (packet: GameUpdateViewData) => void;
+    }
+  >();
 
   constructor(
     public game: Game,
@@ -274,7 +281,9 @@ export class GameRunner {
       throw new Error("trusted NATIONAL recipient is not a real human");
     }
     const filter = new NationalOutboundFilter(this.game, player.id());
-    filter.restoreSightMemory(restoreNationalHumanSight(this.game, player.id()));
+    filter.restoreSightMemory(
+      restoreNationalHumanSight(this.game, player.id()),
+    );
     this.trustedNationalRecipients.set(clientID, {
       playerId: player.id(),
       filter,
@@ -528,14 +537,27 @@ export class GameRunner {
         continue;
       }
       const verified = collectLiveNationalObservation(this.game, player.id());
-      const results = actorNationalResults(this.game, player, recipient.results);
+      const results = actorNationalResults(
+        this.game,
+        player,
+        recipient.results,
+      );
       const privatePacket = results.length
-        ? ({ ...fullPacket, nationalCommandResults: results } as GameUpdateViewData)
+        ? ({
+            ...fullPacket,
+            nationalCommandResults: results,
+          } as GameUpdateViewData)
         : fullPacket;
-      const projected = recipient.filter.project(this.game, privatePacket, verified);
+      const projected = recipient.filter.project(
+        this.game,
+        privatePacket,
+        verified,
+      );
       if (player.hasSpawned() && player.isAlive()) {
         persistNationalHumanSight(
-          this.game, player.id(), recipient.filter.snapshotSightMemory(),
+          this.game,
+          player.id(),
+          recipient.filter.snapshotSightMemory(),
         );
       }
       recipient.deliver(projected);

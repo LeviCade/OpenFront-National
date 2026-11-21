@@ -6,7 +6,11 @@
  * This is a server-only vertical slice, NOT the legacy websocket turn
  * protocol. No browser may execute a second authoritative NATIONAL runner.
  */
-import { GameMode, GameType, PlayerType } from "@openfront/engine-api/game/GameTypes";
+import {
+  GameMode,
+  GameType,
+  PlayerType,
+} from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import {
   type ClientID,
@@ -44,7 +48,10 @@ export class TrustedNationalMatch {
     readonly gameID: string,
     private readonly runner: GameRunner,
     admittedPlayers: readonly Client[],
-    private readonly deliver: (client: Client, packet: GameUpdateViewData) => void,
+    private readonly deliver: (
+      client: Client,
+      packet: GameUpdateViewData,
+    ) => void,
   ) {
     const config = runner.game.config().gameConfig();
     if (
@@ -54,10 +61,14 @@ export class TrustedNationalMatch {
       config.rankedType !== undefined ||
       config.tutorial === true
     ) {
-      throw new Error("NATIONAL authority requires an unranked Private FFA game");
+      throw new Error(
+        "NATIONAL authority requires an unranked Private FFA game",
+      );
     }
     if (admittedPlayers.length < 2) {
-      throw new Error("NATIONAL authority requires two real authenticated humans");
+      throw new Error(
+        "NATIONAL authority requires two real authenticated humans",
+      );
     }
 
     const accounts = new Set<string>();
@@ -74,11 +85,15 @@ export class TrustedNationalMatch {
         accounts.has(client.publicId) ||
         persistentIDs.has(client.persistentID)
       ) {
-        throw new Error("NATIONAL authority rejected unauthenticated or duplicate seat");
+        throw new Error(
+          "NATIONAL authority rejected unauthenticated or duplicate seat",
+        );
       }
       const player = runner.game.playerByClientID(client.clientID);
       if (!player || player.type() !== PlayerType.Human) {
-        throw new Error("NATIONAL authority seat missing from real Game registry");
+        throw new Error(
+          "NATIONAL authority seat missing from real Game registry",
+        );
       }
       this.seats.set(client.clientID, client);
       this.requestIds.set(client.clientID, new Set());
@@ -107,8 +122,12 @@ export class TrustedNationalMatch {
       sender.spectator ||
       !sender.claims ||
       !sender.publicId
-    ) return false;
-    if (this.runner.game.playerByClientID(sender.clientID)?.type() !== PlayerType.Human) {
+    )
+      return false;
+    if (
+      this.runner.game.playerByClientID(sender.clientID)?.type() !==
+      PlayerType.Human
+    ) {
       return false;
     }
     const parsed = IntentSchema.safeParse(candidate);
