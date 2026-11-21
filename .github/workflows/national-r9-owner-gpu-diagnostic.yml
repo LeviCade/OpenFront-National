@@ -147,3 +147,5 @@ jobs:
           path: national-qa-artifacts/gpu/diagnostic/
           if-no-files-found: warn
           retention-days: 7
+
+# Spawn-first diagnostic: map interaction precedes the timed diplomacy panel.
