@@ -793,13 +793,9 @@ async function main() {
       await capture("game-hud");
     });
     await step("spawn", async () => {
-      await click("NATIONAL.*Diplomacy", "national-diplomacy-panel", 75);
-      await capture("diplomacy-before-spawn");
-      const msg = await evaluate(
-        "window.__nationalQaFind('national-diplomacy-panel')?.innerText ?? ''",
-      );
-      if (!/spawn before founding/i.test(msg))
-        record("spawn-precondition-not-observed", { text: msg.slice(0, 150) });
+      // Spawn windows are time-limited. Do not open a diplomacy overlay or
+      // spend the first seconds on screenshots before real map interaction.
+      // A collapsed panel also keeps Found Empire inaccessible until later.
       // Only real pointer interaction can spawn a human. Probe the visible
       // actor's own state to avoid late duplicate clicks and to explain why
       // a genuine browser fails (never mutate Game/player state in QA).
@@ -834,7 +830,10 @@ async function main() {
           record("spawn-own-territory-observed", { attempt: index, ...state });
           break;
         }
-        if (await locate("^Found Empire$", "national-diplomacy-panel")) break;
+        if (state?.inSpawnPhase === false && state?.tilesOwned === 0) {
+          record("spawn-phase-expired-without-territory", { attempt: index });
+          break;
+        }
         const canvas = await evaluate(`(() => {
           const canvases=[...document.querySelectorAll('canvas')].filter((e)=>e.getBoundingClientRect().width>150);
           const rect=canvases.sort((a,b)=>b.getBoundingClientRect().width-a.getBoundingClientRect().width)[0]?.getBoundingClientRect();
@@ -846,6 +845,15 @@ async function main() {
         record("spawn-own-state-after-click", { attempt: index, ...(await ownSpawnState()) });
       }
       record("spawn-own-state-after-attempts", await ownSpawnState());
+      const finalSpawn = await ownSpawnState();
+      if (!finalSpawn?.tilesOwned) {
+        throw Error("NATIONAL_SPAWN_FAILED_NO_OWNED_TERRITORY");
+      }
+      // Open diplomacy only once actual Game-owned tiles exist.
+      if (!finalSpawn.panelExpanded) {
+        await click("NATIONAL.*Diplomacy", "national-diplomacy-panel", 50);
+      }
+      await capture("diplomacy-after-spawn");
       await poll(
         () => locate("^Found Empire$", "national-diplomacy-panel"),
         "authenticated player spawned and Found Empire enabled",
