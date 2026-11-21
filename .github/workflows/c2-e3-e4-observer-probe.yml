@@ -1,0 +1,45 @@
+name: C2 E3 E4 actual NATIONAL observer-map combined acceptance
+on:
+  push:
+    branches:
+      - probe/c2-e3-e4-observer-wire-20261121
+    paths:
+      - .github/workflows/c2-e3-e4-observer-probe.yml
+permissions:
+  contents: read
+jobs:
+  combined:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Pinned npm
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Pinned install
+        run: npm run inst
+      - name: Pinned formatter for E3 and integrated E4 reader
+        shell: bash
+        run: |
+          files=(
+            packages/engine/src/national/observation/NationalObserverMap.ts
+            packages/engine/src/national/observation/NationalServerOutbound.ts
+            src/server/national/NationalRecipientWire.ts
+            tests/national/C2PrivateObserverMapWire.test.ts
+            src/client/TrustedNationalSession.ts
+          )
+          npx --no-install oxfmt --write "${files[@]}"
+          for f in "${files[@]}"; do
+            echo "C2_COMBINED_FORMAT_BEGIN:$f"
+            base64 -w0 "$f"
+            echo
+            echo "C2_COMBINED_FORMAT_END:$f"
+          done
+      - name: Whole source TypeScript with updated E4 parser
+        run: npm run typecheck
+      - name: Seven live source suites with actual A/B/C decoded network frames
+        run: npx --no-install vitest run --project node tests/national/C2PrivateObserverMapWire.test.ts tests/national/NationalGeographicFogR8.test.ts tests/national/ClassFivePrincipalWireFanout.test.ts tests/national/ClassFiveTrustedLobbyTransport.test.ts tests/national/NationalServerOutboundClass4.test.ts tests/national/NationalAccessionPacketsR11.test.ts
+      - name: Full lint
+        run: npm run lint
