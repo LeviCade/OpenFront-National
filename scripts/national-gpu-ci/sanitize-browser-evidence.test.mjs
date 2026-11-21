@@ -1,5 +1,12 @@
 import { strict as assert } from "node:assert";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "vitest";
@@ -22,7 +29,8 @@ const sample = () => ({
   elapsedMs: 100,
   actualHardware: {
     webgl: {
-      unmaskedRenderer: "ANGLE (Mesa, virgl (Mesa Intel(R) HD Graphics 4600 (HSW GT2)), OpenGL ES 3.2)",
+      unmaskedRenderer:
+        "ANGLE (Mesa, virgl (Mesa Intel(R) HD Graphics 4600 (HSW GT2)), OpenGL ES 3.2)",
       shaderPixel: PIXEL,
     },
     webgl1: { shaderPixel: PIXEL },
@@ -41,10 +49,12 @@ const sample = () => ({
       publicPolitics: { empires: [{ id: "public" }] },
     },
   ],
-  runtimeAssetRequests: [{
-    origin: "https://secret.example",
-    path: "/UNPUBLISHABLE_AUTH_TOKEN.mp3",
-  }],
+  runtimeAssetRequests: [
+    {
+      origin: "https://secret.example",
+      path: "/UNPUBLISHABLE_AUTH_TOKEN.mp3",
+    },
+  ],
   restrictedRuntimeAssets: [],
   networkErrors: [],
 });
@@ -67,15 +77,25 @@ test("redacted report reveals only schema-listed performance and GPU evidence", 
     "browserConsole",
     "runtimeAssetRequests",
     "requestId",
-  ]) assert.ok(!text.includes(marker), "leak marker: " + marker);
+  ])
+    assert.ok(!text.includes(marker), "leak marker: " + marker);
 });
 
 test("mismatched source or absent independently verified hardware never passes", () => {
-  assert.equal(summarizeBrowserEvidence(sample(), "b".repeat(40)).sourceMatches, false);
-  assert.equal(summarizeBrowserEvidence(sample(), SHA).hardware.proofAccepted, true);
+  assert.equal(
+    summarizeBrowserEvidence(sample(), "b".repeat(40)).sourceMatches,
+    false,
+  );
+  assert.equal(
+    summarizeBrowserEvidence(sample(), SHA).hardware.proofAccepted,
+    true,
+  );
   const forged = sample();
   forged.events = [{ ...verified, accepted: false }];
-  assert.equal(summarizeBrowserEvidence(forged, SHA).hardware.proofAccepted, false);
+  assert.equal(
+    summarizeBrowserEvidence(forged, SHA).hardware.proofAccepted,
+    false,
+  );
 });
 
 test("publish four separate reports; reject absent proof and nonmatching source", () => {
@@ -92,7 +112,10 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       const target = join(dir, "browser-" + mode);
       mkdirSync(target, { recursive: true });
       writeFileSync(join(target, "acceptance.json"), JSON.stringify(sample()));
-      writeFileSync(join(target, "home.png"), Buffer.from("89504e470d0a1a0a", "hex"));
+      writeFileSync(
+        join(target, "home.png"),
+        Buffer.from("89504e470d0a1a0a", "hex"),
+      );
     }
     assert.equal(publishEvidence(dir, SHA), true);
     const published = JSON.parse(
@@ -126,8 +149,10 @@ test("symlink named .png does not permit reading arbitrary filesystem content", 
     symlinkSync(join(dir, "secret.txt"), join(browser, "home.png"));
     publishEvidence(dir, SHA);
     assert.ok(
-      !readFileSync(join(dir, "gpu", "public", "summary.json"), "utf8")
-        .includes("UNPUBLISHABLE_TOKEN_FROM_SYMLINK"),
+      !readFileSync(
+        join(dir, "gpu", "public", "summary.json"),
+        "utf8",
+      ).includes("UNPUBLISHABLE_TOKEN_FROM_SYMLINK"),
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

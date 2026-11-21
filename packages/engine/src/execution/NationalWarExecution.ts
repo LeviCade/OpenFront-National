@@ -359,7 +359,8 @@ export class NationalWarExecution implements Execution {
         command.kind === "accept-peace" &&
         error instanceof Error &&
         error.message === "other belligerent must accept peace"
-      ) return;
+      )
+        return;
       throw error;
     }
   }

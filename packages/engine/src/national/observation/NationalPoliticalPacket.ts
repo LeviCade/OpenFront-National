@@ -113,7 +113,9 @@ export interface OutboundOtherResult {
   readonly motionId?: string;
 }
 
-export type OutboundNationalResult = OutboundFounderResult | OutboundOtherResult;
+export type OutboundNationalResult =
+  | OutboundFounderResult
+  | OutboundOtherResult;
 
 /**
  * Tracks deliveries by BOTH authoritative sequence and opaque requestId.
@@ -154,8 +156,7 @@ function validRecord(record: AuthoritativeFounderOutcome, game: Game): void {
     record.requestId.length > 256 ||
     (record.recipientId !== undefined && !safeId(record.recipientId)) ||
     (record.empireId !== undefined &&
-      (typeof record.empireId !== "string" ||
-        record.empireId.length > 256)) ||
+      (typeof record.empireId !== "string" || record.empireId.length > 256)) ||
     (record.commandKind === undefined && !safeId(record.empireId)) ||
     (record.commandKind !== undefined &&
       Object.prototype.hasOwnProperty.call(WAR_TYPES, record.commandKind) &&
@@ -167,10 +168,12 @@ function validRecord(record: AuthoritativeFounderOutcome, game: Game): void {
       ) &&
       !Object.prototype.hasOwnProperty.call(WAR_TYPES, record.commandKind)) ||
     (record.commandKind !== undefined &&
-      Object.prototype.hasOwnProperty.call(POLITICAL_TYPES, record.commandKind) &&
+      Object.prototype.hasOwnProperty.call(
+        POLITICAL_TYPES,
+        record.commandKind,
+      ) &&
       !safeId(record.commandTargetId)) ||
-    (record.commandTargetId !== undefined &&
-      !safeId(record.commandTargetId)) ||
+    (record.commandTargetId !== undefined && !safeId(record.commandTargetId)) ||
     (record.warId !== undefined && !safeId(record.warId)) ||
     (record.motionId !== undefined && !safeId(record.motionId)) ||
     (record.accepted &&
@@ -189,12 +192,20 @@ function validRecord(record: AuthoritativeFounderOutcome, game: Game): void {
     typeof record.accepted !== "boolean" ||
     !VALID_REASONS.has(record.reason) ||
     (record.commandKind === undefined &&
-      !["accepted", "actor-inactive", "invalid-empire-id", "political-rule"].includes(
+      ![
+        "accepted",
+        "actor-inactive",
+        "invalid-empire-id",
+        "political-rule",
+      ].includes(record.reason)) ||
+    (record.commandKind !== undefined &&
+      Object.prototype.hasOwnProperty.call(
+        POLITICAL_TYPES,
+        record.commandKind,
+      ) &&
+      !["accepted", "actor-inactive", "political-rule"].includes(
         record.reason,
       )) ||
-    (record.commandKind !== undefined &&
-      Object.prototype.hasOwnProperty.call(POLITICAL_TYPES, record.commandKind) &&
-      !["accepted", "actor-inactive", "political-rule"].includes(record.reason)) ||
     (record.commandKind !== undefined &&
       Object.prototype.hasOwnProperty.call(WAR_TYPES, record.commandKind) &&
       (![
@@ -222,9 +233,10 @@ function readActorJournal(
   // All three methods are E1-owned filtered reads of ONE journal. A separate
   // WAR method is optional until E1 integrates it; absence means NO receipt.
   // The caller resolves actor from the actual registered clientID.
-  const war = typeof source.nationalWarCommandResults === "function"
-    ? source.nationalWarCommandResults(actor)
-    : [];
+  const war =
+    typeof source.nationalWarCommandResults === "function"
+      ? source.nationalWarCommandResults(actor)
+      : [];
   return [
     ...(typeof source.nationalCommandResults === "function"
       ? source.nationalCommandResults(actor)
@@ -297,10 +309,7 @@ export function actorNationalResults(
     // E1's resultsFor(actor) already scopes the journal. Recheck here so a
     // future engine change cannot send a foreign actor's private receipt.
     if (record.actorId !== actor.id()) continue;
-    if (
-      record.recipientId !== undefined &&
-      record.recipientId !== actor.id()
-    )
+    if (record.recipientId !== undefined && record.recipientId !== actor.id())
       continue;
     validRecord(record, game);
     const proof = JSON.stringify([
@@ -390,7 +399,9 @@ export function actorNationalResults(
           ...base,
           type: WAR_TYPES[kind],
           ...(record.warId === undefined ? {} : { warId: record.warId }),
-          ...(record.motionId === undefined ? {} : { motionId: record.motionId }),
+          ...(record.motionId === undefined
+            ? {}
+            : { motionId: record.motionId }),
         });
       }
     } else {

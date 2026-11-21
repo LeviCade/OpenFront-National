@@ -68,16 +68,16 @@ An independently signed physical NVIDIA/AMD/Apple path can pass the general proo
 
 Run each with its own output directory, preserving raw immutable evidence:
 
-| Scenario | Arguments | Artifact directory |
-| --- | --- | --- |
-| NATIONAL desktop | default | `national-qa-artifacts/browser-national-desktop` |
-| NATIONAL mobile | `--mobile` | `national-qa-artifacts/browser-national-mobile` |
-| Legacy/FFA desktop | `--legacy` | `national-qa-artifacts/browser-legacy-ffa-desktop` |
-| Legacy/FFA mobile | `--legacy --mobile` | `national-qa-artifacts/browser-legacy-ffa-mobile` |
+| Scenario           | Arguments           | Artifact directory                                 |
+| ------------------ | ------------------- | -------------------------------------------------- |
+| NATIONAL desktop   | default             | `national-qa-artifacts/browser-national-desktop`   |
+| NATIONAL mobile    | `--mobile`          | `national-qa-artifacts/browser-national-mobile`    |
+| Legacy/FFA desktop | `--legacy`          | `national-qa-artifacts/browser-legacy-ffa-desktop` |
+| Legacy/FFA mobile  | `--legacy --mobile` | `national-qa-artifacts/browser-legacy-ffa-mobile`  |
 
 Require more than home/menu: actual spawn, running game HUD/canvas, genuine click/touch/key inputs, authoritative recipient-bound accepted/rejected commands and safe state transitions. Save/restore requires a genuinely protected host, not a browser-owned Worker. Victory/replay must be observed, never simulated for the report. Preserve CDP `SystemInfo.getInfo`, browser version, GL contexts/shaders, console/exceptions, sanitized media/network errors, witnessed worker packet receipts and exact screenshots.
 
-**Current script coverage:** NATIONAL founding request-ID, accepted roster/receipt, rejected duplicate, trusted save/restore and sovereign victory *when reachable*; FFA startup/HUD plus actual launcher interaction. **Not yet evidenced:** E1/E2 authoritative WAR/peace, keyboard game actions, FFA tactical player actions, full victory/replay, hostile-client secret confinement. New requirements must not be falsely inferred from existing steps. Capture the exact first failing stage per mode.
+**Current script coverage:** NATIONAL founding request-ID, accepted roster/receipt, rejected duplicate, trusted save/restore and sovereign victory _when reachable_; FFA startup/HUD plus actual launcher interaction. **Not yet evidenced:** E1/E2 authoritative WAR/peace, keyboard game actions, FFA tactical player actions, full victory/replay, hostile-client secret confinement. New requirements must not be falsely inferred from existing steps. Capture the exact first failing stage per mode.
 
 ## Separate security and licensing blockers
 

@@ -738,9 +738,9 @@ export class GameImpl implements Game {
         ? safeId(command.warId)
         : command.kind === "propose-peace"
           ? safeId(command.warId)
-          : this._nationalWar.snapshot().wars.motions.find(
-              (m) => m.id === command.motionId,
-            )?.layerId;
+          : this._nationalWar
+              .snapshot()
+              .wars.motions.find((m) => m.id === command.motionId)?.layerId;
     const motionId =
       command.kind === "propose-peace" || command.kind === "accept-peace"
         ? safeId(command.motionId)
