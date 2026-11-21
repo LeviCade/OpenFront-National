@@ -701,12 +701,14 @@ export class NationalDiplomacyPanel extends LitElement {
       .filter(
         (empire) =>
           !empire.memberIds.includes(actor.id()) &&
-          game.players().some(
-            (player) =>
-              player.id() === empire.leaderId &&
-              player.isAlive() &&
-              player.numTilesOwned() > 0,
-          ),
+          game
+            .players()
+            .some(
+              (player) =>
+                player.id() === empire.leaderId &&
+                player.isAlive() &&
+                player.numTilesOwned() > 0,
+            ),
       )
       .map((empire) => ({
         id: empire.id,
