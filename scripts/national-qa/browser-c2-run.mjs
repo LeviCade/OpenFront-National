@@ -33,8 +33,8 @@ import {
 
 const argv = process.argv;
 const mode = argv[argv.indexOf("--mode") + 1] ?? "";
-const modes = mode === "all" ? Object.keys(C2_PATHS).concat("private-national") :
-  [mode];
+const modes =
+  mode === "all" ? Object.keys(C2_PATHS).concat("private-national") : [mode];
 if (modes.some((name) => name !== "private-national" && !C2_PATHS[name])) {
   console.error("C2_E5_UNKNOWN_MODE");
   process.exit(2);
@@ -47,9 +47,11 @@ if (!/^[a-f0-9]{40}$/.test(head) || requestedSha !== head) {
   process.exit(2);
 }
 const realHardwareRequested = process.env.NATIONAL_REQUIRE_HARDWARE_GPU === "1";
-if (realHardwareRequested &&
+if (
+  realHardwareRequested &&
   (process.env.NATIONAL_E6_APPROVED_CANDIDATE_SHA !== head ||
-    !/^[0-9]+$/.test(process.env.NATIONAL_E6_APPROVED_RUN_ID ?? ""))) {
+    !/^[0-9]+$/.test(process.env.NATIONAL_E6_APPROVED_RUN_ID ?? ""))
+) {
   console.error("C2_E5_PHYSICAL_GPU_NOT_AUTHORIZED_BY_E6");
   process.exit(2);
 }
@@ -67,11 +69,13 @@ const iend = Buffer.from("0000000049454e44ae426082", "hex");
 function genuinePng(file) {
   if (!existsSync(file) || !lstatSync(file).isFile()) return false;
   const data = readFileSync(file);
-  return data.length > 1000 &&
+  return (
+    data.length > 1000 &&
     data.subarray(0, 8).equals(magic) &&
     data.subarray(-12).equals(iend) &&
     data.readUInt32BE(16) >= 320 &&
-    data.readUInt32BE(20) >= 240;
+    data.readUInt32BE(20) >= 240
+  );
 }
 function screenshots(folder) {
   if (!existsSync(folder)) return [];
@@ -82,19 +86,29 @@ function screenshots(folder) {
 }
 function save(modeName, verdict) {
   const path = join(root, modeName + ".json");
-  writeFileSync(path, JSON.stringify({
-    exactSource: head,
-    mode: modeName,
-    ...verdict,
-  }, null, 2) + "\n");
-  console.info("C2_E5_VERDICT " + JSON.stringify({
-    mode: modeName,
-    gameplay: verdict.gameplay,
-    hardware: verdict.hardware,
-    firstFailure: verdict.firstFailure,
-    firstFailedStage: verdict.firstFailedStage,
-    source: head,
-  }));
+  writeFileSync(
+    path,
+    JSON.stringify(
+      {
+        exactSource: head,
+        mode: modeName,
+        ...verdict,
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  console.info(
+    "C2_E5_VERDICT " +
+      JSON.stringify({
+        mode: modeName,
+        gameplay: verdict.gameplay,
+        hardware: verdict.hardware,
+        firstFailure: verdict.firstFailure,
+        firstFailedStage: verdict.firstFailedStage,
+        source: head,
+      }),
+  );
 }
 function runLocal(modeName) {
   const config = C2_PATHS[modeName];
@@ -170,8 +184,9 @@ function sessionObservation(port) {
       });
       if (!res.ok) throw Error("CDP_HTTP_UNAVAILABLE");
       const tabs = await res.json();
-      const page = tabs.find((t) => t.type === "page" &&
-        typeof t.webSocketDebuggerUrl === "string");
+      const page = tabs.find(
+        (t) => t.type === "page" && typeof t.webSocketDebuggerUrl === "string",
+      );
       if (!page) throw Error("REAL_CDP_PAGE_MISSING");
       const ws = new WebSocket(page.webSocketDebuggerUrl);
       await new Promise((resolveOpen, rejectOpen) => {
@@ -182,18 +197,23 @@ function sessionObservation(port) {
       const pending = new Map();
       ws.addEventListener("message", (event) => {
         let data;
-        try { data = JSON.parse(String(event.data)); } catch { return; }
+        try {
+          data = JSON.parse(String(event.data));
+        } catch {
+          return;
+        }
         if (!pending.has(data.id)) return;
         const entry = pending.get(data.id);
         pending.delete(data.id);
         if (data.error) entry.reject(Error("CDP_RESPONSE_ERROR"));
         else entry.resolve(data.result);
       });
-      const send = (method, params = {}) => new Promise((resolveSend, rejectSend) => {
-        const id = ++serial;
-        pending.set(id, { resolve: resolveSend, reject: rejectSend });
-        ws.send(JSON.stringify({ id, method, params }));
-      });
+      const send = (method, params = {}) =>
+        new Promise((resolveSend, rejectSend) => {
+          const id = ++serial;
+          pending.set(id, { resolve: resolveSend, reject: rejectSend });
+          ws.send(JSON.stringify({ id, method, params }));
+        });
       try {
         const browser = await send("Browser.getVersion");
         const state = await send("Runtime.evaluate", {
@@ -230,8 +250,9 @@ function sessionObservation(port) {
           matchId: ui.matchId,
           hostAdmitted: false,
           serverOwnedProjection: false,
-          serverTick: Number.isSafeInteger(ui.displayedProjectionTick) ?
-            ui.displayedProjectionTick : null,
+          serverTick: Number.isSafeInteger(ui.displayedProjectionTick)
+            ? ui.displayedProjectionTick
+            : null,
           visibleMapRendered: ui.visibleMapRendered === true,
           spectator: ui.displayedSpectator,
           displayClaimsHostAdmission: ui.displayedHostAdmission === true,
@@ -240,9 +261,12 @@ function sessionObservation(port) {
         ws.close();
       }
     })(),
-    new Promise((_, rejectTimeout) => setTimeout(
-      () => rejectTimeout(Error("PRIVATE_CDP_OBSERVATION_TIMEOUT")), 8000,
-    )),
+    new Promise((_, rejectTimeout) =>
+      setTimeout(
+        () => rejectTimeout(Error("PRIVATE_CDP_OBSERVATION_TIMEOUT")),
+        8000,
+      ),
+    ),
   ]);
 }
 async function privateObservation() {
@@ -289,9 +313,8 @@ async function privateObservation() {
 }
 let failCount = 0;
 for (const name of modes) {
-  const verdict = name === "private-national"
-    ? await privateObservation()
-    : runLocal(name);
+  const verdict =
+    name === "private-national" ? await privateObservation() : runLocal(name);
   if (verdict.gameplay !== "PASS") failCount++;
 }
 // Exit status is a machine gate, never a substitute for the evidence JSON.

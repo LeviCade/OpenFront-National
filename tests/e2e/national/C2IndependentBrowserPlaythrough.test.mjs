@@ -15,29 +15,67 @@ const proof = (mode) => {
   ];
   if (config.kind === "legacy") {
     events.push(
-      { name: "legacy-ffa-verified", nationalPanelAbsent: true, workerPacketCount: 12 },
-      { name: "legacy-actual-map-interaction-authoritative-update",
-        playerTiles: 6, lastTick: 12, via: mode.endsWith("mobile") ? "touch" : "mouse" },
+      {
+        name: "legacy-ffa-verified",
+        nationalPanelAbsent: true,
+        workerPacketCount: 12,
+      },
+      {
+        name: "legacy-actual-map-interaction-authoritative-update",
+        playerTiles: 6,
+        lastTick: 12,
+        via: mode.endsWith("mobile") ? "touch" : "mouse",
+      },
     );
   } else {
     events.push(
-      { name: "solo-transport-admission-observed", gameTypeIsSolo: true,
-        actorPresent: true, gameIdPresent: true, tick: 1 },
-      { name: "engine-spawn-verified", unobstructedInputs: 1, tickBefore: 1,
-        tickAfter: 4 },
-      { name: "founding-real-click-submitted", actorCorrelated: true,
-        requestFingerprint: "0123456789abcdef" },
-      { name: "authoritative-empire-accepted", verified: true,
-        authenticPublicRoster: true, recipientCorrelated: true },
+      {
+        name: "solo-transport-admission-observed",
+        gameTypeIsSolo: true,
+        actorPresent: true,
+        gameIdPresent: true,
+        tick: 1,
+      },
+      {
+        name: "engine-spawn-verified",
+        unobstructedInputs: 1,
+        tickBefore: 1,
+        tickAfter: 4,
+      },
+      {
+        name: "founding-real-click-submitted",
+        actorCorrelated: true,
+        requestFingerprint: "0123456789abcdef",
+      },
+      {
+        name: "authoritative-empire-accepted",
+        verified: true,
+        authenticPublicRoster: true,
+        recipientCorrelated: true,
+      },
       { name: "authoritative-war-declared", receiptTick: 8, sequence: 6 },
-      { name: "real-target-aware-radial-attack", targetMatch: true,
-        enabled: true, pointer: mode.endsWith("mobile") ? "touch" : "mouse" },
-      { name: "solo-real-battle-engine-correlated", opponentDamaged: true,
-        troopLoss: true, territoryLoss: false },
+      {
+        name: "real-target-aware-radial-attack",
+        targetMatch: true,
+        enabled: true,
+        pointer: mode.endsWith("mobile") ? "touch" : "mouse",
+      },
+      {
+        name: "solo-real-battle-engine-correlated",
+        opponentDamaged: true,
+        troopLoss: true,
+        territoryLoss: false,
+      },
       { name: "authoritative-combat-impact", actualOpponentLoss: true },
-      { name: "authoritative-solo-playability-complete",
-        founded: true, spawned: true, warDeclared: true, realRadialAttack: true,
-        opponentDamaged: true, liveTick: 19 },
+      {
+        name: "authoritative-solo-playability-complete",
+        founded: true,
+        spawned: true,
+        warDeclared: true,
+        realRadialAttack: true,
+        opponentDamaged: true,
+        liveTick: 19,
+      },
     );
   }
   return {
@@ -57,7 +95,11 @@ const proof = (mode) => {
     submittedFounding: { authenticRequestObserved: true },
   };
 };
-const result = (mode, report = proof(mode), labels = C2_PATHS[mode].screenshots) =>
+const result = (
+  mode,
+  report = proof(mode),
+  labels = C2_PATHS[mode].screenshots,
+) =>
   classifySoloOrLegacy({
     mode,
     report,
@@ -77,7 +119,10 @@ describe("C2 E5 proof rejects optimistic browser and release claims", () => {
   }
   it("does not require fake B/C players for Solo", () => {
     expect(C2_PATHS["national-solo-desktop"].args).toEqual(["--solo"]);
-    expect(C2_PATHS["national-solo-mobile"].args).toEqual(["--solo", "--mobile"]);
+    expect(C2_PATHS["national-solo-mobile"].args).toEqual([
+      "--solo",
+      "--mobile",
+    ]);
   });
   it("rejects source mismatch despite optimistic pass", () => {
     const report = proof("national-solo-desktop");
@@ -88,25 +133,39 @@ describe("C2 E5 proof rejects optimistic browser and release claims", () => {
     );
   });
   it("requires real PNG files as well as screenshot events", () => {
-    expect(result("legacy-mobile", proof("legacy-mobile"), ["home"]).gameplay).toBe("FAIL");
+    expect(
+      result("legacy-mobile", proof("legacy-mobile"), ["home"]).gameplay,
+    ).toBe("FAIL");
   });
   it("rejects screen events without genuine founding/roster", () => {
     const report = proof("national-solo-mobile");
-    report.events = report.events.filter((e) => e.name !== "authoritative-empire-accepted");
-    expect(result("national-solo-mobile", report).checksFailed.some((x) =>
-      x.code === "FOUNDING_RECEIPT_OR_ROSTER_MISSING")).toBe(true);
+    report.events = report.events.filter(
+      (e) => e.name !== "authoritative-empire-accepted",
+    );
+    expect(
+      result("national-solo-mobile", report).checksFailed.some(
+        (x) => x.code === "FOUNDING_RECEIPT_OR_ROSTER_MISSING",
+      ),
+    ).toBe(true);
   });
   it("rejects a radial click that never produces actual engine damage", () => {
     const report = proof("national-solo-desktop");
-    report.events = report.events.filter((e) =>
-      e.name !== "solo-real-battle-engine-correlated");
-    expect(result("national-solo-desktop", report).checksFailed.some((x) =>
-      x.code === "REAL_RADIAL_BATTLE_DAMAGE_UNPROVEN")).toBe(true);
+    report.events = report.events.filter(
+      (e) => e.name !== "solo-real-battle-engine-correlated",
+    );
+    expect(
+      result("national-solo-desktop", report).checksFailed.some(
+        (x) => x.code === "REAL_RADIAL_BATTLE_DAMAGE_UNPROVEN",
+      ),
+    ).toBe(true);
   });
   it("rejects a software renderer even when browser draws", () => {
     const report = proof("legacy-desktop");
-    report.events.push({ name: "strict-hardware-renderer-attestation",
-      accepted: true, reason: "SIGNED_PHYSICAL_GPU_VERIFIED" });
+    report.events.push({
+      name: "strict-hardware-renderer-attestation",
+      accepted: true,
+      reason: "SIGNED_PHYSICAL_GPU_VERIFIED",
+    });
     expect(result("legacy-desktop", report).hardware).toBe("BLOCKED");
     report.actualHardware.webgl.shaderPixel = [0, 0, 0, 0];
     expect(result("legacy-desktop", report).gameplay).toBe("FAIL");
@@ -140,11 +199,18 @@ describe("C2 E5 proof rejects optimistic browser and release claims", () => {
   it("never promotes a three-browser smoke without E6 witness", () => {
     const verdict = classifyPrivateNational({
       topology: { accepted: true },
-      joined: true, bilateralAccession: true, privateViewsDifferent: true,
-      warReceipt: true, opponentPeace: true, reconnectRevokedOldSocket: true,
-      spectatorDenied: true, hostWitnessVerified: false,
+      joined: true,
+      bilateralAccession: true,
+      privateViewsDifferent: true,
+      warReceipt: true,
+      opponentPeace: true,
+      reconnectRevokedOldSocket: true,
+      spectatorDenied: true,
+      hostWitnessVerified: false,
     });
     expect(verdict.gameplay).toBe("BLOCKED");
-    expect(verdict.firstFailure).toBe("INDEPENDENT_TRUSTED_HOST_WITNESS_MISSING");
+    expect(verdict.firstFailure).toBe(
+      "INDEPENDENT_TRUSTED_HOST_WITNESS_MISSING",
+    );
   });
 });
