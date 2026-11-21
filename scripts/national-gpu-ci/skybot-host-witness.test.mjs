@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { createHash, generateKeyPairSync, verify } from "node:crypto";
+import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
 import { test } from "vitest";
 import {
   APPROVED_STAGING,
@@ -9,6 +9,7 @@ import {
   validateControllerObservation,
   verifyControllerTeardown,
   signedHostRecord,
+  signHostWithExternalKey,
   createHostPreflight,
   createHostPostflight,
 } from "./skybot-host-witness.mjs";
@@ -282,4 +283,24 @@ test("preflight has bounded freshness and postflight requires job completion plu
   rejectWith("HOST_POSTFLIGHT_EVIDENCE_OR_TIME_INVALID", () =>
     createHostPostflight(expected, times, host, {}, summaryBytes, NOW),
   );
+});
+
+test("hardware signer contract refuses exportable fallback, wrong enrollment or forged signature", () => {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const publicPem = publicKey.export({ format: "pem", type: "spki" }).toString();
+  const fp = createHash("sha256").update(publicPem, "utf8").digest("hex");
+  const payload = { jobId: expected.jobId, runId: expected.runId, challenge: CHALLENGE };
+  const external = (bytes) => sign(null, bytes, privateKey).toString("base64");
+  const proof = signHostWithExternalKey(payload, publicPem, [fp], [fp], external);
+  assert.equal(verify(null, Buffer.from(JSON.stringify(payload)), publicKey,
+    Buffer.from(proof.signature, "base64")), true);
+  rejectWith("HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED", () =>
+    signHostWithExternalKey(payload, publicPem, [], [fp], external));
+  rejectWith("HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED", () =>
+    signHostWithExternalKey(payload, publicPem, [fp], [], external));
+  rejectWith("HOST_HSM_SIGNATURE_UNVERIFIED", () =>
+    signHostWithExternalKey({ ...payload, jobId: "other" }, publicPem,
+      [fp], [fp], () => external(Buffer.from("wrong-job"))));
+  rejectWith("HOST_HSM_SIGNATURE_FORMAT_INVALID", () =>
+    signHostWithExternalKey(payload, publicPem, [fp], [fp], () => "not-signature"));
 });
