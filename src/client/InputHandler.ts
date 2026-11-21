@@ -1409,8 +1409,8 @@ export class InputHandler {
         if (this.uiState.ghostStructure !== null) {
           this.eventBus.emit(new TouchGhostPlacementEvent(event.x, event.y));
         } else if (
-          this.gameView.config().gameConfig().nationalMode === true &&
-          !this.gameView.config().isReplay()
+          this.gameView.config?.().gameConfig?.().nationalMode === true &&
+          this.gameView.config?.().isReplay?.() !== true
         ) {
           // The spawn path is exactly the existing desktop map action.
           // Later taps open the same real engine-authorized radial used by a

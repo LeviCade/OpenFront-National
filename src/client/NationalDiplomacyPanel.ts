@@ -596,9 +596,10 @@ export class NationalDiplomacyPanel extends LitElement {
       return;
     }
     if (
-      !(action === "propose"
-        ? this.eligiblePeaceWars()
-        : this.eligiblePeaceMotions()
+      !(
+        action === "propose"
+          ? this.eligiblePeaceWars()
+          : this.eligiblePeaceMotions()
       ).some((item) => item.id === reference)
     ) {
       this.diplomacyError =
@@ -708,7 +709,10 @@ export class NationalDiplomacyPanel extends LitElement {
                   Choose a nation, declare WAR, then fight on the actual game map.
                   Membership and outcomes come only from the engine.
                 </p>
-                <p data-national-map-instructions class="text-xs text-slate-300">
+                <p
+                  data-national-map-instructions
+                  class="text-xs text-slate-300"
+                >
                   ${game.inSpawnPhase()
                     ? "Spawn first: click or tap an unoccupied land tile."
                     : "Battle: right-click opposing territory on desktop, or tap it on mobile, then choose the enabled Attack action."}
@@ -963,33 +967,72 @@ export class NationalDiplomacyPanel extends LitElement {
                       ? "Choose a real engine-issued WAR or motion ID. The game still decides constitutional authority."
                       : "Awaiting authoritative current conflicts. Peace controls remain unavailable until the game sends live IDs."}
                   </p>
-                  ${conflicts
-                    ? html`<div aria-label="Current conflicts" class="space-y-1 text-xs text-slate-300">
-                        <p>Active layers: ${conflicts.layers.filter((layer) => layer.endedTick === null).length};
-                        pending peace motions: ${conflicts.motions.filter((motion) => motion.acceptedTick === null).length}.</p>
-                        ${conflicts.layers.map((layer) => html`<p class="break-all">WAR ${layer.id} · ${layer.first.id} vs ${layer.second.id} · ${layer.endedTick === null ? "ACTIVE" : "ENDED"}</p>`)}
-                        ${conflicts.motions.map((motion) => html`<p class="break-all">Motion ${motion.id} for WAR ${motion.layerId} · ${motion.acceptedTick === null ? "PENDING" : "ACCEPTED"}</p>`)}
-                      </div>`
-                    : nothing}
-                  ${combatWars.length
-                    ? html`<div data-national-map-combat class="rounded-lg border border-cyan-400/40 bg-cyan-900/25 p-3 space-y-2">
-                        <strong>⚔️ War is active — attack on the map</strong>
-                        <p class="text-xs">Close this panel, then right-click enemy land (desktop) or tap it (mobile). Choose Attack in the existing map menu. The engine decides whether troops move. Use the normal troop-ratio control to set how many are sent.</p>
-                        <p data-national-live-attacks class="text-xs" role="status">
-                          Observed live outgoing map attacks: ${observedOutgoingAttacks}.
-                          This is reported from game state, not from clicking Attack.
-                        </p>
-                        <button
-                          id="national-return-to-map"
-                          type="button"
-                          class="min-h-11 rounded-lg border border-cyan-300 px-4 py-2 font-semibold text-white focus-visible:outline-2 focus-visible:outline-white"
-                          @click=${this.closeForMap}
-                        >Return to map</button>
-                      </div>`
-                    : nothing}
+                  ${
+                    conflicts
+                      ? html`<div
+                          aria-label="Current conflicts"
+                          class="space-y-1 text-xs text-slate-300"
+                        >
+                          <p>
+                            Active layers:
+                            ${conflicts.layers.filter((layer) => layer.endedTick === null).length};
+                            pending peace motions:
+                            ${conflicts.motions.filter((motion) => motion.acceptedTick === null).length}.
+                          </p>
+                          ${conflicts.layers.map(
+                            (layer) => html`<p class="break-all">
+                              WAR ${layer.id} · ${layer.first.id} vs
+                              ${layer.second.id} ·
+                              ${layer.endedTick === null ? "ACTIVE" : "ENDED"}
+                            </p>`,
+                          )}
+                          ${conflicts.motions.map(
+                            (motion) => html`<p class="break-all">
+                              Motion ${motion.id} for WAR ${motion.layerId} ·
+                              ${motion.acceptedTick === null ? "PENDING" : "ACCEPTED"}
+                            </p>`,
+                          )}
+                        </div>`
+                      : nothing
+                  }
+                  ${
+                    combatWars.length
+                      ? html`<div
+                          data-national-map-combat
+                          class="rounded-lg border border-cyan-400/40 bg-cyan-900/25 p-3 space-y-2"
+                        >
+                          <strong>⚔️ War is active — attack on the map</strong>
+                          <p class="text-xs">
+                            Close this panel, then right-click enemy land
+                            (desktop) or tap it (mobile). Choose Attack in the
+                            existing map menu. The engine decides whether troops
+                            move. Use the normal troop-ratio control to set how
+                            many are sent.
+                          </p>
+                          <p
+                            data-national-live-attacks
+                            class="text-xs"
+                            role="status"
+                          >
+                            Observed live outgoing map attacks:
+                            ${observedOutgoingAttacks}. This is reported from
+                            game state, not from clicking Attack.
+                          </p>
+                          <button
+                            id="national-return-to-map"
+                            type="button"
+                            class="min-h-11 rounded-lg border border-cyan-300 px-4 py-2 font-semibold text-white focus-visible:outline-2 focus-visible:outline-white"
+                            @click=${this.closeForMap}
+                          >
+                            Return to map
+                          </button>
+                        </div>`
+                      : nothing
+                  }
                   <form
                     class="space-y-2"
-                    @submit=${(event: SubmitEvent) => this.submitPeace(event, "propose")}
+                    @submit=${(event: SubmitEvent) =>
+                      this.submitPeace(event, "propose")}
                   >
                     <label
                       for="national-peace-war-id"
@@ -1003,24 +1046,35 @@ export class NationalDiplomacyPanel extends LitElement {
                       class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base focus-visible:outline-2 focus-visible:outline-amber-300"
                       .value=${this.warIdDraft}
                       @change=${(event: Event) =>
-                        (this.warIdDraft = (event.target as HTMLSelectElement).value)}
+                        (this.warIdDraft = (
+                          event.target as HTMLSelectElement
+                        ).value)}
                       ?disabled=${!canIssuePeace || peaceWars.length === 0}
                     >
                       <option value="">Choose an active WAR</option>
-                      ${peaceWars.map((war) => html`<option value=${war.id}>${war.id} · ${war.first.id} vs ${war.second.id}</option>`)}
+                      ${peaceWars.map(
+                        (war) =>
+                          html`<option value=${war.id}>
+                            ${war.id} · ${war.first.id} vs ${war.second.id}
+                          </option>`,
+                      )}
                     </select>
                     <button
                       id="national-propose-peace"
                       type="submit"
                       class="min-h-11 rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 focus-visible:outline-2 focus-visible:outline-white disabled:opacity-50"
-                      ?disabled=${!canIssuePeace || !this.warIdDraft.trim() || (conflicts !== null && !peaceWars.some((war) => war.id === this.warIdDraft))}
+                      ?disabled=${!canIssuePeace ||
+                      !this.warIdDraft.trim() ||
+                      (conflicts !== null &&
+                        !peaceWars.some((war) => war.id === this.warIdDraft))}
                     >
                       Propose peace
                     </button>
                   </form>
                   <form
                     class="space-y-2"
-                    @submit=${(event: SubmitEvent) => this.submitPeace(event, "accept")}
+                    @submit=${(event: SubmitEvent) =>
+                      this.submitPeace(event, "accept")}
                   >
                     <label
                       for="national-peace-motion-id"
@@ -1034,17 +1088,29 @@ export class NationalDiplomacyPanel extends LitElement {
                       class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base focus-visible:outline-2 focus-visible:outline-amber-300"
                       .value=${this.motionIdDraft}
                       @change=${(event: Event) =>
-                        (this.motionIdDraft = (event.target as HTMLSelectElement).value)}
+                        (this.motionIdDraft = (
+                          event.target as HTMLSelectElement
+                        ).value)}
                       ?disabled=${!canIssuePeace || peaceMotions.length === 0}
                     >
                       <option value="">Choose an opponent's peace motion</option>
-                      ${peaceMotions.map((motion) => html`<option value=${motion.id}>${motion.id} · WAR ${motion.layerId}</option>`)}
+                      ${peaceMotions.map(
+                        (motion) =>
+                          html`<option value=${motion.id}>
+                            ${motion.id} · WAR ${motion.layerId}
+                          </option>`,
+                      )}
                     </select>
                     <button
                       id="national-accept-peace"
                       type="submit"
                       class="min-h-11 rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 focus-visible:outline-2 focus-visible:outline-white disabled:opacity-50"
-                      ?disabled=${!canIssuePeace || !this.motionIdDraft.trim() || (conflicts !== null && !peaceMotions.some((motion) => motion.id === this.motionIdDraft))}
+                      ?disabled=${!canIssuePeace ||
+                      !this.motionIdDraft.trim() ||
+                      (conflicts !== null &&
+                        !peaceMotions.some(
+                          (motion) => motion.id === this.motionIdDraft,
+                        ))}
                     >
                       Accept peace
                     </button>

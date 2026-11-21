@@ -244,20 +244,29 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     await panel.updateComplete;
     await choose(panel, "#national-peace-war-id", "war-11");
     panel.querySelector<HTMLButtonElement>("#national-propose-peace")!.click();
-    expect(intents()).toEqual([{
-      type: "national_propose_peace",
-      warId: "war-11",
-      requestId: expect.stringMatching(/^nc_[0-9a-f]{32}$/),
-    }]);
-    expect(NationalProposePeaceIntentSchema.safeParse(intents()[0]).success).toBe(true);
+    expect(intents()).toEqual([
+      {
+        type: "national_propose_peace",
+        warId: "war-11",
+        requestId: expect.stringMatching(/^nc_[0-9a-f]{32}$/),
+      },
+    ]);
+    expect(
+      NationalProposePeaceIntentSchema.safeParse(intents()[0]).success,
+    ).toBe(true);
     state.tick = 11;
-    state.diplomacyResults = [{
-      type: "national_propose_peace",
-      actorId: "nation-a", recipientId: "nation-a",
-      requestId: intents()[0].requestId,
-      sequence: 7, tick: 11, accepted: false,
-      reason: "political-rule",
-    }];
+    state.diplomacyResults = [
+      {
+        type: "national_propose_peace",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        requestId: intents()[0].requestId,
+        sequence: 7,
+        tick: 11,
+        accepted: false,
+        reason: "political-rule",
+      },
+    ];
     panel.refresh();
     await panel.updateComplete;
     await choose(panel, "#national-peace-motion-id", "motion-12");
@@ -268,7 +277,9 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       requestId: expect.stringMatching(/^nc_[0-9a-f]{32}$/),
     });
     expect(intents()[1].requestId).not.toBe(intents()[0].requestId);
-    expect(NationalAcceptPeaceIntentSchema.safeParse(intents()[1]).success).toBe(true);
+    expect(
+      NationalAcceptPeaceIntentSchema.safeParse(intents()[1]).success,
+    ).toBe(true);
     expect(panel.textContent).not.toContain("Peace accepted by game");
   });
 
@@ -695,16 +706,23 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
 
   it("does not offer guessed WAR/motion IDs when authoritative state is missing", async () => {
     const { panel } = await setup();
-    const war = panel.querySelector<HTMLSelectElement>("#national-peace-war-id")!;
-    const motion = panel.querySelector<HTMLSelectElement>("#national-peace-motion-id")!;
+    const war = panel.querySelector<HTMLSelectElement>(
+      "#national-peace-war-id",
+    )!;
+    const motion = panel.querySelector<HTMLSelectElement>(
+      "#national-peace-motion-id",
+    )!;
     expect(war.tagName).toBe("SELECT");
     expect(motion.tagName).toBe("SELECT");
     expect(war.disabled).toBe(true);
     expect(motion.disabled).toBe(true);
-    expect(panel.textContent).toContain("Awaiting authoritative current conflicts");
+    expect(panel.textContent).toContain(
+      "Awaiting authoritative current conflicts",
+    );
     // Even manually forged submission cannot bypass state validation.
     (panel as any).warIdDraft = "fabricated-id";
-    panel.querySelector<HTMLButtonElement>("#national-propose-peace")!
+    panel
+      .querySelector<HTMLButtonElement>("#national-propose-peace")!
       .closest("form")!
       .dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
     expect(intents()).toHaveLength(0);
@@ -715,20 +733,28 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
   it("lets an independent nation respond to a real imperial peace proposal", async () => {
     const { panel, state } = await setup();
     state.conflicts = projection(
-      [{
-        id: "imperial-war",
-        scope: "imperial",
-        first: { kind: "empire", id: "Atlas" },
-        second: { kind: "nation", id: "nation-a" },
-        declaredBy: "nation-b",
-        startedTick: 10,
-        endedTick: null,
-      }],
-      [{
-        id: "imperial-motion", layerId: "imperial-war",
-        proposedBy: "nation-b", proposingSide: 0,
-        proposedTick: 10, acceptedTick: null, acceptedBy: null,
-      }],
+      [
+        {
+          id: "imperial-war",
+          scope: "imperial",
+          first: { kind: "empire", id: "Atlas" },
+          second: { kind: "nation", id: "nation-a" },
+          declaredBy: "nation-b",
+          startedTick: 10,
+          endedTick: null,
+        },
+      ],
+      [
+        {
+          id: "imperial-motion",
+          layerId: "imperial-war",
+          proposedBy: "nation-b",
+          proposingSide: 0,
+          proposedTick: 10,
+          acceptedTick: null,
+          acceptedBy: null,
+        },
+      ],
     );
     panel.refresh();
     await panel.updateComplete;
@@ -739,7 +765,8 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     await choose(panel, "#national-peace-motion-id", "imperial-motion");
     panel.querySelector<HTMLButtonElement>("#national-accept-peace")!.click();
     expect(intents()[0]).toMatchObject({
-      type: "national_accept_peace", motionId: "imperial-motion",
+      type: "national_accept_peace",
+      motionId: "imperial-motion",
     });
   });
 
@@ -748,18 +775,25 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     state.conflicts = projection();
     panel.refresh();
     await panel.updateComplete;
-    expect(panel.textContent).toContain("Battle: right-click opposing territory");
-    expect(panel.querySelector("[data-national-live-attacks]")?.textContent)
-      .toContain("Observed live outgoing map attacks: 0");
+    expect(panel.textContent).toContain(
+      "Battle: right-click opposing territory",
+    );
+    expect(
+      panel.querySelector("[data-national-live-attacks]")?.textContent,
+    ).toContain("Observed live outgoing map attacks: 0");
     expect(panel.querySelector("[data-national-map-combat]")).not.toBeNull();
-    const back = panel.querySelector<HTMLButtonElement>("#national-return-to-map")!;
+    const back = panel.querySelector<HTMLButtonElement>(
+      "#national-return-to-map",
+    )!;
     expect(back.className).toContain("min-h-11");
     back.click();
     await panel.updateComplete;
     expect(
-      panel.querySelector<HTMLButtonElement>(
-        'button[aria-controls="national-diplomacy-content"]',
-      )?.getAttribute("aria-expanded"),
+      panel
+        .querySelector<HTMLButtonElement>(
+          'button[aria-controls="national-diplomacy-content"]',
+        )
+        ?.getAttribute("aria-expanded"),
     ).toBe("false");
     expect(intents()).toHaveLength(0);
   });

@@ -1,4 +1,8 @@
-import { Difficulty, GameMode, UnitType } from "@openfront/engine-api/game/GameTypes";
+import {
+  Difficulty,
+  GameMode,
+  UnitType,
+} from "@openfront/engine-api/game/GameTypes";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/client/Cosmetics", () => ({
@@ -32,7 +36,9 @@ describe("SinglePlayerModal start", () => {
       events.push((event as CustomEvent).detail),
     );
     modal.handleConfigNationalModeSelected(
-      new CustomEvent("national-mode-selected", { detail: { enabled: true } }),
+      new CustomEvent("national-mode-selected", {
+        detail: { enabled: true },
+      }),
     );
     expect(modal.nationalMode).toBe(true);
     expect(modal.gameMode).toBe(GameMode.FFA);
@@ -49,7 +55,9 @@ describe("SinglePlayerModal start", () => {
   it("switching back to Impossible is ordinary Solo, never a hidden NATIONAL default", async () => {
     const modal = createModal();
     modal.handleConfigNationalModeSelected(
-      new CustomEvent("national-mode-selected", { detail: { enabled: true } }),
+      new CustomEvent("national-mode-selected", {
+        detail: { enabled: true },
+      }),
     );
     modal.handleConfigDifficultySelected(
       new CustomEvent("difficulty-selected", {

@@ -3957,7 +3957,6 @@ describe("GhostStructure Hotkeys tapping/Scrolling", () => {
   });
 });
 
-
 describe("NATIONAL human touch map actions", () => {
   function tapNational(
     nationalMode: boolean,
@@ -3994,12 +3993,18 @@ describe("NATIONAL human touch map actions", () => {
     );
     try {
       const down = new PointerEvent("pointerdown", {
-        button: 0, clientX: 122, clientY: 211,
-        pointerId: 7, pointerType: "touch",
+        button: 0,
+        clientX: 122,
+        clientY: 211,
+        pointerId: 7,
+        pointerType: "touch",
       });
       const up = new PointerEvent("pointerup", {
-        button: 0, clientX: 122, clientY: 211,
-        pointerId: 7, pointerType: "touch",
+        button: 0,
+        clientX: 122,
+        clientY: 211,
+        pointerId: 7,
+        pointerType: "touch",
       });
       handler["onPointerDown"](down);
       handler["onPointerUp"](up);
