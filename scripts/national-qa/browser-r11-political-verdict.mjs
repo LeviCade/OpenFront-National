@@ -52,6 +52,48 @@ export function verifyDistinctLiveSessions(
 }
 
 /**
+ * E5 source-only topology check after real CDP admission of A, B and C.
+ * Matching game IDs never attest a trusted NATIONAL server by themselves;
+ * E2's protected host and E6's independent host witness are separate gates.
+ */
+export function verifyThreeLivePrincipals(founder, recipient, opponent) {
+  for (const [first, second] of [
+    [founder, recipient],
+    [founder, opponent],
+    [recipient, opponent],
+  ]) {
+    const pair = verifyDistinctLiveSessions(first, second);
+    if (!pair.accepted) return pair;
+  }
+  const empire = founder.empires?.find(
+    (e) =>
+      e?.leaderId === recipient.actorId &&
+      Array.isArray(e.memberIds) &&
+      e.memberIds.includes(founder.actorId) &&
+      e.memberIds.includes(recipient.actorId),
+  );
+  if (!empire)
+    return fail("POLITICAL_THREE_PRINCIPAL_ROSTER_NOT_CURRENT", "E1/E3");
+  if (empire.memberIds.includes(opponent.actorId))
+    return fail("WAR_OPPONENT_IS_SAME_EMPIRE", "E2/E4");
+  const otherView = opponent.empires?.find((e) => e?.id === empire.id);
+  if (
+    !otherView ||
+    otherView.leaderId !== recipient.actorId ||
+    !Array.isArray(otherView.memberIds) ||
+    !otherView.memberIds.includes(founder.actorId) ||
+    !otherView.memberIds.includes(recipient.actorId) ||
+    !validTick(opponent.politicsTick) ||
+    !validTick(founder.politicsTick)
+  )
+    return fail("POLITICAL_THIRD_VIEW_ROSTER_UNVERIFIED", "E3");
+  return {
+    accepted: true,
+    reason: "THREE_LIVE_PRINCIPALS_SOURCE_TOPOLOGY_ONLY",
+  };
+}
+
+/**
  * Exact recipient-only pending accession invitation. This is a CURRENT
  * authenticated GameView packet, not an original sender's optimistic receipt.
  */
@@ -419,6 +461,10 @@ const booleanFields = new Set([
   "viaCdp",
   "recipientOnly",
   "recipientAccepted",
+  "pendingUiObserved",
+  "uiIdentityMatched",
+  "nationalMode",
+  "isSolo",
   "sameGameId",
   "targetNotEmpireMember",
   "secondAuthenticatedSession",
@@ -443,6 +489,8 @@ const numericFields = new Set([
   "tick",
   "tickBefore",
   "tickAfter",
+  "snapshotTick",
+  "issuedTick",
   "receiptTick",
   "sequence",
   "attempt",

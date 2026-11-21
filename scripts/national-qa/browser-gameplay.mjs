@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 import { connectAuthenticatedPeer } from "./browser-r11-peer.mjs";
 import {
   verifyDistinctLiveSessions,
+  verifyThreeLivePrincipals,
   verifyPrivateInvitation,
   reconcilePoliticalReceipt,
   corroboratePublicEmpire,
@@ -1313,11 +1314,32 @@ async function main() {
       ) {
         throw Error("REAL_FOUNDING_REQUEST_ID_MISSING_OR_INVALID");
       }
+      // E4 exposes a read-only pending-command identity, not an acceptance
+      // receipt. Correlate it when visible; a fast resolved command can have
+      // already cleared the pending DOM, so do not fabricate a missing view.
+      const pendingUi = await evaluate(`(() => {
+        const n=document.querySelector('[data-national-founding-request-id]');
+        return n ? {
+          requestId:n.getAttribute('data-national-founding-request-id'),
+          actorId:n.getAttribute('data-national-founding-actor-id'),
+        } : null;
+      })()`);
+      if (
+        pendingUi &&
+        (pendingUi.requestId !== submittedFounding.requestId ||
+          pendingUi.actorId !== prior.actorId)
+      )
+        throw Error("FOUNDING_UI_PENDING_IDENTITY_MISMATCH_OWNER_E4");
       record("founding-real-click-submitted", {
-        requestSuffix: submittedFounding.requestId.slice(-8),
+        requestFingerprint: createHash("sha256")
+          .update(submittedFounding.requestId)
+          .digest("hex")
+          .slice(0, 16),
         issuedTick: prior.tick,
         actorCorrelated: true,
-        source: "real EventBus via CDP-clicked founding button",
+        pendingUiObserved: pendingUi !== null,
+        uiIdentityMatched: pendingUi !== null,
+        source: "real EventBus via CDP clicked founding button",
       });
       await capture("founding-request");
       let last = null;
@@ -1377,6 +1399,7 @@ async function main() {
             attempt,
             tickBefore: prior.tick,
             tickAfter: observedState.tick,
+            snapshotTick: observedState.snapshotTick,
             paused: observedState.paused,
             matchedJournal: journal.length,
             matchedView: view.length,
@@ -1463,6 +1486,34 @@ async function main() {
     let candidateId = null;
     let accessionRequest = null;
     let accessionReceiptTick = null;
+    // The shipped Solo path has one local authority. Even a manually opened
+    // second Solo tab is a DIFFERENT LocalServer, not a trusted three-player
+    // match. Source success below cannot be promoted into browser acceptance.
+    await step("trusted-three-principal-host", async () => {
+      const observedHost = await evaluate(`(() => {
+        const g=window.__nationalQaFind('national-diplomacy-panel')?.game;
+        const c=g?.config?.()?.gameConfig?.();
+        return {
+          gameType:c?.gameType ?? null,
+          nationalMode:c?.nationalMode === true,
+          gameTick:g?.ticks?.() ?? null,
+          paused:g?.isPaused?.() ?? null,
+        };
+      })()`);
+      record("trusted-national-host-check", {
+        source: "real live GameView game configuration",
+        tick: observedHost?.gameTick ?? null,
+        paused: observedHost?.paused ?? null,
+        nationalMode: observedHost?.nationalMode === true,
+        isSolo: observedHost?.gameType === "Singleplayer",
+      });
+      if (observedHost?.gameType === "Singleplayer")
+        throw Error("NATIONAL_SOLO_CANNOT_PROVE_THREE_PRINCIPALS_OWNER_E2");
+      // Private NATIONAL is not trusted: legacy Private runs unfiltered
+      // per-client game state. E2 must supply a separately verified host
+      // capability before E5 can exercise multiplayer or expose packets.
+      throw Error("NATIONAL_TRUSTED_SERVER_MULTIPLAYER_REQUIRED_OWNER_E2");
+    });
     await step("offer-accession", async () => {
       await setPanelExpanded(true);
       const before = await primaryPoliticalObservation();
@@ -1763,8 +1814,10 @@ async function main() {
       peacePeer = await openPeer(process.env.NATIONAL_QA_PEACE_CDP_PORT);
       const founderSession = await primaryPoliticalObservation();
       const opposingSession = await peacePeer.observe();
-      const legitimate = verifyDistinctLiveSessions(
+      const recipientSession = await politicalPeer?.observe();
+      const legitimate = verifyThreeLivePrincipals(
         founderSession,
+        recipientSession,
         opposingSession,
       );
       if (!legitimate.accepted) {

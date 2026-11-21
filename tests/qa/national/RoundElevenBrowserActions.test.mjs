@@ -7,6 +7,7 @@ import {
   sanitizeAcceptanceEvent,
   sanitizePacketEvidence,
   verifyDistinctLiveSessions,
+  verifyThreeLivePrincipals,
   verifyPrivateInvitation,
 } from "../../../scripts/national-qa/browser-r11-political-verdict.mjs";
 import {
@@ -165,6 +166,45 @@ describe("R11 E5 authentic founding lifecycle and ownership", () => {
         ],
       }).status,
     ).toBe("blocked");
+  });
+
+  it("never accepts future receipts or a roster older than its receipt", () => {
+    const future = classifyFoundingEvidence({
+      ...input,
+      tick: 10,
+    });
+    expect(future).toMatchObject({
+      status: "pending",
+      reason: "FOUNDING_VIEW_BEHIND_RECEIPT",
+    });
+    const stale = classifyFoundingEvidence({
+      ...input,
+      snapshotTick: 10,
+    });
+    expect(stale).toMatchObject({
+      status: "pending",
+      reason: "FOUNDING_PUBLIC_ROSTER_MISSING",
+    });
+  });
+  it("rejects divergent accepted receipts but permits identical journal and view copies", () => {
+    expect(
+      classifyFoundingEvidence({
+        ...input,
+        results: [input.results[0], { ...input.results[0], sequence: 9 }],
+      }).reason,
+    ).toBe("FOUNDING_CONTRADICTORY_RECEIPTS");
+    expect(
+      classifyFoundingEvidence({
+        ...input,
+        results: [input.results[0], { ...input.results[0] }],
+      }).status,
+    ).toBe("accepted");
+    expect(
+      classifyFoundingEvidence({
+        ...input,
+        results: [{ ...input.results[0], accepted: undefined }],
+      }).reason,
+    ).toBe("FOUNDING_RECEIPT_STATUS_INVALID");
   });
 });
 describe("R11 E5 genuine radial and peace authority gates", () => {
@@ -644,6 +684,52 @@ describe("R11 E5 complete privacy proof fails closed on absent sender view", () 
     expect(verifyDistinctLiveSessions(a, b, "b").reason).toBe(
       "POLITICAL_SPECTATOR_OR_INACTIVE",
     );
+  });
+});
+
+
+describe("Class Four source-only A/B/C browser topology", () => {
+  const A = {
+    gameId: "same-authoritative-game",
+    actorId: "a",
+    tick: 120,
+    politicsTick: 120,
+    spectator: false,
+    spawned: true,
+    ownedTiles: 10,
+    empires: [{ id: "empire", leaderId: "b", memberIds: ["a", "b"] }],
+  };
+  const B = { ...A, actorId: "b" };
+  const C = { ...A, actorId: "c" };
+  it("requires three living distinct same-game principals and an outside enemy", () => {
+    expect(verifyThreeLivePrincipals(A, B, C).accepted).toBe(true);
+    expect(
+      verifyThreeLivePrincipals(A, B, { ...C, actorId: "b" }).accepted,
+    ).toBe(false);
+    expect(
+      verifyThreeLivePrincipals(A, B, { ...C, gameId: "other" }).accepted,
+    ).toBe(false);
+    expect(
+      verifyThreeLivePrincipals(A, B, { ...C, spectator: true }).accepted,
+    ).toBe(false);
+    expect(
+      verifyThreeLivePrincipals(A, B, {
+        ...C,
+        empires: [{ id: "empire", leaderId: "b", memberIds: ["a", "b", "c"] }],
+      }).accepted,
+    ).toBe(false);
+  });
+  it("fails closed when outside principal lacks the current public empire view", () => {
+    expect(verifyThreeLivePrincipals(A, B, { ...C, empires: [] }).reason).toBe(
+      "POLITICAL_THIRD_VIEW_ROSTER_UNVERIFIED",
+    );
+    expect(
+      verifyThreeLivePrincipals(
+        { ...A, empires: [] },
+        B,
+        C,
+      ).reason,
+    ).toBe("POLITICAL_THREE_PRINCIPAL_ROSTER_NOT_CURRENT");
   });
 });
 

@@ -107,15 +107,50 @@ export function classifyFoundingEvidence({
       owner: "E3",
     };
   }
+  if (matching.some((r) => r.accepted !== true && r.accepted !== false)) {
+    return {
+      status: "blocked",
+      reason: "FOUNDING_RECEIPT_STATUS_INVALID",
+      owner: "E3",
+    };
+  }
+  // Multiple channels may repeat the same immutable receipt, but disagreeing
+  // sequence/tick/outcome for one request must never qualify as acceptance.
+  const signatures = new Set(
+    matching.map((r) =>
+      [
+        r.type,
+        r.actorId,
+        r.recipientId,
+        r.empireId,
+        r.requestId,
+        r.tick,
+        r.sequence,
+        r.accepted,
+      ].join(":"),
+    ),
+  );
   const accepted = matching.filter((r) => r.accepted === true);
   const rejected = matching.filter((r) => r.accepted === false);
-  if (accepted.length && rejected.length) {
+  if (signatures.size > 1 || (accepted.length && rejected.length)) {
     return {
       status: "blocked",
       reason: "FOUNDING_CONTRADICTORY_RECEIPTS",
       owner: "E3",
     };
   }
+  const tickValid = Number.isSafeInteger(tick) && tick >= issuedTick;
+  if (!tickValid)
+    return { status: "blocked", reason: "GAME_TICK_INVALID", owner: "E2" };
+  // A receipt may arrive before GameView and the public roster catch up.
+  // Neither an optimistic HUD message nor an older projection is authority.
+  const receiptTick = matching.length ? matching[0].tick : null;
+  if (receiptTick !== null && tick < receiptTick)
+    return {
+      status: "pending",
+      reason: "FOUNDING_VIEW_BEHIND_RECEIPT",
+      owner: "E2/E3",
+    };
   if (rejected.length)
     return {
       status: "rejected",
@@ -131,9 +166,9 @@ export function classifyFoundingEvidence({
         Array.isArray(e.memberIds) &&
         e.memberIds.includes(actorId),
     );
-  const tickValid = Number.isSafeInteger(tick) && tick >= issuedTick;
   const projectionCurrent =
-    Number.isSafeInteger(snapshotTick) && snapshotTick >= issuedTick;
+    Number.isSafeInteger(snapshotTick) &&
+    snapshotTick >= (receiptTick ?? issuedTick);
   if (
     accepted.length &&
     roster &&
@@ -147,8 +182,6 @@ export function classifyFoundingEvidence({
       owner: null,
     };
   }
-  if (!tickValid)
-    return { status: "blocked", reason: "GAME_TICK_INVALID", owner: "E2" };
   if (tick === issuedTick && !accepted.length)
     return {
       status: "pending",
