@@ -1,0 +1,36 @@
+name: R10 E2 Wave Two Exact Formatter
+on:
+  push:
+    branches:
+      - feature/r10-e2-live-combat-levy-20261121
+    paths:
+      - .github/workflows/r10-e2-wave2-formatter.yml
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Install repository-pinned tooling
+        run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm ci --ignore-scripts
+      - name: Capture exact UTF-8 oxfmt output for E2 files
+        run: |
+          npx --no-install oxfmt --write packages/engine/src/execution/NationExecution.ts tests/national/RoundTenNationExecutionBridge.test.ts
+          git diff --check
+          node <<'NODE'
+          const fs = require('node:fs');
+          const files = [
+            'packages/engine/src/execution/NationExecution.ts',
+            'tests/national/RoundTenNationExecutionBridge.test.ts',
+          ];
+          for (let i = 0; i < files.length; i++) {
+            console.log('R10_E2_WAVE2_' + i + '=' + JSON.stringify(fs.readFileSync(files[i], 'utf8')));
+          }
+          NODE
