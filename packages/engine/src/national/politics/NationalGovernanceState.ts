@@ -18,6 +18,7 @@ const politicalCommandKind = z.enum([
   "offer-empire",
   "accept-empire",
   "transfer-crown",
+  "set-national-peace-delegation",
   "found-pact",
   "invite-pact",
   "accept-pact",

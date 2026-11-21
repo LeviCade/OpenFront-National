@@ -1,4 +1,4 @@
-name: R11 E3 one-shot formatter capture (probe branch only)
+name: R11 E3 independent combined recipient contract probe
 on:
   push:
     branches:
@@ -8,22 +8,19 @@ on:
 permissions:
   contents: read
 jobs:
-  exact:
+  authentic:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "24.15.0"
-      - name: Pinned npm 12
+      - name: Pinned npm
         run: npm install --global --ignore-scripts npm@12.1.0
       - name: Pinned install
         run: npm run inst
-      - name: Exact pinned oxfmt and capture file
-        shell: bash
-        run: |
-          npx --no-install oxfmt --write tests/national/NationalAccessionPacketsR11.test.ts
-          echo "__R11_E3_FORMAT_BEGIN__"
-          cat tests/national/NationalAccessionPacketsR11.test.ts
-          echo "__R11_E3_FORMAT_END__"
+      - name: E1 E2 E3 E4 typed integration
+        run: npm run typecheck
+      - name: Exact R11 recipient UI and live bot tests (no GPU)
+        run: npx --no-install vitest run --project node tests/national/NationalAccessionPacketsR11.test.ts tests/national/RoundElevenDelegatedPeaceWire.test.ts tests/national/NationalBotRejectionRoundtripR11.test.ts

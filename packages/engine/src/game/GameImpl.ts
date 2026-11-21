@@ -618,12 +618,17 @@ export class GameImpl implements Game {
     NationalPoliticalAuthority & NationalConflictPoliticsPort
   > | null {
     if (this._national === null) return null;
-    this._nationalAuthority ??= new PoliticalAuthorityAdapter(() => {
-      if (this._national === null) throw new Error("NATIONAL is not enabled");
-      // A defensive, validated snapshot; never give another subsystem the
-      // mutable PoliticsProjection. The callback follows restoreState().
-      return this._national.snapshot().politics;
-    });
+    this._nationalAuthority ??= new PoliticalAuthorityAdapter(
+      () => {
+        if (this._national === null) throw new Error("NATIONAL is not enabled");
+        // A defensive, validated snapshot; never give another subsystem the
+        // mutable PoliticsProjection. The callback follows restoreState().
+        return this._national.snapshot().politics;
+      },
+      (memberId, action) =>
+        action === "peace" &&
+        this._national?.hasDelegatedNationalPeace(memberId) === true,
+    );
     return this._nationalAuthority;
   }
 

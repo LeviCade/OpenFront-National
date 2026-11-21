@@ -4,6 +4,7 @@
  * console, URL and host diagnostics. None of those raw files leave the guest.
  * This publisher explicitly allowlists scalar acceptance observations.
  */
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -163,6 +164,22 @@ export function publishEvidence(root, expectedSha, kind = "release") {
     throw Error("Unrecognized GPU acceptance lane");
   }
   const publicDir = join(root, "gpu", "public", kind);
+  // Never follow a symlink or publish unrelated files left by an earlier run.
+  // A source-run evidence lane is immutable once written: reusing it is an
+  // operator error, not permission to upload mixed/stale screenshots.
+  for (const path of [
+    root,
+    join(root, "gpu"),
+    join(root, "gpu", "public"),
+    publicDir,
+  ]) {
+    if (existsSync(path) && !lstatSync(path).isDirectory()) {
+      throw Error("PUBLIC_EVIDENCE_PATH_NOT_A_DIRECTORY");
+    }
+  }
+  if (existsSync(publicDir) && readdirSync(publicDir).length !== 0) {
+    throw Error("PUBLIC_EVIDENCE_DIRECTORY_NOT_EMPTY");
+  }
   mkdirSync(publicDir, { recursive: true });
   const resultsPath = join(root, "gpu", "scenarios.jsonl");
   const lines = existsSync(resultsPath)
@@ -245,10 +262,14 @@ export function publishEvidence(root, expectedSha, kind = "release") {
         gl1.unmaskedRenderer,
       ) &&
       summary.hardware.renderer !== null;
-    const signed =
-      kind === "release" &&
+    // Browser JSON is guest-originated. Its "accepted" event is a CLAIM,
+    // not a controller signature checked against a host-owned trust root.
+    // Only verify-independent-release.mjs, running AFTER guest disposal,
+    // can turn a complete release report into an independently certified PASS.
+    const browserClaimedSignedProof =
       raw?.hardwareAcceptanceRequired === true &&
       summary.hardware.proofAccepted === true;
+    const signed = false;
     const laneMatches =
       raw?.hardwareAcceptanceRequired === (kind === "release");
     const viewportMatches = actualViewport === expectedViewport;
@@ -265,14 +286,14 @@ export function publishEvidence(root, expectedSha, kind = "release") {
       (kind === "diagnostic" || signed);
     if (reportedPass && !scenarioAccepted) valid = false;
     if (!statusExitMatches) valid = false;
-    const outcome = !status
+    let outcome = !status
       ? "NOT_RUN"
       : reportedPass
         ? scenarioAccepted
           ? "PASS"
           : "UNVERIFIED"
         : "FAIL";
-    const reason = !status
+    let reason = !status
       ? "PROCESS_NOT_RUN"
       : !raw
         ? "REPORT_MISSING_OR_INVALID"
@@ -295,9 +316,11 @@ export function publishEvidence(root, expectedSha, kind = "release") {
                       ? "SIGNED_WITNESS_NOT_VERIFIED"
                       : "NONE";
     summary.hardware.diagnosticObserved = physicalDiagnostic;
+    summary.hardware.browserClaimedSignedProof = browserClaimedSignedProof;
     summary.hardware.proofAccepted = signed;
     summary.hardware.verdict = signed ? summary.hardware.verdict : null;
     const images = [];
+    const screenshotSha256 = {};
     if (existsSync(origin) && lstatSync(origin).isDirectory()) {
       const outputDir = join(publicDir, mode);
       mkdirSync(outputDir, { recursive: true });
@@ -319,7 +342,13 @@ export function publishEvidence(root, expectedSha, kind = "release") {
           continue;
         copyFileSync(path, join(outputDir, name));
         images.push(name);
+        screenshotSha256[name] = createHash("sha256").update(png).digest("hex");
       }
+    }
+    if (reportedPass && images.length === 0 && outcome === "PASS") {
+      valid = false;
+      outcome = "UNVERIFIED";
+      reason = "SCREENSHOT_MISSING";
     }
     result.modes[mode] = {
       scenario: mode,
@@ -338,13 +367,14 @@ export function publishEvidence(root, expectedSha, kind = "release") {
       screenshotCount: images.length,
       ...summary,
       screenshotNames: images,
+      screenshotSha256,
     };
     writeFileSync(
       join(publicDir, mode + ".json"),
       JSON.stringify(result.modes[mode], null, 2) + "\n",
     );
   }
-  result.schema = 2;
+  result.schema = 3;
   result.lane = kind;
   result.exactCandidateSha = SHA.test(expectedSha ?? "") ? expectedSha : null;
   result.allModesPass =

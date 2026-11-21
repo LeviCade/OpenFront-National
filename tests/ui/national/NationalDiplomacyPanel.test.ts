@@ -181,10 +181,17 @@ describe("NATIONAL player-facing founding", () => {
       expect.arrayContaining([
         expect.stringContaining("Non-aggression pact"),
         expect.stringContaining("Mutual defense pact"),
-        expect.stringContaining("Empire accession"),
-        expect.stringContaining("Transfer crown"),
       ]),
     );
+    // Political roles are now available when authorized, not permanently
+    // disabled cosmetic placeholders. A nation without an invitation cannot
+    // accept and cannot claim emperor powers.
+    expect(
+      element.querySelector<HTMLButtonElement>("#national-accept-accession")!
+        .disabled,
+    ).toBe(true);
+    expect(element.querySelector("#national-offer-accession")).toBeNull();
+    expect(element.querySelector("#national-transfer-crown")).toBeNull();
     const toggle = element.querySelector<HTMLButtonElement>(
       'button[aria-controls="national-diplomacy-content"]',
     )!;

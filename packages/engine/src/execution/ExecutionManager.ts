@@ -118,6 +118,20 @@ export class Executor {
           },
           intent.requestId ?? null,
         );
+      case "national_set_peace_delegation":
+        // The stamped clientID has ALREADY resolved the trusted actor above.
+        // The named empire/member are requested targets, never credentials.
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          {
+            kind: "set-national-peace-delegation",
+            empireId: intent.empireId,
+            memberId: intent.memberId,
+            enabled: intent.enabled,
+          },
+          intent.requestId ?? null,
+        );
       case "national_declare_war":
         return new NationalWarExecution(
           player,

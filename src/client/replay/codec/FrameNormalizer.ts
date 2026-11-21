@@ -104,6 +104,9 @@ export const VIEW_DATA_ROUTING: Record<
   // Future historical politics require an explicit codec version migration.
   nationalPolitics: "dropped",
   nationalCommandResults: "dropped",
+  // Private actor-scoped accession offers must NEVER enter replay frames:
+  // seek/reconnect cannot resurrect or disclose a previous invitation.
+  nationalAccessionOffers: "dropped",
   tick: "normalizer",
   updates: "normalizer",
   packedTileUpdates: "normalizer",

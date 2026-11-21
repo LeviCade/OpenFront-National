@@ -10,6 +10,21 @@ import type {
 } from "../snapshot/SnapshotContext";
 
 /**
+ * E1 may be integrated in a different engineer PR. E2 owns the complete
+ * serialized wire/snapshot command shape NOW. Once assembled, E1's
+ * NationalCommand includes this exact variant and E1 Game enforces its law.
+ */
+type NationalPeaceDelegationCommand = {
+  kind: "set-national-peace-delegation";
+  empireId: string;
+  memberId: string;
+  enabled: boolean;
+};
+type ExecutableNationalCommand =
+  | NationalCommand
+  | NationalPeaceDelegationCommand;
+
+/**
  * M0 authenticated NATIONAL command path.
  * Executor looks up actor by server-stamped clientID; a client cannot supply
  * another player's ID in this command. The live game rechecks identity.
@@ -22,7 +37,7 @@ export class NationalFoundEmpireExecution implements Execution {
     private actor: Player,
     private empireId: string,
     /** Optional E1-owned political command; legacy founding remains valid. */
-    private politicalCommand: NationalCommand | null = null,
+    private politicalCommand: ExecutableNationalCommand | null = null,
     private requestId: string | null = null,
   ) {}
 
@@ -48,7 +63,13 @@ export class NationalFoundEmpireExecution implements Execution {
       } else {
         const result = this.game.performNationalPoliticalCommandWithOutcome(
           this.actor,
-          this.politicalCommand,
+          // The canonical E1 Game port knows this variant when E1 PR #69
+          // is assembled; this E2 branch independently types it for snapshots.
+          // A type bridge cannot grant authority: GameImpl revalidates actor.
+          this.politicalCommand as Exclude<
+            NationalCommand,
+            { kind: "found-empire" }
+          >,
           this.requestId,
         );
         if (!result.accepted)
@@ -112,6 +133,12 @@ const NationalFoundEmpireStateSchema = z.object({
         kind: z.literal("transfer-crown"),
         empireId: z.string(),
         successorId: z.string(),
+      }),
+      z.object({
+        kind: z.literal("set-national-peace-delegation"),
+        empireId: z.string(),
+        memberId: z.string(),
+        enabled: z.boolean(),
       }),
       z.object({
         kind: z.literal("found-pact"),
