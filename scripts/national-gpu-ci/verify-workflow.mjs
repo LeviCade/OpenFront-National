@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // E6 workflow contract: cheap, no GPU, node modules, or remote CI required.
-import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const source = readFileSync(
-  new URL("../../.github/workflows/national-hardware-acceptance.yml", import.meta.url),
+  new URL(
+    "../../.github/workflows/national-hardware-acceptance.yml",
+    import.meta.url,
+  ),
   "utf8",
 );
 
@@ -13,11 +16,16 @@ void test("workflow is manual-only and uses exactly one trusted GPU slot", () =>
   assert.match(source, /^on:\n  workflow_dispatch:/m);
   assert.match(source, /^  gpu-browser:\s*$/m);
   assert.deepEqual(
-    [...source.split(/^jobs:\s*$/m)[1].matchAll(/^  ([a-z][a-z0-9-]*):\s*$/gm)].map((m) => m[1]),
+    [
+      ...source.split(/^jobs:\s*$/m)[1].matchAll(/^  ([a-z][a-z0-9-]*):\s*$/gm),
+    ].map((m) => m[1]),
     ["gpu-browser"],
   );
   assert.match(source, /^    runs-on: skybot-ci-gpu$/m);
-  assert.doesNotMatch(source, /runs-on: \[self-hosted, gpu\]|\bmatrix:|pull_request:|push:/);
+  assert.doesNotMatch(
+    source,
+    /runs-on: \[self-hosted, gpu\]|\bmatrix:|pull_request:|push:/,
+  );
   assert.match(source, /^  contents: read$/m);
 });
 
@@ -26,12 +34,13 @@ void test("source gate pins immutable SHA and both ancestry directions", () => {
     "42e2b5d0a6372737b78178e5be49da7b76383d0a",
     "stage3/integration-20261115",
     "stage3/round6-combined-acceptance-20261116",
-    "git merge-base --is-ancestor \"$BASE_SHA\" \"$NATIONAL_GPU_CANDIDATE_SHA\"",
-    "git merge-base --is-ancestor \"$NATIONAL_GPU_CANDIDATE_SHA\" \"$staging\"",
-    "test \"$GITHUB_REF\" = refs/heads/main",
-    "git checkout --detach \"$NATIONAL_GPU_CANDIDATE_SHA\"",
+    'git merge-base --is-ancestor "$BASE_SHA" "$NATIONAL_GPU_CANDIDATE_SHA"',
+    'git merge-base --is-ancestor "$NATIONAL_GPU_CANDIDATE_SHA" "$staging"',
+    'test "$GITHUB_REF" = refs/heads/main',
+    'git checkout --detach "$NATIONAL_GPU_CANDIDATE_SHA"',
     "persist-credentials: false",
-  ]) assert.ok(source.includes(required), "missing source gate: " + required);
+  ])
+    assert.ok(source.includes(required), "missing source gate: " + required);
 });
 
 void test("one install then all four real E5 browser scenarios", () => {
@@ -49,9 +58,14 @@ void test("one install then all four real E5 browser scenarios", () => {
     "node scripts/national-qa/browser-gameplay.mjs",
     "scenarios.jsonl",
     "if: always()",
-  ]) assert.ok(source.includes(required), "missing required stage: " + required);
+  ])
+    assert.ok(source.includes(required), "missing required stage: " + required);
   assert.equal((source.match(/npm run inst/g) ?? []).length, 1);
-  assert.equal((source.match(/node scripts\/national-qa\/browser-gameplay\.mjs/g) ?? []).length, 1);
+  assert.equal(
+    (source.match(/node scripts\/national-qa\/browser-gameplay\.mjs/g) ?? [])
+      .length,
+    1,
+  );
 });
 
 void test("hardware proof cannot be forged inside disposable guest", () => {
@@ -61,7 +75,11 @@ void test("hardware proof cannot be forged inside disposable guest", () => {
     "NATIONAL_GPU_ATTESTATION_CHALLENGE",
     "trusted host-signed attestation not provisioned",
     "guest-inventory.txt",
-  ]) assert.ok(source.includes(required), "missing proof gate: " + required);
-  assert.doesNotMatch(source, /swiftshader|--disable-gpu|--enable-unsafe-swiftshader/);
+  ])
+    assert.ok(source.includes(required), "missing proof gate: " + required);
+  assert.doesNotMatch(
+    source,
+    /swiftshader|--disable-gpu|--enable-unsafe-swiftshader/,
+  );
   assert.doesNotMatch(source, /openssl .*genpkey|ssh-keygen .*ed25519/);
 });
