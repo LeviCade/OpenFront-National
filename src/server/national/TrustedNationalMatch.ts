@@ -20,9 +20,6 @@ import {
   type Turn,
 } from "@openfront/engine-api/Schemas";
 import { GameRunner } from "@openfront/engine/GameRunner";
-import { encodeNationalViewPayload } from "@openfront/shared/NationalViewWire";
-import type { ServerNationalViewMessage } from "@openfront/shared/WireSchemas";
-import { encodeServerMessage } from "@openfront/shared/ZbinWire";
 import { createHash, randomUUID } from "node:crypto";
 import WebSocket from "ws";
 import type { Client } from "../Client";
@@ -108,57 +105,38 @@ export class TrustedNationalMatch {
     }
     // Register projections only after validating every seat. The GameRunner
     // itself verifies clientID -> real PlayerID on each subsequent tick.
-    for (const client of admittedPlayers) {
-      // The Client object and socket originate from GameServer's verified
-      // roster. Capture this *socket*, not merely the account's reusable ID:
-      // reconnecting through another ws cannot inherit stale receipt state.
-      const admittedSocket = client.ws;
-      const sessionId = randomUUID(); // server minted, never transmitted
-      const active = () =>
-        this.seats.get(client.clientID) === client &&
-        client.ws === admittedSocket &&
-        admittedSocket.readyState === WebSocket.OPEN &&
-        !client.spectator &&
-        !!client.claims &&
-        !!client.publicId;
-      this.activeSocket.set(client.clientID, active);
-      runner.registerTrustedNationalRecipient(
-        client.clientID,
-        {
-          clientID: client.clientID,
-          sessionId,
-          isConnected: active,
-          isSpectator: () => client.spectator,
-        },
-        (packet) => {
-          // GameRunner has already called E3 session.projectGameUpdate.
-          // Packet is an independent recipient-filtered object, not Game.
-          if (!active()) return;
-          // Canonical authenticated server→socket emission: NEVER a raw Turn,
-          // GameRunner frame, GameSnapshot or E1 private journal. Only E3's
-          // recipient-checked packet may reach this exact admitted socket.
-          try {
-            const payload = encodeNationalViewPayload(packet);
-            const wire = encodeServerMessage(
-              {
-                type: "national_view",
-                payload,
-              } satisfies ServerNationalViewMessage,
-              undefined,
-            );
-            admittedSocket.send(wire);
-            // Existing match acceptance callback is observation/telemetry,
-            // not an alternative raw network delivery channel.
-            this.deliver(client, packet);
-          } catch {
-            // A dead socket or oversize/invalid payload must fail closed,
-            // without leaking a sensitive serialization error or ending the
-            // canonical Game tick for the other authenticated seats.
-            this.revokeRecipient(client);
-          }
-        },
-      );
-    }
+    for (const client of admittedPlayers) this.registerSeat(client);
+  }
+
+  /** E2's verified Client and original physical socket are authoritative.
+   * A reconnect always receives a NEW E3 cursor and server-minted nonce.
+   */
+  private registerSeat(client: Client): void {
+    const admittedSocket = client.ws;
+    const sessionId = randomUUID();
+    const active = () =>
+      this.seats.get(client.clientID) === client &&
+      client.ws === admittedSocket &&
+      admittedSocket.readyState === WebSocket.OPEN &&
+      !client.spectator &&
+      !!client.claims &&
+      !!client.publicId;
+    this.activeSocket.set(client.clientID, active);
+    this.runner.registerTrustedNationalRecipient(
+      client.clientID,
+      {
+        clientID: client.clientID,
+        sessionId,
+        isConnected: active,
+        isSpectator: () => client.spectator,
+      },
+      (packet) => {
+        // The runner already passed the host-only frame through E3's ONE
+        // principal-bound projection. E2 GameServer alone owns encoding and
+        // sending the existing national_projection wire variant.
+        if (active()) this.deliver(client, packet);
+      },
+    );
   }
 
   /**
@@ -227,6 +205,39 @@ export class TrustedNationalMatch {
       .update("\n")
       .update(JSON.stringify(this.committed))
       .digest("hex");
+  }
+
+  /** E2 GameServer host-only disconnect status; never client admin intent. */
+  recordServerDisconnect(clientID: ClientID, disconnected: boolean): void {
+    if (!this.seats.has(clientID)) return;
+    this.intents.push(StampedIntentSchema.parse({
+      type: "mark_disconnected",
+      clientID,
+      isDisconnected: disconnected,
+    }));
+  }
+
+  currentTick(): number {
+    return this.runner.game.ticks();
+  }
+
+  /** New physical socket for the SAME verified account/seat. Historical
+   * command receipts must NOT replay, current pending invitations may.
+   */
+  resumeRecipient(client: Client): boolean {
+    if (
+      this.seats.get(client.clientID) !== client ||
+      !client.claims ||
+      !client.publicId ||
+      client.spectator ||
+      client.ws.readyState !== WebSocket.OPEN ||
+      this.runner.game.playerByClientID(client.clientID)?.type() !==
+        PlayerType.Human
+    ) return false;
+    this.runner.removeTrustedNationalRecipient(client.clientID);
+    this.activeSocket.delete(client.clientID);
+    this.registerSeat(client);
+    return true;
   }
 
   /** Revokes private E3 delivery. Already-committed turns remain canonical. */

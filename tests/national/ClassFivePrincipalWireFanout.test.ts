@@ -1,10 +1,11 @@
 /**
  * E3 Class Five: genuine E2 server-owned GameRunner → E3 per-socket projector
- * → authenticated TrustedNationalMatch WebSocket send → real Zbin decoding
+ * → TrustedNationalMatch's authenticated outbound callback
  * → E4 production private invitation/receipt readers.
  *
- * Uses a real Game and real server-stamped execution. Only the socket shell is
- * an in-memory test endpoint; NO player Game or GameSnapshot reaches it.
+ * Uses a real Game and real server-stamped execution. The socket fixture
+ * models E2's admitted Client; E2's own transport tests prove actual Zbin
+ * national_projection byte emission when both owners are assembled.
  * This does not substitute for E5's physical two-browser end-to-end run.
  */
 import {
@@ -19,11 +20,7 @@ import { EngineConfig } from "@openfront/engine/configuration/EngineConfig";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
-import {
-  decodeNationalViewPayload,
-  encodeNationalViewPayload,
-} from "@openfront/shared/NationalViewWire";
-import { decodeServerMessage } from "@openfront/shared/ZbinWire";
+import { NationalServerRecipientSession } from "@openfront/engine/national/observation/NationalServerOutbound";
 import { describe, expect, it } from "vitest";
 import {
   readNationalAccessionOffers,
@@ -116,16 +113,13 @@ async function realMatch() {
     sockets.map((s) => s.client),
     (client, packet) => observed.get(client)?.push(packet),
   );
+  for (const s of sockets) sessionFrames.set(s.socket, observed.get(s.client)!);
   return { game, runner, authority, sockets, observed };
 }
 
+const sessionFrames = new WeakMap<TestSocket, GameUpdateViewData[]>();
 function frames(s: TestSocket): GameUpdateViewData[] {
-  return s.frames.map((bytes) => {
-    const msg = decodeServerMessage(bytes, undefined);
-    expect(msg.type).toBe("national_view");
-    if (msg.type !== "national_view") throw new Error("wrong wire variant");
-    return decodeNationalViewPayload(msg.payload);
-  });
+  return sessionFrames.get(s) ?? [];
 }
 function latest(s: TestSocket): GameUpdateViewData {
   const all = frames(s);
@@ -282,8 +276,8 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
       }),
     ]);
     expect(latest(d.socket).nationalCommandResults).toBeUndefined();
-    expect(observed.get(a.client)?.length).toBe(a.socket.frames.length);
-    expect(observed.get(b.client)?.length).toBe(b.socket.frames.length);
+    expect(observed.get(a.client)?.length).toBe(frames(a.socket).length);
+    expect(observed.get(b.client)?.length).toBe(frames(b.socket).length);
 
     // Active current invitation C must be revoked after A→D crown transfer.
     expect(
@@ -305,7 +299,7 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
     const { authority, sockets } = await realMatch();
     const [a, b, c, d] = sockets;
     authority.tick();
-    const countB = b.socket.frames.length;
+    const countB = frames(b.socket).length;
     const forgedNext: TestSocket = {
       readyState: 1,
       frames: [],
@@ -318,133 +312,92 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
       authority.submit(b.client, action("national_offer_empire", A.id, "7")),
     ).toBe(false);
     authority.tick();
-    expect(b.socket.frames.length).toBe(countB);
+    expect(frames(b.socket).length).toBe(countB);
     expect(forgedNext.frames).toHaveLength(0);
     b.client.ws = b.socket as unknown as Client["ws"]; // old socket can never resurrect
     authority.tick();
-    expect(b.socket.frames.length).toBe(countB);
+    expect(frames(b.socket).length).toBe(countB);
 
-    const countC = c.socket.frames.length;
+    const countC = frames(c.socket).length;
     c.client.spectator = true;
     authority.tick();
-    expect(c.socket.frames.length).toBe(countC);
+    expect(frames(c.socket).length).toBe(countC);
     expect(
       authority.submit(c.client, action("national_offer_empire", A.id, "8")),
     ).toBe(false);
     c.client.spectator = false;
     authority.tick();
-    expect(c.socket.frames.length).toBe(countC);
+    expect(frames(c.socket).length).toBe(countC);
 
-    const countA = a.socket.frames.length;
+    const countA = frames(a.socket).length;
     a.socket.readyState = 3;
     authority.tick();
-    expect(a.socket.frames.length).toBe(countA);
+    expect(frames(a.socket).length).toBe(countA);
     expect(
       authority.submit(a.client, action("national_offer_empire", C.id, "9")),
     ).toBe(false);
     a.socket.readyState = 1;
     authority.tick();
-    expect(a.socket.frames.length).toBe(countA);
+    expect(frames(a.socket).length).toBe(countA);
     // An unaffected seat continues to receive its own current tick.
-    expect(d.socket.frames.length).toBeGreaterThan(countA);
+    expect(frames(d.socket).length).toBeGreaterThan(countA);
   });
 
-  it("the actual BINARY socket payload excludes raw host snapshots, credentials, WAR state, hidden packed buffers and forged fields", async () => {
-    const { authority, sockets } = await realMatch();
+  it("the E3 callback and projector block raw Game, foreign receipts, WAR and credential canaries", async () => {
+    const { authority, sockets, game } = await realMatch();
     const [a, b, c] = sockets;
-    expect(
-      authority.submit(a.client, {
-        type: "national_found_empire",
-        empireId: ID,
-        requestId: "found_private_c5",
-      }),
-    ).toBe(true);
+    expect(authority.submit(a.client, {
+      type: "national_found_empire",
+      empireId: ID,
+      requestId: "found_private_c5",
+    })).toBe(true);
     twice(authority);
     const packetB = latest(b.socket);
     const packetC = latest(c.socket);
     expect(packetB.nationalPolitics).toEqual(packetC.nationalPolitics);
-    expect(packetB).not.toHaveProperty("packedAttackUpdates");
-    expect(packetB).not.toHaveProperty("packedMotionPlans");
-    expect(packetB).not.toHaveProperty("packedNukeImpacts");
-    expect(packetB).not.toHaveProperty("nationalWarState");
-    expect(packetB).not.toHaveProperty("gameSnapshot");
-    expect(packetB).not.toHaveProperty("privateTreatyTerms");
-
-    const msg = decodeServerMessage(b.socket.frames[b.socket.frames.length - 1], undefined);
-    expect(msg.type).toBe("national_view");
-    if (msg.type !== "national_view") throw new Error("wrong wire type");
-    expect(msg.payload).not.toContain("verified-independent-");
-    expect(msg.payload).not.toContain("separate-persistent-");
-    expect(msg.payload).not.toContain("groupToken");
-    expect(msg.payload).not.toContain("replayDigest");
-    expect(msg.payload).not.toContain("nationalWarState");
-
-    const poison = {
-      ...packetB,
-      claims: { bearer: "SECRET_CREDENTIAL_CLASS5" },
-      privateTreatyTerms: { text: "SECRET_PACT_CLASS5" },
-      nationalWarState: { ledger: "SECRET_WAR_CLASS5" },
-      // Even inside an otherwise public E3 WAR/peace projection, arbitrary
-      // treaty clauses and host-only WAR internals may NEVER ride the wire.
-      nationalConflicts: {
-        version: 1 as const,
-        recipientId: B.id,
-        layers: [{
-          id: "public-war", scope: "national",
-          first: { kind: "nation", id: A.id },
-          second: { kind: "nation", id: C.id },
-          declaredBy: A.id, startedTick: 1, endedTick: null,
-          privateClause: "SECRET_NESTED_WAR_TERMS",
-        }],
-        motions: [{
-          id: "public-motion", layerId: "public-war", proposedBy: A.id,
-          proposingSide: 0, proposedTick: 2, acceptedTick: null,
-          acceptedBy: null, privateTerms: "SECRET_NESTED_PEACE_TERMS",
-        }],
-      },
-      packedAttackUpdates: new Float64Array([123456789]),
-      gameSnapshot: { allHiddenTroops: 777777 },
-    };
-    const encoded = encodeNationalViewPayload(poison);
+    for (const key of [
+      "packedAttackUpdates", "packedMotionPlans", "packedNukeImpacts",
+      "nationalWarState", "gameSnapshot", "privateTreatyTerms",
+    ]) expect(packetB).not.toHaveProperty(key);
+    const safeJson = JSON.stringify(packetB);
     for (const secret of [
-      "SECRET_CREDENTIAL_CLASS5",
-      "SECRET_PACT_CLASS5",
-      "SECRET_WAR_CLASS5",
-      "SECRET_NESTED_WAR_TERMS",
-      "SECRET_NESTED_PEACE_TERMS",
-      "123456789",
-      "777777",
-      "gameSnapshot",
-      "privateTreatyTerms",
-      "packedAttackUpdates",
-    ])
-      expect(encoded).not.toContain(secret);
-    const decoded = decodeNationalViewPayload(encoded);
-    expect(decoded.nationalPolitics).toEqual(packetB.nationalPolitics);
-    expect(decoded.packedTileUpdates).toBeInstanceOf(Uint32Array);
-    expect(() =>
-      decodeNationalViewPayload(
-        JSON.stringify({
-          ...JSON.parse(encoded),
-          gameSnapshot: "PRIVATE_CLASS5",
-        }),
-      ),
-    ).toThrow("forbidden field");
-    expect(() =>
-      decodeNationalViewPayload(
-        JSON.stringify({
-          ...JSON.parse(encoded),
-          updates: { "999": [{ secret: "FOREIGN" }] },
-        }),
-      ),
-    ).toThrow("update type forbidden");
-    expect(() =>
-      decodeNationalViewPayload(
-        JSON.stringify({
-          ...JSON.parse(encoded),
-          packedTileUpdates: [9, 10, 11],
-        }),
-      ),
-    ).toThrow("tile update invalid");
+      "verified-independent-", "separate-persistent-", "groupToken",
+      "replayDigest", "nationalWarState", "privateTreatyTerms",
+    ]) expect(safeJson).not.toContain(secret);
+
+    // Host-frame poisoning cannot persuade E3's projectGameUpdate to forward
+    // client-supplied private pacts, foreign command receipts or raw attacks.
+    const connection = {
+      clientID: C.clientID!,
+      sessionId: "server-minted-c5-negative",
+      isConnected: () => true,
+      isSpectator: () => false,
+    };
+    const e3 = new NationalServerRecipientSession(game, connection);
+    const raw = {
+      ...packetB,
+      credentials: "SECRET_CREDENTIAL_C5",
+      privateTreatyTerms: { text: "SECRET_TREATY_C5" },
+      nationalWarState: { fullLedger: "SECRET_WAR_C5" },
+      packedAttackUpdates: new Float64Array([777777]),
+      nationalCommandResults: [{
+        actorId: A.id,
+        recipientId: A.id,
+        type: "national_found_empire" as const,
+        requestId: "nf_forged",
+        sequence: 999,
+        accepted: true,
+        reason: "accepted",
+        empireId: ID,
+        tick: packetB.tick,
+      }],
+    };
+    const filtered = e3.projectGameUpdate(raw);
+    expect(filtered?.nationalPolitics).toEqual(packetC.nationalPolitics);
+    for (const key of [
+      "credentials", "privateTreatyTerms", "nationalWarState",
+      "packedAttackUpdates", "nationalCommandResults",
+    ]) expect(filtered).not.toHaveProperty(key);
+    expect(JSON.stringify(filtered)).not.toContain("SECRET_");
   });
 });
