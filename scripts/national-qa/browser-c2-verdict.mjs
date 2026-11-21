@@ -330,7 +330,7 @@ export function classifySoloOrLegacy({
     hardwareReason: "E6_INDEPENDENT_PHYSICAL_HOST_WITNESS_REQUIRED",
     firstFailure: safeCode
       ? error(safeCode, stageOwner)
-      : failures[0] ?? null,
+      : (failures[0] ?? null),
     checksFailed: failures,
     completedStages: completed.slice(0, 24),
     firstFailedStage: firstFailure?.stage ?? report?.errors?.[0]?.stage ?? null,

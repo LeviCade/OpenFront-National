@@ -161,10 +161,12 @@ describe("C2 E5 proof rejects optimistic browser and release claims", () => {
   });
   it("routes an actual sanitized WebGL failure to E6 before missing downstream stages", () => {
     const report = proof("national-solo-desktop");
-    report.errors = [{
-      stage: "start",
-      error: "REAL_CHROMIUM_GPU_REQUIRED: WebGL gate",
-    }];
+    report.errors = [
+      {
+        stage: "start",
+        error: "REAL_CHROMIUM_GPU_REQUIRED: WebGL gate",
+      },
+    ];
     report.events.push({ name: "stage-failed", stage: "start" });
     const verdict = result("national-solo-desktop", report);
     expect(verdict.gameplay).toBe("FAIL");
@@ -180,8 +182,11 @@ describe("C2 E5 proof rejects optimistic browser and release claims", () => {
     report.console = [{ severity: "exception" }];
     const verdict = result("legacy-desktop", report);
     expect(verdict.gameplay).toBe("FAIL");
-    expect(verdict.checksFailed.some((entry) =>
-      entry.code === "BROWSER_CONSOLE_ERRORS_UNREVIEWED")).toBe(true);
+    expect(
+      verdict.checksFailed.some(
+        (entry) => entry.code === "BROWSER_CONSOLE_ERRORS_UNREVIEWED",
+      ),
+    ).toBe(true);
   });
   it("rejects a software renderer even when browser draws", () => {
     const report = proof("legacy-desktop");
