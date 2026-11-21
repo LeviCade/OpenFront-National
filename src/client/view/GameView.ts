@@ -346,7 +346,7 @@ export class GameView implements GameLike {
       this._nationalConflicts =
         this._nationalPolitics === null
           ? null
-          : readNationalConflicts(nationalPacket.nationalConflicts, currentActorId);
+          : readNationalConflicts(nationalPacket.nationalConflicts, currentActorId, gu.tick);
       this._nationalConflictsTick =
         this._nationalConflicts === null ? null : gu.tick;
 

@@ -154,6 +154,10 @@ export class NationalDiplomacyPanel extends LitElement {
       if (
         game?.gameID() !== prior.gameId ||
         player?.id() !== prior.actorId ||
+        game?.config().isReplay() ||
+        game?.isSpectator() ||
+        player?.isAlive() !== true ||
+        game?.inSpawnPhase() ||
         !layer
       ) {
         this.confirmedDiplomacy = null;
@@ -161,7 +165,12 @@ export class NationalDiplomacyPanel extends LitElement {
           "Current authoritative WAR state no longer verifies the previous action.";
       } else if (
         (prior.type === "national_declare_war" && layer.endedTick !== null) ||
-        (prior.type === "national_propose_peace" && (!motion || motion.acceptedTick !== null))
+        (prior.type === "national_propose_peace" &&
+          (!motion || motion.acceptedTick !== null)) ||
+        (prior.type === "national_accept_peace" &&
+          (!motion ||
+            motion.acceptedTick === null ||
+            layer.endedTick !== motion.acceptedTick))
       ) {
         this.confirmedDiplomacy = null;
         this.diplomacyStatus =

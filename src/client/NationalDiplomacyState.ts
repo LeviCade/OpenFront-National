@@ -313,9 +313,11 @@ function validConflictSide(value: unknown): value is NationalConflictSide {
 export function readNationalConflicts(
   source: unknown,
   authenticatedActorId: string | null,
+  packetTick?: number,
 ): NationalPublicConflicts | null {
   if (
     !authenticatedActorId ||
+    (packetTick !== undefined && (!Number.isSafeInteger(packetTick) || packetTick < 0)) ||
     !record(source) ||
     source.version !== 1 ||
     source.recipientId !== authenticatedActorId ||
@@ -342,9 +344,11 @@ export function readNationalConflicts(
       !validNationalWarReference(row.declaredBy) ||
       !Number.isSafeInteger(row.startedTick) ||
       (row.startedTick as number) < 0 ||
+      (packetTick !== undefined && (row.startedTick as number) > packetTick) ||
       (row.endedTick !== null &&
         (!Number.isSafeInteger(row.endedTick) ||
-          (row.endedTick as number) < (row.startedTick as number)))
+          (row.endedTick as number) < (row.startedTick as number) ||
+          (packetTick !== undefined && (row.endedTick as number) > packetTick)))
     ) return null;
     seenLayers.add(row.id);
     layers.push({
@@ -372,9 +376,11 @@ export function readNationalConflicts(
       (row.proposingSide !== 0 && row.proposingSide !== 1) ||
       !Number.isSafeInteger(row.proposedTick) ||
       (row.proposedTick as number) < 0 ||
+      (packetTick !== undefined && (row.proposedTick as number) > packetTick) ||
       (row.acceptedTick !== null &&
         (!Number.isSafeInteger(row.acceptedTick) ||
-          (row.acceptedTick as number) < (row.proposedTick as number))) ||
+          (row.acceptedTick as number) < (row.proposedTick as number) ||
+          (packetTick !== undefined && (row.acceptedTick as number) > packetTick))) ||
       (row.acceptedBy !== null &&
         (typeof row.acceptedBy !== "string" ||
           !validNationalWarReference(row.acceptedBy))) ||
@@ -467,7 +473,7 @@ export function confirmedNationalDiplomacy(
     motion.acceptedTick >= attempt.issuedTick &&
     motion.acceptedTick <= result.tick &&
     layer.endedTick === motion.acceptedTick
-  ) return `Peace accepted by game: hostilities ended for war ${layer.id}.`;
+  ) return `Peace accepted by game: war layer ${layer.id} ended. Other war layers may remain active.`;
   return null;
 }
 
