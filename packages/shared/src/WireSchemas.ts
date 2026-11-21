@@ -52,8 +52,7 @@ export type ServerMessage =
   | ServerLobbyInfoMessage
   | ServerNewLobbyMessage
   | ServerPongMessage
-  | ServerRedirectMessage
-  | ServerNationalCapabilityMessage;
+  | ServerRedirectMessage;
 
 export type ServerTurnMessage = z.infer<typeof ServerTurnMessageSchema>;
 
@@ -78,7 +77,6 @@ export type ServerLobbyInfoMessage = z.infer<
 export type ServerNewLobbyMessage = z.infer<typeof ServerNewLobbyMessageSchema>;
 
 export type ServerRedirectMessage = z.infer<typeof ServerRedirectMessageSchema>;
-export type ServerNationalCapabilityMessage = z.infer<typeof ServerNationalCapabilityMessageSchema>;
 
 export type ClientSendWinnerMessage = z.infer<typeof ClientSendWinnerSchema>;
 
@@ -588,15 +586,6 @@ export const ServerRedirectMessageSchema = z.object({
   gameID: ID,
 });
 
-/** A trusted server may authorize or revoke one exact Private NATIONAL seat. */
-export const ServerNationalCapabilityMessageSchema = z.object({
-  type: z.literal("national_capability"),
-  version: z.literal(1),
-  gameID: ID,
-  clientID: ID,
-  active: z.boolean(),
-});
-
 export const ServerMessageSchema = zb.discriminatedUnion("type", [
   ServerTurnMessageSchema,
   ServerPrestartMessageSchema,
@@ -609,8 +598,6 @@ export const ServerMessageSchema = zb.discriminatedUnion("type", [
   ServerPongMessageSchema,
   // Appended, never inserted: variant order is the wire tag (zbin/README.md).
   ServerRedirectMessageSchema,
-  // Append-only: the zbin discriminant index is the on-wire type tag.
-  ServerNationalCapabilityMessageSchema,
 ]);
 
 //
