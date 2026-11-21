@@ -112,12 +112,14 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
     // Private websocket rooms do not yet have a trusted authoritative Game
     // host. A browser worker contains every nation's raw state, so enabling
     // NATIONAL there would bypass recipient-private packet projection.
-    await expect(
-      setup("plains", {
-        nationalMode: true,
-        gameType: GameType.Private,
-      }, founders.slice(0, 2)),
-    ).rejects.toThrow("NATIONAL requires unranked Solo Free For All");
+    const privateNational = setup(
+      "plains",
+      { nationalMode: true, gameType: GameType.Private },
+      founders.slice(0, 2),
+    );
+    await expect(privateNational).rejects.toThrow(
+      "NATIONAL requires unranked Solo Free For All",
+    );
   });
 
   it("executes an authenticated founding click through ordinary GameRunner turns and delivers only the actor's receipt", async () => {
