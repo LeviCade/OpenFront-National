@@ -25,5 +25,5 @@ jobs:
       - name: Emit pinned formatting patches
         if: always()
         run: |
-          npx --no-install oxfmt --write tests/national/ConductorTwoCrownWarContinuity.test.ts packages/engine/src/game/GameImpl.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/national/politics/NationalWarState.ts packages/engine/src/national/conflict/WarLedger.ts
-          git diff -- tests/national/ConductorTwoCrownWarContinuity.test.ts packages/engine/src/game/GameImpl.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/national/politics/NationalWarState.ts packages/engine/src/national/conflict/WarLedger.ts
+          npx --no-install oxfmt --write tests/national/ConductorTwoCrownWarContinuity.test.ts packages/engine/src/game/GameImpl.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/national/politics/NationalWarState.ts packages/engine/src/national/conflict/WarLedger.ts packages/engine/src/execution/NationalWarExecution.ts
+          git diff -- tests/national/ConductorTwoCrownWarContinuity.test.ts packages/engine/src/game/GameImpl.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/national/politics/NationalWarState.ts packages/engine/src/national/conflict/WarLedger.ts packages/engine/src/execution/NationalWarExecution.ts
