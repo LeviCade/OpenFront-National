@@ -56,6 +56,15 @@ async function liveGame(): Promise<Game> {
     for (let x = 30; x < 50; x++) game.player(A).conquer(game.ref(x, y));
     for (let x = 50; x < 70; x++) game.player(C).conquer(game.ref(x, y));
   }
+  // Join every artificial front to its actual spawned capital. Otherwise
+  // PlayerExecution's normal cluster pruning could reclaim detached test
+  // rectangles during the later, genuine peace and replay ticks.
+  for (let x = 20; x <= 30; x++) game.player(A).conquer(game.ref(x, 20));
+  for (let y = 20; y < 72; y++) game.player(A).conquer(game.ref(30, y));
+  for (let x = 70; x <= 80; x++) game.player(B).conquer(game.ref(x, 20));
+  for (let y = 20; y < 46; y++) game.player(B).conquer(game.ref(70, y));
+  for (let x = 20; x <= 60; x++) game.player(C).conquer(game.ref(x, 80));
+  for (let y = 71; y <= 80; y++) game.player(C).conquer(game.ref(60, y));
   game.executeNextTick();
   game.player(A).setTroops(500_000);
   game.player(B).setTroops(250_000);
@@ -176,7 +185,10 @@ describe("R10 E2 actual GameRunner NATIONAL war, MDA and peace", () => {
     // continues in both, while ONLY the attack twin may debit donors.
     const { restored: idle } = await roundTrip(game, "plains");
     const { engine: idleEngine, errors: idleErrors } = runner(idle);
-    const beforeTiles = [game.player(A).numTilesOwned(), game.player(B).numTilesOwned()];
+    const beforeTiles = [
+      game.player(A).numTilesOwned(),
+      game.player(B).numTilesOwned(),
+    ];
     turn(game, engine, attack(B));
     turn(idle, idleEngine);
     turn(game, engine);
@@ -203,10 +215,15 @@ describe("R10 E2 actual GameRunner NATIONAL war, MDA and peace", () => {
       );
     }
 
-    for (let i = 0; i < 6; i++) turn(game, engine);
+    for (let i = 0; i < 6; i++) {
+      turn(game, engine);
+      turn(idle, idleEngine);
+    }
     expect(game.player(A).numTilesOwned()).toBeGreaterThan(beforeTiles[0]);
     expect(game.player(B).numTilesOwned()).toBeLessThan(beforeTiles[1]);
-    expect(game.player(B).troops()).toBeLessThan(250_000);
+    // Troops regenerate during every real tick. Compare the defender to its
+    // identical no-combat twin, never to a fixed prebattle troop constant.
+    expect(game.player(B).troops()).toBeLessThan(idle.player(B).troops());
 
     // Rejected same-side peace cannot end the war. The other belligerent
     // must accept through the exact same authenticated GameRunner path.
@@ -356,6 +373,38 @@ describe("R10 E2 actual GameRunner NATIONAL war, MDA and peace", () => {
     ).toBe(true);
     expect(levy.allowances).toHaveLength(2);
     expect(game.player(D).troops()).toBeLessThan(donorBefore);
+
+    // Settling only the Bravo layer cannot outlaw Charlie combat. Both
+    // wars exist independently in the same canonical Game WAR authority.
+    const bravoWar = game
+      .nationalWarCommandResults(game.player(A))
+      .find((row) => row.requestId === "r10-front-b")?.warId;
+    expect(bravoWar).toBeDefined();
+    turn(game, engine, {
+      type: "national_propose_peace",
+      warId: bravoWar,
+      requestId: "r10-front-b-peace",
+      clientID: clientA,
+    });
+    turn(game, engine);
+    const motionId = peaceMotion(game, bravoWar!);
+    turn(game, engine, {
+      type: "national_accept_peace",
+      motionId,
+      requestId: "r10-front-b-accepted",
+      clientID: clientB,
+    });
+    turn(game, engine);
+    expect(game.nationalWarAuthority()!.atWar(A, B)).toBe(false);
+    expect(game.nationalWarAuthority()!.atWar(A, C)).toBe(true);
+    const beforeMoreCombat = game.nationalWarState()!.levy.processed.length;
+    turn(game, engine, attack(B, 20_000), attack(C, 20_000));
+    turn(game, engine);
+    // The peacetime B click cannot spend anything; the surviving C layer
+    // still accepts its ordinary map assault and records one actual event.
+    expect(game.nationalWarState()!.levy.processed).toHaveLength(
+      beforeMoreCombat + 1,
+    );
     const { bytes, restored, again } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
