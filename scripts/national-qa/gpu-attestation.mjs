@@ -66,8 +66,8 @@ export function verifyHardwareWebgl(capabilities, trust = {}) {
     return reject("INDEPENDENT_HARDWARE_PROOF_MISSING", evidence);
   }
   if (!/^[a-f0-9]{40}$/i.test(text(expected.sourceSha)) ||
-      !/^\\d+$/.test(text(expected.runId)) ||
-      !/^\\d+$/.test(text(expected.runAttempt)) ||
+      !/^\d+$/.test(text(expected.runId)) ||
+      !/^\d+$/.test(text(expected.runAttempt)) ||
       !text(expected.runnerName) ||
       !/^[a-f0-9]{64}$/i.test(text(expected.challenge))) {
     return reject("HARDWARE_PROOF_RUN_CONTEXT_MISSING", evidence);
