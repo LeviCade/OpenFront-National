@@ -1,0 +1,29 @@
+name: R11 E3 one-shot formatter capture (probe branch only)
+on:
+  push:
+    branches:
+      - probe/r11-e3-oxfmt-20261121
+    paths:
+      - .github/workflows/r11-e3-format-probe.yml
+permissions:
+  contents: read
+jobs:
+  exact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Pinned npm 12
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Pinned install
+        run: npm run inst
+      - name: Exact pinned oxfmt and capture file
+        shell: bash
+        run: |
+          npx --no-install oxfmt --write tests/national/NationalAccessionPacketsR11.test.ts
+          echo "__R11_E3_FORMAT_BEGIN__"
+          cat tests/national/NationalAccessionPacketsR11.test.ts
+          echo "__R11_E3_FORMAT_END__"
