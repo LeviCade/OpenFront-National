@@ -90,6 +90,14 @@ desktop/mobile exited zero. No new physical GPU result is implied by this
 document or the negative-control tests. Preserve those first failures until
 E6's reviewed changed-head test records actual success.
 
+## Executed C2 First Class source/Chromium evidence (November 21, 2026)
+
+- **Focused source verification:** [run #44955265134](https://github.com/LeviCade/OpenFront-National/actions/runs/44955265134) passed 12/12 independent negative tests, syntax, oxlint zero errors and pinned oxfmt. First live private-browser readiness on that SHA returned **BLOCKED** (three real account/browser CDP endpoints absent).
+- **Real ordinary Chrome 157.0.8103.78:** [four-mode source-fixed smoke #44955374876](https://github.com/LeviCade/OpenFront-National/actions/runs/44955374876), exact `c247f2af57e427ef587b125a1034efa91c1b2486`. The matrix jobs completed as diagnostics, **not** gameplay passes. NATIONAL desktop/mobile both **FAIL at `start`**; legacy desktop/mobile both **FAIL at `legacy-ffa`**. Each report retained four valid local PNGs, one Worker packet, WebGL shader pixel PASS, and a browser console error; the game never reached founding, WAR or damage. This ordinary CI lane explicitly enabled SwiftShader and provided **no host GPU signature**.
+- Four sanitized bounded per-mode JSON artifacts are attached to that run. Private raw logs/recipient packets were **not published**. The four failures in software Chrome cannot establish that the physical GPU fails or succeeds.
+- **Updated E5 source after the smoke** improves the sanitized *actual first-failure stage/error* instead of only printing generic process exit, and recognizes actual headless Chrome variants. This source refinement does not retroactively convert the earlier smoke into a new SHA's physical result. E6 must preserve the strict renderer and independently inspect physical graphics.
+- **Private NATIONAL**: no genuine separately authenticated A/B/C sessions were supplied during this test; therefore **BLOCKED**, not PASS.
+
 **Owner-routing:** E1 commands, WAR and peace semantics; E2 authenticated
 host/socket/ticks/reconnect/spectator; E3 private recipient DTOs; E4 map
 projection, pointer/touch, viewport and controls; E5 browser harness,
