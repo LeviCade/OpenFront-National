@@ -41,6 +41,8 @@ const MANAGEMENT_INTENTS = new Set([
 
 export class TrustedNationalMatch {
   private readonly seats = new Map<ClientID, Client>();
+  /** The exact admitted physical socket, not reusable clientID identity. */
+  private readonly activeSocket = new Map<ClientID, () => boolean>();
   private readonly requestIds = new Map<ClientID, Set<string>>();
   private readonly committed: Turn[] = [];
   private intents: StampedIntent[] = [];
@@ -116,6 +118,7 @@ export class TrustedNationalMatch {
         !client.spectator &&
         !!client.claims &&
         !!client.publicId;
+      this.activeSocket.set(client.clientID, active);
       runner.registerTrustedNationalRecipient(
         client.clientID,
         {
@@ -141,6 +144,7 @@ export class TrustedNationalMatch {
   submit(sender: Client, candidate: unknown): boolean {
     if (
       this.seats.get(sender.clientID) !== sender ||
+      this.activeSocket.get(sender.clientID)?.() !== true ||
       sender.spectator ||
       !sender.claims ||
       !sender.publicId
@@ -203,6 +207,7 @@ export class TrustedNationalMatch {
   /** Revokes private E3 delivery. Already-committed turns remain canonical. */
   revokeRecipient(client: Client): void {
     if (this.seats.get(client.clientID) !== client) return;
+    this.activeSocket.delete(client.clientID);
     this.runner.removeTrustedNationalRecipient(client.clientID);
   }
 }
