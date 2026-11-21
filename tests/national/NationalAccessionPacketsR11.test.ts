@@ -134,9 +134,14 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
       }),
     ]);
 
-    emperor.send(
+    // Queuing a real stamped turn is pending, not authoritative acceptance.
+    const pendingOffer = emperor.next(
       order("national_offer_empire", "r11-offer-b", A.clientID!, B.id),
     );
+    expect(pendingOffer.nationalCommandResults).toBeUndefined();
+    expect(emperor.receipts("r11-offer-b")).toEqual([]);
+    // The next ordinary tick executes E2's command through the real E1 journal.
+    emperor.next();
     expect(emperor.receipts("r11-offer-b")).toEqual([
       expect.objectContaining({
         type: "national_offer_empire",
@@ -186,9 +191,13 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
     expect(invitee.receipts("r11-forged-b")).toEqual([]);
     expect(offers(invitee.next())).toHaveLength(1);
 
-    invitee.send(
+    const pendingAcceptance = invitee.next(
       order("national_accept_empire", "r11-accept-b", B.clientID!, B.id),
     );
+    expect(offers(pendingAcceptance)).toHaveLength(1);
+    expect(invitee.receipts("r11-accept-b")).toEqual([]);
+    const confirmedAcceptance = invitee.next();
+    expect(offers(confirmedAcceptance)).toEqual([]);
     expect(invitee.receipts("r11-accept-b")).toEqual([
       expect.objectContaining({
         type: "national_accept_empire",
@@ -291,6 +300,11 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
     ).toEqual([]);
     const final = await roundTrip(game, "plains");
     expect([...final.bytes]).toEqual([...final.again]);
+    // Restoring the Game-owned journal must NOT recreate the invalidated
+    // invitation as a new actionable offer or an old success toast.
+    const restoredForeign = session(final.restored, C.clientID!).next();
+    expect(offers(restoredForeign)).toEqual([]);
+    expect(restoredForeign.nationalCommandResults).toBeUndefined();
   });
 
   it("a hostile packet cannot inject a foreign offer, private command receipt or complete E1 state", async () => {
