@@ -16,9 +16,24 @@ import {
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
-const north = new PlayerInfo("North", PlayerType.Human, "r9-north-client", "r9-north-id");
-const south = new PlayerInfo("South", PlayerType.Human, "r9-south-client", "r9-south-id");
-const third = new PlayerInfo("Third", PlayerType.Human, "r9-third-client", "r9-third-id");
+const north = new PlayerInfo(
+  "North",
+  PlayerType.Human,
+  "r9-north-client",
+  "r9-north-id",
+);
+const south = new PlayerInfo(
+  "South",
+  PlayerType.Human,
+  "r9-south-client",
+  "r9-south-id",
+);
+const third = new PlayerInfo(
+  "Third",
+  PlayerType.Human,
+  "r9-third-client",
+  "r9-third-id",
+);
 const warId = "real_r9_war";
 const motionId = "real_r9_motion";
 
@@ -254,6 +269,54 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
     expect(() =>
       actorNationalResults(game, game.player(north.id), emptyNationalResultDeliveryState()),
     ).toThrow(/invalid authoritative founder receipt/);
+  });
+
+  it("can read an actual E1-style WAR result without a founder empire ID, including rejection", async () => {
+    const game = await activeWar();
+    const journal = [
+      {
+        sequence: 21,
+        actorId: north.id,
+        type: "national_declare_war" as const,
+        requestId: "nc_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        accepted: true,
+        tick: game.ticks(),
+        reason: "accepted",
+        warId,
+      },
+      {
+        sequence: 22,
+        actorId: north.id,
+        type: "national_propose_peace" as const,
+        requestId: "nc_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        accepted: false,
+        tick: game.ticks(),
+        reason: "political-rule",
+      },
+    ];
+    Object.defineProperty(game, "nationalWarCommandResults", {
+      configurable: true,
+      value: () => journal,
+    });
+    const results = actorNationalResults(
+      game,
+      game.player(north.id),
+      emptyNationalResultDeliveryState(),
+    );
+    expect(results).toEqual([
+      expect.objectContaining({
+        type: "national_declare_war",
+        accepted: true,
+        warId,
+        sequence: 21,
+      }),
+      expect.objectContaining({
+        type: "national_propose_peace",
+        accepted: false,
+        sequence: 22,
+      }),
+    ]);
+    expect(results[1]).not.toHaveProperty("motionId");
   });
 
   it("direct outbound filter refuses foreign, future and malformed result IDs", async () => {

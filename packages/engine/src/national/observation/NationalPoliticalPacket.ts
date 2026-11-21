@@ -14,11 +14,14 @@ interface AuthoritativeFounderOutcome {
   readonly sequence: number;
   readonly requestId: string;
   readonly actorId: string;
-  readonly empireId: string;
+  readonly empireId?: string;
   readonly accepted: boolean;
   readonly tick: number;
   readonly reason: string;
   readonly commandKind?: NationalPoliticalKind | NationalWarKind;
+  /** E1 may use a typed result name or command kind on the WAR read port. */
+  readonly kind?: NationalWarKind;
+  readonly type?: "national_declare_war" | "national_propose_peace" | "national_accept_peace";
   readonly commandTargetId?: string;
   readonly warId?: string;
   readonly motionId?: string;
@@ -134,21 +137,33 @@ function validRecord(record: AuthoritativeFounderOutcome, game: Game): void {
     typeof record.requestId !== "string" ||
     record.requestId.length < 1 ||
     record.requestId.length > 256 ||
-    typeof record.empireId !== "string" ||
-    record.empireId.length > 256 ||
+    (record.empireId !== undefined &&
+      (typeof record.empireId !== "string" ||
+        record.empireId.length > 256)) ||
+    (record.commandKind === undefined && !safeId(record.empireId)) ||
     (record.commandKind !== undefined &&
-      (!safeId(record.commandTargetId) ||
-        (!(record.commandKind in POLITICAL_TYPES) &&
-          !(record.commandKind in WAR_TYPES)))) ||
+      !Object.prototype.hasOwnProperty.call(
+        POLITICAL_TYPES,
+        record.commandKind,
+      ) &&
+      !Object.prototype.hasOwnProperty.call(WAR_TYPES, record.commandKind)) ||
+    (record.commandKind !== undefined &&
+      Object.prototype.hasOwnProperty.call(POLITICAL_TYPES, record.commandKind) &&
+      !safeId(record.commandTargetId)) ||
+    (record.commandTargetId !== undefined &&
+      !safeId(record.commandTargetId)) ||
     (record.warId !== undefined && !safeId(record.warId)) ||
     (record.motionId !== undefined && !safeId(record.motionId)) ||
-    ((record.commandKind === "declare-national" ||
-      record.commandKind === "declare-imperial") &&
+    (record.accepted &&
+      (record.commandKind === "declare-national" ||
+        record.commandKind === "declare-imperial") &&
       !safeId(record.warId)) ||
-    (record.commandKind === "propose-peace" &&
+    (record.accepted &&
+      record.commandKind === "propose-peace" &&
       (!safeId(record.warId) || !safeId(record.motionId))) ||
-    (record.commandKind === "accept-peace" &&
-      !safeId(record.motionId)) ||
+    (record.accepted &&
+      record.commandKind === "accept-peace" &&
+      (!safeId(record.warId) || !safeId(record.motionId))) ||
     typeof record.actorId !== "string" ||
     record.actorId.length < 1 ||
     record.actorId.length > 256 ||
@@ -168,6 +183,9 @@ function readActorJournal(
   // All three methods are E1-owned filtered reads of ONE journal. A separate
   // WAR method is optional until E1 integrates it; absence means NO receipt.
   // The caller resolves actor from the actual registered clientID.
+  const war = typeof source.nationalWarCommandResults === "function"
+    ? source.nationalWarCommandResults(actor)
+    : [];
   return [
     ...(typeof source.nationalCommandResults === "function"
       ? source.nationalCommandResults(actor)
@@ -175,9 +193,27 @@ function readActorJournal(
     ...(typeof source.nationalPoliticalCommandResults === "function"
       ? source.nationalPoliticalCommandResults(actor)
       : []),
-    ...(typeof source.nationalWarCommandResults === "function"
-      ? source.nationalWarCommandResults(actor)
-      : []),
+    ...war.map((record) => {
+      // Normalize only explicit authoritative E1 WAR result types. No type is
+      // derived from a public conflict or a client-submitted command.
+      const kind =
+        record.commandKind ??
+        record.kind ??
+        (record.type === "national_declare_war"
+          ? "declare-national"
+          : record.type === "national_propose_peace"
+            ? "propose-peace"
+            : record.type === "national_accept_peace"
+              ? "accept-peace"
+              : undefined);
+      if (
+        record.kind !== undefined &&
+        record.commandKind !== undefined &&
+        record.kind !== record.commandKind
+      )
+        throw new Error("NATIONAL contradictory authoritative WAR kind");
+      return { ...record, commandKind: kind };
+    }),
   ];
 }
 
@@ -295,8 +331,14 @@ export function actorNationalResults(
       reason: record.reason,
     };
     if (record.commandKind === undefined) {
-      results.push({ ...base, type: "national_found_empire", empireId: record.empireId });
-    } else if (record.commandKind in WAR_TYPES) {
+      results.push({
+        ...base,
+        type: "national_found_empire",
+        empireId: record.empireId!,
+      });
+    } else if (
+      Object.prototype.hasOwnProperty.call(WAR_TYPES, record.commandKind)
+    ) {
       // WAR receipts only correlate to E2-issued tokens, never E1's auto:
       // journal IDs. Every war/motion ref MUST come from E1, not the roster.
       if (WAR_REQUEST.test(record.requestId)) {

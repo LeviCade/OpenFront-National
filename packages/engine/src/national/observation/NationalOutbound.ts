@@ -73,7 +73,6 @@ function publicPolitics(
   };
 }
 
-
 /** Safe, detached WAR projection for E4. Never forward raw WAR/LEVY snapshots.
  * E2 owns the engine-api typed wire schema. Pending diplomacy is only visible
  * to current participants, while WAR declarations/cessations are public. */
@@ -491,18 +490,14 @@ export class NationalOutboundFilter {
               if (item.type === "national_declare_war")
                 return (
                   /^[A-Za-z0-9_-]{1,128}$/.test(item.requestId) &&
-                  publicId(item.warId)
+                  (!item.accepted || publicId(item.warId))
                 );
-              if (item.type === "national_propose_peace")
+              if (item.type === "national_propose_peace" ||
+                  item.type === "national_accept_peace")
                 return (
                   /^[A-Za-z0-9_-]{1,128}$/.test(item.requestId) &&
-                  publicId(item.warId) &&
-                  publicId(item.motionId)
-                );
-              if (item.type === "national_accept_peace")
-                return (
-                  /^[A-Za-z0-9_-]{1,128}$/.test(item.requestId) &&
-                  publicId(item.motionId)
+                  (!item.accepted ||
+                    (publicId(item.warId) && publicId(item.motionId)))
                 );
               return publicId(item.commandTargetId);
             })
