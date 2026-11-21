@@ -351,15 +351,14 @@ describe("R11 E2 authenticated national-peace delegation execution", () => {
       expect(finalAgain).toEqual(finalBytes);
       expect(restored.nationalWarState()).toEqual(game.nationalWarState());
       expect(restored.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(B);
+      const replaySession = connect(restored, CA);
       for (let i = 0; i < 3; i++) {
         turn(game, ruler);
-        const restoredSession = i === 0 ? connect(restored, CA) : null;
-        // The canonical Game state remains deterministic independently of
-        // E3's per-session packet cursors and browser UI.
-        if (restoredSession) {
-          for (let j = 0; j <= i; j++) turn(restored, restoredSession);
-        } else restored.executeNextTick();
+        turn(restored, replaySession);
+        // Game-state replay identity is independent of E3's packet cursors.
+        expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
       }
+      expect(replaySession.errors).toEqual([]);
       expect(ruler.errors).toEqual([]);
       expect(member.errors).toEqual([]);
       expect(opposing.errors).toEqual([]);
