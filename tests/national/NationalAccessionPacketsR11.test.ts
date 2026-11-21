@@ -25,25 +25,25 @@ const A = new PlayerInfo(
   "Emperor",
   PlayerType.Human,
   "R11CLIA1",
-  "r11-actor-a",
+  "R11ACTA1",
 );
 const B = new PlayerInfo(
   "Invitee",
   PlayerType.Human,
   "R11CLIB1",
-  "r11-actor-b",
+  "R11ACTB1",
 );
 const C = new PlayerInfo(
   "Foreign",
   PlayerType.Human,
   "R11CLIC1",
-  "r11-actor-c",
+  "R11ACTC1",
 );
 const D = new PlayerInfo(
   "Reverse",
   PlayerType.Human,
   "R11CLID1",
-  "r11-actor-d",
+  "R11ACTD1",
 );
 const EMPIRE = "r11_real_empire";
 const PLAYERS = [A, B, C, D];
