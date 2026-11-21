@@ -17,10 +17,10 @@ import { roundTrip } from "../util/Snapshot";
 
 const gameID = "r10-live-combat";
 const humans = [
-  new PlayerInfo("Alpha", PlayerType.Human, "R10ALPHA1", "r10-a"),
-  new PlayerInfo("Bravo", PlayerType.Human, "R10BRAVO1", "r10-b"),
-  new PlayerInfo("Charlie", PlayerType.Human, "R10CHARL1", "r10-c"),
-  new PlayerInfo("Delta", PlayerType.Human, "R10DELTA1", "r10-d"),
+  new PlayerInfo("Alpha", PlayerType.Human, "R10ALPHA1", "R10ATK01"),
+  new PlayerInfo("Bravo", PlayerType.Human, "R10BRAVO1", "R10DEF01"),
+  new PlayerInfo("Charlie", PlayerType.Human, "R10CHARL1", "R10SUP01"),
+  new PlayerInfo("Delta", PlayerType.Human, "R10DELTA1", "R10SUP02"),
 ];
 const [A, B, C, D] = humans.map((info) => info.id);
 const [clientA, clientB, clientC] = humans.map((info) => info.clientID!);
