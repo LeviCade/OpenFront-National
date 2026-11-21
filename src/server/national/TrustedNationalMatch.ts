@@ -178,6 +178,29 @@ export class TrustedNationalMatch {
       .digest("hex");
   }
 
+  /**
+   * A legitimate account reconnects to its ORIGINAL Game seat; create a fresh
+   * E3 recipient cursor but never replay prior private packet history or
+   * accept a new principal claiming the old clientID.
+   */
+  resumeRecipient(client: Client): boolean {
+    if (
+      this.seats.get(client.clientID) !== client ||
+      !client.claims ||
+      !client.publicId ||
+      client.spectator ||
+      this.runner.game.playerByClientID(client.clientID)?.type() !==
+        PlayerType.Human
+    ) return false;
+    this.runner.removeTrustedNationalRecipient(client.clientID);
+    this.runner.registerTrustedNationalRecipient(client.clientID, (packet) => {
+      if (this.seats.get(client.clientID) === client && !client.spectator) {
+        this.deliver(client, packet);
+      }
+    });
+    return true;
+  }
+
   /** Revokes private E3 delivery. Already-committed turns remain canonical. */
   revokeRecipient(client: Client): void {
     if (this.seats.get(client.clientID) !== client) return;
