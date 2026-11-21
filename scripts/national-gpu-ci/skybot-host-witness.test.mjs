@@ -97,6 +97,8 @@ const teardown = () => ({
   observedAtMs: NOW + 110_000,
   jobId: expected.jobId,
   runId: expected.runId,
+  runAttempt: expected.runAttempt,
+  sourceSha: expected.sourceSha,
   runnerId: expected.runnerId,
   runnerName: expected.runnerName,
   challenge: expected.challenge,

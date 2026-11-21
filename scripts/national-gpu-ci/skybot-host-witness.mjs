@@ -323,6 +323,8 @@ export function verifyControllerTeardown(teardown, expected, jobCompletedAtMs) {
   requireTrue(
     teardown?.kind === "skybot-host-teardown-v1" &&
       same(teardown.jobId, expected.jobId) &&
+      teardown.sourceSha === expected.sourceSha &&
+      same(teardown.runAttempt, expected.runAttempt) &&
       same(teardown.runId, expected.runId) &&
       same(teardown.runnerId, expected.runnerId) &&
       teardown.runnerName === expected.runnerName &&
