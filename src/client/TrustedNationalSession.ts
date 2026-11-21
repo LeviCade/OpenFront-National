@@ -29,7 +29,8 @@ export function parseTrustedNationalProjection(
   payload: string,
   expectedTick: number,
 ): TrustedNationalProjection {
-  if (payload.length > 2_000_000) throw new Error("NATIONAL oversized projection");
+  if (payload.length > 2_000_000)
+    throw new Error("NATIONAL oversized projection");
   const parsed: unknown = JSON.parse(payload);
   if (
     parsed === null ||
@@ -37,8 +38,11 @@ export function parseTrustedNationalProjection(
     Array.isArray(parsed) ||
     (parsed as { tick?: unknown }).tick !== expectedTick ||
     !Object.keys(parsed).every((key) => allowedFields.has(key)) ||
-    !Array.isArray((parsed as { packedTileUpdates?: unknown }).packedTileUpdates)
-  ) throw new Error("NATIONAL invalid recipient projection");
+    !Array.isArray(
+      (parsed as { packedTileUpdates?: unknown }).packedTileUpdates,
+    )
+  )
+    throw new Error("NATIONAL invalid recipient projection");
   return parsed as TrustedNationalProjection;
 }
 

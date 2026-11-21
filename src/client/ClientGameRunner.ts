@@ -58,11 +58,6 @@ import { rememberLobbyRoster } from "./LobbyRosterLevels";
 import { pagePin } from "./PagePin";
 import { groupTokenOf, loggableStartMessage } from "./PresenceGroup";
 import {
-  parseTrustedNationalProjection,
-  TrustedNationalProjectionEvent,
-  TrustedNationalStartedEvent,
-} from "./TrustedNationalSession";
-import {
   applyGraphicsOverrides,
   createRenderSettings,
   deepAssign,
@@ -100,6 +95,11 @@ import {
   SendUpgradeStructureIntentEvent,
   Transport,
 } from "./Transport";
+import {
+  parseTrustedNationalProjection,
+  TrustedNationalProjectionEvent,
+  TrustedNationalStartedEvent,
+} from "./TrustedNationalSession";
 import {
   GRAPHICS_KEY,
   USER_SETTINGS_CHANGED_EVENT,

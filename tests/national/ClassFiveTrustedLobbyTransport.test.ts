@@ -3,19 +3,28 @@
  * projection for three distinct authenticated seats. Only websocket transport
  * and small test terrain are substituted. There is ONE live game instance.
  */
-import { GameMode, GameType, PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
+import {
+  GameMode,
+  GameType,
+  PlayerInfo,
+  PlayerType,
+} from "@openfront/engine-api/game/GameTypes";
 import type { GameConfig } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
-import { createGameWireContext } from "@openfront/shared/ZbinWire";
 import type { WireGameStartInfo } from "@openfront/shared/WireSchemas";
+import { createGameWireContext } from "@openfront/shared/ZbinWire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseTrustedNationalProjection } from "../../src/client/TrustedNationalSession";
 import type { Client } from "../../src/server/Client";
 import type { GameServer } from "../../src/server/GameServer";
 import {
-  cid, makeClient, makeGame, makeMockWs, mockWsOf,
+  cid,
+  makeClient,
+  makeGame,
+  makeMockWs,
+  mockWsOf,
 } from "../util/GameServerHarness";
 import { setup } from "../util/Setup";
 import { TestConfig } from "../util/TestConfig";
@@ -47,8 +56,14 @@ async function realRunner(info: WireGameStartInfo): Promise<GameRunner> {
   );
   const game = await setup(
     "plains",
-    { ...info.config, nationalMode: true, gameType: GameType.Private,
-      gameMode: GameMode.FFA, bots: 0, nations: "disabled" },
+    {
+      ...info.config,
+      nationalMode: true,
+      gameType: GameType.Private,
+      gameMode: GameMode.FFA,
+      bots: 0,
+      nations: "disabled",
+    },
     humans,
     undefined,
     TrustedTestConfig,
@@ -60,16 +75,26 @@ async function realRunner(info: WireGameStartInfo): Promise<GameRunner> {
   }
   game.executeNextTick();
   game.executeNextTick();
-  return new GameRunner(game, new Executor(game, info.gameID, undefined), () => {});
+  return new GameRunner(
+    game,
+    new Executor(game, info.gameID, undefined),
+    () => {},
+  );
 }
 
-function fixture(seats = [verified(0), verified(1), verified(2)], extra?: Client) {
+function fixture(
+  seats = [verified(0), verified(1), verified(2)],
+  extra?: Client,
+) {
   const game = makeGame({
     id: cid("nat5"),
     creatorPersistentID: seats[0].persistentID,
     config: {
-      nationalMode: true, gameType: GameType.Private,
-      gameMode: GameMode.FFA, bots: 0, nations: "disabled",
+      nationalMode: true,
+      gameType: GameType.Private,
+      gameMode: GameMode.FFA,
+      bots: 0,
+      nations: "disabled",
     },
     deps: { createNationalRunner: realRunner, turnIntervalMs: () => 1000 },
   });
@@ -100,14 +125,15 @@ function projections(client: Client) {
     });
 }
 function receipt(client: Client, token: string) {
-  return projections(client).some((p) =>
-    Array.isArray(p.nationalCommandResults) &&
-    p.nationalCommandResults.some(
-      (r: unknown) =>
-        r !== null &&
-        typeof r === "object" &&
-        (r as { requestId?: string }).requestId === token,
-    ),
+  return projections(client).some(
+    (p) =>
+      Array.isArray(p.nationalCommandResults) &&
+      p.nationalCommandResults.some(
+        (r: unknown) =>
+          r !== null &&
+          typeof r === "object" &&
+          (r as { requestId?: string }).requestId === token,
+      ),
   );
 }
 async function action(client: Client, intent: Record<string, unknown>) {
@@ -125,7 +151,10 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
   });
 
   it("never flushes a canonical turn from a hostile host pause in NATIONAL prestart", async () => {
-    const { game, seats: [host, beta] } = fixture();
+    const {
+      game,
+      seats: [host, beta],
+    } = fixture();
     game.prestart();
     await action(host, { type: "toggle_pause", paused: true });
     await action(beta, {
@@ -143,7 +172,10 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
   });
 
   it("uses one match for three humans, sends no canonical turns, isolates private E1 receipts", async () => {
-    const { game, seats: [a, b, c] } = fixture();
+    const {
+      game,
+      seats: [a, b, c],
+    } = fixture();
     await boot(game);
     for (const client of [a, b, c]) {
       expect(starts(client)).toHaveLength(1);
@@ -152,7 +184,9 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
       expect(start.gameStartInfo.gameID).toBe(cid("nat5"));
       expect(start.gameStartInfo.players).toHaveLength(3);
       expect(projections(client).length).toBeGreaterThan(0);
-      expect(sent(client).some((m) => m.type === "turn" || m.type === "start")).toBe(false);
+      expect(
+        sent(client).some((m) => m.type === "turn" || m.type === "start"),
+      ).toBe(false);
     }
     await action(a, {
       type: "national_found_empire",
@@ -174,13 +208,21 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
   });
 
   it("stamps a forged socket principal as its real seat; denies unauthorized host actions", async () => {
-    const { game, seats: [a, b, c] } = fixture();
+    const {
+      game,
+      seats: [a, b, c],
+    } = fixture();
     await boot(game);
     await action(b, {
-      type: "national_found_empire", empireId: "bravo-empire",
-      requestId: "class5-spoof-b", clientID: a.clientID,
+      type: "national_found_empire",
+      empireId: "bravo-empire",
+      requestId: "class5-spoof-b",
+      clientID: a.clientID,
     });
-    await action(c, { type: "update_game_config", config: { nationalMode: false } });
+    await action(c, {
+      type: "update_game_config",
+      config: { nationalMode: false },
+    });
     await action(c, { type: "toggle_pause", paused: true });
     expect(game.gameConfig.nationalMode).toBe(true);
     expect(game.isPaused()).toBe(false);
@@ -198,7 +240,10 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
   });
 
   it("revokes old socket, permits original-seat reconnect and refuses late or kicked entrants", async () => {
-    const { game, seats: [a, b, c] } = fixture();
+    const {
+      game,
+      seats: [a, b, c],
+    } = fixture();
     await boot(game);
     const oldWs = mockWsOf(a);
     await oldWs.trigger("close");
@@ -208,12 +253,18 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
     expect(projections(b).length).toBeGreaterThan(before);
     const freshWs = makeMockWs();
     expect(game.rejoinClient(freshWs as any, a.persistentID, 0)).toBe(true);
-    expect(freshWs.sent(ctx).some((m) => m.type === "national_start")).toBe(true);
+    expect(freshWs.sent(ctx).some((m) => m.type === "national_start")).toBe(
+      true,
+    );
     vi.advanceTimersByTime(1000);
-    expect(freshWs.sent(ctx).some((m) => m.type === "national_projection")).toBe(true);
+    expect(
+      freshWs.sent(ctx).some((m) => m.type === "national_projection"),
+    ).toBe(true);
     const late = makeClient({
-      clientID: cid("late5"), persistentID: "late-person",
-      publicId: "verified-late", claims: {} as NonNullable<Client["claims"]>,
+      clientID: cid("late5"),
+      persistentID: "late-person",
+      publicId: "verified-late",
+      claims: {} as NonNullable<Client["claims"]>,
     });
     expect(game.joinClient(late)).toBe("started");
     expect(game.rejoinClient(makeMockWs() as any, "not-seated")).toBe(false);
@@ -225,14 +276,22 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
 
   it("fails closed on anonymous or duplicated verified accounts", async () => {
     const [a, b, c] = [verified(0), verified(1), verified(2)];
-    const guest = Object.assign(Object.create(Object.getPrototypeOf(b)), b, { claims: null }) as Client;
+    const guest = Object.assign(Object.create(Object.getPrototypeOf(b)), b, {
+      claims: null,
+    }) as Client;
     const one = fixture([a, guest, c]);
     await boot(one.game);
     expect(one.game.hasEnded()).toBe(true);
-    expect(sent(a).some((m) => m.type === "turn" || m.type === "national_start")).toBe(false);
-    const duplicate = Object.assign(Object.create(Object.getPrototypeOf(c)), verified(2), {
-      publicId: publics[1],
-    }) as Client;
+    expect(
+      sent(a).some((m) => m.type === "turn" || m.type === "national_start"),
+    ).toBe(false);
+    const duplicate = Object.assign(
+      Object.create(Object.getPrototypeOf(c)),
+      verified(2),
+      {
+        publicId: publics[1],
+      },
+    ) as Client;
     const two = fixture([verified(0), verified(1), duplicate]);
     await boot(two.game);
     expect(two.game.hasEnded()).toBe(true);
@@ -240,16 +299,19 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
 
   it("refuses to grant spectators any private NATIONAL projection", async () => {
     const spectator = makeClient({
-      clientID: cid("watch5"), spectator: true,
+      clientID: cid("watch5"),
+      spectator: true,
       claims: {} as NonNullable<Client["claims"]>,
       publicId: "verified-watcher",
     });
     const { game, seats } = fixture(undefined, spectator);
     await boot(game);
     expect(mockWsOf(spectator).close).toHaveBeenCalled();
-    expect(sent(spectator).some((m) =>
-      m.type === "national_start" || m.type === "national_projection",
-    )).toBe(false);
+    expect(
+      sent(spectator).some(
+        (m) => m.type === "national_start" || m.type === "national_projection",
+      ),
+    ).toBe(false);
     expect(projections(seats[0]).length).toBeGreaterThan(0);
   });
 });

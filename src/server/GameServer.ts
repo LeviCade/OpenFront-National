@@ -6,12 +6,8 @@ import {
   PlayerType,
   RankedType,
 } from "@openfront/engine-api/game/GameTypes";
-import { maps } from "@openfront/engine-api/game/Maps.gen";
-import {
-  createTrustedNationalGameRunner,
-  type GameRunner,
-} from "@openfront/engine/GameRunner";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import { maps } from "@openfront/engine-api/game/Maps.gen";
 import {
   AllPlayersStats,
   ClientID,
@@ -30,6 +26,10 @@ import {
   assignTeamsLobbyPreview,
   resolveTeamsList,
 } from "@openfront/engine-lib/game/TeamAssignment";
+import {
+  createTrustedNationalGameRunner,
+  type GameRunner,
+} from "@openfront/engine/GameRunner";
 import { isAdminRole } from "@openfront/shared/ApiSchemas";
 import { CloseCode, CloseReason } from "@openfront/shared/CloseCodes";
 import { GameEnv } from "@openfront/shared/configuration/Env";
@@ -84,13 +84,13 @@ import {
 } from "./IntentAuthorization";
 import { ListingState } from "./ListingState";
 import { friendsLookup, NameVisibility } from "./NameVisibility";
+import { encodeNationalRecipientProjection } from "./national/NationalRecipientWire";
+import { loadTrustedNationalMapFiles } from "./national/TrustedNationalMapFiles";
+import { TrustedNationalMatch } from "./national/TrustedNationalMatch";
 import { poolTargetFor } from "./PoolRouting";
 import { Roster } from "./Roster";
 import { ServerEnv } from "./ServerEnv";
 import { SocketIngress } from "./SocketIngress";
-import { loadTrustedNationalMapFiles } from "./national/TrustedNationalMapFiles";
-import { TrustedNationalMatch } from "./national/TrustedNationalMatch";
-import { encodeNationalRecipientProjection } from "./national/NationalRecipientWire";
 import {
   LONE_VOTER_REPLAY_CAP,
   replayWinnerInChild,
@@ -444,14 +444,20 @@ export class GameServer {
     ) {
       // Prestart is not trusted execution. No player or host can make the
       // legacy queue flush while the protected map/roster is loading.
-      return finish({ status: 409, error: "NATIONAL trusted runner not ready" });
+      return finish({
+        status: 409,
+        error: "NATIONAL trusted runner not ready",
+      });
     }
 
     if (this.nationalMatch !== null) {
       // The authenticated websocket path supplies a roster Client. An
       // admin-bot cannot inject engine actions or host session authority.
       if (actor.isAdminBot) {
-        return finish({ status: 403, error: "NATIONAL requires human session" });
+        return finish({
+          status: 403,
+          error: "NATIONAL requires human session",
+        });
       }
       if (stamped.type === "toggle_pause") {
         this.paused = stamped.paused;
@@ -470,7 +476,10 @@ export class GameServer {
           !this.clients.isConnected(client) ||
           client.ws.readyState !== WebSocket.OPEN
         ) {
-          return finish({ status: 403, error: "NATIONAL session disconnected" });
+          return finish({
+            status: 403,
+            error: "NATIONAL session disconnected",
+          });
         }
         return finish(
           this.nationalMatch.submit(client, intent)
@@ -1300,14 +1309,18 @@ export class GameServer {
         this.isListed() ||
         this.creatorPersistentID === undefined
       ) {
-        throw new Error("NATIONAL requires authenticated unlisted Private FFA host");
+        throw new Error(
+          "NATIONAL requires authenticated unlisted Private FFA host",
+        );
       }
       const seated = this.clients.players();
       const host = seated.find(
         (c) => c.persistentID === this.creatorPersistentID,
       );
       if (!host?.claims || !host.publicId || seated.length < 2) {
-        throw new Error("NATIONAL requires authenticated host and two real seats");
+        throw new Error(
+          "NATIONAL requires authenticated host and two real seats",
+        );
       }
       const accounts = new Set<string>();
       const persistents = new Set<string>();
@@ -1321,7 +1334,9 @@ export class GameServer {
           accounts.has(client.publicId) ||
           persistents.has(client.persistentID)
         ) {
-          throw new Error("NATIONAL requires distinct connected authenticated seats");
+          throw new Error(
+            "NATIONAL requires distinct connected authenticated seats",
+          );
         }
         accounts.add(client.publicId);
         persistents.add(client.persistentID);
@@ -1436,21 +1451,25 @@ export class GameServer {
       !this.clients.isConnected(client) ||
       client.spectator ||
       client.ws.readyState !== WebSocket.OPEN
-    ) return;
+    )
+      return;
     // The protocol intentionally has NO turns array or snapshot field.
     client.ws.send(
-      encodeServerMessage({
-        type: "national_start",
-        gameStartInfo: this.names.startInfoFor(
-          client.clientID,
-          isAdminRole(client.role),
-          this.gameStartInfo,
-          this.wireGameStartInfo,
-        ),
-        myClientID: client.clientID,
-        tick: this.nationalMatch.currentTick(),
-        groupToken: this.groupToken,
-      } satisfies ServerNationalStartMessage, this.zbinCtx),
+      encodeServerMessage(
+        {
+          type: "national_start",
+          gameStartInfo: this.names.startInfoFor(
+            client.clientID,
+            isAdminRole(client.role),
+            this.gameStartInfo,
+            this.wireGameStartInfo,
+          ),
+          myClientID: client.clientID,
+          tick: this.nationalMatch.currentTick(),
+          groupToken: this.groupToken,
+        } satisfies ServerNationalStartMessage,
+        this.zbinCtx,
+      ),
     );
   }
 
@@ -1464,14 +1483,18 @@ export class GameServer {
       !this.clients.isConnected(client) ||
       client.spectator ||
       client.ws.readyState !== WebSocket.OPEN
-    ) return;
+    )
+      return;
     const payload = encodeNationalRecipientProjection(packet);
     client.ws.send(
-      encodeServerMessage({
-        type: "national_projection",
-        tick: packet.tick,
-        payload,
-      } satisfies ServerNationalProjectionMessage, this.zbinCtx),
+      encodeServerMessage(
+        {
+          type: "national_projection",
+          tick: packet.tick,
+          payload,
+        } satisfies ServerNationalProjectionMessage,
+        this.zbinCtx,
+      ),
     );
   }
 

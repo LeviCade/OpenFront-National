@@ -1,10 +1,10 @@
+import { GameMapSize, GameMapType } from "@openfront/engine-api/game/GameTypes";
 /**
  * Trusted NATIONAL server map adapter. Reads the SAME deployment map binaries
  * as the HTTP worker, but never exposes them or the resulting Game to clients.
  */
 import type { MapFiles } from "@openfront/engine-api/game/MapFiles";
 import { MapManifestSchema } from "@openfront/engine-api/game/MapManifest";
-import { GameMapSize, GameMapType } from "@openfront/engine-api/game/GameTypes";
 import { readMapFile } from "../MapFiles";
 
 export async function loadTrustedNationalMapFiles(

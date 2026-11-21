@@ -152,11 +152,13 @@ export class TrustedNationalMatch {
   /** Authenticated host-only connection status; NEVER accepted from socket input. */
   recordServerDisconnect(clientID: ClientID, disconnected: boolean): void {
     if (!this.seats.has(clientID)) return;
-    this.intents.push(StampedIntentSchema.parse({
-      type: "mark_disconnected",
-      clientID,
-      isDisconnected: disconnected,
-    }));
+    this.intents.push(
+      StampedIntentSchema.parse({
+        type: "mark_disconnected",
+        clientID,
+        isDisconnected: disconnected,
+      }),
+    );
   }
 
   currentTick(): number {
@@ -205,7 +207,8 @@ export class TrustedNationalMatch {
       client.spectator ||
       this.runner.game.playerByClientID(client.clientID)?.type() !==
         PlayerType.Human
-    ) return false;
+    )
+      return false;
     this.runner.removeTrustedNationalRecipient(client.clientID);
     this.runner.registerTrustedNationalRecipient(client.clientID, (packet) => {
       if (this.seats.get(client.clientID) === client && !client.spectator) {
