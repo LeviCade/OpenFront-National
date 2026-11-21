@@ -19,7 +19,7 @@ import {
 
 const SHA = "a".repeat(40);
 const CHALLENGE = "b".repeat(64);
-const STAGE_SHA = "c".repeat(40);
+const STAGE_SHA = SHA;
 const NOW = 1_780_000_000_000;
 const expected = Object.freeze({
   repository: REPOSITORY,
@@ -61,7 +61,7 @@ const proof = () => ({
     object: { sha: STAGE_SHA },
   },
   ancestry: {
-    status: "ahead",
+    status: "identical",
     merge_base_commit: { sha: SHA },
     base_commit: { sha: SHA },
   },
@@ -80,6 +80,7 @@ const observation = () => ({
   runnerId: expected.runnerId,
   runnerName: expected.runnerName,
   sourceSha: expected.sourceSha,
+  observedCheckoutSha: expected.sourceSha,
   challenge: expected.challenge,
   guest: {
     hardwareBackedVerified: true,
@@ -154,6 +155,7 @@ test("guest-published shader claims cannot replace out-of-guest controller obser
     ["runnerId", "42"],
     ["challenge", "f".repeat(64)],
     ["sourceSha", "d".repeat(40)],
+    ["observedCheckoutSha", "d".repeat(40)],
   ]) {
     const tampered = { ...o, [key]: value };
     rejectWith("OUT_OF_GUEST_WEBGL_OBSERVER_MISSING", () =>

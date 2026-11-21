@@ -66,7 +66,8 @@ export function verifyControllerRun({ expected, repository, run, job, stage, anc
       RUNNER.test(expected.runnerName ?? "") &&
       HEX64.test(expected.challenge ?? "") &&
       expected.approvedStagingRef === APPROVED_STAGING &&
-      SHA.test(expected.approvedStagingSha ?? ""),
+      SHA.test(expected.approvedStagingSha ?? "") &&
+      expected.sourceSha === expected.approvedStagingSha,
     "TRUSTED_RUN_CONTEXT_INCOMPLETE",
   );
   requireTrue(
@@ -100,7 +101,7 @@ export function verifyControllerRun({ expected, repository, run, job, stage, anc
   requireTrue(
     stage?.ref === "refs/heads/" + APPROVED_STAGING &&
       stage.object?.sha === expected.approvedStagingSha &&
-      ["identical", "ahead"].includes(ancestry?.status) &&
+      ancestry?.status === "identical" &&
       ancestry.merge_base_commit?.sha === expected.sourceSha &&
       ancestry.base_commit?.sha === expected.sourceSha,
     "CONDUCTOR_SOURCE_ANCESTRY_UNVERIFIED",
@@ -223,6 +224,7 @@ export function validateControllerObservation(observation, expected) {
       same(observation.runnerId, expected.runnerId) &&
       observation.runnerName === expected.runnerName &&
       observation.sourceSha === expected.sourceSha &&
+      observation.observedCheckoutSha === expected.sourceSha &&
       observation.challenge === expected.challenge &&
       observation.observedByController === true &&
       Number.isSafeInteger(observation.observedAtMs),
@@ -405,6 +407,8 @@ async function main() {
     const physical = probePhysicalPreflight(expected);
     const observed = readRootJson("controller-gpu-observation.json");
     const guest = validateControllerObservation(observed, expected);
+    requireTrue(Math.abs(Date.now() - observed.observedAtMs) <= 120000,
+      "OUT_OF_GUEST_WEBGL_OBSERVATION_STALE");
     payload = createHostPreflight(expected, times, physical, guest, Date.now());
     safeWrite("controller-preflight.json",
       signedHostRecord(payload, privateKey, enrolled, hostTrust));
