@@ -14,8 +14,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Install pinned source tools
-        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Use repository-required npm 12 and install pinned source tools
+        run: |
+          npm install -g npm@12.1.0
+          npm --version
+          npm ci --ignore-scripts --no-audit --no-fund
       - name: Run R11 E1 focused live GameRunner acceptance
         run: npx --no-install vitest run tests/national/RoundElevenImperialPeaceDelegation.test.ts --reporter=verbose
       - name: Emit exact pinned formatting patch
