@@ -135,6 +135,33 @@ describe("E2 Round Nine WAR execution to E1-owned outcome port", () => {
     expect(game.nationalWarAuthority()?.atWar(north.id, south.id)).toBe(false);
   });
 
+  it("contains E1's reused foreign request ID without changing WAR or crashing the tick", async () => {
+    const game = await spawned();
+    const authority = withCanonicalOutcome(game);
+    authority.mockImplementation(() => {
+      throw new Error("NATIONAL command journal: reused foreign request ID");
+    });
+    const before = game.nationalWarState();
+    queue(
+      game,
+      {
+        type: "national_declare_war",
+        scope: "national",
+        nationId: north.id,
+        targetId: south.id,
+        targetKind: "nation",
+        requestId: "r9_foreign_reuse",
+      },
+      north.clientID,
+    );
+    expect(() => {
+      game.executeNextTick();
+      game.executeNextTick();
+    }).not.toThrow();
+    expect(authority).toHaveBeenCalledTimes(1);
+    expect(game.nationalWarState()).toEqual(before);
+  });
+
   it("forwards invalid imperial clicks and legacy null tokens", async () => {
     const game = await spawned();
     const outcome = withCanonicalOutcome(game);
