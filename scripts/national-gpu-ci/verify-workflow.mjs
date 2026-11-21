@@ -32,7 +32,7 @@ void test("strict default-main dispatch, owner admission and immutable R10 ances
     'test "$GITHUB_REF" = refs/heads/main',
     "0e52b5eeb7490ce83898f2a9696732c7e7d6b21c",
     'git merge-base --is-ancestor "$BASE_SHA" "$NATIONAL_GPU_CANDIDATE_SHA"',
-    'git merge-base --is-ancestor "$NATIONAL_GPU_CANDIDATE_SHA" "$remote"',
+    'git merge-base --is-ancestor "$NATIONAL_GPU_CANDIDATE_SHA" "$staging"',
     "stage3/integration-20261115",
     "stage3/r10-reviewed-gpu-20261121",
     "persist-credentials: false",
