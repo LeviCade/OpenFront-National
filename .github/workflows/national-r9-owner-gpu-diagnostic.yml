@@ -74,7 +74,9 @@ jobs:
             MODE="$mode" EXIT_CODE="$code" node --input-type=module <<'NODE'
           import { existsSync, readFileSync, appendFileSync } from 'node:fs';
           const mode = process.env.MODE;
-          const file = 'national-qa-artifacts/browser-' + mode + '/acceptance.json';
+          const file = 'national-qa-artifacts/browser-' +
+            (mode.startsWith('legacy') ? 'legacy-ffa-' : 'national-') +
+            (mode.endsWith('mobile') ? 'mobile' : 'desktop') + '/acceptance.json';
           const outcome = {mode, exitCode: Number(process.env.EXIT_CODE),
             diagnosticOnly: true, releaseAttested: false,
             sourceSha: process.env.GITHUB_SHA, reportPresent: existsSync(file)};
@@ -83,6 +85,18 @@ jobs:
               const x = JSON.parse(readFileSync(file,'utf8'));
               outcome.sourceMatched = x.exactSource === process.env.GITHUB_SHA;
               outcome.stage = typeof x.stage === 'string' ? x.stage.slice(0,64) : null;
+              const spawn = Array.isArray(x.events)
+                ? [...x.events].reverse().find(e => e?.name === 'spawn-own-state-after-attempts' ||
+                    e?.name === 'spawn-own-state-after-click' ||
+                    e?.name === 'spawn-own-state-before')
+                : null;
+              if (spawn) outcome.spawnState = {
+                actorPresent: spawn.actorPresent === true,
+                inSpawnPhase: spawn.inSpawnPhase === true,
+                tilesOwned: Number.isSafeInteger(spawn.tilesOwned) ? spawn.tilesOwned : null,
+                publicPoliticsPresent: spawn.publicPoliticsPresent === true,
+                panelExpanded: spawn.panelExpanded === true
+              };
               const g2=x.actualHardware?.webgl, g1=x.actualHardware?.webgl1;
               outcome.webgl2 = g2?.supported === true && g2?.contextLost !== true;
               outcome.webgl1 = g1?.supported === true && g1?.contextLost !== true;
@@ -102,6 +116,9 @@ jobs:
           if (existsSync(logFile)) {
             const raw = readFileSync(logFile, 'utf8');
             const classifier = [
+              ['SPAWN_TIMEOUT', /authenticated player spawned and Found Empire enabled/i],
+              ['SPAWN_CANVAS_MISSING', /Playable canvas not found/i],
+              ['SPAWN_PANEL_MISSING', /Timed out.*NATIONAL.*Diplomacy|NATIONAL opt-in control missing/i],
               ['WEBGL_SOFTWARE_GATE', /blocked by WebGL gate|SOFTWARE_RENDERER_FORBIDDEN/i],
               ['GPU_CONTEXT', /WEBGL_CONTEXT_UNAVAILABLE|WEBGL2_UNAVAILABLE|WebGL2 context lost/i],
               ['BROWSER_BOOT', /Timed out: Chromium remote debugging|No Chromium page target/i],
@@ -119,6 +136,7 @@ jobs:
             echo "$mode exit=$code (nonrelease diagnostic only)"
             if [ "$code" -ne 0 ]; then failures=1; fi
           done
+          cat national-qa-artifacts/gpu/diagnostic/outcomes.jsonl
           echo "DIAGNOSTIC_ONLY; NO_GPU_RELEASE_CERTIFICATION; scenario_failures=$failures"
           exit "$failures"
       - name: Upload bounded diagnostic outcomes only
