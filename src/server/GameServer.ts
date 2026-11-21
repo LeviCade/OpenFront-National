@@ -1113,6 +1113,17 @@ export class GameServer {
     if (this.stage === "started" || this.ended) {
       return;
     }
+    // The legacy websocket start/turn protocol broadcasts a complete turn
+    // stream for untrusted client-side GameRunners. Until the private E3
+    // recipient protocol is wired, NEVER put NATIONAL into that path.
+    if (
+      this.gameConfig.nationalMode === true &&
+      this.gameConfig.gameType === GameType.Private
+    ) {
+      this.log.error("Private NATIONAL requires trusted-host transport");
+      this.ended = true;
+      return;
+    }
     this.stage = "started";
     this._startTime = Date.now();
     // Set last ping to start so we don't immediately stop the game
