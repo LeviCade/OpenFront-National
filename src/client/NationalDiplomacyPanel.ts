@@ -3,6 +3,7 @@ import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import {
+  confirmedNationalDiplomacy,
   createNationalDiplomacyRequestId,
   createNationalFoundingRequestId,
   empireForMember,
@@ -11,7 +12,10 @@ import {
   reconcileNationalFounding,
   validEmpireId,
   validNationalWarReference,
+  type NationalDiplomacyAttempt,
   type NationalDiplomacyResult,
+  type NationalPublicWarLayer,
+  type NationalPublicPeaceMotion,
   type NationalFoundingAttempt,
 } from "./NationalDiplomacyState";
 import {
@@ -52,12 +56,17 @@ export class NationalDiplomacyPanel extends LitElement {
   @state() private motionIdDraft = "";
   @state() private diplomacyStatus: string | null = null;
   @state() private diplomacyError: string | null = null;
-  private lastDiplomacySubmission: {
+  private lastDiplomacySubmission: (NationalDiplomacyAttempt & {
     gameId: string;
-    actorId: string;
     tick: number;
     requestId: string;
-    commandType: NationalDiplomacyResult["type"];
+  }) | null = null;
+  private confirmedDiplomacy: {
+    gameId: string;
+    actorId: string;
+    type: NationalDiplomacyResult["type"];
+    warId: string;
+    motionId?: string;
   } | null = null;
 
   createRenderRoot() {
@@ -137,6 +146,28 @@ export class NationalDiplomacyPanel extends LitElement {
         }
       }
     }
+    const prior = this.confirmedDiplomacy;
+    if (prior) {
+      const view = game?.nationalConflicts?.() ?? null;
+      const layer = view?.layers.find((item) => item.id === prior.warId);
+      const motion = view?.motions.find((item) => item.id === prior.motionId);
+      if (
+        game?.gameID() !== prior.gameId ||
+        player?.id() !== prior.actorId ||
+        !layer
+      ) {
+        this.confirmedDiplomacy = null;
+        this.diplomacyStatus =
+          "Current authoritative WAR state no longer verifies the previous action.";
+      } else if (
+        (prior.type === "national_declare_war" && layer.endedTick !== null) ||
+        (prior.type === "national_propose_peace" && (!motion || motion.acceptedTick !== null))
+      ) {
+        this.confirmedDiplomacy = null;
+        this.diplomacyStatus =
+          "The previously confirmed WAR or peace motion has since changed. Review current conflicts.";
+      }
+    }
     const submission = this.lastDiplomacySubmission;
     if (submission) {
       const tick = game?.ticks() ?? -1;
@@ -192,11 +223,31 @@ export class NationalDiplomacyPanel extends LitElement {
           this.diplomacyStatus = null;
           this.diplomacyError = `The game rejected this diplomacy action: ${result.reason ?? "political-rule"}.`;
         } else if (result?.accepted) {
-          // A genuine accepted E1 receipt alone is NOT sufficient to claim
-          // a war, peace motion or agreement took effect. E1/E3 must also
-          // publish the actual current public conflict projection.
-          this.diplomacyStatus =
-            "Authenticated positive command receipt received; authoritative public war/peace state is not yet available. No completed action is confirmed.";
+          const confirmed = confirmedNationalDiplomacy(
+            submission,
+            result,
+            game.nationalConflicts?.() ?? null,
+            game.nationalConflictsTick?.() ?? null,
+          );
+          if (confirmed) {
+            this.lastDiplomacySubmission = null;
+            this.confirmedDiplomacy = {
+              gameId: submission.gameId,
+              actorId: submission.actorId,
+              type: result.type,
+              warId: result.warId!,
+              ...(result.motionId ? { motionId: result.motionId } : {}),
+            };
+            this.diplomacyStatus = confirmed;
+            this.diplomacyError = null;
+          } else if (tick - submission.tick >= 200) {
+            this.lastDiplomacySubmission = null;
+            this.diplomacyStatus =
+              "Accepted receipt could not be reconciled with authoritative WAR/peace state. Outcome remains unconfirmed.";
+          } else {
+            this.diplomacyStatus =
+              "Authenticated positive command receipt received; authoritative public war/peace state is not yet available. No completed action is confirmed.";
+          }
         } else if (tick - submission.tick >= 200) {
           this.lastDiplomacySubmission = null;
           this.diplomacyStatus =
@@ -209,6 +260,11 @@ export class NationalDiplomacyPanel extends LitElement {
 
   /** A dropped or replaced session must never retain optimistic success. */
   public connectionInterrupted(): void {
+    if (this.confirmedDiplomacy !== null) {
+      this.confirmedDiplomacy = null;
+      this.diplomacyStatus =
+        "Connection interrupted. Current WAR state must be verified again.";
+    }
     if (this.lastDiplomacySubmission !== null) {
       this.lastDiplomacySubmission = null;
       this.diplomacyStatus =
@@ -361,7 +417,7 @@ export class NationalDiplomacyPanel extends LitElement {
       .map((player) => ({ id: player.id(), name: player.name() }));
   }
 
-  /** No result journal for WAR/peace yet: submission is never success. */
+  /** Only journal plus current recipient-bound projection can confirm. */
   private sendDiplomacyCommand(
     command: (
       requestId: string,
@@ -371,6 +427,7 @@ export class NationalDiplomacyPanel extends LitElement {
       | SendNationalAcceptPeaceIntentEvent,
     description: string,
     commandType: NationalDiplomacyResult["type"],
+    context: Omit<NationalDiplomacyAttempt, "commandType" | "actorId" | "issuedTick"> = {},
   ): void {
     const reason = this.warUnavailableReason;
     const game = this.game;
@@ -381,13 +438,9 @@ export class NationalDiplomacyPanel extends LitElement {
       return;
     }
     const tick = game.ticks();
-    if (
-      this.lastDiplomacySubmission?.gameId === game.gameID() &&
-      this.lastDiplomacySubmission.actorId === player.id() &&
-      this.lastDiplomacySubmission.tick === tick
-    ) {
+    if (this.lastDiplomacySubmission !== null) {
       this.diplomacyError =
-        "One diplomacy command is already submitted this tick. Await the next game tick.";
+        "A diplomacy command is still pending authoritative confirmation.";
       return;
     }
     let requestId: string;
@@ -406,7 +459,10 @@ export class NationalDiplomacyPanel extends LitElement {
         tick,
         requestId,
         commandType,
+        issuedTick: tick,
+        ...context,
       };
+      this.confirmedDiplomacy = null;
       // An EventBus producer does not prove that an intent gate, worker or
       // E1 accepted this action. Exact request receipts are still pending E1/E3.
       this.diplomacyStatus = `${description} handed to the command producer (request ${requestId}). Delivery and authoritative outcome remain unconfirmed; no success is confirmed.`;
@@ -454,7 +510,48 @@ export class NationalDiplomacyPanel extends LitElement {
         ),
       `${this.warScope === "imperial" ? "Imperial" : "National"} war declaration`,
       "national_declare_war",
+      {
+        scope: this.warScope,
+        ownEmpireId: ownEmpire?.id,
+        targetKind: kind,
+        targetId: this.warTargetId,
+      },
     );
+  }
+
+  private ourWarSide(layer: NationalPublicWarLayer): 0 | 1 | null {
+    const actorId = this.game?.myPlayer()?.id();
+    if (!actorId) return null;
+    const empire = this.memberEmpire;
+    const sideId =
+      layer.scope === "national"
+        ? actorId
+        : empire?.leaderId === actorId
+          ? empire.id
+          : null;
+    const kind = layer.scope === "national" ? "nation" : "empire";
+    if (!sideId) return null;
+    if (layer.first.kind === kind && layer.first.id === sideId) return 0;
+    if (layer.second.kind === kind && layer.second.id === sideId) return 1;
+    return null;
+  }
+
+  private eligiblePeaceWars(): readonly NationalPublicWarLayer[] {
+    return this.game?.nationalConflicts?.()?.layers.filter(
+      (layer) => layer.endedTick === null && this.ourWarSide(layer) !== null,
+    ) ?? [];
+  }
+
+  private eligiblePeaceMotions(): readonly NationalPublicPeaceMotion[] {
+    const view = this.game?.nationalConflicts?.();
+    if (!view) return [];
+    const wars = new Map(this.eligiblePeaceWars().map((layer) => [layer.id, layer]));
+    return view.motions.filter((motion) => {
+      const layer = wars.get(motion.layerId);
+      return layer !== undefined &&
+        motion.acceptedTick === null &&
+        this.ourWarSide(layer) !== motion.proposingSide;
+    });
   }
 
   private submitPeace(event: SubmitEvent, action: "propose" | "accept"): void {
@@ -462,8 +559,16 @@ export class NationalDiplomacyPanel extends LitElement {
     const reference =
       action === "propose" ? this.warIdDraft.trim() : this.motionIdDraft.trim();
     if (!validNationalWarReference(reference)) {
-      this.diplomacyError =
-        "Enter an exact authoritative war or motion ID (1–256 characters).";
+      this.diplomacyError = "Select an exact game-issued war or motion ID.";
+      return;
+    }
+    const projection = this.game?.nationalConflicts?.() ?? null;
+    if (
+      projection &&
+      !(action === "propose" ? this.eligiblePeaceWars() : this.eligiblePeaceMotions())
+        .some((item) => item.id === reference)
+    ) {
+      this.diplomacyError = "That ID is not an eligible current engine reference.";
       return;
     }
     this.sendDiplomacyCommand(
@@ -473,6 +578,7 @@ export class NationalDiplomacyPanel extends LitElement {
           : new SendNationalAcceptPeaceIntentEvent(reference, requestId),
       action === "propose" ? "Peace proposal" : "Peace motion acceptance",
       action === "propose" ? "national_propose_peace" : "national_accept_peace",
+      action === "propose" ? { warId: reference } : { motionId: reference },
     );
   }
 
