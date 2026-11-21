@@ -403,17 +403,21 @@ describe("Round Nine actual Game-owned public WAR state and private receipts", (
       return;
     }
 
-    const command = (game as unknown as {
-      performNationalWarCommandWithOutcome?: (
-        actor: Player,
-        request:
-          | { kind: "propose-peace"; warId: string; motionId: string }
-          | { kind: "accept-peace"; motionId: string },
-        requestId: string,
-      ) => { accepted: boolean; requestId: string };
-    }).performNationalWarCommandWithOutcome?.bind(game);
+    const command = (
+      game as unknown as {
+        performNationalWarCommandWithOutcome?: (
+          actor: Player,
+          request:
+            | { kind: "propose-peace"; warId: string; motionId: string }
+            | { kind: "accept-peace"; motionId: string },
+          requestId: string,
+        ) => { accepted: boolean; requestId: string };
+      }
+    ).performNationalWarCommandWithOutcome?.bind(game);
     if (command === undefined) {
-      throw new Error("E1 WAR outcome port absent despite journal availability");
+      throw new Error(
+        "E1 WAR outcome port absent despite journal availability",
+      );
     }
     const proposalId = "nc_1234567890abcdef1234567890abcdef";
     const acceptanceId = "nc_abcdef1234567890abcdef1234567890";
