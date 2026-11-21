@@ -36,7 +36,7 @@ function seat(clientID: string, publicId: string): Client {
     "127.0.0.1",
     clientID,
     null,
-    { readyState: 1 } as Client["ws"],
+    { readyState: 1, send: () => undefined } as unknown as Client["ws"],
     undefined,
     publicId,
     [],
