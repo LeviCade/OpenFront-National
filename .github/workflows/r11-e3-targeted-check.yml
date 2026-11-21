@@ -34,3 +34,5 @@ jobs:
             cat "${f}"
             echo "__R11_E3_FORMAT_END__${f}"
           done
+
+# R11 E3 second focused probe after TypeScript fixes
