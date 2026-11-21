@@ -154,7 +154,7 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
       name: "Verified Pact",
       pactKind: "MDA",
       terms: { admission: "unanimous", expulsion: "forbidden" },
-    });
+    }, A.clientID!);
     host.tick(); // real host-created GameRunner tick and three socket frames
     const [a, b, c] = sockets.map((s) => view(s.socket));
     expect(a.data.nationalPolitics).toEqual(b.data.nationalPolitics);
