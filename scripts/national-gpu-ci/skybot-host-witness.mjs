@@ -406,6 +406,44 @@ function liveHardwareSigner(message) {
     env: { PATH: "/usr/sbin:/usr/bin:/sbin:/bin", LC_ALL: "C" },
   }).trim();
 }
+/** Require four DISTINCT, independently signed, still-bound host
+ * preflights before an after-job release certificate can be published. A
+ * one-mode HSM signature cannot certify three later unsigned browser runs. */
+export function verifyFourModeHostProofs(proofs, publicPem, expected, times) {
+  requireTrue(Array.isArray(proofs) && proofs.length === PROOF_MODES.length,
+    "FOUR_SIGNED_HOST_PREFLIGHTS_MISSING");
+  const key = createPublicKey(publicPem);
+  requireTrue(key.asymmetricKeyType === "ed25519",
+    "HOST_ED25519_PUBLIC_KEY_INVALID");
+  let previousTime = times.runStartedAtMs - 30000;
+  for (let i = 0; i < PROOF_MODES.length; i++) {
+    const proof = proofs[i];
+    const p = proof?.payload;
+    requireTrue(p?.version === 1 && p.mode === PROOF_MODES[i] &&
+      p.repository === REPOSITORY &&
+      String(p.repositoryId) === REPOSITORY_ID &&
+      p.sourceSha === expected.sourceSha &&
+      same(p.runId, expected.runId) &&
+      same(p.runAttempt, expected.runAttempt) &&
+      same(p.jobId, expected.jobId) &&
+      p.runnerName === expected.runnerName &&
+      same(p.runnerId, expected.runnerId) &&
+      p.challenge === expected.challenge &&
+      Number.isSafeInteger(p.issuedAtMs) &&
+      Number.isSafeInteger(p.expiresAtMs) &&
+      p.issuedAtMs >= previousTime &&
+      p.issuedAtMs <= times.jobCompletedAtMs &&
+      p.expiresAtMs - p.issuedAtMs <= 120000 &&
+      p.expiresAtMs > p.issuedAtMs &&
+      typeof proof.signature === "string" &&
+      /^(?:[A-Za-z0-9+/]{4}){21}(?:[A-Za-z0-9+/]{2}==)$/.test(proof.signature) &&
+      verify(null, Buffer.from(JSON.stringify(p), "utf8"), key,
+        Buffer.from(proof.signature, "base64")),
+      "FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED");
+    previousTime = p.issuedAtMs;
+  }
+  return true;
+}
 const bound = (expected) => ({
   version: 1,
   repository: REPOSITORY,
@@ -618,6 +656,9 @@ async function main() {
       Date.now(),
     );
     // Sign now, but do not publish a contradictory/failed release result.
+    const allSignedModes = PROOF_MODES.map((mode) =>
+      readRootJson("controller-preflight-" + mode + ".json"));
+    verifyFourModeHostProofs(allSignedModes, pem, expected, times);
     const signedPostflight = hostSign(payload);
     const verdict = verifyIndependentRelease({
       summaryBytes,
