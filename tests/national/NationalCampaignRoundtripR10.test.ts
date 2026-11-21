@@ -149,22 +149,22 @@ describe("R10 three-nation observed-information live match", () => {
     const startingTroops = game.player(AI_A).troops();
     const attackCalls = vi.spyOn(game, "addExecution");
     for (let i = 0; i < 150; i++) game.executeNextTick();
-    // Only live NationExecution bots can declare for Alpha in this match.
-    // The canonical Game-owned WAR layer is authoritative in both the R9
-    // direct-command and R10 outcome-acknowledging execution implementations.
-    const botDeclaration = game.nationalWarState()?.wars.layers.some(
-      (layer) =>
-        layer.endedTick === null &&
-        layer.declaredBy === AI_A &&
-        layer.first.id === AI_A &&
-        layer.second.id === AI_B,
-    );
     const attacks = attackCalls.mock.calls
       .flat()
       .filter((execution) => execution instanceof AttackExecution);
     attackCalls.mockRestore();
 
-    expect(botDeclaration).toBe(true);
+    expect(
+      game
+        .nationalWarState()
+        ?.wars.layers.some(
+          (layer) =>
+            layer.endedTick === null &&
+            layer.declaredBy === AI_A &&
+            layer.first.id === AI_A &&
+            layer.second.id === AI_B,
+        ),
+    ).toBe(true);
     expect(game.nationalWarAuthority()?.atWar(AI_A, AI_B)).toBe(true);
     expect(attacks.length).toBeGreaterThan(0);
     expect(
