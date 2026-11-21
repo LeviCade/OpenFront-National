@@ -195,7 +195,7 @@ export interface TrustedNationalWarGamePort<
 
 /** Mandatory server-session/roster check, shared by execution and delivery. */
 function boundNationalWarActor<Actor extends { id(): PlayerID }>(
-  game: TrustedHostGamePort & {
+  game: Pick<TrustedHostGamePort, "config"> & {
     playerByClientID(clientID: ClientID): Actor | null | undefined;
   },
   gameID: string,
@@ -239,7 +239,12 @@ export function executeTrustedNationalWarCommand<
   ) => AuthenticatedNationalOwner | null,
   command: Command,
 ): Outcome {
-  const actor = boundNationalWarActor<Actor>(game, gameID, session, resolveSession);
+  const actor = boundNationalWarActor<Actor>(
+    game,
+    gameID,
+    session,
+    resolveSession,
+  );
   return game.performNationalWarCommandWithOutcome(actor, command);
 }
 
@@ -257,6 +262,11 @@ export function readTrustedNationalWarOutcomes<
     gameID: string,
   ) => AuthenticatedNationalOwner | null,
 ): readonly Outcome[] {
-  const actor = boundNationalWarActor<Actor>(game, gameID, session, resolveSession);
+  const actor = boundNationalWarActor<Actor>(
+    game,
+    gameID,
+    session,
+    resolveSession,
+  );
   return game.nationalWarCommandResults(actor);
 }
