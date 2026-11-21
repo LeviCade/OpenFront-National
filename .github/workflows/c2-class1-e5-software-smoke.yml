@@ -1,0 +1,57 @@
+name: C2 E5 ordinary Chromium four-mode diagnostic NOT GPU acceptance
+on:
+  push:
+    branches: [feature/c2-class1-e5-real-browser-playthrough-20261121]
+    paths: [".github/workflows/c2-class1-e5-software-smoke.yml"]
+permissions:
+  contents: read
+jobs:
+  software-browser:
+    name: "Software Chrome ${{ matrix.mode }} / never hardware certified"
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    strategy:
+      fail-fast: false
+      matrix:
+        mode:
+          - national-solo-desktop
+          - national-solo-mobile
+          - legacy-desktop
+          - legacy-mobile
+    env:
+      NATIONAL_QA_SOFTWARE_CDP: "1"
+      NATIONAL_REQUIRE_HARDWARE_GPU: "0"
+      CHROME_BIN: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Record ordinary Chrome availability, not a physical GPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$CHROME_BIN"
+          "$CHROME_BIN" --version
+          printf 'SOFTWARE_DIAGNOSTIC_ONLY=TRUE\nHARDWARE_ATTESTED=FALSE\n'
+      - name: Run exact-sha CDP playthrough, capture expected failures
+        shell: bash
+        run: |
+          set +e
+          timeout --kill-after=10s 215s node scripts/national-qa/browser-c2-run.mjs --mode "${{ matrix.mode }}"
+          code=$?
+          set -e
+          echo "C2_E5_REAL_CHROME_DIAGNOSTIC_EXIT=$code"
+          echo "C2_E5_NOT_PHYSICAL_GPU=true"
+          test -f "national-qa-artifacts/c2/${{ matrix.mode }}.json" || exit 1
+          node -e "const f=require('fs');const p='national-qa-artifacts/c2/${{ matrix.mode }}.json';const r=JSON.parse(f.readFileSync(p));if(r.exactSource!==process.env.GITHUB_SHA||r.hardware!=='BLOCKED')process.exit(2);console.log('C2_E5_MODE',r.mode,'GAMEPLAY',r.gameplay,'FIRST_FAILURE',r.firstFailure?.code,'STAGE',r.firstFailedStage,'WORKER_PACKETS',r.workerPacketCount,'SCREENSHOTS',r.screenshotCount)"
+      - name: Publish bounded per-mode JSON only (no screenshots/private logs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c2-e5-software-${{ matrix.mode }}-${{ github.sha }}
+          path: national-qa-artifacts/c2/${{ matrix.mode }}.json
+          if-no-files-found: warn
+          retention-days: 14
