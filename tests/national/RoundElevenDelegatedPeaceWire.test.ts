@@ -8,8 +8,8 @@
  * R11 combined CI MUST execute it, not skip or treat a draft as acceptance.
  */
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
-import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { NationalFoundEmpireExecution } from "@openfront/engine/execution/NationalFoundEmpireExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
@@ -165,9 +165,9 @@ describe("R11 E2 authenticated national-peace delegation execution", () => {
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
     expect(
-      restored.executions().some(
-        (e) => e instanceof NationalFoundEmpireExecution && e.isActive(),
-      ),
+      restored
+        .executions()
+        .some((e) => e instanceof NationalFoundEmpireExecution && e.isActive()),
     ).toBe(true);
   });
 
@@ -199,7 +199,9 @@ describe("R11 E2 authenticated national-peace delegation execution", () => {
       expect(game.nationalPoliticalAuthority()?.membersOf(EMPIRE)).toEqual(
         [A, B].sort(),
       );
-      expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(false);
+      expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(
+        false,
+      );
 
       // The reigning emperor (A) starts a NATIONAL B-C war and a separate
       // IMPERIAL war against D, both through normal stamped GameRunner turns.
@@ -236,7 +238,9 @@ describe("R11 E2 authenticated national-peace delegation execution", () => {
       expect(policy(game, C, "r11_foreign_forgery").accepted).toBe(false);
       grant(game, member, true, "r11_member_forgery");
       expect(policy(game, B, "r11_member_forgery").accepted).toBe(false);
-      expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(false);
+      expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(
+        false,
+      );
 
       grant(game, ruler, true, "r11_emperor_grant");
       expect(policy(game, A, "r11_emperor_grant")).toMatchObject({
@@ -246,11 +250,17 @@ describe("R11 E2 authenticated national-peace delegation execution", () => {
         commandKind: "set-national-peace-delegation",
         commandTargetId: EMPIRE,
       });
-      expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(true);
-      expect(game.nationalPoliticalAuthority()?.mayDeclareNational(B)).toBe(false);
+      expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(
+        true,
+      );
+      expect(game.nationalPoliticalAuthority()?.mayDeclareNational(B)).toBe(
+        false,
+      );
       // E3 alone projects the actual actor-bound receipt, not E2.
       expect(
-        privateResults(ruler).filter((entry) => entry.requestId === "r11_emperor_grant"),
+        privateResults(ruler).filter(
+          (entry) => entry.requestId === "r11_emperor_grant",
+        ),
       ).toEqual([
         expect.objectContaining({
           type: "national_set_peace_delegation",
@@ -264,7 +274,9 @@ describe("R11 E2 authenticated national-peace delegation execution", () => {
         privateResults(member).some((r) => r.requestId === "r11_emperor_grant"),
       ).toBe(false);
       expect(
-        privateResults(opposing).some((r) => r.requestId === "r11_emperor_grant"),
+        privateResults(opposing).some(
+          (r) => r.requestId === "r11_emperor_grant",
+        ),
       ).toBe(false);
 
       // Delegation is NATIONAL ONLY; the same actor cannot settle IMPERIAL.
@@ -278,7 +290,9 @@ describe("R11 E2 authenticated national-peace delegation execution", () => {
       const layersBeforeRevoke = game.nationalWarState()?.wars.layers;
       grant(game, ruler, false, "r11_emperor_revoke");
       expect(policy(game, A, "r11_emperor_revoke").accepted).toBe(true);
-      expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(false);
+      expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(
+        false,
+      );
       expect(game.nationalWarState()?.wars.layers).toEqual(layersBeforeRevoke);
       click(game, member, {
         type: "national_propose_peace",
@@ -305,15 +319,32 @@ describe("R11 E2 authenticated national-peace delegation execution", () => {
       expect(war(game, C, "r11_opponent_accepts").accepted).toBe(true);
       expect(game.nationalWarAuthority()?.atWar(B, C)).toBe(false);
       expect(game.nationalWarAuthority()?.atWar(B, D)).toBe(true);
-      expect(game.nationalWarState()?.wars.layers.find((l) => l.id === imperialId)?.endedTick).toBeNull();
-      expect(privateResults(member).some((x) => x.requestId === "r11_member_proposes" && x.recipientId === B)).toBe(true);
-      expect(privateResults(opposing).some((x) => x.requestId === "r11_opponent_accepts" && x.recipientId === C)).toBe(true);
+      expect(
+        game.nationalWarState()?.wars.layers.find((l) => l.id === imperialId)
+          ?.endedTick,
+      ).toBeNull();
+      expect(
+        privateResults(member).some(
+          (x) => x.requestId === "r11_member_proposes" && x.recipientId === B,
+        ),
+      ).toBe(true);
+      expect(
+        privateResults(opposing).some(
+          (x) => x.requestId === "r11_opponent_accepts" && x.recipientId === C,
+        ),
+      ).toBe(true);
       // A foreign participant cannot see either of those private results.
       turn(game, imperialFoe);
       expect(privateResults(imperialFoe)).toEqual([]);
-      const { restored: withGrant, bytes, again } = await roundTrip(game, "plains");
+      const {
+        restored: withGrant,
+        bytes,
+        again,
+      } = await roundTrip(game, "plains");
       expect(again).toEqual(bytes);
-      expect(withGrant.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(true);
+      expect(withGrant.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(
+        true,
+      );
 
       click(game, ruler, {
         type: "national_transfer_crown",
@@ -323,17 +354,25 @@ describe("R11 E2 authenticated national-peace delegation execution", () => {
       });
       expect(policy(game, A, "r11_appoint_new_emperor").accepted).toBe(true);
       expect(game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(B);
-      expect(game.nationalPoliticalAuthority()?.maySettleNational(A)).toBe(false);
+      expect(game.nationalPoliticalAuthority()?.maySettleNational(A)).toBe(
+        false,
+      );
       // Former A cannot appoint itself; new emperor B may lawfully grant
       // A, then immediately revoke. No stale appointment persists.
       grant(game, ruler, true, "r11_former_emperor_cannot_grant", A);
-      expect(policy(game, A, "r11_former_emperor_cannot_grant").accepted).toBe(false);
+      expect(policy(game, A, "r11_former_emperor_cannot_grant").accepted).toBe(
+        false,
+      );
       grant(game, member, true, "r11_new_emperor_grants", A);
       expect(policy(game, B, "r11_new_emperor_grants").accepted).toBe(true);
-      expect(game.nationalPoliticalAuthority()?.maySettleNational(A)).toBe(true);
+      expect(game.nationalPoliticalAuthority()?.maySettleNational(A)).toBe(
+        true,
+      );
       grant(game, member, false, "r11_new_emperor_revokes", A);
       expect(policy(game, B, "r11_new_emperor_revokes").accepted).toBe(true);
-      expect(game.nationalPoliticalAuthority()?.maySettleNational(A)).toBe(false);
+      expect(game.nationalPoliticalAuthority()?.maySettleNational(A)).toBe(
+        false,
+      );
       click(game, ruler, {
         type: "national_propose_peace",
         warId: imperialId,
@@ -347,7 +386,11 @@ describe("R11 E2 authenticated national-peace delegation execution", () => {
       });
       expect(war(game, B, "r11_new_imperial_proposal").accepted).toBe(true);
 
-      const { restored, bytes: finalBytes, again: finalAgain } = await roundTrip(game, "plains");
+      const {
+        restored,
+        bytes: finalBytes,
+        again: finalAgain,
+      } = await roundTrip(game, "plains");
       expect(finalAgain).toEqual(finalBytes);
       expect(restored.nationalWarState()).toEqual(game.nationalWarState());
       expect(restored.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(B);

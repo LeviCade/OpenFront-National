@@ -20,7 +20,9 @@ type NationalPeaceDelegationCommand = {
   memberId: string;
   enabled: boolean;
 };
-type ExecutableNationalCommand = NationalCommand | NationalPeaceDelegationCommand;
+type ExecutableNationalCommand =
+  | NationalCommand
+  | NationalPeaceDelegationCommand;
 
 /**
  * M0 authenticated NATIONAL command path.
