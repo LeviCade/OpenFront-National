@@ -114,7 +114,7 @@ describe("E2 Round Five authenticated WAR execution against actual spawned Game"
         nationId: "east-id",
         targetId: "south-id",
         targetKind: "nation",
-        clientID: "north-client",
+        clientID: "east-client",
       },
       {
         type: "national_declare_war",
@@ -170,7 +170,7 @@ describe("E2 Round Five authenticated WAR execution against actual spawned Game"
     enqueue(game, {
       type: "national_propose_peace",
       warId: national.id,
-      clientID: "north-client",
+      clientID: "east-client",
     });
     const nextMotion = game
       .nationalWarState()
