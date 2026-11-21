@@ -57,6 +57,7 @@ jobs:
       - name: Run four real Chromium gameplay probes (NO release attestation)
         shell: bash
         run: |
+          set +e
           set -uo pipefail
           failures=0
           mkdir -p national-qa-artifacts/gpu/diagnostic
@@ -95,6 +96,22 @@ jobs:
             } catch {
               outcome.reportValid = false;
             }
+          }
+          // No raw log text or private packet data leaves the disposable guest.
+          const logFile = '/tmp/national-gpu-' + mode + '.log';
+          if (existsSync(logFile)) {
+            const raw = readFileSync(logFile, 'utf8');
+            const classifier = [
+              ['WEBGL_SOFTWARE_GATE', /blocked by WebGL gate|SOFTWARE_RENDERER_FORBIDDEN/i],
+              ['GPU_CONTEXT', /WEBGL_CONTEXT_UNAVAILABLE|WEBGL2_UNAVAILABLE|WebGL2 context lost/i],
+              ['BROWSER_BOOT', /Timed out: Chromium remote debugging|No Chromium page target/i],
+              ['VITE_BOOT', /Timed out: Vite HTTP|Vite terminated/i],
+              ['SOURCE_ATTESTATION', /GPU_RELEASE_TRUST_ROOT_NOT_ENROLLED|INDEPENDENT_HARDWARE_PROOF_MISSING/i],
+              ['BROWSER_GAMEPLAY', /QA_R5_BROWSER_FAILURE|gameplay assertion|Timed out/i],
+            ];
+            outcome.failureClass = outcome.exitCode === 0
+              ? 'NONE'
+              : (classifier.find(([, pattern]) => pattern.test(raw))?.[0] ?? 'OTHER');
           }
           appendFileSync('national-qa-artifacts/gpu/diagnostic/outcomes.jsonl',
             JSON.stringify(outcome)+'\n');
