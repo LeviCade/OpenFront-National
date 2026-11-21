@@ -22,6 +22,7 @@ const allowedFields = new Set([
   "nationalConflicts",
   "nationalCommandResults",
   "nationalAccessionOffers",
+  "nationalObserverMap",
 ]);
 const permittedUpdates = new Set<number>([
   GameUpdateType.Player,
@@ -33,6 +34,150 @@ export interface TrustedNationalProjection {
   readonly tick: number;
   readonly [key: string]: unknown;
 }
+
+/** E3 / C2 authenticated visible map page, never a Game snapshot. */
+export interface TrustedNationalObserverMap {
+  readonly version: 1;
+  readonly tick: number;
+  readonly observerId: string;
+  readonly width: number;
+  readonly height: number;
+  readonly reset: boolean;
+  readonly cursor: number;
+  readonly nextCursor: number | null;
+  readonly tiles: readonly (readonly [number, number, number, number])[];
+  readonly units: readonly {
+    readonly id: number;
+    readonly ownerId: string;
+    readonly kind: string;
+    readonly tile: number;
+    readonly troops?: number;
+  }[];
+  readonly unitsTruncated: boolean;
+  readonly visibleBorders: readonly {
+    readonly targetId: string;
+    readonly access: "land" | "naval";
+  }[];
+  readonly ownResources: {
+    readonly troops: number;
+    readonly treasury: number;
+  };
+  readonly countries: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly alive: boolean;
+    readonly landPercent: number;
+    readonly status: string;
+  }[];
+}
+
+const safeInteger = (v: unknown, min: number, max: number): v is number =>
+  typeof v === "number" && Number.isSafeInteger(v) && v >= min && v <= max;
+const safeNumber = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v);
+
+/**
+ * Reject invalid/oversized E3 map pages before any state reaches the GPU.
+ * Ownership is NEVER inferred for tiles omitted from the authorized page.
+ */
+export function readTrustedNationalObserverMap(
+  value: unknown,
+  packetTick: number,
+): TrustedNationalObserverMap | null {
+  if (value === undefined) return null;
+  if (!record(value)) throw new Error("NATIONAL observer-map is not a record");
+  const maxMapTiles = 32_000_000;
+  const width = value.width;
+  const height = value.height;
+  if (
+    value.version !== 1 ||
+    value.tick !== packetTick ||
+    typeof value.observerId !== "string" ||
+    value.observerId.length === 0 ||
+    value.observerId.length > 128 ||
+    !safeInteger(width, 1, 16_384) ||
+    !safeInteger(height, 1, 16_384) ||
+    width * height > maxMapTiles ||
+    typeof value.reset !== "boolean" ||
+    !safeInteger(value.cursor, 0, maxMapTiles) ||
+    (value.nextCursor !== null &&
+      (!safeInteger(value.nextCursor, 0, maxMapTiles) ||
+        value.nextCursor < value.cursor)) ||
+    !Array.isArray(value.tiles) ||
+    value.tiles.length > 4096 ||
+    !Array.isArray(value.units) ||
+    value.units.length > 2048 ||
+    typeof value.unitsTruncated !== "boolean" ||
+    !Array.isArray(value.visibleBorders) ||
+    value.visibleBorders.length > 4096 ||
+    !record(value.ownResources) ||
+    !safeNumber(value.ownResources.troops) ||
+    !safeNumber(value.ownResources.treasury) ||
+    !Array.isArray(value.countries) ||
+    value.countries.length > 4096
+  ) throw new Error("NATIONAL invalid observer-map v1 metadata");
+  const validTile = (ref: unknown) => safeInteger(ref, 0, width * height - 1);
+  let lastRef = -1;
+  for (const tuple of value.tiles as unknown[]) {
+    if (
+      !Array.isArray(tuple) ||
+      tuple.length !== 4 ||
+      !validTile(tuple[0]) ||
+      tuple[0] <= lastRef ||
+      !safeInteger(tuple[1], 0, 65535) ||
+      !safeInteger(tuple[2], 0, 255) ||
+      !safeInteger(tuple[3], 0, 15)
+    ) throw new Error("NATIONAL invalid visible tile page");
+    lastRef = tuple[0];
+  }
+  for (const unit of value.units as unknown[]) {
+    if (
+      !record(unit) ||
+      !safeInteger(unit.id, 0, 0xffffffff) ||
+      typeof unit.ownerId !== "string" ||
+      unit.ownerId.length > 128 ||
+      typeof unit.kind !== "string" ||
+      unit.kind.length > 64 ||
+      !validTile(unit.tile) ||
+      (unit.troops !== undefined && !safeNumber(unit.troops))
+    ) throw new Error("NATIONAL invalid visible unit marker");
+  }
+  for (const border of value.visibleBorders as unknown[]) {
+    if (
+      !record(border) ||
+      typeof border.targetId !== "string" ||
+      border.targetId.length > 128 ||
+      (border.access !== "land" && border.access !== "naval")
+    ) throw new Error("NATIONAL invalid visible border");
+  }
+  for (const country of value.countries as unknown[]) {
+    if (
+      !record(country) ||
+      typeof country.id !== "string" ||
+      country.id.length > 128 ||
+      typeof country.name !== "string" ||
+      country.name.length > 256 ||
+      typeof country.alive !== "boolean" ||
+      !safeNumber(country.landPercent) ||
+      typeof country.status !== "string" ||
+      country.status.length > 64
+    ) throw new Error("NATIONAL invalid public country");
+  }
+  return value as unknown as TrustedNationalObserverMap;
+}
+
+/** Exactly E3's currently-visible terrain+ownership lanes. */
+export function observerMapTilePairs(
+  observerMap: TrustedNationalObserverMap | null,
+): number[] {
+  if (observerMap === null) return [];
+  const pairs: number[] = [];
+  for (const [tile, state, terrain] of observerMap.tiles) {
+    pairs.push(tile, state | (terrain << 16));
+  }
+  return pairs;
+}
+
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -116,6 +261,13 @@ export function materializeTrustedNationalUpdate(
   const tiles = numericArray(packet.packedTileUpdates, 1_048_576, true);
   if (tiles === undefined || tiles.length % 2 !== 0)
     throw new Error("NATIONAL invalid projected tile pairs");
+  const observerMap = readTrustedNationalObserverMap(
+    packet.nationalObserverMap,
+    packet.tick,
+  );
+  // E3's paged current-sight map gives late joiners real visible territory.
+  // All added states belong to the authenticated observer's current sight.
+  const visibleTilePairs = [...tiles, ...observerMapTilePairs(observerMap)];
   const units = numericArray(packet.packedUnitUpdates, 210_000);
   if (units !== undefined && units.length % 21 !== 0)
     throw new Error("NATIONAL invalid projected unit stride");
@@ -127,7 +279,7 @@ export function materializeTrustedNationalUpdate(
   return {
     tick: packet.tick,
     updates: safeUpdates,
-    packedTileUpdates: Uint32Array.from(tiles),
+    packedTileUpdates: Uint32Array.from(visibleTilePairs),
     ...(units === undefined ? {} : { packedUnitUpdates: Float64Array.from(units) }),
     ...(players === undefined
       ? {}
