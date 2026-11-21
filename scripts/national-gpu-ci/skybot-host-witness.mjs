@@ -42,6 +42,12 @@ const RENDER = "/dev/dri/renderD128";
 const LEASE = "/run/skybot-ci/intel-virgl-acl.lease";
 // Production requires an operator-installed nonexportable Ed25519 key bridge.
 const HOST_HSM_SIGNER = "/usr/local/libexec/skybot-ci/host-ed25519-hsm-sign";
+const PROOF_MODES = [
+  "national-desktop",
+  "national-mobile",
+  "legacy-desktop",
+  "legacy-mobile",
+];
 const PIXEL = [51, 102, 153, 255];
 const digest = (b) => createHash("sha256").update(b).digest("hex");
 const requireTrue = (condition, code) => {
@@ -525,8 +531,11 @@ const assertHostOnly = () => {
 async function main() {
   assertHostOnly();
   const phase = process.argv[2];
+  const mode = process.argv[3];
   requireTrue(
-    ["preflight", "postflight"].includes(phase) && process.argv.length === 3,
+    (phase === "postflight" && process.argv.length === 3) ||
+      ((phase === "preflight" || phase === "refresh-preflight") &&
+        process.argv.length === 4 && PROOF_MODES.includes(mode)),
     "UNAPPROVED_HOST_WITNESS_ACTION",
   );
   const expected = readRootJson("trusted-github-run-context.json");
@@ -551,19 +560,28 @@ async function main() {
   const hostSign = (payload) => signHostWithExternalKey(
     payload, pem, enrolled, hostTrust, liveHardwareSigner);
   let payload;
-  if (phase === "preflight") {
+  if (phase === "preflight" || phase === "refresh-preflight") {
     const physical = probePhysicalPreflight(expected);
     const observed = readRootJson("controller-gpu-observation.json");
+    requireTrue(observed.mode === mode,
+      "CONTROLLER_OBSERVED_WRONG_GPU_SCENARIO");
     const guest = validateControllerObservation(observed, expected);
     requireTrue(
       Math.abs(Date.now() - observed.observedAtMs) <= 120000,
       "OUT_OF_GUEST_WEBGL_OBSERVATION_STALE",
     );
-    payload = createHostPreflight(expected, times, physical, guest, Date.now());
-    safeWrite(
-      "controller-preflight.json",
-      hostSign(payload),
-    );
+    payload = {
+      ...createHostPreflight(expected, times, physical, guest, Date.now()),
+      mode,
+    };
+    const signed = hostSign(payload);
+    // Retain first preflight as independently reviewed host anchor.
+    if (phase === "preflight") {
+      requireTrue(mode === "national-desktop",
+        "FIRST_GPU_MODE_REQUIRED");
+      safeWrite("controller-preflight.json", signed);
+    }
+    safeWrite("controller-preflight-" + mode + ".json", signed);
   } else {
     requireTrue(
       times.jobCompletedAtMs !== null,
