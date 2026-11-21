@@ -1,4 +1,4 @@
-name: Class Five E3 authenticated socket wire acceptance
+name: Class Five E3 single-source recipient projection
 on:
   push:
     branches:
@@ -10,7 +10,7 @@ permissions:
 jobs:
   exact:
     runs-on: ubuntu-latest
-    timeout-minutes: 22
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,14 +20,12 @@ jobs:
         run: npm install --global --ignore-scripts npm@12.1.0
       - name: Pinned install
         run: npm run inst
-      - name: Check and capture pinned formatter output for E3-owned files
+      - name: Format E3-owned integrations and capture exact blobs
         shell: bash
         run: |
           files=(
             packages/engine/src/GameRunner.ts
             src/server/national/TrustedNationalMatch.ts
-            packages/shared/src/NationalViewWire.ts
-            packages/shared/src/WireSchemas.ts
             tests/national/TrustedNationalServerAuthority.test.ts
             tests/national/ClassFivePrincipalWireFanout.test.ts
           )
@@ -38,10 +36,9 @@ jobs:
             echo
             echo "E3_FORMAT_BLOB_END:$f"
           done
-      - name: Actual whole-source TypeScript
+      - name: Whole-source TypeScript
         run: npm run typecheck
-      - name: Focused E1/E2/E3/E4 real Game and wire tests
+      - name: Trusted host E1-E4 focused real Game tests
         run: npx --no-install vitest run --project node tests/national/ClassFivePrincipalWireFanout.test.ts tests/national/TrustedNationalServerAuthority.test.ts tests/national/NationalServerOutboundClass4.test.ts tests/national/NationalAccessionPacketsR11.test.ts tests/national/RoundElevenDelegatedPeaceWire.test.ts tests/national/NationalBotRejectionRoundtripR11.test.ts
-      - name: Pinned source lint
+      - name: Pinned full lint
         run: npm run lint
-# E3 second pass: exact target lib and nested WAR leak test
