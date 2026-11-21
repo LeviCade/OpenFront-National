@@ -10,6 +10,7 @@ import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
+import { NationalRuntime } from "@openfront/engine/national/NationalRuntime";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import {
   NationalOutboundFilter,
@@ -27,6 +28,12 @@ const C = new PlayerInfo("Foreign", PlayerType.Human, "R11CLIC1", "R11ACTC1");
 const D = new PlayerInfo("Reverse", PlayerType.Human, "R11CLID1", "R11ACTD1");
 const EMPIRE = "r11_real_empire";
 const PLAYERS = [A, B, C, D];
+const INTEGRATED_DELEGATION =
+  typeof (
+    NationalRuntime.prototype as typeof NationalRuntime.prototype & {
+      hasDelegatedNationalPeace?: (memberId: string) => boolean;
+    }
+  ).hasDelegatedNationalPeace === "function";
 
 type R11Packet = Omit<GameUpdateViewData, "nationalCommandResults"> & {
   readonly nationalCommandResults?: readonly OutboundNationalResult[];
@@ -373,4 +380,211 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
     ]);
     expect(session(game).next()).not.toHaveProperty("nationalAccessionOffers");
   });
+  /**
+   * Runs only after E1, E2 and E4 have been assembled into the same source
+   * tree. The old E3-only base lacks the real delegation intent entirely.
+   * IMPORTANT: on the combined build this MUST be one executed test, not an
+   * E4 parser mock or a skipped test, and the E4 export is mandatory.
+   */
+  it.runIf(INTEGRATED_DELEGATION)(
+    "combined E1→E2→E3→E4 recipient and delegation receipts survive real ticks",
+    async () => {
+      // Use the actual E4 production parsers. A missing integration export is
+      // an outright failure, never a substituted reader implemented by E3.
+      const e4 = await import("../../src/client/NationalDiplomacyState");
+      const readOffers: unknown = Reflect.get(
+        e4,
+        "readNationalAccessionOffers",
+      );
+      const readPolitical: unknown = Reflect.get(
+        e4,
+        "readNationalPoliticalResults",
+      );
+      expect(typeof readOffers).toBe("function");
+      expect(typeof readPolitical).toBe("function");
+      if (
+        typeof readOffers !== "function" ||
+        typeof readPolitical !== "function"
+      )
+        throw new Error("R11 E3/E4 production wire reader missing");
+
+      const game = await seeded();
+      const emperor = session(game, A.clientID!);
+      const candidate = session(game, D.clientID!);
+      const invitee = session(game, B.clientID!);
+      const outsider = session(game, C.clientID!);
+      const spectator = session(game);
+      const receiptId = (hex: string) => "np_" + hex.repeat(32);
+
+      emperor.send(found());
+      // E1 expressly permits a candidate to initiate accession into an
+      // existing empire. In this direction the EMPEROR is the recipient;
+      // candidateId must stay D (NOT be rewritten to A for E4).
+      const issued = candidate.next(
+        order("national_offer_empire", receiptId("1"), D.clientID!, D.id),
+      );
+      expect(issued.nationalCommandResults).toBeUndefined();
+      const emperorOffer = emperor.next();
+      expect(emperorOffer.nationalAccessionOffers).toMatchObject({
+        version: 1,
+        recipientId: A.id,
+        offers: [
+          {
+            empireId: EMPIRE,
+            candidateId: D.id,
+            proposerId: D.id,
+            recipientId: A.id,
+          },
+        ],
+      });
+      // This is the missing cross-owner contract: E4 MUST recognize an
+      // E3-projected, E1-real candidate→emperor offer as actionable.
+      expect(
+        readOffers(emperorOffer.nationalAccessionOffers, A.id),
+      ).toMatchObject({
+        version: 1,
+        recipientId: A.id,
+        offers: [
+          {
+            empireId: EMPIRE,
+            candidateId: D.id,
+            proposerId: D.id,
+            recipientId: A.id,
+          },
+        ],
+      });
+      expect(readOffers(emperorOffer.nationalAccessionOffers, C.id)).toBeNull();
+      expect(offers(candidate.next())).toEqual([]);
+      expect(offers(outsider.next())).toEqual([]);
+      const anonymous = spectator.next();
+      expect(anonymous).not.toHaveProperty("nationalAccessionOffers");
+      expect(anonymous).not.toHaveProperty("nationalCommandResults");
+
+      // Distinguish a pending E2 stamped acceptance from a real E1 receipt.
+      const pendingAccept = emperor.next(
+        order("national_accept_empire", receiptId("2"), A.clientID!, D.id),
+      );
+      expect(offers(pendingAccept)).toHaveLength(1);
+      expect(emperor.receipts(receiptId("2"))).toEqual([]);
+      const accepted = emperor.next();
+      expect(offers(accepted)).toEqual([]);
+      expect(game.nationalPoliticalAuthority()?.empireOf(D.id)).toBe(EMPIRE);
+      expect(readPolitical(accepted.nationalCommandResults, A.id)).toEqual([
+        expect.objectContaining({
+          type: "national_accept_empire",
+          actorId: A.id,
+          recipientId: A.id,
+          requestId: receiptId("2"),
+          commandTargetId: EMPIRE,
+          accepted: true,
+        }),
+      ]);
+      expect(readPolitical(accepted.nationalCommandResults, B.id)).toEqual([]);
+      expect(offers(invitee.next())).toEqual([]);
+
+      // New E1 peace delegation is a DISTINCT political receipt from real
+      // E2 authenticated stamped execution. No UI fake or Game helper call.
+      const grantId = receiptId("3");
+      const grantIntent = {
+        type: "national_set_peace_delegation",
+        empireId: EMPIRE,
+        memberId: D.id,
+        enabled: true,
+        requestId: grantId,
+        clientID: A.clientID!,
+      };
+      emperor.next(grantIntent);
+      expect(emperor.receipts(grantId)).toEqual([]);
+      const grantPacket = emperor.next();
+      const canonical = game
+        .nationalPoliticalCommandResults(game.player(A.id))
+        .find((item) => item.requestId === grantId);
+      expect(canonical).toMatchObject({
+        actorId: A.id,
+        recipientId: A.id,
+        commandKind: "set-national-peace-delegation",
+        commandTargetId: EMPIRE,
+        accepted: true,
+      });
+      expect(game.nationalPoliticalAuthority()?.maySettleNational(D.id)).toBe(
+        true,
+      );
+      const forwarded = grantPacket.nationalCommandResults?.find(
+        (item) => item.requestId === grantId,
+      );
+      expect(forwarded).toMatchObject({
+        actorId: canonical?.actorId,
+        recipientId: canonical?.recipientId,
+        type: "national_set_peace_delegation",
+        requestId: canonical?.requestId,
+        commandTargetId: canonical?.commandTargetId,
+        sequence: canonical?.sequence,
+        tick: canonical?.tick,
+        accepted: canonical?.accepted,
+        reason: canonical?.reason,
+      });
+      // The E4 accession result parser cannot mistake a delegation
+      // receipt for consent to accession.
+      expect(readPolitical(grantPacket.nationalCommandResults, A.id)).toEqual(
+        [],
+      );
+      expect(invitee.next().nationalCommandResults).toBeUndefined();
+      expect(outsider.next().nationalCommandResults).toBeUndefined();
+      expect(spectator.next().nationalCommandResults).toBeUndefined();
+
+      // A foreign country's own rejected request is private to THAT
+      // foreign requester, not to the ruler or newly-admitted member.
+      const rejectedId = receiptId("4");
+      outsider.next({
+        ...grantIntent,
+        requestId: rejectedId,
+        clientID: C.clientID!,
+      });
+      const refused = outsider.next();
+      expect(refused.nationalCommandResults).toEqual([
+        expect.objectContaining({
+          type: "national_set_peace_delegation",
+          actorId: C.id,
+          recipientId: C.id,
+          requestId: rejectedId,
+          commandTargetId: EMPIRE,
+          accepted: false,
+          reason: "political-rule",
+        }),
+      ]);
+      expect(emperor.next().nationalCommandResults).toBeUndefined();
+      expect(candidate.next().nationalCommandResults).toBeUndefined();
+      expect(spectator.next().nationalCommandResults).toBeUndefined();
+
+      // Pending third-party offers become invalid on a real E1 crown
+      // transfer; never display old actionable state after restore.
+      emperor.send(
+        order("national_offer_empire", receiptId("5"), A.clientID!, B.id),
+      );
+      const beforeTransfer = invitee.next();
+      expect(
+        readOffers(beforeTransfer.nationalAccessionOffers, B.id),
+      ).toMatchObject({
+        offers: [{ empireId: EMPIRE, candidateId: B.id, recipientId: B.id }],
+      });
+      emperor.send(
+        order("national_transfer_crown", receiptId("6"), A.clientID!, D.id),
+      );
+      const revoked = invitee.next();
+      expect(readOffers(revoked.nationalAccessionOffers, B.id)).toMatchObject({
+        offers: [],
+      });
+      expect(game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(D.id);
+      const { restored, bytes, again } = await roundTrip(game, "plains");
+      expect(again).toEqual(bytes);
+      const postRestore = session(restored, B.clientID!).next();
+      expect(
+        readOffers(postRestore.nationalAccessionOffers, B.id),
+      ).toMatchObject({ offers: [] });
+      expect(postRestore.nationalCommandResults).toBeUndefined();
+      expect(session(restored).next()).not.toHaveProperty(
+        "nationalAccessionOffers",
+      );
+    },
+  );
 });

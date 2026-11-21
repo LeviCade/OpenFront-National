@@ -55,6 +55,7 @@ function fixture() {
     sourceSha,
     runId: "44920010367",
     runAttempt: "1",
+    jobId: "14920010367",
     runnerName: "skybot-ci-gpu-test-runner",
     runnerId: "12345",
     challenge,
@@ -74,6 +75,8 @@ function fixture() {
       scenario: mode,
       outcome: "UNVERIFIED",
       reason: "SIGNED_WITNESS_NOT_VERIFIED",
+      firstFailedStage: null,
+      releaseCertified: false,
       exitCode: 0,
       stageComplete: true,
       reportPresent: true,
@@ -249,6 +252,7 @@ test("tampered Ed25519 signature or source/run/runner/nonce binding rejects", ()
       ["sourceSha", "f".repeat(40)],
       ["runId", "40000000000"],
       ["runAttempt", "3"],
+      ["jobId", "799"],
       ["runnerName", "stranger-runner"],
       ["runnerId", "99999"],
       ["challenge", "e".repeat(64)],
@@ -379,6 +383,34 @@ test("wrong lane, missing mode, failing NATIONAL gameplay and forged guest certi
     );
     assert.equal(
       mutate((s) => {
+        s.modes["national-desktop"].outcome = "FAIL";
+      }).reason,
+      "GAMEPLAY_MODE_EVIDENCE_INCOMPLETE_national-desktop",
+    );
+    assert.equal(
+      mutate((s) => {
+        s.modes["national-desktop"].outcome = "UNVERIFIED";
+        s.modes["national-desktop"].reason = "GAMEPLAY_STAGE_FOUND_EMPIRE";
+      }).reason,
+      "GAMEPLAY_MODE_EVIDENCE_INCOMPLETE_national-desktop",
+    );
+    assert.equal(
+      mutate((s) => {
+        s.modes["national-desktop"].reason = "SIGNED_WITNESS_NOT_VERIFIED";
+        s.modes["national-desktop"].firstFailedStage = "found-empire";
+      }).reason,
+      "GAMEPLAY_MODE_EVIDENCE_INCOMPLETE_national-desktop",
+    );
+    assert.equal(
+      mutate((s) => {
+        s.modes["national-desktop"].firstFailedStage = null;
+        s.modes["national-desktop"].releaseCertified = true;
+      }).reason,
+      "GAMEPLAY_MODE_EVIDENCE_INCOMPLETE_national-desktop",
+    );
+    assert.equal(
+      mutate((s) => {
+        s.modes["national-desktop"].releaseCertified = false;
         s.modes["national-desktop"].exitCode = 1;
         s.modes["national-desktop"].outcome = "FAIL";
       }).reason,

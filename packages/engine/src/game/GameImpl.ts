@@ -657,10 +657,39 @@ export class GameImpl implements Game {
     return this._nationalWar?.snapshot() ?? null;
   }
 
+  /**
+   * Trusted-host defense in depth. E2 MUST retain the originating authenticated
+   * server-stamped clientID in every pending execution/snapshot and pass it to
+   * these Game entry points. Never substitute the Player's later clientID:
+   * a takeover changes it on the SAME Player object.
+   *
+   * Undefined is kept only for existing internally trusted bots and legacy
+   * callers; browser payloads must NEVER select/omit this parameter.
+   */
+  private assertNationalExecutionPrincipal(
+    actor: Player,
+    authenticatedClientID?: ClientID,
+  ): void {
+    if (this._players.get(actor.id()) !== actor)
+      throw new Error("NATIONAL: forged actor");
+    if (
+      authenticatedClientID !== undefined &&
+      (actor.type() !== PlayerType.Human ||
+        actor.clientID() !== authenticatedClientID ||
+        this.playerByClientID(authenticatedClientID) !== actor)
+    )
+      throw new Error("NATIONAL: stale authenticated actor session");
+  }
+
   /** Legacy direct Game WAR port: preserves real WarLedger rule exceptions. */
-  performNationalWarCommand(actor: Player, command: NationalWarCommand): void {
+  performNationalWarCommand(
+    actor: Player,
+    command: NationalWarCommand,
+    authenticatedClientID?: ClientID,
+  ): void {
     if (this._nationalWar === null || this._national === null)
       throw new Error("NATIONAL war: mode not enabled");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
     if (
       this.inSpawnPhase() ||
       this._players.get(actor.id()) !== actor ||
@@ -683,6 +712,7 @@ export class GameImpl implements Game {
     actor: Player,
     command: NationalWarCommand & { readonly requestId?: string },
     requestId: string | null = null,
+    authenticatedClientID?: ClientID,
   ): NationalWarCommandOutcome {
     if (
       this._nationalWar === null ||
@@ -690,10 +720,9 @@ export class GameImpl implements Game {
       this._nationalGovernance === null
     )
       throw new Error("NATIONAL war: mode not enabled");
-    // No journal entry or state change for a forged Player object, even when
-    // that object supplies a real player ID.
-    if (this._players.get(actor.id()) !== actor)
-      throw new Error("NATIONAL war: forged actor");
+    // Reject stale/borrowed sessions BEFORE idempotent receipt lookup. A
+    // takeover cannot resurrect the old session's once-accepted WAR result.
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
     const suppliedRequestId = requestId ?? command.requestId ?? null;
     if (
       suppliedRequestId !== null &&
@@ -1001,8 +1030,13 @@ export class GameImpl implements Game {
   }
 
   /** Trusted player object from authenticated execution, never caller-supplied ID. */
-  performNationalCommand(actor: Player, command: NationalCommand): void {
+  performNationalCommand(
+    actor: Player,
+    command: NationalCommand,
+    authenticatedClientID?: ClientID,
+  ): void {
     if (this._national === null) throw new Error("NATIONAL is not enabled");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
     if (
       this.inSpawnPhase() ||
       this._players.get(actor.id()) !== actor ||
@@ -1025,11 +1059,11 @@ export class GameImpl implements Game {
     actor: Player,
     empireId: string,
     requestId: string | null = null,
+    authenticatedClientID?: ClientID,
   ): NationalFoundEmpireResult {
     if (this._national === null || this._nationalGovernance === null)
       throw new Error("NATIONAL command journal: mode not enabled");
-    if (this._players.get(actor.id()) !== actor)
-      throw new Error("NATIONAL command journal: forged actor");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
     // Reject pathological identifiers without persisting unbounded client
     // input or partially committing a result when Zod validates the journal.
     const recordedEmpireId =
@@ -1082,11 +1116,11 @@ export class GameImpl implements Game {
     actor: Player,
     command: Exclude<NationalCommand, { kind: "found-empire" }>,
     requestId: string | null = null,
+    authenticatedClientID?: ClientID,
   ): NationalPoliticalCommandResult {
     if (this._national === null || this._nationalGovernance === null)
       throw new Error("NATIONAL command journal: mode not enabled");
-    if (this._players.get(actor.id()) !== actor)
-      throw new Error("NATIONAL command journal: forged actor");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
     const targetId = "pactId" in command ? command.pactId : command.empireId;
     const recordedTargetId =
       typeof targetId === "string" &&
