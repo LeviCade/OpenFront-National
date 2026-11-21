@@ -74,7 +74,10 @@ export class NationalServerRecipientSession {
     if (!game.config().nationalMode()) {
       throw new Error("NATIONAL trusted server projection in legacy mode");
     }
-    if (typeof connection.sessionId !== "string" || connection.sessionId.length < 1) {
+    if (
+      typeof connection.sessionId !== "string" ||
+      connection.sessionId.length < 1
+    ) {
       throw new Error("NATIONAL trusted server connection identity required");
     }
     this.originalSessionId = connection.sessionId;

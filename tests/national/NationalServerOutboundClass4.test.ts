@@ -226,11 +226,17 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
     sendB.link.connected = false;
     expect(sendB.server.projectPolitics()).toBeNull();
     const rejoined = outgoing(game, B.clientID!);
-    expect(rejoined.server.projectPolitics()?.nationalAccessionOffers?.offers).toHaveLength(1);
-    expect(rejoined.server.projectPolitics()?.nationalCommandResults).toBeUndefined();
+    expect(
+      rejoined.server.projectPolitics()?.nationalAccessionOffers?.offers,
+    ).toHaveLength(1);
+    expect(
+      rejoined.server.projectPolitics()?.nationalCommandResults,
+    ).toBeUndefined();
     ruler.send(command("national_transfer_crown", "4", A.clientID!, D.id));
     expect(game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(D.id);
-    expect(rejoined.server.projectPolitics()?.nationalAccessionOffers?.offers).toEqual([]);
+    expect(
+      rejoined.server.projectPolitics()?.nationalAccessionOffers?.offers,
+    ).toEqual([]);
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
     const reconnectB = outgoing(restored, B.clientID!);
@@ -339,7 +345,9 @@ describe("Class Four: trusted-host recipient-only NATIONAL outbound interface", 
     recycled.link.sessionId = "different-authenticated-socket";
     expect(recycled.server.projectPolitics()).toBeNull();
     const freshA = outgoing(game, A.clientID!);
-    expect(freshA.server.projectPolitics()?.nationalCommandResults).toBeUndefined();
+    expect(
+      freshA.server.projectPolitics()?.nationalCommandResults,
+    ).toBeUndefined();
     a.link.connected = false;
     expect(a.server.projectPolitics()).toBeNull();
     a.link.connected = true;
