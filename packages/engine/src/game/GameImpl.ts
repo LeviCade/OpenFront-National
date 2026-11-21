@@ -1102,6 +1102,11 @@ export class GameImpl implements Game {
           return "political-rule";
         }
       },
+      () =>
+        this._national?.snapshot().politics.empires.some(
+          (empire) =>
+            empire.id === recordedEmpireId && empire.leaderId === actor.id(),
+        ) === true,
     );
   }
 

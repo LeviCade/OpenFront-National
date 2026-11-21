@@ -196,6 +196,7 @@ export class NationalGovernanceState {
     gameTick: number,
     suppliedRequestId: string | null,
     perform: () => FoundEmpireReason,
+    mayReplayAccepted?: () => boolean,
   ): NationalFoundEmpireResult {
     return this.recordCommand(
       actorId,
@@ -204,6 +205,9 @@ export class NationalGovernanceState {
       suppliedRequestId,
       perform,
       null,
+      null,
+      null,
+      mayReplayAccepted,
     );
   }
 
