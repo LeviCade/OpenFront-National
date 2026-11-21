@@ -804,6 +804,7 @@ async function main() {
       await step("legacy-player-action", async () => {
         const initial = await worker();
         const lastTick = Math.max(0, ...initial.map((p) => p.tick ?? 0));
+        const spawnBefore = await evaluate("(() => { const e=window.__nationalQaFind('game-right-sidebar'); const g=e?.game ?? e?.gameView; const p=g?.myPlayer?.(); return p ? {spawned:p.hasSpawned?.() === true, tiles:p.numTilesOwned?.() ?? 0} : null; })()");
         for (const [u, v] of [[0.55, 0.55], [0.38, 0.48], [0.7, 0.42]]) {
           const position = await evaluate("(() => { const canvas = [...document.querySelectorAll('canvas')].filter((e) => e.getBoundingClientRect().width > 150).sort((a,b) => b.getBoundingClientRect().width-a.getBoundingClientRect().width)[0]; const r=canvas?.getBoundingClientRect(); return r ? { x: r.x + r.width * "+u+", y:r.y + r.height * "+v+" } : null; })()");
           if (!position) throw Error("LEGACY_PLAYABLE_CANVAS_MISSING");
@@ -816,8 +817,14 @@ async function main() {
             (p.hasTerritoryDelta || p.hasAuthoritativeAttackDelta));
         }, "legacy real map input followed by authoritative tile or attack update", 35, 300);
         if (!activity) throw Error("LEGACY_PLAYER_ACTION_UNCONFIRMED");
+        const spawned = await poll(async () => {
+          const state = await evaluate("(() => { const e=window.__nationalQaFind('game-right-sidebar'); const g=e?.game ?? e?.gameView; const p=g?.myPlayer?.(); return p ? {spawned:p.hasSpawned?.() === true, tiles:p.numTilesOwned?.() ?? 0} : null; })()");
+          return state?.spawned && state.tiles > 0 &&
+            (!spawnBefore?.spawned || state.tiles > spawnBefore.tiles) ? state : null;
+        }, "real legacy player spawn/territory after map input", 35, 300);
+        if (!spawned) throw Error("LEGACY_SPAWN_NOT_AUTHORITATIVELY_OBSERVED");
         record("legacy-actual-map-interaction-authoritative-update", {
-          via: mobile ? "touch" : "mouse", lastTick,
+          via: mobile ? "touch" : "mouse", lastTick, playerTiles: spawned.tiles,
         });
         await capture("legacy-player-action");
       });
@@ -1102,6 +1109,10 @@ async function main() {
       if (!listened) throw Error("REAL_MAP_ATTACK_OBSERVER_UNAVAILABLE");
       const existing = await worker();
       const lastSequence = Math.max(0, ...existing.map((p) => p.sequence ?? 0));
+      const previousOutgoing = await evaluate("window.__nationalQaFind('national-diplomacy-panel')?.game?.myPlayer?.()?.outgoingAttacks?.()?.length ?? null");
+      if (!Number.isSafeInteger(previousOutgoing)) {
+        throw Error("PLAYER_ATTACK_STATE_UNAVAILABLE");
+      }
       // Collapse the UI, then operate the actual canvas through CDP input.
       await click("NATIONAL.*Diplomacy", "national-diplomacy-panel", 35);
       for (const [u,v] of [[0.55,0.55],[0.4,0.44],[0.65,0.45],[0.52,0.62],[0.7,0.7]]) {
@@ -1118,11 +1129,14 @@ async function main() {
       }
       const authoritative = await poll(async () => {
         const packets = await worker();
-        return packets.some((p) =>
+        const attackCount = await evaluate("window.__nationalQaFind('national-diplomacy-panel')?.game?.myPlayer?.()?.outgoingAttacks?.()?.length ?? null");
+        const resultFromEngine = packets.some((p) =>
           p.sequence > lastSequence &&
           (p.hasAuthoritativeAttackDelta || p.hasAuthoritativeMotion));
-      }, "real map attack plus authoritative attack or motion packet", 60, 300);
-      if (!authoritative) throw Error("MAP_ASSAULT_LACKS_ENGINE_STATE_CHANGE");
+        return Number.isSafeInteger(attackCount) &&
+          attackCount > previousOutgoing && resultFromEngine;
+      }, "actual own outgoing attack plus authoritative combat packet", 60, 300);
+      if (!authoritative) throw Error("MAP_ASSAULT_LACKS_OWN_ENGINE_ATTACK");
       record("actual-war-map-assault", {
         input: mobile ? "touch" : "mouse",
         dispatched: attacks.length, observedEngineChange: true,
