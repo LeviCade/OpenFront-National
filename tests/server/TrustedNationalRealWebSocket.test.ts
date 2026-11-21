@@ -11,7 +11,6 @@ import type { AddressInfo } from "node:net";
 import { GameMode, GameType, PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import type { GameConfig } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
-import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { uuidToBase64url } from "@openfront/shared/Base64";
 import type { WireGameStartInfo, ClientMessage, ServerMessage } from "@openfront/shared/WireSchemas";
@@ -42,6 +41,8 @@ const MATCH_ID = cid("c2nat");
 const EMPIRE = "c2-first-empire";
 const foundToken = "c2_real_auth_found";
 const warToken = "c2_real_auth_war";
+/** Physical client-spawn requests use these terrain refs, not server inserts. */
+let liveSpawnRefs: number[] = [];
 
 class NationalServerConfig extends TestConfig {
   constructor(config: GameConfig, replay: boolean) {
@@ -67,14 +68,11 @@ async function productionRunner(info: WireGameStartInfo): Promise<GameRunner> {
     undefined,
     NationalServerConfig,
   );
-  for (let i = 0; i < humans.length; i++) {
-    game.addExecution(
-      new SpawnExecution(info.gameID, humans[i], game.ref(20 + 30 * i, 20)),
-    );
-  }
+  // No server-side SpawnExecution shortcut. Every human must choose a tile
+  // through their own signed, physically connected WebSocket session.
+  liveSpawnRefs = humans.map((_, i) => game.ref(20 + 30 * i, 20));
   game.executeNextTick();
   game.executeNextTick();
-  game.endSpawnPhase();
   return new GameRunner(
     game,
     new Executor(game, info.gameID, undefined),
@@ -320,6 +318,21 @@ describe("C2 E2 REAL WebSocket three-account NATIONAL server", () => {
     expect(new Set(started.map(x => x.gameStartInfo.gameID))).toEqual(new Set([MATCH_ID]));
     await waitFor(() => [a,b,c].every(p => recipientPackets(p).length > 0), "three private projections");
 
+    for (let i = 0; i < 3; i++) {
+      send([a, b, c][i], {
+        type: "intent",
+        intent: { type: "spawn", tile: liveSpawnRefs[i] },
+      });
+    }
+    const authoritative = requireCanonical().game;
+    await waitFor(
+      () => SEAT_IDS.slice(0, 3).every(
+        (id) => authoritative.playerByClientID(id)?.hasSpawned() === true,
+      ),
+      "three independent WebSocket-backed actual player spawns",
+    );
+    authoritative.endSpawnPhase();
+
     send(a, { type: "intent", intent: {
       type: "national_found_empire", empireId: EMPIRE, requestId: foundToken,
       clientID: SEAT_IDS[1], // the wire serializer must never grant this forged actor
@@ -344,6 +357,7 @@ describe("C2 E2 REAL WebSocket three-account NATIONAL server", () => {
     };
     send(a, { type: "intent", intent: war });
     await waitFor(() => receipt(a, warToken) !== undefined, "WAR canonical command receipt");
+    expect((receipt(a, warToken) as { accepted: boolean }).accepted).toBe(true);
     expect(receipt(b, warToken)).toBeUndefined();
     expect(receipt(c, warToken)).toBeUndefined();
 
