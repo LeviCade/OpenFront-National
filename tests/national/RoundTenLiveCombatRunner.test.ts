@@ -17,10 +17,10 @@ import { roundTrip } from "../util/Snapshot";
 
 const gameID = "r10-live-combat";
 const humans = [
-  new PlayerInfo("Alpha", PlayerType.Human, "r10-a-client", "r10-a"),
-  new PlayerInfo("Bravo", PlayerType.Human, "r10-b-client", "r10-b"),
-  new PlayerInfo("Charlie", PlayerType.Human, "r10-c-client", "r10-c"),
-  new PlayerInfo("Delta", PlayerType.Human, "r10-d-client", "r10-d"),
+  new PlayerInfo("Alpha", PlayerType.Human, "R10ALPHA1", "r10-a"),
+  new PlayerInfo("Bravo", PlayerType.Human, "R10BRAVO1", "r10-b"),
+  new PlayerInfo("Charlie", PlayerType.Human, "R10CHARL1", "r10-c"),
+  new PlayerInfo("Delta", PlayerType.Human, "R10DELTA1", "r10-d"),
 ];
 const [A, B, C, D] = humans.map((info) => info.id);
 const [clientA, clientB, clientC] = humans.map((info) => info.clientID!);
@@ -290,7 +290,7 @@ describe("R10 E2 actual GameRunner NATIONAL war, MDA and peace", () => {
     const game = await liveGame();
     pact(game, B, "r10-rejections", [D]);
     const { engine, errors } = runner(game);
-    turn(game, engine, war(B, "r10-forged", "not-a-real-client"));
+    turn(game, engine, war(B, "r10-forged", "R10FORGE1"));
     turn(game, engine);
     expect(game.nationalWarState()!.wars.layers).toHaveLength(0);
 
