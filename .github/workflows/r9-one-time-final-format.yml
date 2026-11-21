@@ -1,0 +1,40 @@
+name: NATIONAL R9 — final pinned one-file formatter
+
+on:
+  push:
+    branches:
+      - stage3/round9-combined-acceptance-20261121
+    paths:
+      - .github/workflows/r9-one-time-final-format.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix-final-format:
+    if: github.repository == 'LeviCade/OpenFront-National' && github.actor == 'LeviCade'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+      - run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+          npm exec -- oxfmt --write tests/national/RoundEightWarRequestId.test.ts
+          npm run format:check
+      - run: |
+          set -euo pipefail
+          git rm .github/workflows/r9-one-time-final-format.yml
+          git add tests/national/RoundEightWarRequestId.test.ts
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style(stage3): verify final pinned exact-tree formatting"
+          git push origin HEAD:refs/heads/stage3/round9-combined-acceptance-20261121
