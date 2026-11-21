@@ -1,4 +1,7 @@
-import { PlayerType, type GameUpdates } from "@openfront/engine-api/game/GameTypes";
+import {
+  PlayerType,
+  type GameUpdates,
+} from "@openfront/engine-api/game/GameTypes";
 /**
  * NATIONAL per-recipient outbound packet projection.
  *
@@ -164,8 +167,7 @@ export function projectNationalAccessionOffers(
   game: Game,
   observerId: string | null,
 ): NationalAccessionOffersView | undefined {
-  if (!game.config().nationalMode() || observerId === null)
-    return undefined;
+  if (!game.config().nationalMode() || observerId === null) return undefined;
   if (!game.hasPlayer(observerId)) return undefined;
   const observer = game.player(observerId);
   // A spectator, pre-spawn player or eliminated player cannot hold an
@@ -193,7 +195,7 @@ export function projectNationalAccessionOffers(
   const offers: NationalAccessionOffersView["offers"][number][] = [];
   for (const offer of offered) {
     const leaderId = leaders.get(offer.empireId);
-    const pairKey = offer.empireId + "\\0" + offer.candidateId;
+    const pairKey = JSON.stringify([offer.empireId, offer.candidateId]);
     if (
       !publicId(offer.empireId) ||
       !publicId(offer.candidateId) ||

@@ -21,10 +21,30 @@ import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
-const A = new PlayerInfo("Emperor", PlayerType.Human, "r11-client-a", "r11-actor-a");
-const B = new PlayerInfo("Invitee", PlayerType.Human, "r11-client-b", "r11-actor-b");
-const C = new PlayerInfo("Foreign", PlayerType.Human, "r11-client-c", "r11-actor-c");
-const D = new PlayerInfo("Reverse", PlayerType.Human, "r11-client-d", "r11-actor-d");
+const A = new PlayerInfo(
+  "Emperor",
+  PlayerType.Human,
+  "r11-client-a",
+  "r11-actor-a",
+);
+const B = new PlayerInfo(
+  "Invitee",
+  PlayerType.Human,
+  "r11-client-b",
+  "r11-actor-b",
+);
+const C = new PlayerInfo(
+  "Foreign",
+  PlayerType.Human,
+  "r11-client-c",
+  "r11-actor-c",
+);
+const D = new PlayerInfo(
+  "Reverse",
+  PlayerType.Human,
+  "r11-client-d",
+  "r11-actor-d",
+);
 const EMPIRE = "r11_real_empire";
 const PLAYERS = [A, B, C, D];
 
@@ -67,7 +87,8 @@ function session(game: Game, clientID?: string) {
   const next = (command?: Record<string, unknown>): R11Packet => {
     runner.addTurn({
       turnNumber: game.ticks(),
-      intents: command === undefined ? [] : [StampedIntentSchema.parse(command)],
+      intents:
+        command === undefined ? [] : [StampedIntentSchema.parse(command)],
     });
     expect(runner.executeNextTick()).toBe(true);
     return packets[packets.length - 1];
@@ -77,13 +98,17 @@ function session(game: Game, clientID?: string) {
     return next();
   };
   const receipts = (requestId: string) =>
-    packets.flatMap((p) => p.nationalCommandResults ?? [])
+    packets
+      .flatMap((p) => p.nationalCommandResults ?? [])
       .filter((result) => result.requestId === requestId);
   return { next, send, receipts, packets };
 }
 
 function order(
-  type: "national_offer_empire" | "national_accept_empire" | "national_transfer_crown",
+  type:
+    | "national_offer_empire"
+    | "national_accept_empire"
+    | "national_transfer_crown",
   requestId: string,
   clientID: string,
   targetId: string,
@@ -129,7 +154,9 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
       }),
     ]);
 
-    emperor.send(order("national_offer_empire", "r11-offer-b", A.clientID!, B.id));
+    emperor.send(
+      order("national_offer_empire", "r11-offer-b", A.clientID!, B.id),
+    );
     expect(emperor.receipts("r11-offer-b")).toEqual([
       expect.objectContaining({
         type: "national_offer_empire",
@@ -142,18 +169,29 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
       }),
     ]);
     expect(offers(invitee.next())).toEqual([
-      { empireId: EMPIRE, candidateId: B.id, proposerId: A.id, recipientId: B.id },
+      {
+        empireId: EMPIRE,
+        candidateId: B.id,
+        proposerId: A.id,
+        recipientId: B.id,
+      },
     ]);
     expect(offers(emperor.next())).toEqual([]);
     expect(offers(foreign.next())).toEqual([]);
     const anonymous = spectator.next();
     expect(anonymous).not.toHaveProperty("nationalAccessionOffers");
     expect(anonymous).not.toHaveProperty("nationalCommandResults");
-    expect(foreign.packets.flatMap(p => p.nationalCommandResults ?? [])).toEqual([]);
-    expect(invitee.packets.flatMap(p => p.nationalCommandResults ?? [])).toEqual([]);
+    expect(
+      foreign.packets.flatMap((p) => p.nationalCommandResults ?? []),
+    ).toEqual([]);
+    expect(
+      invitee.packets.flatMap((p) => p.nationalCommandResults ?? []),
+    ).toEqual([]);
 
     // A foreign human's ordinary stamped action cannot accept B's consent.
-    foreign.send(order("national_accept_empire", "r11-forged-b", C.clientID!, B.id));
+    foreign.send(
+      order("national_accept_empire", "r11-forged-b", C.clientID!, B.id),
+    );
     expect(foreign.receipts("r11-forged-b")).toEqual([
       expect.objectContaining({
         type: "national_accept_empire",
@@ -168,7 +206,9 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
     expect(invitee.receipts("r11-forged-b")).toEqual([]);
     expect(offers(invitee.next())).toHaveLength(1);
 
-    invitee.send(order("national_accept_empire", "r11-accept-b", B.clientID!, B.id));
+    invitee.send(
+      order("national_accept_empire", "r11-accept-b", B.clientID!, B.id),
+    );
     expect(invitee.receipts("r11-accept-b")).toEqual([
       expect.objectContaining({
         type: "national_accept_empire",
@@ -200,23 +240,43 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
     const foreign = session(game, C.clientID!);
     const reverse = session(game, D.clientID!);
     emperor.send(found());
-    emperor.send(order("national_offer_empire", "r11-offer-b2", A.clientID!, B.id));
-    invitee.send(order("national_accept_empire", "r11-join-b2", B.clientID!, B.id));
+    emperor.send(
+      order("national_offer_empire", "r11-offer-b2", A.clientID!, B.id),
+    );
+    invitee.send(
+      order("national_accept_empire", "r11-join-b2", B.clientID!, B.id),
+    );
 
-    reverse.send(order("national_offer_empire", "r11-reverse-d", D.clientID!, D.id));
+    reverse.send(
+      order("national_offer_empire", "r11-reverse-d", D.clientID!, D.id),
+    );
     expect(offers(reverse.next())).toEqual([]);
     expect(offers(emperor.next())).toEqual([
-      { empireId: EMPIRE, candidateId: D.id, proposerId: D.id, recipientId: A.id },
+      {
+        empireId: EMPIRE,
+        candidateId: D.id,
+        proposerId: D.id,
+        recipientId: A.id,
+      },
     ]);
     expect(foreign.next().nationalAccessionOffers?.offers).toEqual([]);
-    emperor.send(order("national_accept_empire", "r11-accept-d", A.clientID!, D.id));
+    emperor.send(
+      order("national_accept_empire", "r11-accept-d", A.clientID!, D.id),
+    );
     expect(game.nationalPoliticalAuthority()?.empireOf(D.id)).toBe(EMPIRE);
     expect(offers(emperor.next())).toEqual([]);
 
     // Pending but unaccepted C must disappear on lawful crown transfer.
-    emperor.send(order("national_offer_empire", "r11-offer-c", A.clientID!, C.id));
+    emperor.send(
+      order("national_offer_empire", "r11-offer-c", A.clientID!, C.id),
+    );
     expect(offers(foreign.next())).toEqual([
-      { empireId: EMPIRE, candidateId: C.id, proposerId: A.id, recipientId: C.id },
+      {
+        empireId: EMPIRE,
+        candidateId: C.id,
+        proposerId: A.id,
+        recipientId: C.id,
+      },
     ]);
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
@@ -226,7 +286,9 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
       "nationalCommandResults",
     );
 
-    emperor.send(order("national_transfer_crown", "r11-transfer-b", A.clientID!, B.id));
+    emperor.send(
+      order("national_transfer_crown", "r11-transfer-b", A.clientID!, B.id),
+    );
     expect(emperor.receipts("r11-transfer-b")).toEqual([
       expect.objectContaining({
         type: "national_transfer_crown",
@@ -244,7 +306,9 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
     expect(reverse.next().nationalPolitics?.empires[0].leaderId).toBe(B.id);
     expect(invitee.receipts("r11-transfer-b")).toEqual([]);
     expect(foreign.receipts("r11-transfer-b")).toEqual([]);
-    expect(session(game, C.clientID!).next().nationalAccessionOffers?.offers).toEqual([]);
+    expect(
+      session(game, C.clientID!).next().nationalAccessionOffers?.offers,
+    ).toEqual([]);
     const final = await roundTrip(game, "plains");
     expect([...final.bytes]).toEqual([...final.again]);
   });
@@ -252,32 +316,51 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
   it("a hostile packet cannot inject a foreign offer, private command receipt or complete E1 state", async () => {
     const game = await seeded();
     game.performNationalCommand(game.player(A.id), {
-      kind: "found-empire", empireId: EMPIRE,
+      kind: "found-empire",
+      empireId: EMPIRE,
     });
     game.performNationalCommand(game.player(A.id), {
-      kind: "offer-empire", empireId: EMPIRE, candidateId: B.id,
+      kind: "offer-empire",
+      empireId: EMPIRE,
+      candidateId: B.id,
     });
     const legitimate = session(game, B.clientID!).next();
     const foreign = session(game, C.clientID!).next();
     const realOffer = offers(legitimate)[0];
-    const forged = {
+    const poisoned: GameUpdateViewData = {
       ...legitimate,
-      // Injected browser/transport garbage must be ignored by the projection.
-      nationalAccessionOffers: {
-        version: 1, recipientId: C.id,
-        offers: [{ ...realOffer, recipientId: C.id, secretTerms: "PRIVATE_PACT_CANARY" }],
-      },
+      // The base packet is a correctly typed, but foreign, founder receipt.
+      // Its recipient differs from the GameRunner viewer so it must vanish.
       nationalCommandResults: [{
-        type: "national_accept_empire",
-        recipientId: B.id, actorId: B.id, accepted: true,
-        sequence: 123, tick: 0, requestId: "forged_approval",
-        commandTargetId: EMPIRE, reason: "accepted",
+        type: "national_found_empire",
+        recipientId: B.id,
+        actorId: B.id,
+        accepted: true,
+        sequence: 123,
+        tick: 0,
+        requestId: "forged_approval",
+        empireId: EMPIRE,
+        reason: "accepted",
       }],
+    };
+    const forged = {
+      ...poisoned,
+      nationalAccessionOffers: {
+        version: 1,
+        recipientId: C.id,
+        offers: [{
+          ...realOffer,
+          recipientId: C.id,
+          secretTerms: "PRIVATE_PACT_CANARY",
+        }],
+      },
       privatePolitics: { terms: "PRIVATE_PACT_CANARY", hiddenTroops: 999991 },
-    } as R11Packet & { readonly privatePolitics: unknown };
+    };
     const filter = new NationalOutboundFilter(game, C.id);
     const projected = filter.project(
-      game, forged, collectLiveNationalObservation(game, C.id),
+      game,
+      forged,
+      collectLiveNationalObservation(game, C.id),
     ) as R11Packet;
     expect(offers(projected)).toEqual([]);
     expect(projected).not.toHaveProperty("privatePolitics");
@@ -287,7 +370,9 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
     expect(offers(foreign)).toEqual([]);
     expect(projectNationalAccessionOffers(game, null)).toBeUndefined();
     expect(projectNationalAccessionOffers(game, C.id)?.offers).toEqual([]);
-    expect(projectNationalAccessionOffers(game, B.id)?.offers).toEqual([realOffer]);
+    expect(projectNationalAccessionOffers(game, B.id)?.offers).toEqual([
+      realOffer,
+    ]);
     expect(session(game).next()).not.toHaveProperty("nationalAccessionOffers");
   });
 });

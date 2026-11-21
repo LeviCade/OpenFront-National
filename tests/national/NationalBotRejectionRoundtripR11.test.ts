@@ -38,17 +38,18 @@ const cInfo = new PlayerInfo("Charlie", PlayerType.Human, "r11-c-cli", C);
 const dInfo = new PlayerInfo("Delta", PlayerType.Human, "r11-d-cli", D);
 const nation = new Nation(new Cell(40, 45), botInfo);
 
-type PlannerOwner = NationExecution & {
-  readonly nationalPlannerMemory: NationalPlannerMemory | null;
-};
-
 async function match(): Promise<{
   game: Game;
   bot: NationExecution;
 }> {
   const game = await setup(
-    "plains", { nationalMode: true }, [bInfo, cInfo, dInfo],
-    undefined, undefined, true, [nation],
+    "plains",
+    { nationalMode: true },
+    [bInfo, cInfo, dInfo],
+    undefined,
+    undefined,
+    true,
+    [nation],
   );
   const bot = new NationExecution("r11-real-bot-rejection", nation);
   game.addExecution(
@@ -92,7 +93,9 @@ function live(game: Game) {
 function memory(bot: NationExecution): NationalPlannerMemory | null {
   // Inspect the real E2 NationExecution memory to prove ordinary-tick
   // consumption, never write the field or fabricate an E1 command receipt.
-  return (bot as PlannerOwner).nationalPlannerMemory;
+  return (bot as unknown as {
+    readonly nationalPlannerMemory: NationalPlannerMemory | null;
+  }).nationalPlannerMemory;
 }
 
 describe("R11 actual E1 rejection -> E3 cooldown -> E2 alternate attack", () => {
@@ -104,10 +107,13 @@ describe("R11 actual E1 rejection -> E3 cooldown -> E2 alternate attack", () => 
     expect(observed.frontiers.some((f) => f.targetId === C)).toBe(true);
     expect(observed.frontiers.some((f) => f.targetId === D)).toBe(false);
     const wanted = planNationalInterest(
-      observed, initialNationalPlannerMemory(A), 30,
+      observed,
+      initialNationalPlannerMemory(A),
+      30,
     );
     expect(wanted.decision).toMatchObject({
-      objective: "expand", targetId: B,
+      objective: "expand",
+      targetId: B,
     });
     expect(memory(bot)?.rejectedWarTargets ?? []).toEqual([]);
 
@@ -118,17 +124,22 @@ describe("R11 actual E1 rejection -> E3 cooldown -> E2 alternate attack", () => 
     const decisionTick = game.ticks();
     const collisionId = "ai_" + simpleHash(A + ":" + B + ":" + decisionTick);
     const genuineExistingWar = game.performNationalWarCommandWithOutcome(
-      game.player(C), {
+      game.player(C),
+      {
         kind: "declare-national",
         warId: collisionId,
         aggressorId: C,
         targetId: D,
-      }, "r11-collision-authority",
+      },
+      "r11-collision-authority",
     );
     expect(genuineExistingWar.accepted).toBe(true);
     expect(game.nationalWarAuthority()?.atWar(C, D)).toBe(true);
 
-    const declarationCalls = vi.spyOn(game, "performNationalWarCommandWithOutcome");
+    const declarationCalls = vi.spyOn(
+      game,
+      "performNationalWarCommandWithOutcome",
+    );
     const attackCalls = vi.spyOn(game, "addExecution");
     game.executeNextTick();
     const observedAttempts = declarationCalls.mock.results.flatMap(
@@ -136,7 +147,9 @@ describe("R11 actual E1 rejection -> E3 cooldown -> E2 alternate attack", () => 
         const [actor, command] = declarationCalls.mock.calls[index];
         return actor.id() === A &&
           command.kind === "declare-national" &&
-          result.type === "return" ? [result.value] : [];
+          result.type === "return"
+          ? [result.value]
+          : [];
       },
     );
     expect(observedAttempts).toHaveLength(1);
@@ -158,10 +171,13 @@ describe("R11 actual E1 rejection -> E3 cooldown -> E2 alternate attack", () => 
     ]);
 
     const alternativeDecision = planNationalInterest(
-      live(game), memory(bot)!, 30,
+      live(game),
+      memory(bot)!,
+      30,
     );
     expect(alternativeDecision.decision).toMatchObject({
-      objective: "expand", targetId: C,
+      objective: "expand",
+      targetId: C,
     });
     expect(alternativeDecision.decision?.targetId).not.toBe(D);
 
@@ -174,21 +190,23 @@ describe("R11 actual E1 rejection -> E3 cooldown -> E2 alternate attack", () => 
     const acceptedAlternative = declarationCalls.mock.results.some(
       (result, index) => {
         const [actor, command] = declarationCalls.mock.calls[index];
-        return actor.id() === A &&
+        return (
+          actor.id() === A &&
           command.kind === "declare-national" &&
           command.targetId === C &&
           result.type === "return" &&
           result.value?.accepted === true &&
-          result.value?.commandTargetId === C;
+          result.value?.commandTargetId === C
+        );
       },
     );
     expect(acceptedAlternative).toBe(true);
     expect(game.nationalWarAuthority()?.atWar(A, C)).toBe(true);
     expect(game.nationalWarAuthority()?.atWar(A, B)).toBe(false);
     expect(
-      attackCalls.mock.calls.flat().some(
-        (execution) => execution instanceof AttackExecution,
-      ),
+      attackCalls.mock.calls
+        .flat()
+        .some((execution) => execution instanceof AttackExecution),
     ).toBe(true);
     declarationCalls.mockRestore();
     attackCalls.mockRestore();
@@ -198,9 +216,11 @@ describe("R11 actual E1 rejection -> E3 cooldown -> E2 alternate attack", () => 
 
     const original = await roundTrip(game, "plains");
     expect([...original.bytes]).toEqual([...original.again]);
-    const restoredBot = original.restored.executions().find(
-      (exec) => exec instanceof NationExecution && exec.playerID() === A,
-    ) as NationExecution | undefined;
+    const restoredBot = original.restored
+      .executions()
+      .find(
+        (exec) => exec instanceof NationExecution && exec.playerID() === A,
+      ) as NationExecution | undefined;
     expect(restoredBot).toBeDefined();
     expect(memory(restoredBot!)).toEqual(memory(bot));
 
