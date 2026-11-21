@@ -278,6 +278,23 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
       }
       if (rejected && alternative) break;
     }
+    console.log(
+      "R11_E2_BOT_DIAGNOSTIC",
+      JSON.stringify({
+        warCalls: calls.mock.calls.map(([actor, command], index) => ({
+          actor: actor.id(),
+          target: command.kind === "declare-national" ? command.targetId : command.kind,
+          outcome: calls.mock.results[index].value,
+        })),
+        memory: memory(botFor(game, BOT_A)),
+        observation: {
+          frontiers: collectLiveNationalObservation(game, BOT_A).observation.frontiers,
+          troops: game.player(BOT_A).troops(),
+        },
+        warLayers: game.nationalWarState()?.wars.layers,
+        attempts: calls.mock.calls.length,
+      }),
+    );
     expect(rejected).toMatchObject({
       accepted: false,
       actorId: BOT_A,

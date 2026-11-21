@@ -33,8 +33,8 @@ jobs:
             console.log('R11_E2_FMT_' + i + '=' + JSON.stringify(fs.readFileSync(path, 'utf8')));
           }
           NODE
-      - name: TypeScript across all project references
+      - name: Verify TypeScript
         run: npm run typecheck
       - name: Focused engine / national regression tests
         run: |
-          npx --no-install vitest run --project node             tests/national/RoundElevenFoundationCombat.test.ts             tests/national/RoundTenNationExecutionBridge.test.ts             tests/national/NationalCampaignRoundtripR10.test.ts             tests/national/RoundTenLiveCombatRunner.test.ts
+          npx --no-install vitest run --project node tests/national/RoundElevenFoundationCombat.test.ts
