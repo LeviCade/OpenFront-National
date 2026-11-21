@@ -261,6 +261,6 @@ export class NationalServerRecipientSession {
     return {
       ...outbound,
       nationalObserverMap: this.observerMap.page(verified),
-    };
+    } as GameUpdateViewData;
   }
 }
