@@ -35,6 +35,7 @@ import type {
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
 import { DistanceBasedBezierCurve } from "../utilities/Line";
+import { authorizeNationalAttack } from "./NationalWarExecution";
 import { NukeExecution } from "./NukeExecution";
 
 export class MirvExecution implements Execution {
@@ -106,6 +107,27 @@ export class MirvExecution implements Execution {
 
   tick(ticks: number): void {
     if (this.nuke === null) {
+      // WAR-10: MIRV parents are separate from NukeExecution. Recheck the
+      // CURRENT war at the actual launch tick, before debiting resources,
+      // registering a launch, betraying an ally or consuming silo cooldown.
+      // Once the parent is built, accepted peace does not cancel its flight
+      // or the child warheads already committed by that parent.
+      if (
+        this.mg.nationalPoliticalAuthority() !== null &&
+        (!this.mg.hasPlayer(this.player.id()) ||
+          this.mg.player(this.player.id()) !== this.player ||
+          !this.player.isAlive() ||
+          !authorizeNationalAttack(
+            this.mg,
+            this.player.id(),
+            this.mg.owner(this.dst).isPlayer()
+              ? this.mg.owner(this.dst).id()
+              : null,
+          ))
+      ) {
+        this.active = false;
+        return;
+      }
       const spawn = this.player.canBuild(UnitType.MIRV, this.dst);
       if (spawn === false) {
         console.warn(`cannot build MIRV`);

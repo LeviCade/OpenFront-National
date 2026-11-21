@@ -186,15 +186,63 @@ export function planNationalInterest(
     observation.wars,
     self.id,
   );
-  const closeThreat = observation.visibleAssets.some(
-    (a) => a.ownerId !== self.id && enemiesAtWar.has(a.ownerId),
+
+  // Coalition membership is public. Never treat an empire comrade or fellow
+  // war-side belligerent as a target, even if a different layer also makes
+  // them appear hostile. No controllerKind or private strength is available.
+  const protectedPartners = new Set<string>(warAllies);
+  for (const coalition of observation.coalitions) {
+    if (coalition.members.includes(self.id)) {
+      for (const id of coalition.members) protectedPartners.add(id);
+    }
+  }
+
+  const knownCredibility = new Map(
+    memory.reputation.map((r) => [r.nationId, r.credibility]),
   );
-  if (closeThreat && self.landPercent <= 3) {
+  // Only a physically observed military asset may affect tactical risk. An
+  // unobserved powerful nation is not a psychic threat to this local front.
+  const visibleMilitary = new Set(
+    observation.visibleAssets
+      .filter((a) => a.kind === "army" || a.kind === "warship")
+      .map((a) => a.ownerId),
+  );
+  const frontlineTargets = [
+    ...new Set(
+      observation.frontiers
+        .filter((f) => f.access === "land")
+        .map((f) => f.targetId),
+    ),
+  ].sort(cmp);
+  const localWarTargets = frontlineTargets.filter(
+    (id) =>
+      enemiesAtWar.has(id) &&
+      !protectedPartners.has(id) &&
+      publicNations.get(id)?.alive === true,
+  );
+
+  // AI-02: an ACTUAL local campaign outranks every hypothetical new war,
+  // regardless of how many tiles a remote empire controls. Persistence
+  // comes from snapshot-owned planner memory and is deterministic on replay.
+  if (localWarTargets.length > 0) {
+    const preferred =
+      memory.targetId !== null && localWarTargets.includes(memory.targetId)
+        ? memory.targetId
+        : localWarTargets[0];
+    const enemyNearby = observation.visibleAssets.some(
+      (asset) =>
+        asset.ownerId === preferred &&
+        (asset.kind === "army" || asset.kind === "warship"),
+    );
+    const defend = enemyNearby && self.landPercent <= 3;
     const decision: NationalDecision = {
-      objective: "defend",
-      targetId: null,
-      score: 100,
-      rationale: "active-defense",
+      objective: defend ? "defend" : "expand",
+      // A defensive alarm is NOT an offensive campaign order. The live
+      // NationExecution selects an actually observed, E2-authorized local
+      // combatant when it executes defense; the planner returns no target.
+      targetId: defend ? null : preferred,
+      score: defend ? 100 : 80,
+      rationale: defend ? "active-defense" : "reachable-opportunity",
     };
     return {
       planned: true,
@@ -202,26 +250,21 @@ export function planNationalInterest(
       memory: {
         ...memory,
         objective: decision.objective,
-        targetId: null,
+        targetId: decision.targetId,
         nextPlanningTick: observation.tick + cadenceTicks,
       },
     };
   }
 
-  // Defend an existing legally scoped war front before grabbing neutral
-  // territory. Only an actually observed neighboring opponent qualifies;
-  // same-side members and unobserved remote belligerents do not. This is a
-  // preference in the planner, NOT an attack authorization.
-  const adjacentWarEnemy = observation.frontiers.some((frontier) =>
-    enemiesAtWar.has(frontier.targetId),
-  );
-  // Neutral terrain remains the default when no real enemy war front is
-  // observed. The final AttackExecution still enforces E2's live ledger.
-  if (observation.unownedFrontier === true && !adjacentWarEnemy) {
+  // AI-04: credible self-preservation beats elective aggression. Small
+  // independent states expand into neutral land and preserve their standing
+  // army. Members (AI-06) may expand similarly but cannot unilaterally
+  // declare a war on behalf of their emperor.
+  if (observation.unownedFrontier === true) {
     const decision: NationalDecision = {
       objective: "expand",
       targetId: null,
-      score: 40,
+      score: 50,
       rationale: "reachable-opportunity",
     };
     return {
@@ -236,48 +279,44 @@ export function planNationalInterest(
     };
   }
 
-  const knownCredibility = new Map(
-    memory.reputation.map((r) => [r.nationId, r.credibility]),
-  );
-  const visibleMilitary = new Set(
-    observation.visibleAssets
-      .filter((a) => a.kind === "army" || a.kind === "warship")
-      .map((a) => a.ownerId),
-  );
-  const protectedPartners = new Set<string>(warAllies);
-  for (const c of observation.coalitions) {
-    if (c.members.includes(self.id))
-      for (const id of c.members) protectedPartners.add(id);
-  }
-
   let bestId: string | null = null;
   let bestScore = -Infinity;
-  // One linear pass. No access to type/control or secret enemy resources.
-  for (const frontier of observation.frontiers) {
-    const target = publicNations.get(frontier.targetId);
-    if (!target || !target.alive || target.status === "eliminated") continue;
-    // Neither treaty members nor same-war-side comrades can become routine
-    // offensive targets, even without an ordinary coalition treaty.
-    if (protectedPartners.has(target.id)) continue;
-    const credibility = knownCredibility.get(target.id) ?? 0;
-    const seenMilitary = visibleMilitary.has(target.id);
-    const score =
-      22 +
-      (frontier.access === "land" ? 8 : 0) +
-      (enemiesAtWar.has(target.id) ? 10 : 0) -
-      Math.min(20, target.landPercent * 0.7) -
-      (seenMilitary ? 9 : 0) -
-      Math.max(0, credibility);
-    if (
-      score > bestScore ||
-      (score === bestScore && (bestId === null || cmp(target.id, bestId) < 0))
-    ) {
-      bestId = target.id;
-      bestScore = score;
+  if (self.status === "independent" && observation.ownResources.troops >= 500) {
+    for (const frontier of observation.frontiers) {
+      if (frontier.access !== "land") continue;
+      const target = publicNations.get(frontier.targetId);
+      if (!target?.alive || protectedPartners.has(target.id)) continue;
+      // Do not initiate a speculative war against a locally credible
+      // superior force. The comparison uses PUBLIC land shares and the
+      // existence of observed military units, never hidden troop balances.
+      const seenMilitary = visibleMilitary.has(target.id);
+      if (
+        target.landPercent > Math.max(6, self.landPercent * 2.5) ||
+        (self.landPercent <= 2 &&
+          seenMilitary &&
+          target.landPercent > Math.max(1, self.landPercent * 1.5))
+      ) {
+        continue;
+      }
+      const credibility = knownCredibility.get(target.id) ?? 0;
+      const score =
+        38 -
+        Math.min(15, target.landPercent * 0.4) -
+        (seenMilitary ? 8 : 0) -
+        Math.max(0, credibility) +
+        (memory.targetId === target.id ? 8 : 0);
+      if (
+        score > bestScore ||
+        (score === bestScore && (bestId === null || cmp(target.id, bestId) < 0))
+      ) {
+        bestId = target.id;
+        bestScore = score;
+      }
     }
   }
+
   const decision: NationalDecision =
-    bestId !== null && bestScore > 9
+    bestId !== null && bestScore > 12
       ? {
           objective: "expand",
           targetId: bestId,

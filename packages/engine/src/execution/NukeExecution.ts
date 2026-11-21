@@ -35,6 +35,7 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
+import { authorizeNationalAttack } from "./NationalWarExecution";
 
 const SPRITE_RADIUS = 16;
 
@@ -201,6 +202,28 @@ export class NukeExecution implements Execution {
 
   tick(ticks: number): void {
     if (this.nuke === null) {
+      // WAR-10: validate at the ACTUAL launch tick, before purchasing a unit,
+      // breaking alliances, registering a silo cooldown or warning a target.
+      // A missile already instantiated in a previous tick remains in flight
+      // after peace. MIRV sub-warheads belong to that committed parent strike;
+      // they are not new, independently player-ordered launches.
+      if (
+        this.nukeType !== UnitType.MIRVWarhead &&
+        this.mg.nationalPoliticalAuthority() !== null &&
+        (!this.mg.hasPlayer(this.player.id()) ||
+          this.mg.player(this.player.id()) !== this.player ||
+          !this.player.isAlive() ||
+          !authorizeNationalAttack(
+            this.mg,
+            this.player.id(),
+            this.mg.owner(this.dst).isPlayer()
+              ? this.mg.owner(this.dst).id()
+              : null,
+          ))
+      ) {
+        this.active = false;
+        return;
+      }
       const spawn = this.player.canBuild(this.nukeType, this.dst);
       if (spawn === false) {
         console.warn(`cannot build Nuke`);

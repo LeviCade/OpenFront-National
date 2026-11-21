@@ -42,6 +42,13 @@ export interface PactInvitation {
   approvedBy: string[];
 }
 
+export interface PactAmendment {
+  terms: PactTerms;
+  administratorId: string | null;
+  /** Each vote comes from a distinct registered Game actor. */
+  approvedBy: string[];
+}
+
 export interface PoliticsPact {
   id: string;
   name: string;
@@ -51,6 +58,8 @@ export interface PoliticsPact {
   administratorId: string | null;
   terms: PactTerms;
   invitations: PactInvitation[];
+  /** Optional for existing v1 snapshots; never a public packet field. */
+  pendingAmendment?: PactAmendment;
 }
 
 export interface PoliticsEmpire {
@@ -117,6 +126,15 @@ function copy(world: PoliticsProjection): PoliticsProjection {
         targetId: i.targetId,
         approvedBy: [...i.approvedBy],
       })),
+      ...(p.pendingAmendment
+        ? {
+            pendingAmendment: {
+              terms: { ...p.pendingAmendment.terms },
+              administratorId: p.pendingAmendment.administratorId,
+              approvedBy: [...p.pendingAmendment.approvedBy],
+            },
+          }
+        : {}),
     })),
     empires: world.empires.map((e) => ({ ...e, memberIds: [...e.memberIds] })),
     accessionOffers: world.accessionOffers.map((o) => ({ ...o })),
@@ -198,6 +216,28 @@ export function validatePolitics(world: PoliticsProjection): void {
       p.administratorId === null || p.memberIds.includes(p.administratorId),
       "administrator not a member",
     );
+    if (p.pendingAmendment !== undefined) {
+      const proposed = p.pendingAmendment;
+      requireRule(
+        (proposed.terms.admission === "leader" ||
+          proposed.terms.admission === "unanimous") &&
+          (proposed.terms.expulsion === "leader" ||
+            proposed.terms.expulsion === "unanimous" ||
+            proposed.terms.expulsion === "forbidden"),
+        "invalid pending amendment constitution",
+      );
+      requireRule(
+        proposed.administratorId === null ||
+          p.memberIds.includes(proposed.administratorId),
+        "pending amendment administrator not a member",
+      );
+      requireRule(
+        proposed.approvedBy.length > 0 &&
+          unique(proposed.approvedBy) &&
+          proposed.approvedBy.every((id) => p.memberIds.includes(id)),
+        "invalid authenticated amendment votes",
+      );
+    }
     for (const id of p.memberIds) {
       requireRule(nationById.get(id)?.alive, "pact member does not survive");
       requireRule(
@@ -285,6 +325,8 @@ function removePactMember(world: PoliticsProjection, id: string): void {
       return [p];
     }
     p.memberIds = p.memberIds.filter((m) => m !== id);
+    // An old roster cannot authorize a new roster's constitution.
+    delete p.pendingAmendment;
     p.invitations = p.invitations
       .filter((i) => i.targetId !== id)
       .map((i) => ({ ...i, approvedBy: i.approvedBy.filter((v) => v !== id) }));
@@ -434,6 +476,7 @@ export function acceptPactInvitation(
   const next = copy(world);
   const target = pact(next, pactId);
   target.memberIds = sorted([...target.memberIds, candidateId]);
+  delete target.pendingAmendment;
   target.invitations = target.invitations.filter(
     (i) => i.targetId !== candidateId,
   );
@@ -464,6 +507,72 @@ export function amendPact(
   const target = pact(next, pactId);
   target.terms = { ...proposed.terms };
   target.administratorId = proposed.administratorId;
+  delete target.pendingAmendment;
+  validatePolitics(next);
+  return next;
+}
+
+/**
+ * Propose a constitutional change as the real, Game-authenticated actor.
+ * Never accept a client-supplied roster of consenting voters.
+ */
+export function proposePactAmendment(
+  world: PoliticsProjection,
+  pactId: string,
+  actorId: string,
+  proposed: { terms: PactTerms; administratorId: string | null },
+): PoliticsProjection {
+  validatePolitics(world);
+  const current = pact(world, pactId);
+  requireRule(current.memberIds.includes(actorId), "amendment requires member");
+  requireRule(
+    current.pendingAmendment === undefined,
+    "constitutional amendment already pending",
+  );
+  requireRule(
+    proposed.administratorId === null ||
+      current.memberIds.includes(proposed.administratorId),
+    "administrator must be a member",
+  );
+  const next = copy(world);
+  const target = pact(next, pactId);
+  target.pendingAmendment = {
+    terms: { ...proposed.terms },
+    administratorId: proposed.administratorId,
+    approvedBy: [actorId],
+  };
+  // A one-member pact has exactly one constitutional voter.
+  if (target.memberIds.length === 1) {
+    target.terms = { ...proposed.terms };
+    target.administratorId = proposed.administratorId;
+    delete target.pendingAmendment;
+  }
+  validatePolitics(next);
+  return next;
+}
+
+/** Commit only when every CURRENT member has separately authenticated a vote. */
+export function approvePactAmendment(
+  world: PoliticsProjection,
+  pactId: string,
+  actorId: string,
+): PoliticsProjection {
+  validatePolitics(world);
+  const current = pact(world, pactId);
+  requireRule(current.memberIds.includes(actorId), "amendment requires member");
+  requireRule(
+    current.pendingAmendment !== undefined,
+    "constitutional amendment not pending",
+  );
+  const next = copy(world);
+  const target = pact(next, pactId);
+  const pending = target.pendingAmendment!;
+  pending.approvedBy = sorted([...new Set([...pending.approvedBy, actorId])]);
+  if (target.memberIds.every((id) => pending.approvedBy.includes(id))) {
+    target.terms = { ...pending.terms };
+    target.administratorId = pending.administratorId;
+    delete target.pendingAmendment;
+  }
   validatePolitics(next);
   return next;
 }
@@ -506,6 +615,7 @@ function removeMemberFromOnePact(
 ): void {
   const target = pact(world, pactId);
   target.memberIds = target.memberIds.filter((id) => id !== memberId);
+  delete target.pendingAmendment;
   target.invitations = target.invitations.map((i) => ({
     ...i,
     approvedBy: i.approvedBy.filter((id) => id !== memberId),

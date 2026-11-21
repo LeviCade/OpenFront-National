@@ -611,20 +611,30 @@ export const NationalFoundEmpireIntentSchema = z.object({
  * Target nation and political war IDs are references, not permissions.
  */
 const NationalWarId = z.string().min(1).max(256);
+// Click correlation is an opaque hint for E1's authoritative journal;
+// the server-stamped clientID remains the ONLY actor authentication.
+const NationalWarRequestId = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9_-]+$/);
 export const NationalDeclareWarIntentSchema = z.object({
   type: z.literal("national_declare_war"),
   scope: z.enum(["national", "imperial"]),
   nationId: NationalWarId,
   targetId: NationalWarId,
   targetKind: z.enum(["nation", "empire"]),
+  requestId: NationalWarRequestId.optional(),
 });
 export const NationalProposePeaceIntentSchema = z.object({
   type: z.literal("national_propose_peace"),
   warId: NationalWarId,
+  requestId: NationalWarRequestId.optional(),
 });
 export const NationalAcceptPeaceIntentSchema = z.object({
   type: z.literal("national_accept_peace"),
   motionId: NationalWarId,
+  requestId: NationalWarRequestId.optional(),
 });
 
 export const IntentSchema = z.discriminatedUnion("type", [

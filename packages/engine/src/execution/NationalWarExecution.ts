@@ -51,11 +51,18 @@ const stateSchema = z.object({
   initialized: z.boolean(),
   actor: zPlayerRef(),
   command: warCommandSchema,
+  // Historic v1 execution states are migrated to null, never invent a click.
+  requestId: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .nullable(),
 });
 type State = z.infer<typeof stateSchema>;
 
 type WarParty = { kind: "nation" | "empire"; id: string };
-type CanonicalWarCommand =
+type CanonicalWarCommand = (
   | {
       kind: "declare-national";
       warId: string;
@@ -69,7 +76,8 @@ type CanonicalWarCommand =
       target: WarParty;
     }
   | { kind: "propose-peace"; motionId: string; warId: string }
-  | { kind: "accept-peace"; motionId: string };
+  | { kind: "accept-peace"; motionId: string }
+) & { readonly requestId?: string };
 
 /**
  * Exactly E1's Round Four canonical Game port, included structurally here
@@ -89,7 +97,15 @@ interface WarGamePort {
       motions: readonly { id: string }[];
     };
   } | null;
+  /** Existing legacy WAR callers preserve their throwing/void semantics. */
   performNationalWarCommand(actor: Player, command: CanonicalWarCommand): void;
+  /** E1's *separate* authoritative typed outcome + Game journal port. */
+  performNationalWarCommandWithOutcome?(
+    actor: Player,
+    command: CanonicalWarCommand,
+    requestId?: string | null,
+  ): unknown;
+  nationalWarCommandResults?(observer: Player): readonly unknown[];
   nationalLevySource(nationId: string): TroopSource | null;
   applyNationalDefenseLevy(
     attacks: readonly IncomingDefense[],
@@ -99,7 +115,7 @@ interface WarGamePort {
 }
 
 function canonicalWarPort(game: Game): Partial<WarGamePort> {
-  return game as Game & Partial<WarGamePort>;
+  return game as Partial<WarGamePort>;
 }
 
 export function authorizeNationalAttack(
@@ -201,6 +217,8 @@ export class NationalWarExecution implements Execution {
   constructor(
     private actor: Player,
     private command: NationalWarCommand,
+    // Optional E4 click correlation. E1's journal owns acceptance/idempotency.
+    private requestId: string | null = null,
   ) {}
 
   isActive(): boolean {
@@ -218,19 +236,26 @@ export class NationalWarExecution implements Execution {
     this.active = false;
     const game = this.game;
     const port = game === null ? null : canonicalWarPort(game);
+    if (!game || !port?.performNationalWarCommand) return;
+    const political = game.nationalPoliticalAuthority();
+    if (!political) return; // FFA does not have NATIONAL command results.
+
+    // Only E1 may decide or journal a canonical rejection. Once its outcome
+    // port exists, even inactive actors and invalid sovereign claims reach it.
+    // The older void port remains for integration baseline compatibility.
+    const withOutcome = port.performNationalWarCommandWithOutcome;
+    const hasJournal =
+      typeof withOutcome === "function" &&
+      typeof port.nationalWarCommandResults === "function";
     if (
-      !game ||
-      !port?.performNationalWarCommand ||
-      !game.nationalPoliticalAuthority() ||
-      !game.hasPlayer(this.actor.id()) ||
-      game.player(this.actor.id()) !== this.actor ||
-      !this.actor.hasSpawned() ||
-      !this.actor.isAlive()
+      !hasJournal &&
+      (!game.hasPlayer(this.actor.id()) ||
+        game.player(this.actor.id()) !== this.actor ||
+        !this.actor.hasSpawned() ||
+        !this.actor.isAlive())
     )
       return;
-
-    const political = game.nationalPoliticalAuthority()!;
-    if (!port.nationalWarState?.()) return;
+    if (!hasJournal && !port.nationalWarState?.()) return;
     // An execution's engine tick + registered ordinal is deterministic across
     // snapshot/replay and cannot reuse an ID when peace deletes stale motions.
     // Unlike a client action ID, neither value is controlled by the request.
@@ -249,12 +274,17 @@ export class NationalWarExecution implements Execution {
         break;
       case "declare-imperial": {
         const empire = political.empireOf(this.actor.id());
-        if (empire === null || political.emperorOf(empire) !== this.actor.id())
+        if (
+          !hasJournal &&
+          (empire === null || political.emperorOf(empire) !== this.actor.id())
+        )
           return;
         command = {
           kind: "declare-imperial",
           warId: id,
-          aggressor: { kind: "empire", id: empire },
+          // An unaffiliated actor is intentionally invalid. E1 must record
+          // the rejection rather than E2 silently losing the click.
+          aggressor: { kind: "empire", id: empire ?? this.actor.id() },
           target: { kind: this.command.targetKind, id: this.command.targetId },
         };
         break;
@@ -271,12 +301,66 @@ export class NationalWarExecution implements Execution {
         break;
     }
 
+    // E1's Game-owned result service is the ONLY authority for accepted and
+    // rejected WAR/peace clicks. Request IDs are correlation, not credentials.
+    // E3 may project its authenticated journal; E2 never emits an outcome.
+    if (hasJournal) {
+      const result = withOutcome.call(
+        port,
+        this.actor,
+        this.requestId === null
+          ? command
+          : { ...command, requestId: this.requestId },
+        this.requestId,
+      );
+      // Never interpret non-throwing or void execution as acceptance. E1's
+      // verified recipient-bound journal is the only source of WAR outcomes.
+      if (
+        typeof result !== "object" ||
+        result === null ||
+        !("accepted" in result) ||
+        typeof result.accepted !== "boolean" ||
+        !("actorId" in result) ||
+        result.actorId !== this.actor.id() ||
+        !("recipientId" in result) ||
+        result.recipientId !== this.actor.id() ||
+        !("requestId" in result) ||
+        typeof result.requestId !== "string" ||
+        (this.requestId !== null && result.requestId !== this.requestId)
+      )
+        throw new Error("NATIONAL WAR: invalid canonical E1 outcome");
+      return;
+    }
+
+    // Temporary compatibility with the already-integrated void E1 port.
+    // It cannot produce a trustworthy receipt: E4 must keep the click pending.
+    // Avoid throwing on an explicitly forged national initiator while older
+    // Game implementations still lack the outcome journal.
+    if (
+      command.kind === "declare-national" &&
+      command.aggressorId !== this.actor.id()
+    )
+      return;
+
+    // No console.warn suppression: unexpected authority failures are errors,
+    // never implicit acceptance. The new E1 result port handles rule denials.
     try {
-      // GameImpl rechecks authoritative actor, timing, live politics and
-      // delegates to the canonical snapshotted WarLedger.
-      port.performNationalWarCommand(this.actor, command);
+      port.performNationalWarCommand(
+        this.actor,
+        this.requestId === null
+          ? command
+          : { ...command, requestId: this.requestId },
+      );
     } catch (error) {
-      console.warn("NATIONAL war command rejected:", String(error));
+      // Before E1's authoritative receipt port is merged, an ordinary
+      // same-side peace rejection must not crash the Game tick.
+      // Never fabricate an acceptance or swallow unexpected engine errors.
+      if (
+        command.kind === "accept-peace" &&
+        error instanceof Error &&
+        error.message === "other belligerent must accept peace"
+      ) return;
+      throw error;
     }
   }
 
@@ -286,6 +370,7 @@ export class NationalWarExecution implements Execution {
       initialized: this.game !== null,
       actor: w.player(this.actor),
       command: this.command,
+      requestId: this.requestId,
     });
   }
 
@@ -294,12 +379,16 @@ export class NationalWarExecution implements Execution {
     this.game = state.initialized ? reader.game : null;
     this.actor = reader.player(state.actor);
     this.command = state.command;
+    this.requestId = state.requestId;
   }
 }
 
 export const NationalWarExecutionSnapshot = execSnapshotType({
   name: "NationalWar",
-  version: 1,
+  version: 2,
   schema: stateSchema,
+  migrations: {
+    1: (old: object) => ({ ...old, requestId: null }),
+  },
   cls: () => NationalWarExecution,
 });

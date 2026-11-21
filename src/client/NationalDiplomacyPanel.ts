@@ -3,14 +3,27 @@ import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import {
+  confirmedNationalDiplomacy,
+  createNationalDiplomacyRequestId,
   createNationalFoundingRequestId,
   empireForMember,
   foundingUnavailableReason,
+  nationalWarActionUnavailableReason,
   reconcileNationalFounding,
   validEmpireId,
+  validNationalWarReference,
+  type NationalDiplomacyAttempt,
+  type NationalDiplomacyResult,
+  type NationalPublicWarLayer,
+  type NationalPublicPeaceMotion,
   type NationalFoundingAttempt,
 } from "./NationalDiplomacyState";
-import { SendNationalFoundEmpireIntentEvent } from "./Transport";
+import {
+  SendNationalAcceptPeaceIntentEvent,
+  SendNationalDeclareWarIntentEvent,
+  SendNationalFoundEmpireIntentEvent,
+  SendNationalProposePeaceIntentEvent,
+} from "./Transport";
 import type { GameView } from "./view";
 
 /**
@@ -36,6 +49,25 @@ export class NationalDiplomacyPanel extends LitElement {
     | "unknown" = "idle";
   @state() private message: string | null = null;
   @state() private error: string | null = null;
+  @state() private warScope: "national" | "imperial" = "national";
+  @state() private warTargetKind: "nation" | "empire" = "nation";
+  @state() private warTargetId = "";
+  @state() private warIdDraft = "";
+  @state() private motionIdDraft = "";
+  @state() private diplomacyStatus: string | null = null;
+  @state() private diplomacyError: string | null = null;
+  private lastDiplomacySubmission: (NationalDiplomacyAttempt & {
+    gameId: string;
+    tick: number;
+    requestId: string;
+  }) | null = null;
+  private confirmedDiplomacy: {
+    gameId: string;
+    actorId: string;
+    type: NationalDiplomacyResult["type"];
+    warId: string;
+    motionId?: string;
+  } | null = null;
 
   createRenderRoot() {
     return this;
@@ -114,12 +146,144 @@ export class NationalDiplomacyPanel extends LitElement {
         }
       }
     }
+    const prior = this.confirmedDiplomacy;
+    if (prior) {
+      const view = game?.nationalConflicts?.() ?? null;
+      const layer = view?.layers.find((item) => item.id === prior.warId);
+      const motion = view?.motions.find((item) => item.id === prior.motionId);
+      if (
+        game?.gameID() !== prior.gameId ||
+        player?.id() !== prior.actorId ||
+        game?.config().isReplay() ||
+        game?.isSpectator() ||
+        player?.isAlive() !== true ||
+        game?.inSpawnPhase() ||
+        !layer
+      ) {
+        this.confirmedDiplomacy = null;
+        this.diplomacyStatus =
+          "Current authoritative WAR state no longer verifies the previous action.";
+      } else if (
+        (prior.type === "national_declare_war" && layer.endedTick !== null) ||
+        (prior.type === "national_propose_peace" &&
+          (!motion || motion.acceptedTick !== null)) ||
+        (prior.type === "national_accept_peace" &&
+          (!motion ||
+            motion.acceptedTick === null ||
+            layer.endedTick !== motion.acceptedTick))
+      ) {
+        this.confirmedDiplomacy = null;
+        this.diplomacyStatus =
+          "The previously confirmed WAR or peace motion has since changed. Review current conflicts.";
+      }
+    }
+    const submission = this.lastDiplomacySubmission;
+    if (submission) {
+      const tick = game?.ticks() ?? -1;
+      if (
+        !game ||
+        !player ||
+        game.gameID() !== submission.gameId ||
+        player.id() !== submission.actorId ||
+        game.config().isReplay() ||
+        game.isSpectator() ||
+        !player.isAlive() ||
+        game.inSpawnPhase() ||
+        tick < submission.tick
+      ) {
+        this.lastDiplomacySubmission = null;
+        this.diplomacyStatus =
+          "The active game or principal changed. Previous diplomacy is unconfirmed.";
+      } else {
+        const results =
+          typeof game.nationalDiplomacyResults === "function"
+            ? game.nationalDiplomacyResults()
+            : [];
+        const matched = results.filter(
+          (result) =>
+            result.requestId === submission.requestId &&
+            result.type === submission.commandType &&
+            result.actorId === submission.actorId &&
+            result.recipientId === submission.actorId &&
+            Number.isSafeInteger(result.sequence) &&
+            result.sequence >= 0 &&
+            result.tick >= submission.tick &&
+            result.tick <= tick,
+        );
+        const result = matched[0];
+        if (
+          result &&
+          matched.some(
+            (entry) =>
+              entry.sequence !== result.sequence ||
+              entry.accepted !== result.accepted ||
+              entry.tick !== result.tick ||
+              entry.warId !== result.warId ||
+              entry.motionId !== result.motionId ||
+              entry.reason !== result.reason,
+          )
+        ) {
+          this.lastDiplomacySubmission = null;
+          this.diplomacyStatus = null;
+          this.diplomacyError =
+            "Conflicting authenticated diplomacy receipts. No action is confirmed.";
+        } else if (result && !result.accepted) {
+          this.lastDiplomacySubmission = null;
+          this.diplomacyStatus = null;
+          this.diplomacyError = `The game rejected this diplomacy action: ${result.reason ?? "political-rule"}.`;
+        } else if (result?.accepted) {
+          const confirmed = confirmedNationalDiplomacy(
+            submission,
+            result,
+            game.nationalConflicts?.() ?? null,
+            game.nationalConflictsTick?.() ?? null,
+          );
+          if (confirmed) {
+            this.lastDiplomacySubmission = null;
+            this.confirmedDiplomacy = {
+              gameId: submission.gameId,
+              actorId: submission.actorId,
+              type: result.type,
+              warId: result.warId!,
+              ...(result.motionId ? { motionId: result.motionId } : {}),
+            };
+            this.diplomacyStatus = confirmed;
+            this.diplomacyError = null;
+          } else if (tick - submission.tick >= 200) {
+            this.lastDiplomacySubmission = null;
+            this.diplomacyStatus =
+              "Accepted receipt could not be reconciled with authoritative WAR/peace state. Outcome remains unconfirmed.";
+          } else {
+            this.diplomacyStatus =
+              "Authenticated positive command receipt received; authoritative public war/peace state is not yet available. No completed action is confirmed.";
+          }
+        } else if (tick - submission.tick >= 200) {
+          this.lastDiplomacySubmission = null;
+          this.diplomacyStatus =
+            "No authenticated diplomacy result arrived. Outcome is unknown; inspect the game before resubmitting.";
+        }
+      }
+    }
     if (this.expanded) this.requestUpdate();
   }
 
   /** A dropped or replaced session must never retain optimistic success. */
   public connectionInterrupted(): void {
-    if (this.pendingAttempt === null) return;
+    if (this.confirmedDiplomacy !== null) {
+      this.confirmedDiplomacy = null;
+      this.diplomacyStatus =
+        "Connection interrupted. Current WAR state must be verified again.";
+    }
+    if (this.lastDiplomacySubmission !== null) {
+      this.lastDiplomacySubmission = null;
+      this.diplomacyStatus =
+        "Connection interrupted. Previous diplomacy has no confirmed result.";
+      this.diplomacyError = null;
+    }
+    if (this.pendingAttempt === null) {
+      this.requestUpdate();
+      return;
+    }
     this.pendingAttempt = null;
     this.pendingEmpireId = null;
     this.phase = "unknown";
@@ -219,6 +383,214 @@ export class NationalDiplomacyPanel extends LitElement {
     }
   }
 
+  private get warUnavailableReason(): string | null {
+    const game = this.game;
+    const player = game?.myPlayer();
+    return nationalWarActionUnavailableReason({
+      national: game?.config().gameConfig().nationalMode === true,
+      solo: game?.config().gameConfig().gameType === GameType.Singleplayer,
+      replay: game?.config().isReplay() === true,
+      spawned:
+        player !== null &&
+        player !== undefined &&
+        game?.inSpawnPhase() === false &&
+        player.numTilesOwned() > 0,
+      alive: player?.isAlive() === true,
+      spectator: game?.isSpectator() === true,
+      hasPublicPolitics: game?.nationalPolitics() !== null,
+    });
+  }
+
+  /** Only actual living game players or E1-public empires are selectable. */
+  private warTargets(
+    kind: "nation" | "empire",
+  ): readonly { id: string; name: string }[] {
+    const game = this.game;
+    const actor = game?.myPlayer();
+    if (!game || !actor) return [];
+    const ownEmpire = this.memberEmpire;
+    if (kind === "empire") {
+      return (game.nationalPolitics()?.empires ?? [])
+        .filter((empire) => empire.id !== ownEmpire?.id)
+        .map((empire) => ({ id: empire.id, name: empire.id }));
+    }
+    return game
+      .players()
+      .filter(
+        (player) =>
+          player.id() !== actor.id() &&
+          player.isAlive() &&
+          player.numTilesOwned() > 0 &&
+          !ownEmpire?.memberIds.includes(player.id()),
+      )
+      .map((player) => ({ id: player.id(), name: player.name() }));
+  }
+
+  /** Only journal plus current recipient-bound projection can confirm. */
+  private sendDiplomacyCommand(
+    command: (
+      requestId: string,
+    ) =>
+      | SendNationalDeclareWarIntentEvent
+      | SendNationalProposePeaceIntentEvent
+      | SendNationalAcceptPeaceIntentEvent,
+    description: string,
+    commandType: NationalDiplomacyResult["type"],
+    context: Omit<NationalDiplomacyAttempt, "commandType" | "actorId" | "issuedTick"> = {},
+  ): void {
+    const reason = this.warUnavailableReason;
+    const game = this.game;
+    const player = game?.myPlayer();
+    if (reason || !game || !player || !this.eventBus) {
+      this.diplomacyError =
+        reason ?? "The authenticated game channel is unavailable.";
+      return;
+    }
+    const tick = game.ticks();
+    if (this.lastDiplomacySubmission !== null) {
+      this.diplomacyError =
+        "A diplomacy command is still pending authoritative confirmation.";
+      return;
+    }
+    let requestId: string;
+    try {
+      requestId = createNationalDiplomacyRequestId();
+    } catch {
+      this.diplomacyError =
+        "Secure request identity is unavailable. No diplomacy command was sent.";
+      return;
+    }
+    try {
+      this.eventBus.emit(command(requestId));
+      this.lastDiplomacySubmission = {
+        gameId: game.gameID(),
+        actorId: player.id(),
+        tick,
+        requestId,
+        commandType,
+        issuedTick: tick,
+        ...context,
+      };
+      this.confirmedDiplomacy = null;
+      // An EventBus producer does not prove that an intent gate, worker or
+      // E1 accepted this action. Exact request receipts are still pending E1/E3.
+      this.diplomacyStatus = `${description} handed to the command producer (request ${requestId}). Delivery and authoritative outcome remain unconfirmed; no success is confirmed.`;
+      this.diplomacyError = null;
+    } catch {
+      this.diplomacyError = "The diplomacy command could not be submitted.";
+    }
+  }
+
+  private submitWar(event: SubmitEvent): void {
+    event.preventDefault();
+    const game = this.game;
+    const actor = game?.myPlayer();
+    if (!game || !actor || this.warUnavailableReason) {
+      this.diplomacyError =
+        this.warUnavailableReason ?? "No authorized player is available.";
+      return;
+    }
+    const ownEmpire = this.memberEmpire;
+    if (
+      this.warScope === "imperial" &&
+      (!ownEmpire || ownEmpire.leaderId !== actor.id())
+    ) {
+      this.diplomacyError =
+        "Only the current emperor may declare imperial war.";
+      return;
+    }
+    const kind = this.warScope === "national" ? "nation" : this.warTargetKind;
+    if (
+      !validNationalWarReference(this.warTargetId) ||
+      !this.warTargets(kind).some((target) => target.id === this.warTargetId)
+    ) {
+      this.diplomacyError =
+        "Choose a living, eligible target from the current game roster.";
+      return;
+    }
+    this.sendDiplomacyCommand(
+      (requestId) =>
+        new SendNationalDeclareWarIntentEvent(
+          this.warScope,
+          actor.id(),
+          this.warTargetId,
+          kind,
+          requestId,
+        ),
+      `${this.warScope === "imperial" ? "Imperial" : "National"} war declaration`,
+      "national_declare_war",
+      {
+        scope: this.warScope,
+        ownEmpireId: ownEmpire?.id,
+        targetKind: kind,
+        targetId: this.warTargetId,
+      },
+    );
+  }
+
+  private ourWarSide(layer: NationalPublicWarLayer): 0 | 1 | null {
+    const actorId = this.game?.myPlayer()?.id();
+    if (!actorId) return null;
+    const empire = this.memberEmpire;
+    const sideId =
+      layer.scope === "national"
+        ? actorId
+        : empire?.leaderId === actorId
+          ? empire.id
+          : null;
+    const kind = layer.scope === "national" ? "nation" : "empire";
+    if (!sideId) return null;
+    if (layer.first.kind === kind && layer.first.id === sideId) return 0;
+    if (layer.second.kind === kind && layer.second.id === sideId) return 1;
+    return null;
+  }
+
+  private eligiblePeaceWars(): readonly NationalPublicWarLayer[] {
+    return this.game?.nationalConflicts?.()?.layers.filter(
+      (layer) => layer.endedTick === null && this.ourWarSide(layer) !== null,
+    ) ?? [];
+  }
+
+  private eligiblePeaceMotions(): readonly NationalPublicPeaceMotion[] {
+    const view = this.game?.nationalConflicts?.();
+    if (!view) return [];
+    const wars = new Map(this.eligiblePeaceWars().map((layer) => [layer.id, layer]));
+    return view.motions.filter((motion) => {
+      const layer = wars.get(motion.layerId);
+      return layer !== undefined &&
+        motion.acceptedTick === null &&
+        this.ourWarSide(layer) !== motion.proposingSide;
+    });
+  }
+
+  private submitPeace(event: SubmitEvent, action: "propose" | "accept"): void {
+    event.preventDefault();
+    const reference =
+      action === "propose" ? this.warIdDraft.trim() : this.motionIdDraft.trim();
+    if (!validNationalWarReference(reference)) {
+      this.diplomacyError = "Select an exact game-issued war or motion ID.";
+      return;
+    }
+    const projection = this.game?.nationalConflicts?.() ?? null;
+    if (
+      projection &&
+      !(action === "propose" ? this.eligiblePeaceWars() : this.eligiblePeaceMotions())
+        .some((item) => item.id === reference)
+    ) {
+      this.diplomacyError = "That ID is not an eligible current engine reference.";
+      return;
+    }
+    this.sendDiplomacyCommand(
+      (requestId) =>
+        action === "propose"
+          ? new SendNationalProposePeaceIntentEvent(reference, requestId)
+          : new SendNationalAcceptPeaceIntentEvent(reference, requestId),
+      action === "propose" ? "Peace proposal" : "Peace motion acceptance",
+      action === "propose" ? "national_propose_peace" : "national_accept_peace",
+      action === "propose" ? { warId: reference } : { motionId: reference },
+    );
+  }
+
   private playerName(id: string): string {
     return (
       this.game
@@ -252,6 +624,24 @@ export class NationalDiplomacyPanel extends LitElement {
       politics !== null &&
       !game.config().isReplay();
     const readonlyReplay = game.config().isReplay();
+    const warReason = this.warUnavailableReason;
+    const isEmperor =
+      ownEmpire !== null && ownEmpire.leaderId === game.myPlayer()?.id();
+    const warKind =
+      this.warScope === "national" ? "nation" : this.warTargetKind;
+    const warTargets = this.warTargets(warKind);
+    const canIssueWar =
+      warReason === null &&
+      this.eventBus !== null &&
+      this.lastDiplomacySubmission === null &&
+      (this.warScope === "national" || isEmperor);
+    const conflicts = game.nationalConflicts?.() ?? null;
+    const peaceWars = this.eligiblePeaceWars();
+    const peaceMotions = this.eligiblePeaceMotions();
+    const canIssuePeace =
+      warReason === null &&
+      this.eventBus !== null &&
+      this.lastDiplomacySubmission === null;
     return html`
       <section
         class="text-white w-[min(25rem,calc(100vw-1rem))] max-w-full rounded-xl border border-amber-400/50 bg-slate-950/95 shadow-xl backdrop-blur-sm overflow-hidden"
@@ -424,26 +814,246 @@ export class NationalDiplomacyPanel extends LitElement {
                     : nothing
                 }
 
+                <div class="border-t border-white/15 pt-3 space-y-3">
+                  <h2 class="font-semibold text-amber-200">Declare war</h2>
+                  <p class="text-xs text-slate-300">
+                    Declarations use the real authenticated NATIONAL engine.
+                    Sending a command does not prove that war was accepted.
+                  </p>
+                  <form class="space-y-2" @submit=${this.submitWar}>
+                    <label for="national-war-scope" class="block font-semibold">
+                      War authority
+                    </label>
+                    <select
+                      id="national-war-scope"
+                      class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                      .value=${this.warScope}
+                      @change=${(event: Event) => {
+                        this.warScope = (event.target as HTMLSelectElement)
+                          .value as "national" | "imperial";
+                        this.warTargetId = "";
+                      }}
+                      ?disabled=${warReason !== null}
+                    >
+                      <option value="national">National war</option>
+                      <option value="imperial" ?disabled=${!isEmperor}>
+                        Imperial war (emperor only)
+                      </option>
+                    </select>
+                    ${
+                      this.warScope === "imperial"
+                        ? html`<label
+                              for="national-war-target-kind"
+                              class="block font-semibold"
+                            >
+                              Opposing power
+                            </label>
+                            <select
+                              id="national-war-target-kind"
+                              class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                              .value=${this.warTargetKind}
+                              @change=${(event: Event) => {
+                                this.warTargetKind = (
+                                  event.target as HTMLSelectElement
+                                ).value as "nation" | "empire";
+                                this.warTargetId = "";
+                              }}
+                              ?disabled=${!canIssueWar}
+                            >
+                              <option value="nation">Nation</option>
+                              <option value="empire">Empire</option>
+                            </select>`
+                        : nothing
+                    }
+                    <label
+                      for="national-war-target"
+                      class="block font-semibold"
+                    >
+                      Target
+                    </label>
+                    <select
+                      id="national-war-target"
+                      required
+                      class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                      .value=${this.warTargetId}
+                      @change=${(event: Event) =>
+                        (this.warTargetId = (
+                          event.target as HTMLSelectElement
+                        ).value)}
+                      ?disabled=${!canIssueWar || warTargets.length === 0}
+                    >
+                      <option value="">Choose an eligible target</option>
+                      ${warTargets.map(
+                        (target) =>
+                          html`<option value=${target.id}>
+                            ${target.name} (${target.id})
+                          </option>`,
+                      )}
+                    </select>
+                    <button
+                      id="national-declare-war"
+                      type="submit"
+                      class="rounded-lg bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-500 disabled:opacity-50"
+                      ?disabled=${!canIssueWar || warTargets.length === 0 || !this.warTargetId}
+                    >
+                      Declare
+                      ${this.warScope === "imperial" ? "imperial" : "national"}
+                      war
+                    </button>
+                    ${
+                      warReason || (this.warScope === "imperial" && !isEmperor)
+                        ? html`<p class="text-xs text-slate-300">
+                            ${
+                              warReason ??
+                              "Only the current emperor may declare imperial war."
+                            }
+                          </p>`
+                        : nothing
+                    }
+                  </form>
+                </div>
+
+                <div class="border-t border-white/15 pt-3 space-y-3">
+                  <h2 class="font-semibold text-amber-200">Peace</h2>
+                  <p class="text-xs text-slate-300">
+                    ${conflicts
+                      ? "Choose a live engine-issued war or peace-motion ID. The engine still decides authorization."
+                      : "The authoritative public war/motion list is not yet available. Advanced commands require an externally verified engine-issued ID; submitting proves nothing."}
+                  </p>
+                  ${conflicts
+                    ? html`<div aria-label="Current conflicts" class="space-y-1 text-xs text-slate-300">
+                        <p>Current active wars: ${conflicts.layers.filter((layer) => layer.endedTick === null).length}; pending peace motions: ${conflicts.motions.filter((motion) => motion.acceptedTick === null).length}.</p>
+                        ${conflicts.layers.filter((layer) => layer.endedTick === null).map((layer) => html`<p class="break-all">WAR ${layer.id}: ${layer.first.id} vs. ${layer.second.id}</p>`)}
+                        ${conflicts.motions.filter((motion) => motion.acceptedTick === null).map((motion) => html`<p class="break-all">Peace motion ${motion.id} for WAR ${motion.layerId}</p>`)}
+                      </div>`
+                    : nothing}
+                  <form
+                    class="space-y-2"
+                    @submit=${(event: SubmitEvent) => this.submitPeace(event, "propose")}
+                  >
+                    <label
+                      for="national-peace-war-id"
+                      class="block font-semibold"
+                    >
+                      Engine war ID
+                    </label>
+                    ${conflicts
+                      ? html`<select
+                          id="national-peace-war-id"
+                          required
+                          class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                          .value=${this.warIdDraft}
+                          @change=${(event: Event) =>
+                            (this.warIdDraft = (event.target as HTMLSelectElement).value)}
+                          ?disabled=${!canIssuePeace || peaceWars.length === 0}
+                        >
+                          <option value="">Choose a current active WAR</option>
+                          ${peaceWars.map((war) => html`<option value=${war.id}>${war.id} · ${war.first.id} vs. ${war.second.id}</option>`)}
+                        </select>`
+                      : html`<input
+                          id="national-peace-war-id"
+                          type="text"
+                          required
+                          maxlength="256"
+                          autocomplete="off"
+                          class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                          .value=${this.warIdDraft}
+                          @input=${(event: Event) =>
+                            (this.warIdDraft = (event.target as HTMLInputElement).value)}
+                          ?disabled=${!canIssuePeace}
+                        />`}
+                    <button
+                      id="national-propose-peace"
+                      type="submit"
+                      class="rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 disabled:opacity-50"
+                      ?disabled=${!canIssuePeace || !this.warIdDraft.trim() || (conflicts !== null && !peaceWars.some((war) => war.id === this.warIdDraft))}
+                    >
+                      Propose peace
+                    </button>
+                  </form>
+                  <form
+                    class="space-y-2"
+                    @submit=${(event: SubmitEvent) => this.submitPeace(event, "accept")}
+                  >
+                    <label
+                      for="national-peace-motion-id"
+                      class="block font-semibold"
+                    >
+                      Engine peace motion ID
+                    </label>
+                    ${conflicts
+                      ? html`<select
+                          id="national-peace-motion-id"
+                          required
+                          class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                          .value=${this.motionIdDraft}
+                          @change=${(event: Event) =>
+                            (this.motionIdDraft = (event.target as HTMLSelectElement).value)}
+                          ?disabled=${!canIssuePeace || peaceMotions.length === 0}
+                        >
+                          <option value="">Choose a pending peace motion</option>
+                          ${peaceMotions.map((motion) => html`<option value=${motion.id}>${motion.id} · WAR ${motion.layerId}</option>`)}
+                        </select>`
+                      : html`<input
+                          id="national-peace-motion-id"
+                          type="text"
+                          required
+                          maxlength="256"
+                          autocomplete="off"
+                          class="w-full rounded-md border border-slate-400 bg-slate-900 px-3 py-2"
+                          .value=${this.motionIdDraft}
+                          @input=${(event: Event) =>
+                            (this.motionIdDraft = (event.target as HTMLInputElement).value)}
+                          ?disabled=${!canIssuePeace}
+                        />`}
+                    <button
+                      id="national-accept-peace"
+                      type="submit"
+                      class="rounded-lg border border-amber-400 px-4 py-2 font-semibold text-amber-100 disabled:opacity-50"
+                      ?disabled=${!canIssuePeace || !this.motionIdDraft.trim() || (conflicts !== null && !peaceMotions.some((motion) => motion.id === this.motionIdDraft))}
+                    >
+                      Accept peace
+                    </button>
+                  </form>
+                  <p
+                    class="text-xs text-amber-200"
+                    role="status"
+                    aria-live="polite"
+                    data-national-diplomacy-status
+                  >
+                    ${this.diplomacyStatus ?? nothing}
+                  </p>
+                  ${
+                    this.diplomacyError
+                      ? html`<p role="alert" class="text-xs text-red-300">
+                          ${this.diplomacyError}
+                        </p>`
+                      : nothing
+                  }
+                </div>
+
                 <div class="border-t border-white/15 pt-3 space-y-2">
                   <h2 class="font-semibold text-amber-200">
-                    Diplomatic actions
+                    Other diplomatic actions
                   </h2>
                   <p class="text-xs text-slate-400">
-                    Further actions require authenticated game command
-                    contracts.
+                    Membership, succession and treaty actions are blocked until
+                    authenticated execution and recipient-visible result
+                    contracts are available.
                   </p>
                   ${[
                     "Invite nation",
                     "Non-aggression pact",
                     "Mutual defense pact",
-                    "Offer peace",
+                    "Empire accession",
+                    "Transfer crown",
                   ].map(
                     (label) =>
                       html`<button
                         type="button"
                         disabled
                         aria-label="${label} (not yet available)"
-                        title="Awaiting authenticated engine command"
+                        title="Awaiting authenticated engine command and receipt"
                         class="mr-2 mb-2 rounded-md border border-white/20 px-3 py-1.5 text-xs text-slate-500 cursor-not-allowed"
                       >
                         ${label} · Unavailable

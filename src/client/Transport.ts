@@ -117,6 +117,31 @@ export class SendNationalFoundEmpireIntentEvent implements GameEvent {
   ) {}
 }
 
+/** National war authority is always resolved by the trusted execution layer. */
+export class SendNationalDeclareWarIntentEvent implements GameEvent {
+  constructor(
+    public readonly scope: "national" | "imperial",
+    public readonly nationId: string,
+    public readonly targetId: string,
+    public readonly targetKind: "nation" | "empire",
+    public readonly requestId: string,
+  ) {}
+}
+
+export class SendNationalProposePeaceIntentEvent implements GameEvent {
+  constructor(
+    public readonly warId: string,
+    public readonly requestId: string,
+  ) {}
+}
+
+export class SendNationalAcceptPeaceIntentEvent implements GameEvent {
+  constructor(
+    public readonly motionId: string,
+    public readonly requestId: string,
+  ) {}
+}
+
 /** Signals loss/reestablishment of a verified game transport session. */
 export class NationalTransportStatusEvent implements GameEvent {
   constructor(
@@ -338,6 +363,15 @@ export class Transport {
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
     this.subscribe(SendNationalFoundEmpireIntentEvent, (e) =>
       this.onSendNationalFoundEmpireIntent(e),
+    );
+    this.subscribe(SendNationalDeclareWarIntentEvent, (e) =>
+      this.onSendNationalDeclareWarIntent(e),
+    );
+    this.subscribe(SendNationalProposePeaceIntentEvent, (e) =>
+      this.onSendNationalProposePeaceIntent(e),
+    );
+    this.subscribe(SendNationalAcceptPeaceIntentEvent, (e) =>
+      this.onSendNationalAcceptPeaceIntent(e),
     );
     this.subscribe(SendAttackIntentEvent, (e) => this.onSendAttackIntent(e));
     this.subscribe(SendUpgradeStructureIntentEvent, (e) =>
@@ -849,6 +883,59 @@ export class Transport {
     const intent = {
       type: "national_found_empire" as const,
       empireId: event.empireId,
+      requestId: event.requestId,
+    };
+    this.sendIntent(intent);
+  }
+
+  /**
+   * All NATIONAL diplomatic intents use the existing intent gate and trusted
+   * client-ID stamping. The UI never supplies an actor principal or a war ID
+   * that it invents as authoritative.
+   */
+  private nationalDiplomacyWireEnabled(): boolean {
+    const cfg = this.lobbyConfig.gameStartInfo?.config;
+    return (
+      cfg?.gameType === GameType.Singleplayer &&
+      cfg.nationalMode === true &&
+      this.lobbyConfig.gameRecord === undefined
+    );
+  }
+
+  private onSendNationalDeclareWarIntent(
+    event: SendNationalDeclareWarIntentEvent,
+  ) {
+    if (!this.nationalDiplomacyWireEnabled()) return;
+    const intent = {
+      type: "national_declare_war" as const,
+      scope: event.scope,
+      nationId: event.nationId,
+      targetId: event.targetId,
+      targetKind: event.targetKind,
+      requestId: event.requestId,
+    };
+    this.sendIntent(intent);
+  }
+
+  private onSendNationalProposePeaceIntent(
+    event: SendNationalProposePeaceIntentEvent,
+  ) {
+    if (!this.nationalDiplomacyWireEnabled()) return;
+    const intent = {
+      type: "national_propose_peace" as const,
+      warId: event.warId,
+      requestId: event.requestId,
+    };
+    this.sendIntent(intent);
+  }
+
+  private onSendNationalAcceptPeaceIntent(
+    event: SendNationalAcceptPeaceIntentEvent,
+  ) {
+    if (!this.nationalDiplomacyWireEnabled()) return;
+    const intent = {
+      type: "national_accept_peace" as const,
+      motionId: event.motionId,
       requestId: event.requestId,
     };
     this.sendIntent(intent);

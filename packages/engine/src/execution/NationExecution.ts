@@ -334,8 +334,34 @@ export class NationExecution implements Execution {
       30,
     );
     this.nationalPlannerMemory = result.memory;
-    if (!result.planned || result.decision?.objective !== "expand") return;
-    const targetId = result.decision.targetId;
+    // A small nation under an observed active-war threat must still defend.
+    // The old branch discarded every "defend" decision and left a real
+    // front idle. Both attack and defense use the same E2 validator.
+    if (
+      !result.planned ||
+      result.decision === null ||
+      result.decision.objective === "consolidate"
+    )
+      return;
+    const sides = deriveNationalWarSides(observation.wars, player.id());
+    // "defend" is a threat alarm with NO offensive planner target. Choose
+    // only an observed, adjacent, already-hostile E2 WAR combatant at the
+    // actual execution boundary. Never invent a new war during defense.
+    const defensiveFront =
+      observation.frontiers
+        .filter(
+          (f) =>
+            f.access === "land" &&
+            sides.enemies.has(f.targetId) &&
+            !sides.allies.has(f.targetId),
+        )
+        .map((f) => f.targetId)
+        .sort()[0] ?? null;
+    const targetId =
+      result.decision.objective === "defend"
+        ? defensiveFront
+        : result.decision.targetId;
+    if (result.decision.objective === "defend" && targetId === null) return;
 
     // The planner knows only verified frontier IDs. Confirm adjacency again
     // at execution time; neither hidden armies nor off-map enemies are probed.
@@ -388,7 +414,6 @@ export class NationExecution implements Execution {
     )
       return;
 
-    const sides = deriveNationalWarSides(observation.wars, player.id());
     if (sides.allies.has(targetId)) return;
     if (!sides.enemies.has(targetId)) {
       // An independent AI may begin a scoped national war against a real,

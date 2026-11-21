@@ -11,15 +11,20 @@
  *   ... --mobile
  */
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { verifyHardwareWebgl } from "./gpu-attestation.mjs";
 
 const mobile = process.argv.includes("--mobile");
 const legacy = process.argv.includes("--legacy");
 const base = "http://127.0.0.1:9000/";
 const reportDir =
-  "national-qa-artifacts/browser-" + (mobile ? "mobile" : "desktop");
+  "national-qa-artifacts/browser-" +
+  (legacy ? "legacy-ffa-" : "national-") +
+  (mobile ? "mobile" : "desktop");
 mkdirSync(reportDir, { recursive: true });
 const profile = mkdtempSync(join(tmpdir(), "national-r5-"));
 const port = 13000 + (process.pid % 10000);
@@ -29,6 +34,8 @@ const errors = [];
 const observed = [];
 const browserConsole = [];
 const browserNetworkErrors = [];
+const runtimeAssetRequests = [];
+const restrictedRuntimeAssets = [];
 let hardwareCapabilities = null;
 let submittedFounding = null;
 const start = performance.now();
@@ -53,7 +60,11 @@ function record(name, extra = {}) {
 
 function persist() {
   const report = {
-    exactSource: process.env.GITHUB_SHA ?? "local-working-tree",
+    exactSource:
+      process.env.NATIONAL_GPU_CANDIDATE_SHA ??
+      process.env.GITHUB_SHA ??
+      "local-working-tree",
+    hardwareAcceptanceRequired: process.env.NATIONAL_REQUIRE_HARDWARE_GPU === "1",
     viewport: mobile ? "390x844 mobile" : "1280x800 desktop",
     stage,
     events: records,
@@ -61,6 +72,8 @@ function persist() {
     workerPackets: observed.slice(-240),
     console: browserConsole.slice(-240),
     networkErrors: browserNetworkErrors.slice(-120),
+    runtimeAssetRequests: runtimeAssetRequests.slice(-500),
+    restrictedRuntimeAssets: restrictedRuntimeAssets.slice(-80),
     actualHardware: hardwareCapabilities,
     submittedFounding,
     elapsedMs: Math.round(performance.now() - start),
@@ -114,6 +127,36 @@ function cdp(webSocket) {
           1200,
         ),
       });
+    }
+    if (packet.method === "Network.requestWillBeSent") {
+      const raw = packet.params?.request?.url;
+      try {
+        const url = new URL(raw);
+        // Drop query and fragment: URLs can contain authentication tokens.
+        const mediaAsset =
+          /[.](?:mp3|ogg|flac|wav|woff2?|ttf|svg|png|jpe?g|webp)$/i.test(
+            url.pathname,
+          );
+        const assetFolder = /[/](?:proprietary|premium|cdn|assets)[/]/i.test(
+          url.pathname,
+        );
+        if (/^https?:$/.test(url.protocol) && (mediaAsset || assetFolder)) {
+          const evidence = {
+            origin: url.origin,
+            path: url.pathname,
+            type: packet.params?.type ?? "other",
+          };
+          runtimeAssetRequests.push(evidence);
+          const forbiddenLocal = /[/]proprietary[/]/i.test(url.pathname);
+          const upstreamCdn =
+            /[/]cdn[/]/i.test(url.pathname) &&
+            /(?:[.]|^)openfront[.](?:io|dev)$/i.test(url.hostname);
+          if (forbiddenLocal || upstreamCdn)
+            restrictedRuntimeAssets.push(evidence);
+        }
+      } catch {
+        // Non-URL data requests have no external asset origin.
+      }
     }
     if (packet.method === "Network.loadingFailed") {
       browserNetworkErrors.push({
@@ -255,10 +298,12 @@ async function main() {
   if (
     angleBackend !== undefined &&
     angleBackend !== "gl" &&
+    angleBackend !== "gl-egl" &&
     angleBackend !== "vulkan"
   ) {
-    throw new Error("NATIONAL_CHROME_ANGLE_BACKEND must be gl or vulkan");
+    throw new Error("NATIONAL_CHROME_ANGLE_BACKEND must be gl, gl-egl or vulkan");
   }
+  const virglSurfaceless = angleBackend === "gl-egl";
   const hardwareOnly = process.env.NATIONAL_REQUIRE_HARDWARE_GPU === "1";
   // Hosted CI may opt into a software CDP diagnostic. It cannot pass the
   // normal game WebGL gate and is forbidden in real hardware acceptance.
@@ -266,6 +311,7 @@ async function main() {
     !hardwareOnly && process.env.NATIONAL_QA_SOFTWARE_CDP === "1";
   spawnChild(process.env.CHROME_BIN ?? "google-chrome", [
     "--headless=new",
+    ...(virglSurfaceless ? ["--ozone-platform=headless"] : []),
     "--no-sandbox",
     "--disable-dev-shm-usage",
     "--enable-webgl",
@@ -286,7 +332,7 @@ async function main() {
     "--user-data-dir=" + profile,
     "--remote-debugging-port=" + port,
     "about:blank",
-  ]);
+  ], virglSurfaceless ? { EGL_PLATFORM: "surfaceless" } : {});
   const pages = await poll(async () => {
     const res = await fetch("http://127.0.0.1:" + port + "/json/list", {
       signal: AbortSignal.timeout(1200),
@@ -371,6 +417,18 @@ async function main() {
       return found.sort((a,b) => a.text.length-b.text.length)[0] ?? null;
     })()`);
   const hit = async (x, y) => {
+    if (mobile) {
+      await send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x, y, id: 1 }],
+      });
+      await send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      record("actual-touch-input", { x: Math.round(x), y: Math.round(y) });
+      return;
+    }
     await send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
     await send("Input.dispatchMouseEvent", {
       type: "mousePressed",
@@ -439,8 +497,19 @@ async function main() {
   const capture = async (name) => {
     await worker();
     await screenshot(name);
-    record("screenshot", { name, packetCount: observed.length });
+    record("screenshot", {
+      name,
+      packetCount: observed.length,
+      assetRequests: runtimeAssetRequests.length,
+      restrictedAssets: restrictedRuntimeAssets.length,
+    });
     persist();
+    if (restrictedRuntimeAssets.length) {
+      throw new Error(
+        "RESTRICTED_RUNTIME_ASSET_REQUEST: " +
+          JSON.stringify(restrictedRuntimeAssets[0]),
+      );
+    }
   };
   const step = async (name, fn) => {
     stage = name;
@@ -469,6 +538,12 @@ async function main() {
       deviceScaleFactor: 1,
       mobile,
     });
+    if (mobile) {
+      await send("Emulation.setTouchEmulationEnabled", {
+        enabled: true,
+        maxTouchPoints: 1,
+      });
+    }
     await send("Page.addScriptToEvaluateOnNewDocument", { source: probe });
     await send("Page.navigate", { url: base });
     await step("home", async () => {
@@ -484,30 +559,111 @@ async function main() {
         browser: await send("Browser.getVersion").catch((error) => ({
           error: String(error),
         })),
-        webgl: await evaluate(`(() => {
-          const canvas = document.createElement("canvas");
-          const gl = canvas.getContext("webgl2");
-          if (!gl) return { supported: false, userAgent: navigator.userAgent };
-          const debug = gl.getExtension("WEBGL_debug_renderer_info");
-          return {
-            supported: true,
-            vendor: gl.getParameter(gl.VENDOR),
-            renderer: gl.getParameter(gl.RENDERER),
-            unmaskedVendor: debug ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) : null,
-            unmaskedRenderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : null,
-            maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
-            maxRenderbufferSize: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
-            contextLost: gl.isContextLost(),
-            userAgent: navigator.userAgent,
+        ...(await evaluate(`(() => {
+          // Real WebGL1/WebGL2 draw + readPixels, not context presence alone.
+          const probe = (kind) => {
+            const canvas = document.createElement("canvas");
+            canvas.width = 4; canvas.height = 4;
+            const gl = canvas.getContext(kind, { preserveDrawingBuffer: true });
+            if (!gl) return { supported: false };
+            const debug = gl.getExtension("WEBGL_debug_renderer_info");
+            const info = {
+              supported: true,
+              vendor: gl.getParameter(gl.VENDOR),
+              renderer: gl.getParameter(gl.RENDERER),
+              unmaskedVendor: debug ? gl.getParameter(debug.UNMASKED_VENDOR_WEBGL) : null,
+              unmaskedRenderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : null,
+              contextLost: gl.isContextLost(),
+              maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+            };
+            const modern = kind === "webgl2";
+            const vsSource = modern
+              ? "#version 300 es\\nin vec2 position;\\nvoid main(){gl_Position=vec4(position,0.,1.);}"
+              : "attribute vec2 position; void main(){gl_Position=vec4(position,0.,1.);}";
+            const fsSource = modern
+              ? "#version 300 es\\nprecision highp float;\\nout vec4 color;\\nvoid main(){color=vec4(0.2,0.4,0.6,1.0);}"
+              : "precision highp float; void main(){gl_FragColor=vec4(0.2,0.4,0.6,1.0);}";
+            const compile = (type, source) => {
+              const shader = gl.createShader(type);
+              gl.shaderSource(shader, source); gl.compileShader(shader);
+              if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
+                throw Error("shader compile: " + gl.getShaderInfoLog(shader));
+              return shader;
+            };
+            try {
+              const program = gl.createProgram();
+              gl.attachShader(program, compile(gl.VERTEX_SHADER, vsSource));
+              gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fsSource));
+              gl.linkProgram(program);
+              if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+                throw Error("shader link: " + gl.getProgramInfoLog(program));
+              gl.useProgram(program);
+              const buffer = gl.createBuffer();
+              gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+              gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                -1, -1, 1, -1, -1, 1, 1, 1,
+              ]), gl.STATIC_DRAW);
+              const pos = gl.getAttribLocation(program, "position");
+              if (pos < 0) throw Error("shader attribute missing");
+              gl.enableVertexAttribArray(pos);
+              gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+              gl.viewport(0, 0, 4, 4);
+              gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+              const pixels = new Uint8Array(4);
+              gl.readPixels(1, 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+              info.shaderPixel = Array.from(pixels);
+              info.glError = gl.getError();
+            } catch (error) {
+              info.shaderFailure = String(error);
+            }
+            return info;
           };
-        })()`),
+          return { webgl: probe("webgl2"), webgl1: probe("webgl") };
+        })()`)),
         systemGpu: await send("SystemInfo.getInfo")
           .then((info) => info.gpu ?? { unavailable: true })
           .catch((error) => ({ unavailable: true, reason: String(error) })),
       };
-      record("actual-gpu-webgl2-capabilities", {
+      record("actual-gpu-webgl1-webgl2-capabilities", {
         graphics: hardwareCapabilities,
       });
+      if (hardwareOnly) {
+        // Witness is created by a trusted host/controller, not by Chrome or
+        // a guest shell. The signer private key must never enter the VM.
+        const proofPath = process.env.NATIONAL_GPU_ATTESTATION_FILE;
+        const keyPath = process.env.NATIONAL_GPU_PUBLIC_KEY_FILE;
+        const trustedKey = keyPath ? readFileSync(keyPath, "utf8") : null;
+        const approvedKeys = JSON.parse(
+          readFileSync(
+            fileURLToPath(new URL("./trusted-gpu-keys.json", import.meta.url)),
+            "utf8",
+          ),
+        ).trustedEd25519PublicKeySha256;
+        const keyFingerprint = trustedKey
+          ? createHash("sha256").update(trustedKey, "utf8").digest("hex")
+          : null;
+        if (!Array.isArray(approvedKeys) || !approvedKeys.includes(keyFingerprint)) {
+          throw Error("GPU_RELEASE_TRUST_ROOT_NOT_ENROLLED_OR_MISMATCH");
+        }
+        const attestation = verifyHardwareWebgl(hardwareCapabilities, {
+          signedProof: proofPath
+            ? JSON.parse(readFileSync(proofPath, "utf8"))
+            : null,
+          trustedPublicKey: trustedKey,
+          expected: {
+            sourceSha:
+              process.env.NATIONAL_GPU_CANDIDATE_SHA ?? process.env.GITHUB_SHA,
+            runId: process.env.GITHUB_RUN_ID,
+            runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+            runnerName: process.env.RUNNER_NAME,
+            challenge: process.env.NATIONAL_GPU_ATTESTATION_CHALLENGE,
+          },
+        });
+        record("strict-hardware-renderer-attestation", attestation);
+        if (!attestation.accepted) {
+          throw new Error("REAL_CHROMIUM_GPU_REQUIRED: " + attestation.reason);
+        }
+      }
       await capture("home");
     });
     await step("solo", async () => {
@@ -600,7 +756,11 @@ async function main() {
           const gate = window.__nationalQaFind('webgl-gate');
           if (gate) return { blocked: true, status: gate.status };
           const panel = window.__nationalQaFind('national-diplomacy-panel');
-          return panel && !/game is starting/i.test(document.body.innerText)
+          const hud = window.__nationalQaFind('game-right-sidebar');
+          const canvas = [...document.querySelectorAll('canvas')].some(
+            (item) => item.getBoundingClientRect().width > 150
+          );
+          return panel && hud && canvas && !/game is starting/i.test(document.body.innerText)
             ? { running: true } : null;
         })()`),
         "actual started match or explicit WebGL hard blocker",

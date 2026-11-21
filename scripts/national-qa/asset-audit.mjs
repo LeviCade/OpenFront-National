@@ -62,6 +62,7 @@ if (existsSync("LICENSE-ASSETS")) {
 // an optional upstream directory. Source-code references require manual audit.
 const noDistribute = [".mp3", ".flac", ".woff", ".woff2", ".ttf"];
 const sample = [];
+const provenance = [];
 function scan(dir) {
   if (!existsSync(dir)) return;
   for (const item of readdirSync(dir, { withFileTypes: true })) {
@@ -71,15 +72,59 @@ function scan(dir) {
         scan(p);
     } else if (noDistribute.some((suffix) => item.name.endsWith(suffix))) {
       sample.push(p);
+      const bytes = readFileSync(p);
+      provenance.push({
+        path: p,
+        category: /[.](woff2?|ttf)$/i.test(p) ? "font" : "audio",
+        bytes: bytes.length,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+        resourceDirectoryLicense: "CC BY-SA 4.0 / resources/LICENSE",
+        independentOriginReview: "PENDING",
+      });
     }
   }
 }
 scan("resources");
+// Audit all literal game music paths rather than assuming they were copied
+// from a restricted upstream package. Never auto-fetch proprietary music.
+const musicSources = [
+  "src/client/sound/SoundManager.ts",
+  "src/client/sound/MenuMusic.ts",
+];
+const musicCallSites = musicSources.flatMap((source) =>
+  readFileSync(source, "utf8")
+    .split(String.fromCharCode(10))
+    .flatMap((line, index) =>
+      Array.from(
+        line.matchAll(/sounds[/]music[/][a-z0-9-]+[.]mp3/g),
+        (match) => ({ source, line: index + 1, path: match[0] }),
+      ),
+    ),
+);
+const referencedMusic = [
+  ...new Set(musicCallSites.map(({ path }) => path)),
+].sort();
+const missingMusic = referencedMusic.filter(
+  (path) => !existsSync(join("resources", path)),
+);
 const result = {
   gate: "known-shell-assets-and-restricted-subtree",
   status: failed.length ? "FAIL" : "PASS",
   checks: records,
-  inventoryReviewRequired: sample,
+  inventoryReviewRequired: sample.sort(),
+  resourceMediaProvenance: provenance.sort((a, b) =>
+    a.path.localeCompare(b.path),
+  ),
+  originReviewStatus: "PENDING",
+  referencedMusic,
+  musicCallSites,
+  missingMusic,
+  publicReleaseReady:
+    failed.length === 0 && missingMusic.length === 0 && provenance.length === 0,
+  originReviewCounts: {
+    fonts: provenance.filter((r) => r.category === "font").length,
+    audio: provenance.filter((r) => r.category === "audio").length,
+  },
   limitations: [
     "This is not a comprehensive third-party rights clearance.",
     "Referenced assets, network CDN content, fonts and sound playback require browser and manual origin review.",
@@ -96,7 +141,16 @@ console.log(
     status: result.status,
     checked: records.length,
     reviewInventory: sample.length,
+    fontsPending: provenance.filter((r) => r.category === "font").length,
+    audioPending: provenance.filter((r) => r.category === "audio").length,
+    referencedMusic: referencedMusic.length,
+    missingMusic,
     failures: failed,
   }),
 );
-if (failed.length) process.exitCode = 1;
+if (
+  failed.length ||
+  (process.argv.includes("--strict-release") &&
+    (missingMusic.length || provenance.length))
+)
+  process.exitCode = 1;

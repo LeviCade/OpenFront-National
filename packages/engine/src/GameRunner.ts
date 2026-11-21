@@ -466,8 +466,13 @@ export class GameRunner {
           this.game.player(this.nationalObserverId!),
           this.nationalResultDelivery,
         );
-        const authenticatedPacket = results.length
-          ? { ...fullPacket, nationalCommandResults: results }
+        const authenticatedPacket: GameUpdateViewData = results.length
+          ? ({
+              ...fullPacket,
+              // E2 owns the GameUpdates type extension for further political
+              // kinds. E3 only attaches types read from E1's real journal.
+              nationalCommandResults: results,
+            } as unknown as GameUpdateViewData)
           : fullPacket;
         const projected = this.nationalOutbound.project(
           this.game,
