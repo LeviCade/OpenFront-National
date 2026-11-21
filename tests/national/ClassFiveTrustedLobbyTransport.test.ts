@@ -46,7 +46,7 @@ function verified(index: number): Client {
     publicId: publics[index],
     username: ["Alpha", "Bravo", "Charlie"][index],
     // The real Worker obtains this from a validated signed account token.
-    claims: {} as NonNullable<Client["claims"]>,
+    claims: { sub: "verified-persistent-" + index } as NonNullable<Client["claims"]>,
   });
 }
 
@@ -252,7 +252,11 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
     expect(projections(a)).toHaveLength(before);
     expect(projections(b).length).toBeGreaterThan(before);
     const freshWs = makeMockWs();
-    expect(game.rejoinClient(freshWs as any, a.persistentID, 0)).toBe(true);
+    expect(
+      game.rejoinClient(freshWs as any, a.persistentID, 0, undefined, {
+        subject: a.persistentID, publicId: a.publicId!,
+      }),
+    ).toBe(true);
     expect(freshWs.sent(ctx).some((m) => m.type === "national_start")).toBe(
       true,
     );
@@ -268,6 +272,12 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
     });
     expect(game.joinClient(late)).toBe("started");
     expect(game.rejoinClient(makeMockWs() as any, "not-seated")).toBe(false);
+    expect(
+      game.rejoinClient(makeMockWs() as any, c.persistentID, 0, undefined, {
+        subject: c.persistentID,
+        publicId: "wrong-account",
+      }),
+    ).toBe(false);
     game.kickClient(b.clientID);
     expect(game.rejoinClient(makeMockWs() as any, b.persistentID)).toBe(false);
     await mockWsOf(c).emit({ type: "spectate", spectator: true });
