@@ -48,7 +48,7 @@ async function realRunner(info: WireGameStartInfo): Promise<GameRunner> {
   const game = await setup(
     "plains",
     { ...info.config, nationalMode: true, gameType: GameType.Private,
-      gameMode: GameMode.FFA, bots: 0, nations: 0 },
+      gameMode: GameMode.FFA, bots: 0, nations: "disabled" },
     humans,
     undefined,
     TrustedTestConfig,
@@ -69,7 +69,7 @@ function fixture(seats = [verified(0), verified(1), verified(2)], extra?: Client
     creatorPersistentID: seats[0].persistentID,
     config: {
       nationalMode: true, gameType: GameType.Private,
-      gameMode: GameMode.FFA, bots: 0, nations: 0,
+      gameMode: GameMode.FFA, bots: 0, nations: "disabled",
     },
     deps: { createNationalRunner: realRunner, turnIntervalMs: () => 1000 },
   });
