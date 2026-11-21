@@ -1,0 +1,42 @@
+name: NATIONAL Class Five E2 - Trusted Lobby Transport
+on:
+  pull_request:
+    branches: [stage3/class5-trusted-national-vertical-20261121]
+    paths:
+      - src/server/GameServer.ts
+      - src/server/national/**
+      - src/client/ClientGameRunner.ts
+      - src/client/Transport.ts
+      - src/client/PresenceGroup.ts
+      - src/client/TrustedNationalSession.ts
+      - packages/shared/src/WireSchemas.ts
+      - tests/national/ClassFiveTrustedLobbyTransport.test.ts
+      - .github/workflows/national-class5-e2-source.yml
+
+permissions:
+  contents: read
+
+jobs:
+  national-private-session:
+    name: TypeScript + real server sockets + private packet security
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: npm run typecheck
+      - run: npx --no-install vitest run --project node tests/national/ClassFiveTrustedLobbyTransport.test.ts tests/national/TrustedNationalServerAuthority.test.ts tests/national/NationalServerOutboundClass4.test.ts tests/server/GameServerWire.test.ts
+      - run: npx --no-install oxlint src/server/GameServer.ts src/server/national/TrustedNationalMapFiles.ts src/server/national/TrustedNationalMatch.ts src/server/national/NationalRecipientWire.ts src/client/ClientGameRunner.ts src/client/Transport.ts src/client/PresenceGroup.ts src/client/TrustedNationalSession.ts packages/shared/src/WireSchemas.ts tests/national/ClassFiveTrustedLobbyTransport.test.ts
+      - name: Show pinned-format diff before committing it
+        run: |
+          npx --no-install oxfmt --write src/server/GameServer.ts src/server/national/TrustedNationalMapFiles.ts src/server/national/TrustedNationalMatch.ts src/server/national/NationalRecipientWire.ts src/client/ClientGameRunner.ts src/client/Transport.ts src/client/PresenceGroup.ts src/client/TrustedNationalSession.ts packages/shared/src/WireSchemas.ts tests/national/ClassFiveTrustedLobbyTransport.test.ts
+          echo "CLASS5_FORMAT_DIFF_BEGIN"
+          git -c color.ui=false diff --unified=0 -- src/server/GameServer.ts src/server/national/TrustedNationalMapFiles.ts src/server/national/TrustedNationalMatch.ts src/server/national/NationalRecipientWire.ts src/client/ClientGameRunner.ts src/client/Transport.ts src/client/PresenceGroup.ts src/client/TrustedNationalSession.ts packages/shared/src/WireSchemas.ts tests/national/ClassFiveTrustedLobbyTransport.test.ts
+          echo "CLASS5_FORMAT_DIFF_END"
+          npx --no-install oxfmt --check src/server/GameServer.ts src/server/national/TrustedNationalMapFiles.ts src/server/national/TrustedNationalMatch.ts src/server/national/NationalRecipientWire.ts src/client/ClientGameRunner.ts src/client/Transport.ts src/client/PresenceGroup.ts src/client/TrustedNationalSession.ts packages/shared/src/WireSchemas.ts tests/national/ClassFiveTrustedLobbyTransport.test.ts
