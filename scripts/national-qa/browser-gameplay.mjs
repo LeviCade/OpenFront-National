@@ -23,6 +23,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyHardwareWebgl } from "./gpu-attestation.mjs";
+import { reconcileDiplomacyEvidence } from "./browser-verdict.mjs";
 
 const mobile = process.argv.includes("--mobile");
 const legacy = process.argv.includes("--legacy");
@@ -210,8 +211,13 @@ const probe = `(() => {
     const updateCandidates = [data, ...(data.gameUpdate ? [data.gameUpdate] : []), ...(Array.isArray(data.gameUpdates) ? data.gameUpdates : [])];
     for (const candidate of updateCandidates) {
       if (!candidate || typeof candidate !== 'object') continue;
+      if (Number.isSafeInteger(candidate.tick)) info.tick = candidate.tick;
       if (candidate.nationalPolitics) info.publicPolitics = candidate.nationalPolitics;
       if (candidate.nationalCommandResults) info.commandResults = candidate.nationalCommandResults;
+      if (candidate.nationalConflicts) info.publicConflicts = candidate.nationalConflicts;
+      if (candidate.packedAttackUpdates?.length > 0) info.hasAuthoritativeAttackDelta = true;
+      if (candidate.packedMotionPlans?.length > 0) info.hasAuthoritativeMotion = true;
+      if (candidate.packedTileUpdates?.length > 0) info.hasTerritoryDelta = true;
       if (candidate.type === 'snapshot_result') info.snapshotAvailable = candidate.snapshot != null;
     }
     packets.push(info);
@@ -535,6 +541,7 @@ async function main() {
         error: String(err),
         observed: await description().catch(() => null),
       });
+      record("stage-failed", { stage: name, failureClass: String(err).slice(0, 160) });
       await capture("failure-" + name).catch(() => {});
       throw err;
     }
@@ -745,6 +752,26 @@ async function main() {
           nationalPanelAbsent: true,
           workerPacketCount: observed.length,
         });
+      });
+      await step("legacy-player-action", async () => {
+        const initial = await worker();
+        const lastTick = Math.max(0, ...initial.map((p) => p.tick ?? 0));
+        for (const [u, v] of [[0.55, 0.55], [0.38, 0.48], [0.7, 0.42]]) {
+          const position = await evaluate("(() => { const canvas = [...document.querySelectorAll('canvas')].filter((e) => e.getBoundingClientRect().width > 150).sort((a,b) => b.getBoundingClientRect().width-a.getBoundingClientRect().width)[0]; const r=canvas?.getBoundingClientRect(); return r ? { x: r.x + r.width * "+u+", y:r.y + r.height * "+v+" } : null; })()");
+          if (!position) throw Error("LEGACY_PLAYABLE_CANVAS_MISSING");
+          await hit(position.x, position.y);
+          await sleep(450);
+        }
+        const activity = await poll(async () => {
+          const packets = await worker();
+          return packets.some((p) => (p.tick ?? 0) > lastTick &&
+            (p.hasTerritoryDelta || p.hasAuthoritativeAttackDelta));
+        }, "legacy real map input followed by authoritative tile or attack update", 35, 300);
+        if (!activity) throw Error("LEGACY_PLAYER_ACTION_UNCONFIRMED");
+        record("legacy-actual-map-interaction-authoritative-update", {
+          via: mobile ? "touch" : "mouse", lastTick,
+        });
+        await capture("legacy-player-action");
       });
       return;
     }
