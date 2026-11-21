@@ -138,13 +138,23 @@ function allOwn(map: NationalObserverMapV1, game: Game) {
 describe("C2 First Class E3: new M7 actual observer map + recipient wire", () => {
   it("FOG-02/03: three distinct signed seats get identical public roster, individual map/offer privacy and 100-tile real border sightings", async () => {
     const initial = await setup("big_plains", { nationalMode: true }, P);
-    const starts = [initial.ref(20, 100), initial.ref(180, 180), initial.ref(180, 20)];
+    const starts = [initial.ref(20, 100), initial.ref(80, 100), initial.ref(180, 180)];
     const { game, host, sockets } = await rig("big_plains", starts);
     const nearTile = game.ref(80, 100);
-    const farTile = game.ref(195, 100);
+    const farTile = game.ref(180, 180);
     const nearCity = game.player(B.id).buildUnit(UnitType.City, nearTile, {});
-    const farCity = game.player(B.id).buildUnit(UnitType.City, farTile, {});
+    const farCity = game.player(C.id).buildUnit(UnitType.City, farTile, {});
     game.player(B.id).setTroops(9_876_543);
+    // Real E1 political state contains a confidential pact constitution.
+    // Its admission/expulsion terms must never enter an unrelated national
+    // observer-map or player update on the authenticated socket.
+    game.performNationalCommand(game.player(A.id), {
+      kind: "found-pact",
+      pactId: "c2_e3_secret_mda",
+      name: "Verified Pact",
+      pactKind: "MDA",
+      terms: { admission: "unanimous", expulsion: "forbidden" },
+    });
     host.tick(); // real host-created GameRunner tick and three socket frames
     const [a, b, c] = sockets.map((s) => view(s.socket));
     expect(a.data.nationalPolitics).toEqual(b.data.nationalPolitics);
@@ -174,6 +184,9 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     expect(a.msg.payload).not.toContain("9876543");
     expect(a.msg.payload).not.toContain("secretTreaty");
     expect(a.msg.payload).not.toContain("terms");
+    expect(c.msg.payload).not.toContain("unanimous");
+    expect(c.msg.payload).not.toContain("forbidden");
+    expect(c.msg.payload).not.toContain("c2_e3_secret_mda");
     expect(a.map.countries.map((n) => n.id)).toEqual(expect.arrayContaining([
       A.id, B.id, C.id,
     ]));
