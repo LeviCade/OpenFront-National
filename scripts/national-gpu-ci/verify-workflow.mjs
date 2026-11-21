@@ -8,24 +8,15 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 const source = readFileSync(
-  new URL(
-    "../../.github/workflows/national-hardware-acceptance.yml",
-    import.meta.url,
-  ),
+  new URL("../../.github/workflows/national-hardware-acceptance.yml", import.meta.url),
   "utf8",
 );
 
 const diagnostic = readFileSync(
-  new URL(
-    "../../.github/workflows/national-r10-owner-gpu-diagnostic.yml",
-    import.meta.url,
-  ),
+  new URL("../../.github/workflows/national-r10-owner-gpu-diagnostic.yml", import.meta.url),
   "utf8",
 );
-const runner = readFileSync(
-  new URL("./run-four-modes.sh", import.meta.url),
-  "utf8",
-);
+const runner = readFileSync(new URL("./run-four-modes.sh", import.meta.url), "utf8");
 
 void test("strict default-main dispatch, owner admission and immutable R10 ancestry", () => {
   assert.ok(source.includes("  workflow_dispatch:"));
@@ -48,7 +39,8 @@ void test("strict default-main dispatch, owner admission and immutable R10 ances
     'NATIONAL_REQUIRE_HARDWARE_GPU: "1"',
     "run-four-modes.sh release",
     "path: national-qa-artifacts/gpu/public/release/",
-  ]) assert.ok(source.includes(required), "Missing strict: " + required);
+  ])
+    assert.ok(source.includes(required), "Missing strict: " + required);
 });
 
 void test("diagnostic is owner-only, feature-path-filtered and cannot certify release", () => {
@@ -64,7 +56,8 @@ void test("diagnostic is owner-only, feature-path-filtered and cannot certify re
     'NATIONAL_REQUIRE_HARDWARE_GPU: "0"',
     "run-four-modes.sh diagnostic",
     "path: national-qa-artifacts/gpu/public/diagnostic/",
-  ]) assert.ok(diagnostic.includes(required), "Missing diagnostic: " + required);
+  ])
+    assert.ok(diagnostic.includes(required), "Missing diagnostic: " + required);
 });
 
 void test("one pinned installation, one real GPU runner and four serial browser modes", () => {
@@ -77,14 +70,12 @@ void test("one pinned installation, one real GPU runner and four serial browser 
       "CHROME_BIN: /opt/skybot-gpu-runtime/chrome-headless-shell-linux64/chrome-headless-shell",
       "NATIONAL_CHROME_ANGLE_BACKEND: gl-egl",
       "persist-credentials: false",
-    ]) assert.ok(workflow.includes(marker), marker);
+    ])
+      assert.ok(workflow.includes(marker), marker);
     assert.equal((workflow.match(/npm run inst/g) ?? []).length, 1);
     assert.doesNotMatch(workflow, /swiftshader|--enable-unsafe-swiftshader|--disable-gpu/i);
   }
-  assert.match(
-    runner,
-    /for mode in national-desktop national-mobile legacy-desktop legacy-mobile/,
-  );
+  assert.match(runner, /for mode in national-desktop national-mobile legacy-desktop legacy-mobile/);
   assert.ok(runner.includes("node scripts/national-qa/browser-gameplay.mjs"));
   assert.match(runner, /sanitize-browser-evidence[.]mjs --kind/);
   assert.doesNotMatch(runner, /cat .*log|tail -n|grep .*log/);
@@ -92,8 +83,7 @@ void test("one pinned installation, one real GPU runner and four serial browser 
 
 void test("git ancestry denies stale ancestors and unrelated sibling sources", () => {
   const dir = mkdtempSync(join(tmpdir(), "r10-gpu-ancestry-"));
-  const git = (...args) =>
-    execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
+  const git = (...args) => execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
   const commit = (name) =>
     git(
       "-c",
