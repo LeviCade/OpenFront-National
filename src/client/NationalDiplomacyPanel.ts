@@ -677,6 +677,10 @@ export class NationalDiplomacyPanel extends LitElement {
       conflicts?.layers.filter(
         (layer) => layer.endedTick === null && this.ourWarSide(layer) !== null,
       ) ?? [];
+    // Real GameRunner player attack projection only, not an intent counter.
+    const observedOutgoingAttacks =
+      game.myPlayer()?.outgoingAttacks?.().filter((attack) => !attack.retreating)
+        .length ?? 0;
     return html`
       <section
         class="text-white w-[min(25rem,calc(100vw-1rem))] max-w-full rounded-xl border border-amber-400/50 bg-slate-950/95 shadow-xl backdrop-blur-sm overflow-hidden"
@@ -971,6 +975,10 @@ export class NationalDiplomacyPanel extends LitElement {
                     ? html`<div data-national-map-combat class="rounded-lg border border-cyan-400/40 bg-cyan-900/25 p-3 space-y-2">
                         <strong>⚔️ War is active — attack on the map</strong>
                         <p class="text-xs">Close this panel, then right-click enemy land (desktop) or tap it (mobile). Choose Attack in the existing map menu. The engine decides whether troops move. Use the normal troop-ratio control to set how many are sent.</p>
+                        <p data-national-live-attacks class="text-xs" role="status">
+                          Observed live outgoing map attacks: ${observedOutgoingAttacks}.
+                          This is reported from game state, not from clicking Attack.
+                        </p>
                         <button
                           id="national-return-to-map"
                           type="button"

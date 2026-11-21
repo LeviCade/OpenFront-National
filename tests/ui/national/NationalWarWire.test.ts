@@ -708,6 +708,7 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       .closest("form")!
       .dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
     expect(intents()).toHaveLength(0);
+    await panel.updateComplete;
     expect(panel.textContent).toContain("No manual or guessed IDs");
   });
 
@@ -748,6 +749,8 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     panel.refresh();
     await panel.updateComplete;
     expect(panel.textContent).toContain("Battle: right-click opposing territory");
+    expect(panel.querySelector("[data-national-live-attacks]")?.textContent)
+      .toContain("Observed live outgoing map attacks: 0");
     expect(panel.querySelector("[data-national-map-combat]")).not.toBeNull();
     const back = panel.querySelector<HTMLButtonElement>("#national-return-to-map")!;
     expect(back.className).toContain("min-h-11");
