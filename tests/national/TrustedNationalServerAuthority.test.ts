@@ -139,7 +139,7 @@ describe("Fourth Class / E2 trusted Private NATIONAL host", () => {
 
   it("rejects fake extra players, anonymous seats and duplicate accounts", async () => {
     const { runner, a, b } = await match();
-    expect(() => new TrustedNationalMatch(GAME_ID, runner, [a])).toThrow(
+    expect(() => new TrustedNationalMatch(GAME_ID, runner, [a], () => {})).toThrow(
       "two real authenticated humans",
     );
     const anonymous = seat("TRUSTEDB1", "other");
