@@ -249,13 +249,13 @@ export function materializeTrustedNationalUpdate(
   const safeUpdates = Array.from(
     { length: GameUpdateType.DonateEvent + 1 },
     () => [],
-  ) as GameUpdates;
+  ) as unknown as GameUpdates;
   for (const [key, entries] of Object.entries(packet.updates)) {
     const index = Number(key);
     if (!permittedUpdates.has(index) || !Array.isArray(entries)) {
       throw new Error("NATIONAL unauthorized engine update bucket");
     }
-    safeUpdates[index] = entries as GameUpdates[typeof index];
+    (safeUpdates as unknown as Record<number, unknown[]>)[index] = entries;
   }
 
   const tiles = numericArray(packet.packedTileUpdates, 1_048_576, true);
