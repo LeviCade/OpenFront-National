@@ -224,16 +224,24 @@ function sessionObservation(port) {
             const canvas = [...document.querySelectorAll('canvas')]
               .find(c => c.getBoundingClientRect().width > 150);
             const r = canvas?.getBoundingClientRect();
+            const status = document.getElementById(
+              'trusted-national-projection-status',
+            );
+            const visibleProjection =
+              status?.dataset.trustedNationalMap === 'visible';
+            const tickText = p?.getAttribute('data-national-projection-tick');
+            const validatedTick =
+              tickText && /^[0-9]+$/.test(tickText) ? Number(tickText) : null;
             return {
               principalId: p?.getAttribute('data-national-principal-id') ?? null,
               matchId: p?.getAttribute('data-national-match-id') ?? null,
               displayedHostAdmission:
                 p?.getAttribute('data-national-host-admitted') === 'true',
-              displayedProjectionTick:
-                Number(p?.getAttribute('data-national-projection-tick')),
+              displayedProjectionTick: validatedTick,
               displayedSpectator:
                 p?.getAttribute('data-national-spectator') === 'true',
-              visibleMapRendered: !!r && r.width > 150 && r.height > 100,
+              visibleMapRendered: !!r && r.width > 150 &&
+                r.height > 100 && visibleProjection,
             };
           })()`,
           returnByValue: true,
