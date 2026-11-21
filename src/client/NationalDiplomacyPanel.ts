@@ -507,8 +507,10 @@ export class NationalDiplomacyPanel extends LitElement {
     this.lastConfirmedEmpireId = null;
     this.phase = "pending";
     this.error = null;
+    // EventBus delivery is a local UI action, not proof that Transport's
+    // intent gate, LocalServer, or GameRunner accepted the command.
     this.message =
-      "Request sent to game. Awaiting its accepted or rejected result…";
+      "Founding submitted from the interface. Engine delivery and outcome are unverified.";
     try {
       this.eventBus.emit(
         new SendNationalFoundEmpireIntentEvent(empireId, requestId),
@@ -1177,15 +1179,33 @@ export class NationalDiplomacyPanel extends LitElement {
                   this.pendingAttempt
                     ? html`<p
                         data-national-founding-tick
+                        data-national-founding-request-id=${this.pendingAttempt.requestId}
+                        data-national-founding-actor-id=${this.pendingAttempt.actorId}
                         role="status"
                         aria-live="polite"
                         class="text-xs text-amber-200"
                       >
-                        Awaiting authoritative founder receipt: issued at engine
-                        tick ${this.pendingAttempt.issuedTick}, current engine
-                        tick ${game.ticks()}. A 00:00 Solo HUD clock can be
-                        normal during spawn; it does not prove founding
-                        succeeded or failed.
+                        Awaiting authoritative founder resolution for request
+                        ${this.pendingAttempt.requestId} (actor
+                        ${this.pendingAttempt.actorId}). Submitted at Game tick
+                        ${this.pendingAttempt.issuedTick}; current Game tick
+                        ${game.ticks()}, pause
+                        ${
+                          game.isPaused?.() === true
+                            ? "active"
+                            : game.isPaused?.() === false
+                              ? "inactive"
+                              : "unknown"
+                        },
+                        public roster tick
+                        ${game.nationalPoliticsTick?.() ?? "unavailable"}.
+                        ${
+                          this.pendingAttempt.acceptedResultSeen
+                            ? "Matching accepted receipt observed; waiting for current authoritative roster."
+                            : "No matching accepted receipt observed yet."
+                        }
+                        A 00:00 Solo HUD clock is not proof of stopped Game
+                        ticks, delivery or founding success.
                       </p>`
                     : nothing
                 }
