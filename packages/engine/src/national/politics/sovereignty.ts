@@ -68,6 +68,8 @@ export interface PoliticsEmpire {
   memberIds: string[];
   /** Deadline in deterministic simulation milliseconds, never wall-clock time. */
   crisisDeadlineMs: number | null;
+  /** Emperor-approved subordinate NATIONAL peace authority; not imperial. */
+  delegatedNationalPeace?: string[];
 }
 
 export interface EmpireAccessionOffer {
@@ -136,7 +138,13 @@ function copy(world: PoliticsProjection): PoliticsProjection {
           }
         : {}),
     })),
-    empires: world.empires.map((e) => ({ ...e, memberIds: [...e.memberIds] })),
+    empires: world.empires.map((e) => ({
+      ...e,
+      memberIds: [...e.memberIds],
+      ...(e.delegatedNationalPeace === undefined
+        ? {}
+        : { delegatedNationalPeace: [...e.delegatedNationalPeace] }),
+    })),
     accessionOffers: world.accessionOffers.map((o) => ({ ...o })),
     simulationMs: world.simulationMs,
   };
@@ -185,6 +193,18 @@ export function validatePolitics(world: PoliticsProjection): void {
       e.crisisDeadlineMs === null ||
         (Number.isSafeInteger(e.crisisDeadlineMs) && e.crisisDeadlineMs >= 0),
       "invalid crisis deadline",
+    );
+    const delegates = e.delegatedNationalPeace ?? [];
+    requireRule(
+      Array.isArray(delegates) &&
+        unique(delegates) &&
+        delegates.every(
+          (id) =>
+            typeof id === "string" &&
+            id !== e.leaderId &&
+            e.memberIds.includes(id),
+        ),
+      "invalid imperial national-peace delegation",
     );
     for (const id of e.memberIds) {
       requireRule(nationById.get(id)?.alive, "empire member does not survive");
@@ -699,6 +719,7 @@ export function foundEmpire(
     leaderId: founderId,
     memberIds: [founderId],
     crisisDeadlineMs: null,
+    delegatedNationalPeace: [],
   });
   validatePolitics(next);
   return next;
@@ -761,6 +782,44 @@ export function acceptEmpireAccession(
   return next;
 }
 
+/**
+ * M5/WAR-05: emperor grants or withdraws a subordinate's authority to
+ * negotiate only THAT MEMBER'S national war. The canonical WAR ledger reads
+ * this Game-snapshotted policy through PoliticalAuthorityAdapter; imperial
+ * war remains exclusively the incumbent emperor's responsibility.
+ */
+export function setNationalPeaceDelegation(
+  world: PoliticsProjection,
+  empireId: string,
+  actorId: string,
+  memberId: string,
+  enabled: boolean,
+): PoliticsProjection {
+  validatePolitics(world);
+  const current = empire(world, empireId);
+  requireRule(
+    current.leaderId === actorId,
+    "only incumbent emperor may change national peace delegation",
+  );
+  requireRule(
+    current.memberIds.includes(memberId) && memberId !== current.leaderId,
+    "national peace delegate must be a surviving subordinate member",
+  );
+  requireRule(typeof enabled === "boolean", "invalid delegation policy");
+  const delegates = current.delegatedNationalPeace ?? [];
+  requireRule(
+    delegates.includes(memberId) !== enabled,
+    "national peace delegation already in requested state",
+  );
+  const next = copy(world);
+  const target = empire(next, empireId);
+  target.delegatedNationalPeace = enabled
+    ? sorted([...delegates, memberId])
+    : delegates.filter((id) => id !== memberId);
+  validatePolitics(next);
+  return next;
+}
+
 /** Emperor may always transfer to a *surviving constituent*, without changing empire identity. */
 export function transferCrown(
   world: PoliticsProjection,
@@ -788,6 +847,9 @@ export function transferCrown(
   const target = empire(next, empireId);
   target.leaderId = successorId;
   target.crisisDeadlineMs = null;
+  // Grants are appointments of the outgoing crown: NONE survive succession.
+  // The successor may issue fresh grants through a new authenticated command.
+  target.delegatedNationalPeace = [];
   // Outstanding accession offers from the old emperor are invalidated.
   next.accessionOffers = next.accessionOffers.filter(
     (o) => o.empireId !== empireId,
@@ -833,7 +895,13 @@ export function eliminatePoliticalNation(
   for (const e of [...next.empires]) {
     if (!e.memberIds.includes(nationId)) continue;
     if (e.leaderId === nationId) dissolve(next, e.id);
-    else e.memberIds = e.memberIds.filter((id) => id !== nationId);
+    else {
+      e.memberIds = e.memberIds.filter((id) => id !== nationId);
+      if (e.delegatedNationalPeace !== undefined)
+        e.delegatedNationalPeace = e.delegatedNationalPeace.filter(
+          (id) => id !== nationId,
+        );
+    }
   }
   next.accessionOffers = next.accessionOffers.filter(
     (o) =>

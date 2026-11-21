@@ -623,7 +623,10 @@ export class GameImpl implements Game {
       // A defensive, validated snapshot; never give another subsystem the
       // mutable PoliticsProjection. The callback follows restoreState().
       return this._national.snapshot().politics;
-    });
+    }, (memberId, action) =>
+      action === "peace" &&
+      this._national?.hasDelegatedNationalPeace(memberId) === true
+    );
     return this._nationalAuthority;
   }
 
