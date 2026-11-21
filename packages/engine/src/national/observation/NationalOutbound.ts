@@ -74,23 +74,30 @@ function publicPolitics(
 }
 
 
-/** The ONLY engine-issued public WAR facts sent across the E3 worker boundary.
- * Never forward WarLedger snapshots: they include private levy information.
- * Peace motions remain scoped to nations actually on a current WAR side.
- * E2 owns adding this DTO to GameUpdates; E3 does not edit E2's schema. */
+/** Safe, detached WAR projection for E4. Never forward raw WAR/LEVY snapshots.
+ * E2 owns the engine-api typed wire schema. Pending diplomacy is only visible
+ * to current participants, while WAR declarations/cessations are public. */
 export interface NationalPublicConflictView {
-  readonly wars: readonly {
+  readonly version: 1;
+  /** Empty for spectators, never interpreted as an authenticated principal. */
+  readonly recipientId: string;
+  readonly layers: readonly {
     readonly id: string;
     readonly scope: "national" | "imperial";
     readonly first: { readonly kind: "nation" | "empire"; readonly id: string };
     readonly second: { readonly kind: "nation" | "empire"; readonly id: string };
+    readonly declaredBy: string;
     readonly startedTick: number;
+    readonly endedTick: number | null;
   }[];
-  readonly peaceMotions: readonly {
+  readonly motions: readonly {
     readonly id: string;
-    readonly warId: string;
+    readonly layerId: string;
     readonly proposedBy: string;
+    readonly proposingSide: 0 | 1;
     readonly proposedTick: number;
+    readonly acceptedTick: number | null;
+    readonly acceptedBy: string | null;
   }[];
 }
 
@@ -123,8 +130,12 @@ const politicalReason = new Set([
   "political-rule",
 ]);
 
-/** Query only current, canonical, engine-owned WAR truth, never intent/cache.
- * Visible active layers are public; pending diplomacy is participant-private. */
+/** Keep end/acceptance proof briefly for the UI, never permanent history. */
+const PUBLIC_CONFLICT_RETENTION_TICKS = 240;
+
+/** Only canonical E1/E2 Game WAR state, never an intent, client assertion, or
+ * a visible attack animation. The same recipient-bound projection is used by
+ * run_turns, replay and live worker packets through GameRunner. */
 export function projectNationalPublicConflict(
   game: Game,
   actorId: string | null,
@@ -134,10 +145,15 @@ export function projectNationalPublicConflict(
   if (!game.config().nationalMode()) return undefined;
   const snapshot = game.nationalWarState();
   if (snapshot === null) return undefined;
-  const sides = new Map<string, (typeof snapshot.wars.layers)[number]>();
-  const wars: NationalPublicConflictView["wars"][number][] = [];
+  const layers: NationalPublicConflictView["layers"][number][] = [];
+  const visibleLayers = new Map<string, (typeof snapshot.wars.layers)[number]>();
   for (const layer of snapshot.wars.layers) {
-    if (layer.endedTick !== null || layer.startedTick > tick) continue;
+    if (
+      layer.startedTick > tick ||
+      (layer.endedTick !== null &&
+        layer.endedTick < tick - PUBLIC_CONFLICT_RETENTION_TICKS)
+    )
+      continue;
     if (
       !publicId(layer.id) ||
       !publicId(layer.first.id) ||
@@ -145,24 +161,28 @@ export function projectNationalPublicConflict(
       !publicId(layer.declaredBy) ||
       !Number.isSafeInteger(layer.startedTick) ||
       layer.startedTick < 0 ||
+      (layer.endedTick !== null &&
+        (!Number.isSafeInteger(layer.endedTick) ||
+          layer.endedTick < layer.startedTick ||
+          layer.endedTick > tick)) ||
       !["national", "imperial"].includes(layer.scope) ||
       !["nation", "empire"].includes(layer.first.kind) ||
       !["nation", "empire"].includes(layer.second.kind) ||
-      sides.has(layer.id)
-    ) {
-      // Invalid authoritative state cannot be rendered as a verified war.
-      throw new Error("NATIONAL malformed current public WAR layer");
-    }
-    sides.set(layer.id, layer);
-    wars.push({
+      visibleLayers.has(layer.id)
+    )
+      throw new Error("NATIONAL malformed public WAR layer");
+    visibleLayers.set(layer.id, layer);
+    layers.push({
       id: layer.id,
       scope: layer.scope,
       first: { kind: layer.first.kind, id: layer.first.id },
       second: { kind: layer.second.kind, id: layer.second.id },
+      declaredBy: layer.declaredBy,
       startedTick: layer.startedTick,
+      endedTick: layer.endedTick,
     });
   }
-  wars.sort((a, b) => a.id.localeCompare(b.id));
+  layers.sort((a, b) => a.id.localeCompare(b.id));
 
   const onSide = (
     side: { readonly kind: "nation" | "empire"; readonly id: string },
@@ -173,11 +193,16 @@ export function projectNationalPublicConflict(
       : (politics?.empires.find((e) => e.id === side.id)?.memberIds.includes(
           actorId,
         ) ?? false));
-  const peaceMotions: NationalPublicConflictView["peaceMotions"][number][] = [];
+  const motions: NationalPublicConflictView["motions"][number][] = [];
   const motionIds = new Set<string>();
   for (const motion of snapshot.wars.motions) {
-    if (motion.acceptedTick !== null || motion.proposedTick > tick) continue;
-    const layer = sides.get(motion.layerId);
+    if (
+      motion.proposedTick > tick ||
+      (motion.acceptedTick !== null &&
+        motion.acceptedTick < tick - PUBLIC_CONFLICT_RETENTION_TICKS)
+    )
+      continue;
+    const layer = visibleLayers.get(motion.layerId);
     if (!layer || (!onSide(layer.first) && !onSide(layer.second))) continue;
     if (
       !publicId(motion.id) ||
@@ -185,20 +210,34 @@ export function projectNationalPublicConflict(
       !publicId(motion.proposedBy) ||
       !Number.isSafeInteger(motion.proposedTick) ||
       motion.proposedTick < 0 ||
+      (motion.proposingSide !== 0 && motion.proposingSide !== 1) ||
+      (motion.acceptedTick !== null &&
+        (!Number.isSafeInteger(motion.acceptedTick) ||
+          motion.acceptedTick < motion.proposedTick ||
+          motion.acceptedTick > tick ||
+          !publicId(motion.acceptedBy))) ||
+      (motion.acceptedTick === null && motion.acceptedBy !== null) ||
       motionIds.has(motion.id)
-    ) {
-      throw new Error("NATIONAL malformed visible peace motion");
-    }
+    )
+      throw new Error("NATIONAL malformed recipient peace motion");
     motionIds.add(motion.id);
-    peaceMotions.push({
+    motions.push({
       id: motion.id,
-      warId: motion.layerId,
+      layerId: motion.layerId,
       proposedBy: motion.proposedBy,
+      proposingSide: motion.proposingSide,
       proposedTick: motion.proposedTick,
+      acceptedTick: motion.acceptedTick,
+      acceptedBy: motion.acceptedBy,
     });
   }
-  peaceMotions.sort((a, b) => a.id.localeCompare(b.id));
-  return { wars, peaceMotions };
+  motions.sort((a, b) => a.id.localeCompare(b.id));
+  return {
+    version: 1,
+    recipientId: actorId ?? "",
+    layers,
+    motions,
+  };
 }
 
 function publicPlayer(u: PlayerUpdate): PlayerUpdate {
@@ -515,7 +554,7 @@ export class NationalOutboundFilter {
         : { nationalPolitics: publicPoliticalView }),
       ...(publicConflictView === undefined
         ? {}
-        : { nationalConflict: publicConflictView }),
+        : { nationalConflicts: publicConflictView }),
       tick: data.tick,
       updates,
       packedTileUpdates: new Uint32Array(packedTile),
