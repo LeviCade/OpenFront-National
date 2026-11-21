@@ -29,3 +29,10 @@ separate strict release gates.
 - [Public owner GPU diagnostic #44881965453](https://github.com/LeviCade/OpenFront-National/actions/runs/44881965453): authentic Intel VirGL/WebGL1+2/shader evidence on NATIONAL desktop/mobile; reached spawn but DID NOT pass. Both legacy browser processes exited 0, but detailed reports were not captured. Never treat these diagnostics as signed release acceptance.
 
 **This documentation-only commit is a trusted-actor trigger for exact-head combined full TypeScript, full tests, lint, formatting, production build, independent QA, strict WAR/MDA/CAS and dependency acceptance. The result is NOT yet a pass.**
+
+## Formatted candidate exact-head proof
+
+- The complete 788-file regression suite on the preceding source ran **11,589 passed / 1 skipped**; no test failure, lint zero. The only failed gate was one `RoundEightWarRequestId.test.ts` pinned-format mismatch.
+- [one-time final format job #44883029431](https://github.com/LeviCade/OpenFront-National/actions/runs/44883029431) SUCCESS: full format check green and temporary formatter self-removed.
+- Exact post-formatter integration candidate: `7410df53060c4228ef453c1c6b48bf34f15f6060`.
+- This note initiates one complete owner-triggered exact-head combined full-source and independent QA acceptance; it does **not** certify the result ahead of completion.
