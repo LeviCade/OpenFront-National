@@ -620,12 +620,18 @@ export interface Game extends GameLike {
   /** Durable WAR + LEVY snapshot for honest-client observation and replay. */
   nationalWarState(): NationalWarStateSnapshot | null;
   /** Internal trusted actor; E2 owns external schema and command validation. */
-  performNationalWarCommand(actor: Player, command: NationalWarCommand): void;
+  performNationalWarCommand(
+    actor: Player,
+    command: NationalWarCommand,
+    /** Original server-stamped session at command admission, never refreshed. */
+    authenticatedClientID?: ClientID,
+  ): void;
   /** E2 consumes the authoritative Game result; legacy direct calls still throw. */
   performNationalWarCommandWithOutcome(
     actor: Player,
     command: NationalWarCommand & { readonly requestId?: string },
     requestId?: string | null,
+    authenticatedClientID?: ClientID,
   ): NationalWarCommandOutcome;
   /** Actor-only WAR outcomes; never broadcast into political/founding results. */
   nationalWarCommandResults(
@@ -644,6 +650,7 @@ export interface Game extends GameLike {
     actor: Player,
     empireId: string,
     requestId?: string | null,
+    authenticatedClientID?: ClientID,
   ): NationalFoundEmpireResult;
   /** Detached per-actor journal. Never enumerate results for other players. */
   nationalCommandResults(
@@ -654,6 +661,7 @@ export interface Game extends GameLike {
     actor: Player,
     command: Exclude<NationalCommand, { kind: "found-empire" }>,
     requestId?: string | null,
+    authenticatedClientID?: ClientID,
   ): NationalPoliticalCommandResult;
   /** Detached private outcomes; never mixed into Found Empire result packets. */
   nationalPoliticalCommandResults(
@@ -666,7 +674,11 @@ export interface Game extends GameLike {
     data: NationalSightMemory,
   ): void;
   nationalWinner(): PlayerID | null;
-  performNationalCommand(actor: Player, command: NationalCommand): void;
+  performNationalCommand(
+    actor: Player,
+    command: NationalCommand,
+    authenticatedClientID?: ClientID,
+  ): void;
   isPaused(): boolean;
   setPaused(paused: boolean): void;
 

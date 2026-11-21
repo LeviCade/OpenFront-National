@@ -130,20 +130,51 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       report.actualHardware.webgl.supported = true;
       report.actualHardware.webgl.contextLost = false;
       const legacy = mode.startsWith("legacy-");
-      report.events.push({
-        name: "stage-complete",
-        stage: legacy ? "legacy-ffa" : "sovereign-victory",
-      });
-      if (legacy) report.events.push({ name: "legacy-ffa-verified" });
-      else
+      const completedStages = legacy
+        ? ["legacy-ffa", "legacy-player-action"]
+        : [
+            "found-empire",
+            "rejected-founding",
+            "offer-accession",
+            "recipient-invitation",
+            "recipient-acceptance",
+            "transfer-crown",
+            "declare-war",
+            "map-assault",
+            "combat-impact",
+            "propose-peace",
+            "accept-peace",
+          ];
+      for (const finished of completedStages) {
+        report.events.push({ name: "stage-complete", stage: finished });
+      }
+      if (legacy) {
+        report.stage = "legacy-player-action";
+        report.events.push(
+          { name: "legacy-ffa-verified" },
+          { name: "legacy-actual-map-interaction-authoritative-update" },
+        );
+      } else {
+        report.stage = "accept-peace";
         report.events.push(
           { name: "authoritative-empire-accepted" },
           { name: "authoritative-duplicate-rejected" },
-          { name: "authoritative-sovereign-victory" },
+          { name: "political-offer-engine-accepted" },
+          { name: "political-recipient-private-invitation" },
+          { name: "political-membership-confirmed-by-both" },
+          { name: "political-crown-confirmed-by-both" },
+          { name: "authoritative-war-declared" },
+          { name: "authoritative-combat-impact" },
+          { name: "authoritative-peace-proposal" },
+          { name: "authoritative-peace-accepted" },
         );
+      }
       writeFileSync(join(target, "acceptance.json"), JSON.stringify(report));
+      const screenshotName = legacy
+        ? "legacy-player-action.png"
+        : "peace-accepted-ended-war.png";
       writeFileSync(
-        join(target, "home.png"),
+        join(target, screenshotName),
         Buffer.from(
           "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGPcEqDBwMDAxMDAwMDAAAAOxgEwdJw6WQAAAABJRU5ErkJggg==",
           "base64",
@@ -172,10 +203,21 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       assert.equal(modeData.outcome, "PASS");
       assert.equal(modeData.expectedViewport, modeData.actualViewport);
       assert.equal(modeData.screenshotCount, 1);
-      assert.match(modeData.screenshotSha256["home.png"], /^[a-f0-9]{64}$/);
+      const screenshotName = mode.startsWith("legacy-")
+        ? "legacy-player-action.png"
+        : "peace-accepted-ended-war.png";
+      assert.match(modeData.screenshotSha256[screenshotName], /^[a-f0-9]{64}$/);
+      assert.equal(
+        modeData.stageReached,
+        mode.startsWith("legacy-") ? "legacy-player-action" : "accept-peace",
+      );
     }
     for (const mode of MODES) {
-      assert.deepEqual(published.modes[mode].screenshotNames, ["home.png"]);
+      assert.deepEqual(published.modes[mode].screenshotNames, [
+        mode.startsWith("legacy-")
+          ? "legacy-player-action.png"
+          : "peace-accepted-ended-war.png",
+      ]);
       assert.equal(published.modes[mode].hardware.proofAccepted, false);
     }
     assert.ok(!JSON.stringify(published).includes("UNPUBLISHABLE"));
@@ -255,6 +297,21 @@ test("publish four separate reports; reject absent proof and nonmatching source"
     assert.equal(invalid.outcome, "UNVERIFIED");
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("R11 E5 first-failure stage names survive redaction", () => {
+  for (const stageName of [
+    "offer-accession",
+    "recipient-invitation",
+    "transfer-crown",
+    "combat-impact",
+    "accept-peace",
+    "legacy-player-action",
+  ]) {
+    const failed = sample();
+    failed.stage = stageName;
+    assert.equal(summarizeBrowserEvidence(failed, SHA).stageReached, stageName);
   }
 });
 

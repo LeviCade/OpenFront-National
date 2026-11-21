@@ -68,6 +68,7 @@ export function verifyIndependentRelease({
     !HEX40.test(expected.sourceSha ?? "") ||
     !DECIMAL.test(String(expected.runId ?? "")) ||
     !DECIMAL.test(String(expected.runAttempt ?? "")) ||
+    !DECIMAL.test(String(expected.jobId ?? "")) ||
     !/^skybot-ci-gpu-[a-zA-Z0-9-]{4,80}$/.test(expected.runnerName ?? "") ||
     !DECIMAL.test(String(expected.runnerId ?? "")) ||
     !HEX64.test(expected.challenge ?? "") ||
@@ -136,6 +137,7 @@ export function verifyIndependentRelease({
     same(p.sourceSha, expected.sourceSha) &&
     String(p.runId) === String(expected.runId) &&
     String(p.runAttempt) === String(expected.runAttempt) &&
+    String(p.jobId) === String(expected.jobId) &&
     same(p.runnerName, expected.runnerName) &&
     String(p.runnerId) === String(expected.runnerId) &&
     same(p.challenge, expected.challenge);
@@ -232,6 +234,13 @@ export function verifyIndependentRelease({
     if (
       !isObject(report) ||
       report.scenario !== mode ||
+      // A postflight signer must not transform a guest-declared FAIL into PASS.
+      // Guest release outcomes are deliberately UNVERIFIED until this gate;
+      // failed/partial gameplay has a different reason, even if exitCode is 0.
+      report.outcome !== "UNVERIFIED" ||
+      report.reason !== "SIGNED_WITNESS_NOT_VERIFIED" ||
+      report.firstFailedStage !== null ||
+      report.releaseCertified !== false ||
       report.sourceMatches !== true ||
       report.exactSource !== expected.sourceSha ||
       report.reportPresent !== true ||
@@ -300,6 +309,7 @@ export function verifyIndependentRelease({
     sourceSha: expected.sourceSha,
     runId: String(expected.runId),
     runAttempt: String(expected.runAttempt),
+    jobId: String(expected.jobId),
     runnerName: expected.runnerName,
     evidenceSha256: after.evidenceSha256,
     modes: [...MODES],

@@ -210,7 +210,10 @@ export function readNationalAccessionOffers(
       !record(item) ||
       typeof item.empireId !== "string" ||
       !validEmpireId(item.empireId) ||
-      item.candidateId !== authenticatedActorId ||
+      typeof item.candidateId !== "string" ||
+      !validNationalWarReference(item.candidateId) ||
+      (item.candidateId !== authenticatedActorId &&
+        item.proposerId !== item.candidateId) ||
       item.recipientId !== authenticatedActorId ||
       typeof item.proposerId !== "string" ||
       !validNationalWarReference(item.proposerId)

@@ -71,6 +71,7 @@ export class NationalDiplomacyPanel extends LitElement {
       })
     | null = null;
   @state() private accessionCandidateId = "";
+  @state() private requestedAccessionEmpireId = "";
   @state() private chosenInvitation = "";
   @state() private crownSuccessorId = "";
   @state() private politicalStatus: string | null = null;
@@ -357,9 +358,11 @@ export class NationalDiplomacyPanel extends LitElement {
           const confirmed =
             fresh &&
             (political.type === "national_offer_empire"
-              ? empire?.leaderId === political.actorId
+              ? political.targetId === political.actorId
+                ? empire !== undefined
+                : empire?.leaderId === political.actorId
               : political.type === "national_accept_empire"
-                ? empire?.memberIds.includes(political.actorId) === true
+                ? empire?.memberIds.includes(political.targetId) === true
                 : empire?.leaderId === political.targetId &&
                   empire.memberIds.includes(political.actorId));
           if (confirmed) {
@@ -367,9 +370,13 @@ export class NationalDiplomacyPanel extends LitElement {
             this.politicalError = null;
             this.politicalStatus =
               political.type === "national_offer_empire"
-                ? `Game accepted accession offer command for ${this.playerName(political.targetId)}. Only the recipient can verify delivery of the invitation.`
+                ? political.targetId === political.actorId
+                  ? `Game accepted your request to join ${political.empireId}. Only the emperor can verify delivery; membership is not confirmed.`
+                  : `Game accepted accession offer command for ${this.playerName(political.targetId)}. Only the recipient can verify delivery of the invitation.`
                 : political.type === "national_accept_empire"
-                  ? `Confirmed by game: your nation joined ${political.empireId}.`
+                  ? political.targetId === political.actorId
+                    ? `Confirmed by game: your nation joined ${political.empireId}.`
+                    : `Confirmed by game: ${this.playerName(political.targetId)} joined ${political.empireId}.`
                   : `Confirmed by game: ${this.playerName(political.targetId)} now leads ${political.empireId}. Your emperor powers have ended.`;
           } else if (tick - political.issuedTick >= 200) {
             this.lastPoliticalSubmission = null;
@@ -507,8 +514,10 @@ export class NationalDiplomacyPanel extends LitElement {
     this.lastConfirmedEmpireId = null;
     this.phase = "pending";
     this.error = null;
+    // EventBus delivery is a local UI action, not proof that Transport's
+    // intent gate, LocalServer, or GameRunner accepted the command.
     this.message =
-      "Request sent to game. Awaiting its accepted or rejected result…";
+      "Founding submitted from the interface. Engine delivery and outcome are unverified.";
     try {
       this.eventBus.emit(
         new SendNationalFoundEmpireIntentEvent(empireId, requestId),
@@ -680,6 +689,33 @@ export class NationalDiplomacyPanel extends LitElement {
     return view && view.recipientId === actorId ? view.offers : [];
   }
 
+  /** Independent candidates can ask the actual current emperor to admit them. */
+  private requestableAccessionEmpires(): readonly {
+    id: string;
+    leaderName: string;
+  }[] {
+    const game = this.game;
+    const actor = game?.myPlayer();
+    if (!game || !actor || this.memberEmpire !== null) return [];
+    return (game.nationalPolitics()?.empires ?? [])
+      .filter(
+        (empire) =>
+          !empire.memberIds.includes(actor.id()) &&
+          game
+            .players()
+            .some(
+              (player) =>
+                player.id() === empire.leaderId &&
+                player.isAlive() &&
+                player.numTilesOwned() > 0,
+            ),
+      )
+      .map((empire) => ({
+        id: empire.id,
+        leaderName: this.playerName(empire.leaderId),
+      }));
+  }
+
   private accessionCandidates(): readonly { id: string; name: string }[] {
     const actor = this.game?.myPlayer();
     const empire = this.memberEmpire;
@@ -735,14 +771,33 @@ export class NationalDiplomacyPanel extends LitElement {
     let targetId: string;
     if (action === "national_accept_empire") {
       const offer = this.accessionOffers.find(
-        (item) => item.empireId === this.chosenInvitation,
+        (item) =>
+          `${item.empireId}:${item.candidateId}` === this.chosenInvitation,
       );
-      if (!offer || ownEmpire !== null) {
+      const candidateAccepts =
+        offer?.candidateId === actor.id() && ownEmpire === null;
+      const emperorAccepts =
+        offer?.proposerId === offer?.candidateId &&
+        offer?.candidateId !== actor.id() &&
+        ownEmpire?.id === offer?.empireId &&
+        ownEmpire?.leaderId === actor.id();
+      if (!offer || (!candidateAccepts && !emperorAccepts)) {
         this.politicalError =
-          "Choose an authenticated invitation for a nation outside all empires.";
+          "Choose an authenticated invitation you are authorized to accept.";
         return;
       }
       empireId = offer.empireId;
+      targetId = offer.candidateId;
+    } else if (action === "national_offer_empire" && ownEmpire === null) {
+      const empire = this.requestableAccessionEmpires().find(
+        (entry) => entry.id === this.requestedAccessionEmpireId,
+      );
+      if (!empire) {
+        this.politicalError =
+          "Choose an active empire with an eligible emperor before requesting accession.";
+        return;
+      }
+      empireId = empire.id;
       targetId = actor.id();
     } else {
       if (!ownEmpire || ownEmpire.leaderId !== actor.id()) {
@@ -962,6 +1017,7 @@ export class NationalDiplomacyPanel extends LitElement {
     const warReason = this.warUnavailableReason;
     const isEmperor =
       ownEmpire !== null && ownEmpire.leaderId === game.myPlayer()?.id();
+    const requestableEmpires = this.requestableAccessionEmpires();
     const warKind =
       this.warScope === "national" ? "nation" : this.warTargetKind;
     const warTargets = this.warTargets(warKind);
@@ -1177,15 +1233,33 @@ export class NationalDiplomacyPanel extends LitElement {
                   this.pendingAttempt
                     ? html`<p
                         data-national-founding-tick
+                        data-national-founding-request-id=${this.pendingAttempt.requestId}
+                        data-national-founding-actor-id=${this.pendingAttempt.actorId}
                         role="status"
                         aria-live="polite"
                         class="text-xs text-amber-200"
                       >
-                        Awaiting authoritative founder receipt: issued at engine
-                        tick ${this.pendingAttempt.issuedTick}, current engine
-                        tick ${game.ticks()}. A 00:00 Solo HUD clock can be
-                        normal during spawn; it does not prove founding
-                        succeeded or failed.
+                        Awaiting authoritative founder resolution for request
+                        ${this.pendingAttempt.requestId} (actor
+                        ${this.pendingAttempt.actorId}). Submitted at Game tick
+                        ${this.pendingAttempt.issuedTick}; current Game tick
+                        ${game.ticks()}, pause
+                        ${
+                          game.isPaused?.() === true
+                            ? "active"
+                            : game.isPaused?.() === false
+                              ? "inactive"
+                              : "unknown"
+                        },
+                        public roster tick
+                        ${game.nationalPoliticsTick?.() ?? "unavailable"}.
+                        ${
+                          this.pendingAttempt.acceptedResultSeen
+                            ? "Matching accepted receipt observed; waiting for current authoritative roster."
+                            : "No matching accepted receipt observed yet."
+                        }
+                        A 00:00 Solo HUD clock is not proof of stopped Game
+                        ticks, delivery or founding success.
                       </p>`
                     : nothing
                 }
@@ -1487,6 +1561,43 @@ export class NationalDiplomacyPanel extends LitElement {
                     Accession and succession
                   </h2>
                   ${
+                    ownEmpire === null
+                      ? html`<form
+                          class="space-y-2"
+                          @submit=${(event: SubmitEvent) => this.submitPolitical(event, "national_offer_empire")}
+                        >
+                          <label
+                            for="national-request-empire"
+                            class="block font-semibold"
+                            >Request to join an empire</label
+                          >
+                          <select
+                            id="national-request-empire"
+                            required
+                            class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base text-white"
+                            .value=${this.requestedAccessionEmpireId}
+                            @change=${(event: Event) => (this.requestedAccessionEmpireId = (event.target as HTMLSelectElement).value)}
+                            ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || requestableEmpires.length === 0}
+                          >
+                            <option value="">Choose a current empire</option>
+                            ${requestableEmpires.map((empire) => html`<option value=${empire.id}>${empire.id} · Emperor ${empire.leaderName}</option>`)}
+                          </select>
+                          <button
+                            id="national-request-accession"
+                            type="submit"
+                            class="min-h-11 rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
+                            ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || this.eventBus === null || !requestableEmpires.some((empire) => empire.id === this.requestedAccessionEmpireId)}
+                          >
+                            Request accession
+                          </button>
+                          <p class="text-xs text-slate-300">
+                            The emperor must accept your request before your
+                            nation joins. Sending is not membership.
+                          </p>
+                        </form>`
+                      : nothing
+                  }
+                  ${
                     isEmperor
                       ? html`<form
                             class="space-y-2"
@@ -1553,7 +1664,7 @@ export class NationalDiplomacyPanel extends LitElement {
                       : nothing
                   }
                   ${
-                    ownEmpire === null
+                    ownEmpire === null || isEmperor
                       ? html`<form
                           class="space-y-2"
                           @submit=${(event: SubmitEvent) => this.submitPolitical(event, "national_accept_empire")}
@@ -1574,15 +1685,15 @@ export class NationalDiplomacyPanel extends LitElement {
                             <option value="">
                               Choose a verified invitation
                             </option>
-                            ${this.accessionOffers.map((offer) => html`<option value=${offer.empireId}>${offer.empireId} · from ${this.playerName(offer.proposerId)}</option>`)}
+                            ${this.accessionOffers.map((offer) => html`<option value=${`${offer.empireId}:${offer.candidateId}`}>${offer.candidateId === game.myPlayer()?.id() ? `Invitation from ${this.playerName(offer.proposerId)} to join ${offer.empireId}` : `Request from ${this.playerName(offer.candidateId)} to join ${offer.empireId}`}</option>`)}
                           </select>
                           <button
                             id="national-accept-accession"
                             type="submit"
                             class="min-h-11 rounded-md bg-amber-400 px-4 py-2 font-semibold text-slate-950 disabled:opacity-50"
-                            ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || !this.accessionOffers.some((offer) => offer.empireId === this.chosenInvitation)}
+                            ?disabled=${warReason !== null || this.lastPoliticalSubmission !== null || !this.accessionOffers.some((offer) => `${offer.empireId}:${offer.candidateId}` === this.chosenInvitation)}
                           >
-                            Accept accession
+                            ${this.accessionOffers.find((offer) => `${offer.empireId}:${offer.candidateId}` === this.chosenInvitation)?.candidateId === game.myPlayer()?.id() ? "Accept invitation and join" : "Admit candidate into empire"}
                           </button>
                           ${
                             game.nationalAccessionOffers?.() === null ||

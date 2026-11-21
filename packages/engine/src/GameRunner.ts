@@ -63,7 +63,42 @@ export async function createGameRunner(
   map: MapFiles,
   callBack: (gu: GameUpdateViewData | ErrorUpdate) => void,
 ): Promise<GameRunner> {
-  const config = new EngineConfig(gameStart.config, false, gameStart.listed);
+  return createGameRunnerInternal(gameStart, clientID, map, callBack, false);
+}
+
+/**
+ * Trusted server ONLY. This factory does not return a raw game-state callback
+ * or a viewer-selected identity. The host registers authenticated recipients
+ * with the runner and receives only E3-filtered projections.
+ */
+export async function createTrustedNationalGameRunner(
+  gameStart: GameStartInfo,
+  map: MapFiles,
+): Promise<GameRunner> {
+  if (
+    gameStart.config.nationalMode !== true ||
+    gameStart.config.gameType !== GameType.Private ||
+    gameStart.players.length < 2
+  ) {
+    throw new Error("trusted NATIONAL requires a real Private lobby roster");
+  }
+  return createGameRunnerInternal(gameStart, undefined, map, () => {}, true);
+}
+
+async function createGameRunnerInternal(
+  gameStart: GameStartInfo,
+  clientID: ClientID | undefined,
+  map: MapFiles,
+  callBack: (gu: GameUpdateViewData | ErrorUpdate) => void,
+  trustedServerNational: boolean,
+): Promise<GameRunner> {
+  const config = new EngineConfig(
+    gameStart.config,
+    false,
+    gameStart.listed,
+    false,
+    trustedServerNational,
+  );
   const gameMap = await loadGameMap(gameStart.config, map);
   const random = new PseudoRandom(simpleHash(gameStart.gameID));
 
@@ -180,6 +215,18 @@ export class GameRunner {
   private nationalResultDelivery: NationalResultDeliveryState =
     emptyNationalResultDeliveryState();
 
+  // Server-owned NATIONAL: independent E3 state and command-result cursor for
+  // each authenticated human. Never put fullPacket or the Game on the wire.
+  private readonly trustedNationalRecipients = new Map<
+    ClientID,
+    {
+      playerId: PlayerID;
+      filter: NationalOutboundFilter;
+      results: NationalResultDeliveryState;
+      deliver: (packet: GameUpdateViewData) => void;
+    }
+  >();
+
   constructor(
     public game: Game,
     private execManager: Executor,
@@ -215,6 +262,38 @@ export class GameRunner {
       this.nationalObserverId = null;
       this.nationalOutbound = null;
     }
+  }
+
+  /** Bind a real, currently registered human to one private E3 projection. */
+  public registerTrustedNationalRecipient(
+    clientID: ClientID,
+    deliver: (packet: GameUpdateViewData) => void,
+  ): void {
+    if (
+      !this.game.config().nationalMode() ||
+      this.viewerClientID !== undefined ||
+      this.trustedNationalRecipients.has(clientID)
+    ) {
+      throw new Error("invalid trusted NATIONAL recipient registration");
+    }
+    const player = this.game.playerByClientID(clientID);
+    if (!player || player.type() !== PlayerType.Human) {
+      throw new Error("trusted NATIONAL recipient is not a real human");
+    }
+    const filter = new NationalOutboundFilter(this.game, player.id());
+    filter.restoreSightMemory(
+      restoreNationalHumanSight(this.game, player.id()),
+    );
+    this.trustedNationalRecipients.set(clientID, {
+      playerId: player.id(),
+      filter,
+      results: initialNationalResultDeliveryState(this.game, player),
+      deliver,
+    });
+  }
+
+  public removeTrustedNationalRecipient(clientID: ClientID): void {
+    this.trustedNationalRecipients.delete(clientID);
   }
 
   /** Principal rights follow the current engine identity, not cached init data. */
@@ -445,6 +524,44 @@ export class GameRunner {
       tickExecutionDuration: tickExecutionDuration,
       pendingTurns: pendingTurns ?? 0,
     };
+    // One canonical engine tick; N independently filtered, authenticated
+    // player views. Results and sight are never shared between recipients.
+    for (const [clientID, recipient] of this.trustedNationalRecipients) {
+      const player = this.game.playerByClientID(clientID);
+      if (
+        !player ||
+        player.id() !== recipient.playerId ||
+        player.type() !== PlayerType.Human
+      ) {
+        this.trustedNationalRecipients.delete(clientID);
+        continue;
+      }
+      const verified = collectLiveNationalObservation(this.game, player.id());
+      const results = actorNationalResults(
+        this.game,
+        player,
+        recipient.results,
+      );
+      const privatePacket = results.length
+        ? ({
+            ...fullPacket,
+            nationalCommandResults: results,
+          } as GameUpdateViewData)
+        : fullPacket;
+      const projected = recipient.filter.project(
+        this.game,
+        privatePacket,
+        verified,
+      );
+      if (player.hasSpawned() && player.isAlive()) {
+        persistNationalHumanSight(
+          this.game,
+          player.id(),
+          recipient.filter.snapshotSightMemory(),
+        );
+      }
+      recipient.deliver(projected);
+    }
     if (this.nationalOutbound !== null) {
       // A takeover/disconnection may revoke the original player binding.
       // Do not keep sending the prior principal's private fields or units.

@@ -60,33 +60,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p national-qa-artifacts/gpu
-          BASE_SHA=0e52b5eeb7490ce83898f2a9696732c7e7d6b21c
+          BASE_SHA=03463cb2ee6fb508e0ae83ce87aedbc6ee996d29
+          staging=refs/remotes/origin/stage3/class4-six-owner-reciprocal-20261121
           git fetch --no-tags origin \
-            '+refs/heads/stage3/integration-20261115:refs/remotes/origin/stage3/integration-20261115'
-          if git ls-remote --exit-code --heads origin stage3/r10-reviewed-gpu-20261121 >/dev/null; then
-            git fetch --no-tags origin \
-              '+refs/heads/stage3/r10-reviewed-gpu-20261121:refs/remotes/origin/stage3/r10-reviewed-gpu-20261121'
-          fi
+            '+refs/heads/stage3/class4-six-owner-reciprocal-20261121:'"$staging"
           git cat-file -e "$NATIONAL_GPU_CANDIDATE_SHA^{commit}"
           git merge-base --is-ancestor "$BASE_SHA" "$NATIONAL_GPU_CANDIDATE_SHA" || {
-            echo 'REFUSED: candidate predates/diverges from Conductor-approved integration base' >&2
+            echo 'REFUSED: candidate diverges from accepted Class Four base' >&2
             exit 1
           }
-          valid=0
-          for staging in \
-            refs/remotes/origin/stage3/integration-20261115 \
-            refs/remotes/origin/stage3/r10-reviewed-gpu-20261121; do
-            if git show-ref --verify --quiet "$staging" &&
-               git merge-base --is-ancestor "$NATIONAL_GPU_CANDIDATE_SHA" "$staging"; then
-              valid=1
-              printf '%s\n' "$staging" > national-qa-artifacts/gpu/approved-staging-ref.txt
-              break
-            fi
-          done
-          if [[ "$valid" -ne 1 ]]; then
-            echo 'REFUSED: candidate is not reachable from approved staging history' >&2
+          # No stale or earlier source: one exact reviewed Conductor staging tip.
+          test "$(git rev-parse "$staging")" = "$NATIONAL_GPU_CANDIDATE_SHA" || {
+            echo 'REFUSED: candidate is not the exact Class Four staging HEAD' >&2
             exit 1
-          fi
+          }
+          printf '%s\n' "$staging" > national-qa-artifacts/gpu/approved-staging-ref.txt
           git checkout --detach "$NATIONAL_GPU_CANDIDATE_SHA"
           test "$(git rev-parse HEAD)" = "$NATIONAL_GPU_CANDIDATE_SHA"
           printf '%s\n' "$NATIONAL_GPU_CANDIDATE_SHA" > national-qa-artifacts/gpu/sha.txt
