@@ -124,10 +124,17 @@ export class NationalObserverMapPager {
     const tiles: NationalVisibleTileV1[] = refs.map((ref) => {
       const count = map.neighbors4(ref, neighbors);
       const owner = map.ownerID(ref);
+      const x = map.x(ref);
+      const y = map.y(ref);
       let mask = 0;
       for (let i = 0; i < count; i++) {
         const other = neighbors[i];
-        if (visible.has(other) && owner !== map.ownerID(other)) mask |= 1 << i;
+        if (!visible.has(other) || owner === map.ownerID(other)) continue;
+        // neighbors4 compresses missing edge neighbors; use actual geometry
+        // instead of assuming each returned index still means N/S/W/E.
+        const dx = map.x(other) - x;
+        const dy = map.y(other) - y;
+        mask |= dy === -1 ? 1 : dy === 1 ? 2 : dx === -1 ? 4 : 8;
       }
       return [ref, map.tileState(ref), map.terrainByte(ref), mask];
     });
