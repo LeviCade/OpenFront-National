@@ -165,6 +165,7 @@ export function joinLobby(
 
   let currentGameRunner: ClientGameRunner | null = null;
   let creatingTrustedGame = false;
+  let leftTrustedGame = false;
   // Map+WebGL setup is asynchronous. Hold real E3 packets only while loading;
   // never manufacture a fake update or fork a canonical browser GameRunner.
   let bufferedTrustedProjections: TrustedNationalProjectionEvent[] = [];
@@ -318,6 +319,10 @@ export function joinLobby(
         true,
       )
         .then((runner) => {
+          if (leftTrustedGame) {
+            runner.stop();
+            return;
+          }
           currentGameRunner = runner;
           runner.start();
           for (const buffered of bufferedTrustedProjections) {
@@ -327,6 +332,7 @@ export function joinLobby(
         })
         .catch((error) => {
           bufferedTrustedProjections = [];
+          if (leftTrustedGame) return;
           console.error("Failed to mount trusted NATIONAL map", error);
           showErrorModal(
             "NATIONAL projection map failed to load",
@@ -528,6 +534,8 @@ export function joinLobby(
         return false;
       }
       console.log("leaving game");
+      leftTrustedGame = true;
+      bufferedTrustedProjections = [];
       if (currentGameRunner) {
         currentGameRunner.stop();
         currentGameRunner = null;
@@ -1058,11 +1066,12 @@ async function createClientGame(
       health,
       trustedNationalProjection,
       trustedNationalProjection
-        ? () =>
-            view.uploadTileAndTrailState(
-              gameView.frameData().tileState,
-              gameView.frameData().trailState,
-            )
+        ? () => {
+            const frame = gameView.frameData();
+            view.uploadTileAndTrailState(frame.tileState, frame.trailState);
+            // E3 revocation must delete stale unit visuals from the GPU too.
+            view.updateStructures(frame.units as Map<number, UnitState>);
+          }
         : null,
       trustedStatus,
     );
@@ -1160,7 +1169,11 @@ export class ClientGameRunner {
           "NATIONAL · Tick " + update.tick + " · Awaiting E3 visible-map pages";
       }
       this.trustedLastTick = update.tick;
-      this.gameView.markTrustedProjectionReady();
+      // Only the real E3 current-sight map and a matching human seat can
+      // enable a recipient's political and radial controls.
+      if (observerMap !== null && this.myPlayer !== null) {
+        this.gameView.markTrustedProjectionReady();
+      }
       this.webglBuilder?.update(this.gameView);
       this.renderer.tick();
       this.health.recordTurn(performance.now());

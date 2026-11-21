@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   materializeTrustedNationalUpdate,
   parseTrustedNationalProjection,
+  readTrustedNationalObserverMap,
 } from "../../../src/client/TrustedNationalSession";
 import { GameView } from "../../../src/client/view/GameView";
 import type { PlayerView } from "../../../src/client/view/PlayerView";
@@ -85,6 +86,7 @@ describe("Second Conductor Class One E4: E3-authoritative graphical map feed", (
     const view = Object.create(GameView.prototype) as GameView;
     Object.assign(view, {
       _trustedNationalProjection: true,
+      _trustedProjectionReady: true,
       myPlayer: () => self,
       inSpawnPhase: () => false,
       isValidRef: (tile: number) => tile >= 0 && tile < 100,
@@ -105,4 +107,38 @@ describe("Second Conductor Class One E4: E3-authoritative graphical map feed", (
     }) });
     expect(view.trustedVisibleAttack("nation-a", 42)).toBe(false);
   });
+
+  it("merges only E3 current visible terrain pages into actual WebGL tile lanes", () => {
+    const visiblePage = {
+      version: 1, tick: 18, observerId: "nation-a",
+      width: 10, height: 10, reset: true, cursor: 0, nextCursor: null,
+      tiles: [[3, 5, 17, 1], [44, 8, 66, 3]],
+      units: [{ id: 1, ownerId: "nation-a", kind: "infantry", tile: 3, troops: 10 }],
+      unitsTruncated: false,
+      visibleBorders: [{ targetId: "nation-b", access: "land" }],
+      ownResources: { troops: 100, treasury: 50 },
+      countries: [{ id: "nation-a", name: "A", alive: true, landPercent: 5, status: "independent" }],
+    };
+    const decoded = parseTrustedNationalProjection(
+      JSON.stringify({ ...packet(18), nationalObserverMap: visiblePage }), 18,
+    );
+    const validated = readTrustedNationalObserverMap(decoded.nationalObserverMap, 18);
+    expect(validated?.reset).toBe(true);
+    expect(validated?.nextCursor).toBeNull();
+    const actual = materializeTrustedNationalUpdate(decoded, 17);
+    expect([...actual.packedTileUpdates]).toEqual([
+      21, 33, 22, 34, 3, 5 | (17 << 16), 44, 8 | (66 << 16),
+    ]);
+    expect([...actual.packedTileUpdates]).not.toContain(90);
+    expect(() => readTrustedNationalObserverMap({ ...visiblePage, tick: 17 }, 18)).toThrow();
+    expect(() => readTrustedNationalObserverMap({ ...visiblePage, tiles: [[500, 5, 17, 1]] }, 18)).toThrow();
+    expect(() => readTrustedNationalObserverMap({ ...visiblePage, tiles: [[3, 5, 17, 16]] }, 18)).toThrow();
+    expect(() => readTrustedNationalObserverMap({
+      ...visiblePage, units: [{ id: 1, ownerId: "nation-b", kind: "infantry", tile: 3, troops: Infinity }],
+    }, 18)).toThrow();
+    expect(() => readTrustedNationalObserverMap({
+      ...visiblePage, tiles: Array.from({ length: 4097 }, (_, i) => [i, 5, 17, 1]),
+    }, 18)).toThrow();
+  });
+
 });
