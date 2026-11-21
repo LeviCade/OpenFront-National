@@ -90,7 +90,11 @@ describe("E2 Round Eight WAR/peace authenticated correlation transport", () => {
       game as unknown as {
         nationalWarCommandResults?: (
           actor: Player,
-        ) => readonly { requestId: string; accepted: boolean; commandKind: string }[];
+        ) => readonly {
+          requestId: string;
+          accepted: boolean;
+          commandKind: string;
+        }[];
       }
     ).nationalWarCommandResults?.(game.player(north.id));
     if (authoritative !== undefined) {
@@ -137,7 +141,11 @@ describe("E2 Round Eight WAR/peace authenticated correlation transport", () => {
       restored as unknown as {
         nationalWarCommandResults?: (
           actor: Player,
-        ) => readonly { requestId: string; accepted: boolean; commandKind: string }[];
+        ) => readonly {
+          requestId: string;
+          accepted: boolean;
+          commandKind: string;
+        }[];
       }
     ).nationalWarCommandResults?.(restored.player(north.id));
     if (restoredResults !== undefined) {

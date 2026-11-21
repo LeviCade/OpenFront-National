@@ -289,7 +289,9 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       NationalAcceptPeaceIntentSchema.safeParse(intents()[1]).success,
     ).toBe(true);
     expect(panel.textContent).not.toContain("Peace accepted");
-    expect(panel.textContent).not.toContain("Peace settlement confirmed by game");
+    expect(panel.textContent).not.toContain(
+      "Peace settlement confirmed by game",
+    );
   });
 
   it("fails closed for replay, eliminated players, spectators and a non-emperor", async () => {
