@@ -58,8 +58,7 @@ async function seeded(): Promise<{
   game.executeNextTick();
   game.executeNextTick();
   game.endSpawnPhase();
-  for (const id of [A, B, H])
-    expect(game.player(id).hasSpawned()).toBe(true);
+  for (const id of [A, B, H]) expect(game.player(id).hasSpawned()).toBe(true);
 
   // Every passable land tile has a REAL owner, preventing the AI from
   // confusing unclaimed-map expansion with a legally required declaration.
@@ -87,16 +86,13 @@ function humanTurn(
 ): void {
   runner.addTurn({
     turnNumber: game.ticks(),
-    intents:
-      command === undefined ? [] : [StampedIntentSchema.parse(command)],
+    intents: command === undefined ? [] : [StampedIntentSchema.parse(command)],
   });
   expect(runner.executeNextTick()).toBe(true);
 }
 
 describe("R10 E2 real NationExecution -> E1 outcome -> AttackExecution", () => {
-  it(
-    "two bots, one authenticated human, canonical WAR and real combat remain replayable",
-    async () => {
+  it("two bots, one authenticated human, canonical WAR and real combat remain replayable", async () => {
     const { game } = await seeded();
     const seen = collectLiveNationalObservation(game, A).observation;
     expect(seen.frontiers.some((front) => front.targetId === B)).toBe(true);
@@ -120,9 +116,9 @@ describe("R10 E2 real NationExecution -> E1 outcome -> AttackExecution", () => {
     });
     humanTurn(game, humanRunner);
     expect(
-      game.nationalCommandResults(game.player(H)).find(
-        (row) => row.requestId === "r10_human_found",
-      )?.accepted,
+      game
+        .nationalCommandResults(game.player(H))
+        .find((row) => row.requestId === "r10_human_found")?.accepted,
     ).toBe(true);
     expect(game.nationalPublicPoliticalView()?.empires).toEqual(
       expect.arrayContaining([
@@ -157,28 +153,27 @@ describe("R10 E2 real NationExecution -> E1 outcome -> AttackExecution", () => {
         game.player(A).numTilesOwned() > beforeTiles,
     ).toBe(true);
 
-    const active = game.nationalWarState()!.wars.layers.find(
-      (layer) =>
-        layer.endedTick === null &&
-        layer.first.kind === "nation" &&
-        layer.first.id === A &&
-        layer.second.kind === "nation" &&
-        layer.second.id === B,
-    );
+    const active = game
+      .nationalWarState()!
+      .wars.layers.find(
+        (layer) =>
+          layer.endedTick === null &&
+          layer.first.kind === "nation" &&
+          layer.first.id === A &&
+          layer.second.kind === "nation" &&
+          layer.second.id === B,
+      );
     expect(active).toBeDefined();
-    const proposed = game.performNationalWarCommandWithOutcome(
-      game.player(A),
-      {
-        kind: "propose-peace",
-        warId: active!.id,
-        motionId: "r10_bridge_peace",
-      },
-    );
+    const proposed = game.performNationalWarCommandWithOutcome(game.player(A), {
+      kind: "propose-peace",
+      warId: active!.id,
+      motionId: "r10_bridge_peace",
+    });
     expect(proposed.accepted).toBe(true);
-    const settled = game.performNationalWarCommandWithOutcome(
-      game.player(B),
-      { kind: "accept-peace", motionId: "r10_bridge_peace" },
-    );
+    const settled = game.performNationalWarCommandWithOutcome(game.player(B), {
+      kind: "accept-peace",
+      motionId: "r10_bridge_peace",
+    });
     expect(settled.accepted).toBe(true);
     expect(game.nationalWarAuthority()!.atWar(A, B)).toBe(false);
     const paidTroops = game.player(A).troops();
@@ -196,17 +191,14 @@ describe("R10 E2 real NationExecution -> E1 outcome -> AttackExecution", () => {
     const final = await roundTrip(game, "plains");
     const replayed = await roundTrip(restored, "plains");
     expect([...final.bytes]).toEqual([...replayed.bytes]);
-    },
-  );
+  });
 
   it("roundtrips E3's bounded rejection memory without altering E2 troop or WAR ledgers", async () => {
     const { game, alpha } = await seeded();
     const withheld = {
       ...initialNationalPlannerMemory(A),
       nextPlanningTick: game.ticks() + 60,
-      rejectedWarTargets: [
-        { targetId: B, retryAfterTick: game.ticks() + 180 },
-      ],
+      rejectedWarTargets: [{ targetId: B, retryAfterTick: game.ticks() + 180 }],
       lastWarOutcomeSequence: 9,
     };
     // Isolate the E2-owned snapshot codec: this is input state from the E3
@@ -216,9 +208,9 @@ describe("R10 E2 real NationExecution -> E1 outcome -> AttackExecution", () => {
     const warBefore = game.nationalWarState();
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
-    const restoredBot = restored.executions().find(
-      (exec) => exec instanceof NationExecution && exec.playerID() === A,
-    );
+    const restoredBot = restored
+      .executions()
+      .find((exec) => exec instanceof NationExecution && exec.playerID() === A);
     expect(restoredBot).toBeDefined();
     const memory = (
       restoredBot as unknown as {

@@ -31,12 +31,12 @@ import {
   collectLiveNationalObservation,
   liveNationalWarAuthority,
 } from "../national/observation/LiveObservation";
-import type { NationalWarCommandOutcome } from "../national/politics/NationalGovernanceState";
 import {
   advanceLastKnown,
   type NationalObservation,
   type NationalSightMemory,
 } from "../national/observation/NationalObservation";
+import type { NationalWarCommandOutcome } from "../national/politics/NationalGovernanceState";
 import {
   NationSchema,
   nationData,
@@ -684,9 +684,9 @@ export class NationExecution implements Execution {
                 (entry) => ({ ...entry }),
               ),
               rejectedWarTargets:
-                this.nationalPlannerMemory.rejectedWarTargets?.map(
-                  (entry) => ({ ...entry }),
-                ),
+                this.nationalPlannerMemory.rejectedWarTargets?.map((entry) => ({
+                  ...entry,
+                })),
               lastProcessedEvent:
                 this.nationalPlannerMemory.lastProcessedEvent === null
                   ? null
