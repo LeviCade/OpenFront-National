@@ -142,6 +142,31 @@ export class SendNationalAcceptPeaceIntentEvent implements GameEvent {
   ) {}
 }
 
+/** Request-only political commands; the engine stamps and authorizes actor. */
+export class SendNationalOfferEmpireIntentEvent implements GameEvent {
+  constructor(
+    public readonly empireId: string,
+    public readonly candidateId: PlayerID,
+    public readonly requestId: string,
+  ) {}
+}
+
+export class SendNationalAcceptEmpireIntentEvent implements GameEvent {
+  constructor(
+    public readonly empireId: string,
+    public readonly candidateId: PlayerID,
+    public readonly requestId: string,
+  ) {}
+}
+
+export class SendNationalTransferCrownIntentEvent implements GameEvent {
+  constructor(
+    public readonly empireId: string,
+    public readonly successorId: PlayerID,
+    public readonly requestId: string,
+  ) {}
+}
+
 /** Signals loss/reestablishment of a verified game transport session. */
 export class NationalTransportStatusEvent implements GameEvent {
   constructor(
@@ -372,6 +397,15 @@ export class Transport {
     );
     this.subscribe(SendNationalAcceptPeaceIntentEvent, (e) =>
       this.onSendNationalAcceptPeaceIntent(e),
+    );
+    this.subscribe(SendNationalOfferEmpireIntentEvent, (e) =>
+      this.onSendNationalOfferEmpireIntent(e),
+    );
+    this.subscribe(SendNationalAcceptEmpireIntentEvent, (e) =>
+      this.onSendNationalAcceptEmpireIntent(e),
+    );
+    this.subscribe(SendNationalTransferCrownIntentEvent, (e) =>
+      this.onSendNationalTransferCrownIntent(e),
     );
     this.subscribe(SendAttackIntentEvent, (e) => this.onSendAttackIntent(e));
     this.subscribe(SendUpgradeStructureIntentEvent, (e) =>
@@ -939,6 +973,42 @@ export class Transport {
       requestId: event.requestId,
     };
     this.sendIntent(intent);
+  }
+
+  private onSendNationalOfferEmpireIntent(
+    event: SendNationalOfferEmpireIntentEvent,
+  ) {
+    if (!this.nationalDiplomacyWireEnabled()) return;
+    this.sendIntent({
+      type: "national_offer_empire",
+      empireId: event.empireId,
+      candidateId: event.candidateId,
+      requestId: event.requestId,
+    });
+  }
+
+  private onSendNationalAcceptEmpireIntent(
+    event: SendNationalAcceptEmpireIntentEvent,
+  ) {
+    if (!this.nationalDiplomacyWireEnabled()) return;
+    this.sendIntent({
+      type: "national_accept_empire",
+      empireId: event.empireId,
+      candidateId: event.candidateId,
+      requestId: event.requestId,
+    });
+  }
+
+  private onSendNationalTransferCrownIntent(
+    event: SendNationalTransferCrownIntentEvent,
+  ) {
+    if (!this.nationalDiplomacyWireEnabled()) return;
+    this.sendIntent({
+      type: "national_transfer_crown",
+      empireId: event.empireId,
+      successorId: event.successorId,
+      requestId: event.requestId,
+    });
   }
 
   private onSendSpawnIntentEvent(event: SendSpawnIntentEvent) {

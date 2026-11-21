@@ -42,6 +42,38 @@ export interface NationalFoundingResult {
   sequence?: number;
 }
 
+/** E3 must send the authenticated recipient's invitations separately from the
+ * public roster. An absent packet is UNKNOWN, not an empty invitation list. */
+export interface NationalAccessionOffer {
+  readonly empireId: string;
+  readonly candidateId: string;
+  readonly proposerId: string;
+  readonly recipientId: string;
+}
+
+export interface NationalAccessionView {
+  readonly version: 1;
+  readonly recipientId: string;
+  readonly offers: readonly NationalAccessionOffer[];
+}
+
+export type NationalPoliticalAction =
+  | "national_offer_empire"
+  | "national_accept_empire"
+  | "national_transfer_crown";
+
+export interface NationalPoliticalResult {
+  readonly type: NationalPoliticalAction;
+  readonly actorId: string;
+  readonly recipientId: string;
+  readonly commandTargetId: string;
+  readonly accepted: boolean;
+  readonly tick: number;
+  readonly sequence: number;
+  readonly requestId: string;
+  readonly reason: string;
+}
+
 const EMPIRE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const FOUNDING_REQUEST_ID = /^nf_[0-9a-f]{32}$/;
 
@@ -54,6 +86,15 @@ export function createNationalFoundingRequestId(): string {
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);
   return `nf_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Each actual accession/crown click has a fresh cryptographic receipt ID. */
+export function createNationalPoliticalRequestId(): string {
+  if (typeof globalThis.crypto?.getRandomValues !== "function")
+    throw new Error("Secure political request identity is unavailable.");
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return `np_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
 /** Distinct 128-bit opaque token for ONE NATIONAL WAR/peace click. */
@@ -145,6 +186,110 @@ export function readNationalPolitics(
     }
   }
   return { empires, warnings };
+}
+
+/** Reject the WHOLE invitation projection if it is missing, foreign,
+ * malformed or duplicated. A sender may never read an invitee's offers. */
+export function readNationalAccessionOffers(
+  source: unknown,
+  authenticatedActorId: string | null,
+): NationalAccessionView | null {
+  if (
+    !authenticatedActorId ||
+    !record(source) ||
+    source.version !== 1 ||
+    source.recipientId !== authenticatedActorId ||
+    !Array.isArray(source.offers) ||
+    source.offers.length > 256
+  )
+    return null;
+  const offers: NationalAccessionOffer[] = [];
+  const seen = new Set<string>();
+  for (const item of source.offers) {
+    if (
+      !record(item) ||
+      typeof item.empireId !== "string" ||
+      !validEmpireId(item.empireId) ||
+      item.candidateId !== authenticatedActorId ||
+      item.recipientId !== authenticatedActorId ||
+      typeof item.proposerId !== "string" ||
+      !validNationalWarReference(item.proposerId)
+    )
+      return null;
+    const key = item.empireId + ":" + item.candidateId;
+    if (seen.has(key)) return null;
+    seen.add(key);
+    offers.push({
+      empireId: item.empireId,
+      candidateId: item.candidateId,
+      proposerId: item.proposerId,
+      recipientId: authenticatedActorId,
+    });
+  }
+  return { version: 1, recipientId: authenticatedActorId, offers };
+}
+
+/** Only exact actor-private E1 journal receipts; never infer from UI dispatch. */
+export function readNationalPoliticalResults(
+  source: unknown,
+  authenticatedActorId: string | null,
+): NationalPoliticalResult[] {
+  if (!authenticatedActorId || !Array.isArray(source)) return [];
+  const results: NationalPoliticalResult[] = [];
+  for (const item of source) {
+    if (
+      !record(item) ||
+      (item.type !== "national_offer_empire" &&
+        item.type !== "national_accept_empire" &&
+        item.type !== "national_transfer_crown") ||
+      item.actorId !== authenticatedActorId ||
+      item.recipientId !== authenticatedActorId ||
+      typeof item.commandTargetId !== "string" ||
+      !validNationalWarReference(item.commandTargetId) ||
+      typeof item.accepted !== "boolean" ||
+      !Number.isSafeInteger(item.tick) ||
+      (item.tick as number) < 0 ||
+      !Number.isSafeInteger(item.sequence) ||
+      (item.sequence as number) < 0 ||
+      typeof item.requestId !== "string" ||
+      !/^np_[0-9a-f]{32}$/.test(item.requestId) ||
+      (item.reason !== "accepted" &&
+        item.reason !== "actor-inactive" &&
+        item.reason !== "political-rule") ||
+      item.accepted !== (item.reason === "accepted")
+    )
+      continue;
+    results.push({
+      type: item.type,
+      actorId: authenticatedActorId,
+      recipientId: authenticatedActorId,
+      commandTargetId: item.commandTargetId,
+      accepted: item.accepted,
+      tick: item.tick as number,
+      sequence: item.sequence as number,
+      requestId: item.requestId,
+      reason: item.reason,
+    });
+  }
+  return results;
+}
+
+/** A short recipient-only window survives slow HUD refresh, not disconnect. */
+export function retainNationalPoliticalResults(
+  previous: readonly NationalPoliticalResult[],
+  received: readonly NationalPoliticalResult[],
+  tick: number,
+  reset: boolean,
+): readonly NationalPoliticalResult[] {
+  const retained = new Map<string, NationalPoliticalResult>();
+  for (const result of [...(reset ? [] : previous), ...received]) {
+    if (result.tick > tick || result.tick < tick - 240) continue;
+    retained.set(
+      `${result.actorId}:${result.requestId}:${result.sequence}:${result.type}:${result.commandTargetId}:${result.accepted}:${result.tick}`,
+      result,
+    );
+  }
+  return [...retained.values()].slice(-32);
 }
 
 export function readNationalFoundingResults(
