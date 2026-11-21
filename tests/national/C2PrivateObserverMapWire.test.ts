@@ -234,6 +234,27 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     sockets[1].socket.readyState = 1;
     host.tick();
     expect(sockets[1].socket.frames).toHaveLength(prior);
+
+    // A fully new, host-accepted connection for the SAME verified principal
+    // gets its own map reset and current invitation, not an old socket's
+    // previously delivered private command journal or fog cache.
+    const replacement: Socket = {
+      readyState: 1, frames: [],
+      send(bytes) { this.frames.push(bytes); },
+    };
+    sockets[1].client.ws = replacement as unknown as Client["ws"];
+    expect(host.resumeRecipient(sockets[1].client)).toBe(true);
+    host.tick();
+    const resumed = view(replacement);
+    expect(resumed.map.observerId).toBe(B.id);
+    expect(resumed.map.reset).toBe(true);
+    expect(resumed.map.cursor).toBe(0);
+    expect(resumed.data.nationalCommandResults).toBeUndefined();
+    expect(resumed.data.nationalAccessionOffers?.recipientId).toBe(B.id);
+    expect(resumed.data.nationalAccessionOffers?.offers).toEqual([
+      expect.objectContaining({ candidateId: B.id, proposerId: A.id }),
+    ]);
+    expect(sockets[1].socket.frames).toHaveLength(prior);
   });
 
   it("FOG-04/05: actual coastal 200-tile sight reveals an enemy ship marker but not the transport landing plan or troops", async () => {
