@@ -1,0 +1,30 @@
+name: E2 plus E3 authenticated NATIONAL transport combined probe
+on:
+  push:
+    branches:
+      - probe/class5-e3-e2-real-wire-20261121
+    paths:
+      - .github/workflows/class5-e2-e3-combined-probe.yml
+permissions:
+  contents: read
+jobs:
+  actual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Pinned npm
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Pinned install
+        run: npm run inst
+      - name: Focused source format on both owners
+        run: npx --no-install oxfmt --check packages/engine/src/GameRunner.ts src/server/national/TrustedNationalMatch.ts tests/national/TrustedNationalServerAuthority.test.ts tests/national/ClassFivePrincipalWireFanout.test.ts
+      - name: Full source TypeScript
+        run: npm run typecheck
+      - name: REAL GameServer→E3 authenticated recipient→E2 national_projection wire tests
+        run: npx --no-install vitest run --project node tests/national/ClassFiveTrustedLobbyTransport.test.ts tests/national/ClassFivePrincipalWireFanout.test.ts tests/national/TrustedNationalServerAuthority.test.ts tests/national/NationalServerOutboundClass4.test.ts tests/national/NationalAccessionPacketsR11.test.ts tests/national/RoundElevenDelegatedPeaceWire.test.ts tests/national/NationalBotRejectionRoundtripR11.test.ts
+      - name: Lint
+        run: npm run lint
