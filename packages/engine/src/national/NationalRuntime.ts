@@ -166,6 +166,17 @@ export interface NationalUngovernableWarning {
  * Whitelisted public political facts. No private pact terms, vote state,
  * hidden-war ledger, unsighted units, or spoofable client command results.
  */
+/**
+ * Private, recipient-bound accession invitation. E3 must never include these
+ * in the unfiltered public empire roster or another player's packet.
+ */
+export interface NationalAccessionOfferView {
+  readonly empireId: string;
+  readonly candidateId: PlayerID;
+  readonly proposerId: PlayerID;
+  readonly recipientId: PlayerID;
+}
+
 export interface NationalPublicPoliticalView {
   readonly empires: readonly {
     readonly id: string;
@@ -332,6 +343,29 @@ export class NationalRuntime {
       }
     }
     return [...result].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  }
+
+  /** Read only offers TO this principal; never expose pending consent globally. */
+  incomingAccessionOffers(
+    recipientId: PlayerID,
+  ): readonly NationalAccessionOfferView[] {
+    return this.politics.accessionOffers
+      .filter((offer) => offer.recipientId === recipientId)
+      .map((offer) => ({
+        empireId: offer.empireId,
+        candidateId: offer.candidateId,
+        proposerId: offer.proposerId,
+        recipientId: offer.recipientId,
+      }))
+      .sort(
+        (a, b) =>
+          (a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0) ||
+          (a.candidateId < b.candidateId
+            ? -1
+            : a.candidateId > b.candidateId
+              ? 1
+              : 0),
+      );
   }
 
   /** Copy-only, opt-in NATIONAL public facts for E3/E4's trusted UI bridge. */
