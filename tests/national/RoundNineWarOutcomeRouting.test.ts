@@ -6,8 +6,9 @@ import type { Game, Player } from "@openfront/engine/game/Game";
 import { describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
 
-const north = new PlayerInfo("N", PlayerType.Human, "R9NORTH1", "r9-north");
-const south = new PlayerInfo("S", PlayerType.Human, "R9SOUTH1", "r9-south");
+const human = PlayerType.Human;
+const north = new PlayerInfo("N", human, "R9NORTH1", "r9-north");
+const south = new PlayerInfo("S", human, "R9SOUTH1", "r9-south");
 
 async function spawned(): Promise<Game> {
   const game = await setup("plains", { nationalMode: true }, [north, south]);

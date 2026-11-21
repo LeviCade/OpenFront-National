@@ -245,17 +245,16 @@ export class NationalWarExecution implements Execution {
     // Only E1 may decide or journal a canonical rejection. Once its outcome
     // port exists, even inactive actors and invalid sovereign claims reach it.
     // The older void port remains for integration baseline compatibility.
-    const hasOutcomePort =
-      typeof port.nationalWarCommandResults === "function";
+    const hasJournal = typeof port.nationalWarCommandResults === "function";
     if (
-      !hasOutcomePort &&
+      !hasJournal &&
       (!game.hasPlayer(this.actor.id()) ||
         game.player(this.actor.id()) !== this.actor ||
         !this.actor.hasSpawned() ||
         !this.actor.isAlive())
     )
       return;
-    if (!hasOutcomePort && !port.nationalWarState?.()) return;
+    if (!hasJournal && !port.nationalWarState?.()) return;
     // An execution's engine tick + registered ordinal is deterministic across
     // snapshot/replay and cannot reuse an ID when peace deletes stale motions.
     // Unlike a client action ID, neither value is controlled by the request.
@@ -275,7 +274,7 @@ export class NationalWarExecution implements Execution {
       case "declare-imperial": {
         const empire = political.empireOf(this.actor.id());
         if (
-          !hasOutcomePort &&
+          !hasJournal &&
           (empire === null || political.emperorOf(empire) !== this.actor.id())
         )
           return;
@@ -304,7 +303,7 @@ export class NationalWarExecution implements Execution {
     // E1's Game-owned result service is the ONLY authority for accepted and
     // rejected WAR/peace clicks. Request IDs are correlation, not credentials.
     // E3 may project its authenticated journal; E2 never emits an outcome.
-    if (hasOutcomePort) {
+    if (hasJournal) {
       const result = port.performNationalWarCommand(
         this.actor,
         this.requestId === null
