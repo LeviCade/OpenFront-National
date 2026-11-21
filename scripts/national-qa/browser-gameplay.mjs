@@ -1860,6 +1860,7 @@ async function main() {
     let soloBattleAttack = null;
     let peaceMotionId = null;
     await step("declare-war", async () => {
+      let realWarOpponentId = null;
       // The accession recipient is now in our empire. WAR requires a
       // DIFFERENT genuinely admitted living opponent, not a bot from the
       // first dropdown option or an invented test principal.
@@ -1885,7 +1886,7 @@ async function main() {
       ) {
         throw Error("WAR_OPPONENT_IS_SAME_EMPIRE_OWNER_E2_E4");
       }
-      const realWarOpponentId = opposingSession.actorId;
+      realWarOpponentId = opposingSession.actorId;
       record("war-opponent-identity-verified", {
         differentPrincipal: true,
         sameGameId: true,
@@ -1905,9 +1906,7 @@ async function main() {
           "})()",
       );
       if (!hooked) throw Error("WAR_EVENTBUS_OBSERVER_NOT_CONNECTED");
-      const expectedOpponentId = soloOnly
-        ? null
-        : (await peacePeer.observe()).actorId;
+      const expectedOpponentId = soloOnly ? null : realWarOpponentId;
       const targetId = await chooseNativeSelect(
         "#national-war-target",
         expectedOpponentId,
