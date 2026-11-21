@@ -25,7 +25,7 @@ const verified = {
 };
 const sample = () => ({
   exactSource: SHA,
-  stage: "found-empire",
+  stage: "sovereign-victory",
   elapsedMs: 100,
   actualHardware: {
     webgl: {
@@ -109,12 +109,33 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       ).join("\n") + "\n",
     );
     for (const mode of MODES) {
-      const target = join(dir, "browser-" + mode);
+      const target = join(dir, mode.startsWith("legacy-") ? "browser-legacy-ffa-" + mode.split("-")[1] : "browser-" + mode);
       mkdirSync(target, { recursive: true });
-      writeFileSync(join(target, "acceptance.json"), JSON.stringify(sample()));
+      const report = sample();
+      report.hardwareAcceptanceRequired = true;
+      report.viewport = mode.endsWith("mobile") ? "390x844 mobile" : "1280x800 desktop";
+      report.actualHardware.webgl1 = {
+        supported: true, contextLost: false,
+        unmaskedRenderer: report.actualHardware.webgl.unmaskedRenderer,
+        shaderPixel: PIXEL,
+      };
+      report.actualHardware.webgl.supported = true;
+      report.actualHardware.webgl.contextLost = false;
+      const legacy = mode.startsWith("legacy-");
+      report.events.push({
+        name: "stage-complete",
+        stage: legacy ? "legacy-ffa" : "sovereign-victory",
+      });
+      if (legacy) report.events.push({ name: "legacy-ffa-verified" });
+      else report.events.push(
+        { name: "authoritative-empire-accepted" },
+        { name: "authoritative-duplicate-rejected" },
+        { name: "authoritative-sovereign-victory" },
+      );
+      writeFileSync(join(target, "acceptance.json"), JSON.stringify(report));
       writeFileSync(
         join(target, "home.png"),
-        Buffer.from("89504e470d0a1a0a", "hex"),
+        Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGPcEqDBwMDAxMDAwMDAAAAOxgEwdJw6WQAAAABJRU5ErkJggg==", "base64"),
       );
     }
     assert.equal(publishEvidence(dir, SHA), true);
@@ -127,6 +148,14 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       assert.equal(published.modes[mode].hardware.proofAccepted, true);
     }
     assert.ok(!JSON.stringify(published).includes("UNPUBLISHABLE"));
+    assert.equal(publishEvidence(dir, SHA, "diagnostic"), false);
+    const unsigned = JSON.parse(readFileSync(
+      join(dir, "gpu", "public", "diagnostic", "summary.json"), "utf8",
+    ));
+    assert.equal(unsigned.releaseCertified, false);
+    assert.equal(unsigned.hostCleanupVerified, false);
+    assert.equal(unsigned.lane, "diagnostic");
+    assert.equal(unsigned.modes["legacy-desktop"].hardware.proofAccepted, false);
     const changed = sample();
     changed.exactSource = "b".repeat(40);
     writeFileSync(
