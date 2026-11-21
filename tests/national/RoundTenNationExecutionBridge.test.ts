@@ -9,6 +9,7 @@ import {
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
+import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { NationExecution } from "@openfront/engine/execution/NationExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
@@ -178,6 +179,11 @@ describe("R10 E2 real NationExecution -> E1 outcome -> AttackExecution", () => {
     );
     expect(settled.accepted).toBe(true);
     expect(game.nationalWarAuthority()!.atWar(A, B)).toBe(false);
+    const paidTroops = game.player(A).troops();
+    const postPeaceAttack = new AttackExecution(15_000, game.player(A), B);
+    postPeaceAttack.init(game, game.ticks());
+    expect(postPeaceAttack.isActive()).toBe(false);
+    expect(game.player(A).troops()).toBe(paidTroops);
 
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);

@@ -31,6 +31,7 @@ import {
   collectLiveNationalObservation,
   liveNationalWarAuthority,
 } from "../national/observation/LiveObservation";
+import type { NationalWarCommandOutcome } from "../national/politics/NationalGovernanceState";
 import {
   advanceLastKnown,
   type NationalObservation,
@@ -74,21 +75,11 @@ type NationalExecutionPlannerMemory = NationalPlannerMemory & {
   readonly lastWarOutcomeSequence?: number;
 };
 
-type NationalDeclareWarFeedback = {
-  readonly actorId: string;
-  readonly recipientId: string;
-  readonly commandKind: "national_declare_war";
-  readonly commandTargetId: string;
-  readonly sequence: number;
-  readonly tick: number;
-  readonly accepted: boolean;
-};
-
 const warOutcomePlanner = NationalPlanner as typeof NationalPlanner & {
   readonly recordNationalWarOutcome?: (
     observation: NationalObservation,
     memory: NationalExecutionPlannerMemory,
-    outcome: NationalDeclareWarFeedback,
+    outcome: NationalWarCommandOutcome,
     retryTicks?: number,
   ) => NationalExecutionPlannerMemory;
 };
@@ -481,15 +472,7 @@ export class NationExecution implements Execution {
           observation,
           this.nationalPlannerMemory ??
             initialNationalPlannerMemory(player.id()),
-          {
-            actorId: outcome.actorId,
-            recipientId: outcome.recipientId,
-            commandKind: outcome.commandKind,
-            commandTargetId: outcome.commandTargetId,
-            sequence: outcome.sequence,
-            tick: outcome.tick,
-            accepted: outcome.accepted,
-          },
+          outcome,
         );
       }
       if (!outcome.accepted) return;
