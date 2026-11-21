@@ -116,7 +116,7 @@ test("source, repository ID, workflow attempt, runner ID, stage and writer must 
     jobCompletedAtMs: null,
   });
   for (const [section, key, value, reason] of [
-    ["expected", "sourceSha", "f".repeat(40), "CONDUCTOR_SOURCE_ANCESTRY_UNVERIFIED"],
+    ["expected", "sourceSha", "f".repeat(40), "TRUSTED_RUN_CONTEXT_INCOMPLETE"],
     ["run", "run_attempt", 2, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
     ["job", "runner_id", 222, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
     ["stage", "ref", "refs/heads/feature/unreviewed", "CONDUCTOR_SOURCE_ANCESTRY_UNVERIFIED"],
