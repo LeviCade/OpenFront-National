@@ -645,6 +645,20 @@ export const NationalTransferCrownIntentSchema = z.object({
 });
 
 /**
+ * Emperor-granted/revoked NATIONAL peace delegation is a REQUEST, not
+ * political authority. Executor derives the real actor from stamped clientID,
+ * and the E1 Game-owned journal independently validates emperor/member law.
+ * No actorId or claimed emperorId is accepted from the browser.
+ */
+export const NationalSetPeaceDelegationIntentSchema = z.object({
+  type: z.literal("national_set_peace_delegation"),
+  empireId: NationalPoliticalId,
+  memberId: MappedID,
+  enabled: z.boolean(),
+  requestId: NationalPoliticalRequestId.optional(),
+});
+
+/**
  * NATIONAL war actions. Actor is ALWAYS resolved from server-stamped clientID.
  * Neither client-declared authority nor a client-supplied campaign ID exists.
  * Target nation and political war IDs are references, not permissions.
@@ -706,6 +720,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalOfferEmpireIntentSchema,
   NationalAcceptEmpireIntentSchema,
   NationalTransferCrownIntentSchema,
+  NationalSetPeaceDelegationIntentSchema,
   NationalDeclareWarIntentSchema,
   NationalProposePeaceIntentSchema,
   NationalAcceptPeaceIntentSchema,
