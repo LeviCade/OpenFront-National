@@ -48,6 +48,9 @@ export type Intent =
   | UpdateGameConfigIntent
   | ToggleGameStartTimer
   | NationalFoundEmpireIntent
+  | NationalOfferEmpireIntent
+  | NationalAcceptEmpireIntent
+  | NationalTransferCrownIntent
   | NationalDeclareWarIntent
   | NationalProposePeaceIntent
   | NationalAcceptPeaceIntent;
@@ -90,6 +93,16 @@ export type ToggleGameStartTimer = z.infer<
 
 export type NationalFoundEmpireIntent = z.infer<
   typeof NationalFoundEmpireIntentSchema
+>;
+
+export type NationalOfferEmpireIntent = z.infer<
+  typeof NationalOfferEmpireIntentSchema
+>;
+export type NationalAcceptEmpireIntent = z.infer<
+  typeof NationalAcceptEmpireIntentSchema
+>;
+export type NationalTransferCrownIntent = z.infer<
+  typeof NationalTransferCrownIntentSchema
 >;
 
 export type NationalDeclareWarIntent = z.infer<
@@ -587,22 +600,48 @@ export const ToggleGameStartTimerIntentSchema = z.object({
   type: z.literal("toggle_game_start_timer"),
 });
 
+// Every NATIONAL political command shares bounded, non-authoritative
+// identifiers. Player references use the canonical mapped roster ID format.
+const NationalPoliticalId = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9_-]+$/);
+const NationalPoliticalRequestId = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9_-]+$/);
+
 // Actor identity is resolved from the trusted stamped clientID.
 export const NationalFoundEmpireIntentSchema = z.object({
   type: z.literal("national_found_empire"),
-  empireId: z
-    .string()
-    .min(1)
-    .max(64)
-    .regex(/^[A-Za-z0-9_-]+$/),
+  empireId: NationalPoliticalId,
   // Untrusted correlation token, NEVER an actor identity or authorization.
   // Optional for legacy intents. Wire-bounded to E4's opaque per-click ID.
-  requestId: z
-    .string()
-    .min(1)
-    .max(128)
-    .regex(/^[A-Za-z0-9_-]+$/)
-    .optional(),
+  requestId: NationalPoliticalRequestId.optional(),
+});
+
+// These intents are only requests. The actor comes exclusively from the
+// trusted stamped clientID and the live Game-owned political journal decides
+// whether the named empire, invitation and crown transition are legal.
+export const NationalOfferEmpireIntentSchema = z.object({
+  type: z.literal("national_offer_empire"),
+  empireId: NationalPoliticalId,
+  candidateId: MappedID,
+  requestId: NationalPoliticalRequestId.optional(),
+});
+export const NationalAcceptEmpireIntentSchema = z.object({
+  type: z.literal("national_accept_empire"),
+  empireId: NationalPoliticalId,
+  candidateId: MappedID,
+  requestId: NationalPoliticalRequestId.optional(),
+});
+export const NationalTransferCrownIntentSchema = z.object({
+  type: z.literal("national_transfer_crown"),
+  empireId: NationalPoliticalId,
+  successorId: MappedID,
+  requestId: NationalPoliticalRequestId.optional(),
 });
 
 /**
@@ -664,6 +703,9 @@ export const IntentSchema = z.discriminatedUnion("type", [
   UpdateGameConfigIntentSchema,
   ToggleGameStartTimerIntentSchema,
   NationalFoundEmpireIntentSchema,
+  NationalOfferEmpireIntentSchema,
+  NationalAcceptEmpireIntentSchema,
+  NationalTransferCrownIntentSchema,
   NationalDeclareWarIntentSchema,
   NationalProposePeaceIntentSchema,
   NationalAcceptPeaceIntentSchema,
