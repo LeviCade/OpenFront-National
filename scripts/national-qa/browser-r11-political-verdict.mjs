@@ -36,8 +36,8 @@ export function verifyDistinctLiveSessions(
   if (expectedCandidate !== null && second.actorId !== expectedCandidate)
     return fail("POLITICAL_OPPONENT_ACTOR_MISMATCH", "E2/E4");
   if (
-    first.spectator === true ||
-    second.spectator === true ||
+    first.spectator !== false ||
+    second.spectator !== false ||
     first.spawned !== true ||
     second.spawned !== true ||
     !Number.isSafeInteger(first.ownedTiles) ||
@@ -100,6 +100,20 @@ export function verifyPrivateInvitation({
     return fail("POLITICAL_INVITATION_ABSENT_OR_DUPLICATE", "E3");
   // The sender may see OTHER invitations addressed to itself, but never the
   // recipient's pending offer. No private packets are copied to reports.
+  if (
+    !founderView ||
+    founderView.version !== 1 ||
+    founderView.recipientId !== founderId ||
+    !Array.isArray(founderView.offers)
+  )
+    return fail("POLITICAL_SENDER_PRIVATE_VIEW_UNVERIFIED", "E3");
+  if (
+    founderView.offers.some(
+      (o) =>
+        !o || o.recipientId !== founderId || o.candidateId !== founderId,
+    )
+  )
+    return fail("POLITICAL_SENDER_PRIVATE_VIEW_MISMATCH", "E3");
   if (
     founderView?.offers?.some(
       (o) => o?.empireId === empireId && o?.candidateId === recipientId,
@@ -284,6 +298,8 @@ const TRUSTED_ACCEPTANCE_FAILURE_CODES = Object.freeze([
   "POLITICAL_SECOND_LIVE_GAME_PAGE_MISSING_OWNER_E2_E4_E6",
   "POLITICAL_ACCEPT_NATIVE_CLICK_NOT_OBSERVED_OWNER_E4",
   "POLITICAL_PRIVATE_INVITATION_NOT_DELIVERED_OWNER_E3",
+  "POLITICAL_SENDER_PRIVATE_VIEW_UNVERIFIED",
+  "POLITICAL_SENDER_PRIVATE_VIEW_MISMATCH",
   "PEACE_SECOND_PRINCIPAL_REAL_CLICK_MISSING_OWNER_E4",
   "POLITICAL_FOUNDING_SESSION_UNAVAILABLE_OWNER_E2_E4",
   "WARNING_DEV_ADMIN_BOT_KEY_DO_NOT_USE_IN_PRODUCTION",
@@ -377,16 +393,11 @@ export function safeFailureCode(value) {
   for (const code of TRUSTED_ACCEPTANCE_FAILURE_CODES) {
     if (message.includes(code)) return code;
   }
-  if (/Timed out/i.test(message))
-    return "TIMED_OUT: authoritative evidence";
-  if (message.includes("POLITICAL_"))
-    return "POLITICAL_ACCEPTANCE_FAILURE";
-  if (message.includes("FOUNDING_"))
-    return "FOUNDING_ACCEPTANCE_FAILURE";
-  if (message.includes("SPAWN_"))
-    return "SPAWN_ACCEPTANCE_FAILURE";
-  if (message.includes("PEACE_"))
-    return "PEACE_ACCEPTANCE_FAILURE";
+  if (/Timed out/i.test(message)) return "TIMED_OUT: authoritative evidence";
+  if (message.includes("POLITICAL_")) return "POLITICAL_ACCEPTANCE_FAILURE";
+  if (message.includes("FOUNDING_")) return "FOUNDING_ACCEPTANCE_FAILURE";
+  if (message.includes("SPAWN_")) return "SPAWN_ACCEPTANCE_FAILURE";
+  if (message.includes("PEACE_")) return "PEACE_ACCEPTANCE_FAILURE";
   return "UNCLASSIFIED_ACCEPTANCE_FAILURE";
 }
 const booleanFields = new Set([

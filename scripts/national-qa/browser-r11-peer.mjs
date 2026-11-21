@@ -38,8 +38,8 @@ export async function connectAuthenticatedPeer({
       p?.type === "page" &&
       typeof p.webSocketDebuggerUrl === "string" &&
       typeof p.url === "string" &&
-      ["http://127.0.0.1:9000/", "http://localhost:9000/"].some(
-        (prefix) => p.url.startsWith(prefix),
+      ["http://127.0.0.1:9000/", "http://localhost:9000/"].some((prefix) =>
+        p.url.startsWith(prefix),
       ),
   );
   if (!page)

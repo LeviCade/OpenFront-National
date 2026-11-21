@@ -555,6 +555,51 @@ describe("R11 E5 acceptance flags survive privacy projection", () => {
   });
 });
 
+describe("R11 E5 complete privacy proof fails closed on absent sender view", () => {
+  const offer = {
+    empireId: "R11_Browser_QA",
+    candidateId: "b",
+    proposerId: "a",
+    recipientId: "b",
+  };
+  const valid = {
+    founderId: "a",
+    recipientId: "b",
+    empireId: offer.empireId,
+    recipientTick: 50,
+    recipientView: { version: 1, recipientId: "b", offers: [offer] },
+    founderView: { version: 1, recipientId: "a", offers: [] },
+  };
+  it("refuses to certify privacy when the sender private view is unverified", () => {
+    expect(verifyPrivateInvitation(valid).accepted).toBe(true);
+    expect(
+      verifyPrivateInvitation({ ...valid, founderView: null }).reason,
+    ).toBe("POLITICAL_SENDER_PRIVATE_VIEW_UNVERIFIED");
+    expect(
+      verifyPrivateInvitation({
+        ...valid,
+        founderView: { ...valid.founderView, recipientId: "b" },
+      }).reason,
+    ).toBe("POLITICAL_SENDER_PRIVATE_VIEW_UNVERIFIED");
+    expect(
+      verifyPrivateInvitation({
+        ...valid,
+        founderView: {
+          ...valid.founderView,
+          offers: [{ ...offer, recipientId: "a", candidateId: "b" }],
+        },
+      }).reason,
+    ).toBe("POLITICAL_SENDER_PRIVATE_VIEW_MISMATCH");
+  });
+  it("rejects unknown spectator state even if actor and tick appear valid", () => {
+    const a = { gameId: "g", actorId: "a", spawned: true, ownedTiles: 3, tick: 7, spectator: false };
+    const b = { ...a, actorId: "b", spectator: undefined };
+    expect(verifyDistinctLiveSessions(a, b, "b").reason).toBe(
+      "POLITICAL_SPECTATOR_OR_INACTIVE",
+    );
+  });
+});
+
 describe("R11 E5 sanitized physical-browser evidence", () => {
   it("never prints raw private invitations, request nonces, URLs or UI body text", () => {
     const secret = "PRIVATE_RECIPIENT_CANARY_TOKEN";

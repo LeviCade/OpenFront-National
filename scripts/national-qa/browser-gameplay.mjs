@@ -154,7 +154,16 @@ function spawnChild(exe, args, env = {}) {
 
 async function poll(callback, label, attempts = 90, interval = 300) {
   for (let i = 0; i < attempts; i++) {
-    const result = await callback().catch(() => null);
+    const result = await callback().catch((error) => {
+      const detail = String(error);
+      if (
+        detail.includes("_OWNER_") ||
+        /Error: (?:POLITICAL_|PEACE_|WAR_|FOUNDING_|SPAWN_)/.test(detail)
+      ) {
+        throw error;
+      }
+      return null;
+    });
     if (result) return result;
     await sleep(interval);
   }
