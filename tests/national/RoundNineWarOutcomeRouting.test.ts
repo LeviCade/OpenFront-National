@@ -87,7 +87,7 @@ describe("E2 Round Nine WAR execution to E1-owned outcome port", () => {
       }),
       "r9_forged_claim",
     );
-     expect(game.nationalWarState()).toEqual(before);
+    expect(game.nationalWarState()).toEqual(before);
   });
 
   it("forwards stale peace and repeated tokens", async () => {
