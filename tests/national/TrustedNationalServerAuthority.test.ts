@@ -122,8 +122,8 @@ describe("Fourth Class / E2 trusted Private NATIONAL host", () => {
     expect(sentA[0]).not.toBe(sentB[0]);
     expect(sentA[0].tick).toBe(receipt.tick);
     expect(sentB[0].tick).toBe(receipt.tick);
-    expect(sentA[0].nationalConflicts?.recipientId).toBe(humans[0].id);
-    expect(sentB[0].nationalConflicts?.recipientId).toBe(humans[1].id);
+    expect((sentA[0] as GameUpdateViewData & { nationalConflicts?: { recipientId: string } }).nationalConflicts?.recipientId).toBe(humans[0].id);
+    expect((sentB[0] as GameUpdateViewData & { nationalConflicts?: { recipientId: string } }).nationalConflicts?.recipientId).toBe(humans[1].id);
     expect(sentA[0].nationalCommandResults?.every(
       (result) => result.actorId === humans[0].id,
     )).not.toBe(false);
