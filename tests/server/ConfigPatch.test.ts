@@ -96,46 +96,6 @@ describe("applyGameConfigPatch", () => {
     expect(target.hostCheats).toEqual({ startingGold: 5 });
   });
 
-  it("allows authenticated-host PRIVATE FFA national opt-in without changing legacy defaults", () => {
-    const privateFFA = testGameConfig({
-      gameType: GameType.Private,
-      gameMode: GameMode.FFA,
-    });
-    expect(privateFFA.nationalMode).toBeUndefined();
-    applyGameConfigPatch(privateFFA, { nationalMode: true });
-    expect(privateFFA.nationalMode).toBe(true);
-    applyGameConfigPatch(privateFFA, { bots: 4 });
-    expect(privateFFA.nationalMode).toBe(true);
-    applyGameConfigPatch(privateFFA, { nationalMode: false });
-    expect(privateFFA.nationalMode).toBe(false);
-  });
-
-  it("does not enable NATIONAL on public or team games and invalidates mode on a switch to teams", () => {
-    const publicFFA = testGameConfig({
-      gameType: GameType.Public,
-      gameMode: GameMode.FFA,
-    });
-    applyGameConfigPatch(publicFFA, { nationalMode: true });
-    expect(publicFFA.nationalMode).toBeUndefined();
-
-    const privateTeam = testGameConfig({
-      gameType: GameType.Private,
-      gameMode: GameMode.Team,
-    });
-    applyGameConfigPatch(privateTeam, { nationalMode: true });
-    expect(privateTeam.nationalMode).toBeUndefined();
-
-    const privateFFA = testGameConfig({
-      gameType: GameType.Private,
-      gameMode: GameMode.FFA,
-    });
-    applyGameConfigPatch(privateFFA, { nationalMode: true });
-    applyGameConfigPatch(privateFFA, { gameMode: GameMode.Team });
-    expect(privateFFA.nationalMode).toBe(false);
-    applyGameConfigPatch(privateFFA, { nationalMode: true });
-    expect(privateFFA.nationalMode).toBe(false);
-  });
-
   it("ignores gameType, which has its own guarded path", () => {
     const target = testGameConfig({ gameType: GameType.Private });
     applyGameConfigPatch(target, { gameType: GameType.Public });

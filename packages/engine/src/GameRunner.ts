@@ -273,29 +273,10 @@ export class GameRunner {
     ).visibleTiles.has(this.game.ref(x, y));
   }
 
-  /** Solo turns are emitted by exactly one local, authentic human principal. */
+  /** Signed/stamped turn intents must match the authentic NATIONAL player. */
   isNationalIntentAuthorized(clientID: ClientID): boolean {
     if (!this.game.config().nationalMode()) return true;
     return this.isCurrentNationalViewer() && this.viewerClientID === clientID;
-  }
-
-  /**
-   * A hosted PRIVATE NATIONAL match broadcasts ONE server-stamped turn to
-   * every participant's worker. Such a turn legitimately contains the OTHER
-   * humans' intents. Require each actor to belong to this game's immutable
-   * player roster; the websocket GameServer, NOT a browser-supplied actorId,
-   * authenticates and stamps the actual sender before broadcasting.
-   *
-   * Solo and non-private NATIONAL workers keep the existing stricter check.
-   * This authorization applies only to committed turn replication, NEVER
-   * to observation RPCs, private packets or privileged Game snapshots.
-   */
-  isNationalBroadcastTurnAuthorized(clientID: ClientID): boolean {
-    if (!this.game.config().nationalMode()) return true;
-    if (this.game.config().gameConfig().gameType === GameType.Private) {
-      return this.game.playerByClientID(clientID) !== null;
-    }
-    return this.isNationalIntentAuthorized(clientID);
   }
 
   /**

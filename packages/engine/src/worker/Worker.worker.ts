@@ -214,13 +214,13 @@ async function onMessage(e: MessageEvent<MainThreadMessage>) {
       switch (message.type) {
         case "turn":
           denied = message.turn.intents.some(
-            (i) => !gr.isNationalBroadcastTurnAuthorized(i.clientID),
+            (i) => !gr.isNationalIntentAuthorized(i.clientID),
           );
           break;
         case "run_turns":
           denied = message.turns.some((turn) =>
             turn.intents.some(
-              (i) => !gr.isNationalBroadcastTurnAuthorized(i.clientID),
+              (i) => !gr.isNationalIntentAuthorized(i.clientID),
             ),
           );
           break;
