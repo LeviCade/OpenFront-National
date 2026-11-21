@@ -145,9 +145,10 @@ export class NationalObserverMapPager {
     );
     const units: NationalVisibleUnitV1[] = assets
       .slice(0, NATIONAL_OBSERVER_MAX_UNITS)
-      .filter((asset) =>
-        map.isValidCoord(asset.x, asset.y) &&
-        visible.has(map.ref(asset.x, asset.y)),
+      .filter(
+        (asset) =>
+          map.isValidCoord(asset.x, asset.y) &&
+          visible.has(map.ref(asset.x, asset.y)),
       )
       .map((asset) => ({
         id: Number(asset.id),

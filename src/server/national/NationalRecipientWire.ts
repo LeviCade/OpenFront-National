@@ -11,14 +11,14 @@ import {
   GameUpdateType,
   type GameUpdateViewData,
 } from "@openfront/engine-api/game/GameUpdates";
-import { replacer } from "@openfront/shared/SharedUtil";
-import type { NationalPublicConflictView } from "@openfront/engine/national/observation/NationalOutbound";
 import {
   NATIONAL_OBSERVER_MAX_TILES,
   NATIONAL_OBSERVER_MAX_UNITS,
   NATIONAL_OBSERVER_MAP_VERSION,
   type NationalObserverMapV1,
 } from "@openfront/engine/national/observation/NationalObserverMap";
+import type { NationalPublicConflictView } from "@openfront/engine/national/observation/NationalOutbound";
+import { replacer } from "@openfront/shared/SharedUtil";
 
 export const MAX_NATIONAL_PROJECTION_BYTES = 2_000_000;
 
@@ -41,23 +41,29 @@ export function encodeNationalRecipientProjection(
     if (
       map.version !== NATIONAL_OBSERVER_MAP_VERSION ||
       map.tick !== filtered.tick ||
-      !Number.isSafeInteger(map.width) || map.width <= 0 ||
-      !Number.isSafeInteger(map.height) || map.height <= 0 ||
-      !Number.isSafeInteger(map.cursor) || map.cursor < 0 ||
+      !Number.isSafeInteger(map.width) ||
+      map.width <= 0 ||
+      !Number.isSafeInteger(map.height) ||
+      map.height <= 0 ||
+      !Number.isSafeInteger(map.cursor) ||
+      map.cursor < 0 ||
       (map.nextCursor !== null &&
-        (!Number.isSafeInteger(map.nextCursor) || map.nextCursor < map.cursor)) ||
+        (!Number.isSafeInteger(map.nextCursor) ||
+          map.nextCursor < map.cursor)) ||
       map.tiles.length > NATIONAL_OBSERVER_MAX_TILES ||
       map.units.length > NATIONAL_OBSERVER_MAX_UNITS ||
-      map.units.some((unit) =>
-        unit.ownerId !== map.observerId && unit.troops !== undefined
+      map.units.some(
+        (unit) => unit.ownerId !== map.observerId && unit.troops !== undefined,
       ) ||
       (filtered.nationalAccessionOffers !== undefined &&
         filtered.nationalAccessionOffers.recipientId !== map.observerId) ||
-      (filtered.nationalCommandResults ?? []).some((result) =>
-        result.actorId !== map.observerId ||
-        result.recipientId !== map.observerId
+      (filtered.nationalCommandResults ?? []).some(
+        (result) =>
+          result.actorId !== map.observerId ||
+          result.recipientId !== map.observerId,
       )
-    ) throw new Error("NATIONAL invalid bounded observer-map v1");
+    )
+      throw new Error("NATIONAL invalid bounded observer-map v1");
   }
   const allowed = {
     tick: filtered.tick,
@@ -128,7 +134,10 @@ export function encodeNationalRecipientProjection(
             cursor: map.cursor,
             nextCursor: map.nextCursor,
             tiles: map.tiles.map(([tile, state, terrain, borderMask]) => [
-              tile, state, terrain, borderMask,
+              tile,
+              state,
+              terrain,
+              borderMask,
             ]),
             units: map.units.map((unit) => ({
               id: unit.id,

@@ -94,7 +94,10 @@ export class NationalServerRecipientSession {
     // connection cannot acquire another player's rights by mutating its
     // session object later.
     this.principalId = player?.type() === PlayerType.Human ? player.id() : null;
-    this.observerMap = this.principalId === null ? null : new NationalObserverMapPager(game, this.principalId);
+    this.observerMap =
+      this.principalId === null
+        ? null
+        : new NationalObserverMapPager(game, this.principalId);
     this.outbound = new NationalOutboundFilter(game, this.principalId);
     if (this.principalId !== null) {
       this.outbound.restoreSightMemory(
