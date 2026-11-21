@@ -159,6 +159,10 @@ export class TrustedNationalMatch {
     }));
   }
 
+  currentTick(): number {
+    return this.runner.game.ticks();
+  }
+
   /** One deterministic simulation step, performed ONLY by the trusted host. */
   tick(): NationalTickReceipt {
     const turn: Turn = {
