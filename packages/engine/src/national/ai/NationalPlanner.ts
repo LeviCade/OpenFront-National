@@ -48,6 +48,13 @@ export interface DiplomaticReputation {
   readonly credibility: number;
   readonly lastObservedTick: number;
 }
+/** Persist in NationExecutionSnapshot when E2 adopts the R10 action hook.
+ * The list is bounded; no global treaty, troop or adversary knowledge enters. */
+export interface NationalRejectedWarTarget {
+  readonly targetId: NationId;
+  readonly retryAfterTick: number;
+}
+
 export interface NationalPlannerMemory {
   readonly observerId: NationId;
   readonly objective: NationalObjective;
@@ -58,6 +65,9 @@ export interface NationalPlannerMemory {
     readonly id: string;
   } | null;
   readonly reputation: readonly DiplomaticReputation[];
+  /** Optional for migration from R9 snapshots. E2 owns wire persistence. */
+  readonly rejectedWarTargets?: readonly NationalRejectedWarTarget[];
+  readonly lastWarOutcomeSequence?: number;
 }
 export interface NationalDecision {
   readonly objective: NationalObjective;
@@ -76,6 +86,8 @@ export interface NationalPlanResult {
 
 const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const REPUTATION_LIMIT = 128;
+const REJECTED_TARGET_LIMIT = 16;
+const DEFAULT_RETRY_TICKS = 180;
 const clamp = (n: number): number => Math.max(-10, Math.min(10, n));
 const weight: Record<PublicDiplomaticEventKind, number> = {
   "treaty-kept": 1,
@@ -97,6 +109,89 @@ export function initialNationalPlannerMemory(
     nextPlanningTick: 0,
     lastProcessedEvent: null,
     reputation: [],
+    rejectedWarTargets: [],
+    lastWarOutcomeSequence: -1,
+  };
+}
+
+/** Feed only a REAL Game-owned command result back into the strategy.
+ *
+ * The E2 NationExecution bridge must call this with the returned E1 outcome,
+ * not with an enqueued intent. A rejected declaration must change the next
+ * objective instead of creating an infinite same-target WAR retry loop.
+ * All additional fields require E2 NationExecutionSnapshot persistence.
+ */
+export function recordNationalWarOutcome(
+  observation: NationalObservation,
+  previous: NationalPlannerMemory,
+  outcome: {
+    readonly actorId: string;
+    readonly recipientId: string;
+    readonly commandKind: "national_declare_war";
+    readonly commandTargetId: string;
+    readonly sequence: number;
+    readonly tick: number;
+    readonly accepted: boolean;
+  },
+  retryTicks: number = DEFAULT_RETRY_TICKS,
+): NationalPlannerMemory {
+  if (
+    observation.observerId !== previous.observerId ||
+    outcome.actorId !== previous.observerId ||
+    outcome.recipientId !== previous.observerId
+  )
+    throw new Error("NATIONAL planner: foreign command outcome");
+  if (
+    !Number.isSafeInteger(outcome.tick) ||
+    outcome.tick < 0 ||
+    outcome.tick > observation.tick ||
+    !Number.isSafeInteger(outcome.sequence) ||
+    outcome.sequence < 0 ||
+    !Number.isSafeInteger(retryTicks) ||
+    retryTicks < 1 ||
+    retryTicks > 3600
+  )
+    throw new Error("NATIONAL planner: invalid command outcome");
+  // An obsolete/foreign target cannot seed knowledge the AI never observed.
+  if (
+    !observation.frontiers.some(
+      (f) =>
+        f.access === "land" && f.targetId === outcome.commandTargetId,
+    )
+  )
+    return previous;
+  if (outcome.sequence <= (previous.lastWarOutcomeSequence ?? -1))
+    return previous;
+  const remaining = (previous.rejectedWarTargets ?? []).filter(
+    (item) =>
+      item.retryAfterTick > observation.tick &&
+      item.targetId !== outcome.commandTargetId,
+  );
+  if (!outcome.accepted) {
+    remaining.push({
+      targetId: outcome.commandTargetId,
+      retryAfterTick: observation.tick + retryTicks,
+    });
+  }
+  remaining.sort(
+    (a, b) =>
+      a.retryAfterTick - b.retryAfterTick ||
+      cmp(a.targetId, b.targetId),
+  );
+  return {
+    ...previous,
+    rejectedWarTargets: remaining.slice(-REJECTED_TARGET_LIMIT),
+    lastWarOutcomeSequence: outcome.sequence,
+    ...(outcome.accepted
+      ? {}
+      : {
+          objective: "consolidate" as const,
+          targetId: null,
+          nextPlanningTick: Math.min(
+            previous.nextPlanningTick,
+            observation.tick + 1,
+          ),
+        }),
   };
 }
 
@@ -163,7 +258,12 @@ export function planNationalInterest(
     throw new Error("cadenceTicks must be a positive integer");
   }
   const updated = updateNationalDiplomaticMemory(observation, previous);
-  const memory = updated.memory;
+  const memory = {
+    ...updated.memory,
+    rejectedWarTargets: (updated.memory.rejectedWarTargets ?? []).filter(
+      (entry) => entry.retryAfterTick > observation.tick,
+    ),
+  };
   if (observation.tick < memory.nextPlanningTick && !updated.sawNewEvent) {
     return { planned: false, decision: null, memory };
   }
@@ -224,6 +324,10 @@ export function planNationalInterest(
       enemiesAtWar.has(id) &&
       !protectedPartners.has(id) &&
       publicNations.get(id)?.alive === true,
+  );
+
+  const blockedNewWars = new Set(
+    (memory.rejectedWarTargets ?? []).map((item) => item.targetId),
   );
 
   // AI-02: an ACTUAL local campaign outranks every hypothetical new war,
@@ -290,7 +394,12 @@ export function planNationalInterest(
     for (const frontier of observation.frontiers) {
       if (frontier.access !== "land") continue;
       const target = publicNations.get(frontier.targetId);
-      if (!target?.alive || protectedPartners.has(target.id)) continue;
+      if (
+        !target?.alive ||
+        protectedPartners.has(target.id) ||
+        blockedNewWars.has(target.id)
+      )
+        continue;
       // Do not initiate a speculative war against a locally credible
       // superior force. The comparison uses PUBLIC land shares and the
       // existence of observed military units, never hidden troop balances.
