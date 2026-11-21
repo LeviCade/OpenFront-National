@@ -24,25 +24,25 @@ import { roundTrip } from "../util/Snapshot";
 const A = new PlayerInfo(
   "Emperor",
   PlayerType.Human,
-  "r11-client-a",
+  "R11CLIA1",
   "r11-actor-a",
 );
 const B = new PlayerInfo(
   "Invitee",
   PlayerType.Human,
-  "r11-client-b",
+  "R11CLIB1",
   "r11-actor-b",
 );
 const C = new PlayerInfo(
   "Foreign",
   PlayerType.Human,
-  "r11-client-c",
+  "R11CLIC1",
   "r11-actor-c",
 );
 const D = new PlayerInfo(
   "Reverse",
   PlayerType.Human,
-  "r11-client-d",
+  "R11CLID1",
   "r11-actor-d",
 );
 const EMPIRE = "r11_real_empire";
