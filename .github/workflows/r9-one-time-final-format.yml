@@ -31,7 +31,7 @@ jobs:
           npm run format:check
       - run: |
           set -euo pipefail
-          git rm .github/workflows/r9-one-time-final-format.yml
+          git rm -f .github/workflows/r9-one-time-final-format.yml
           git add tests/national/RoundEightWarRequestId.test.ts
           git diff --cached --check
           git config user.name "github-actions[bot]"
