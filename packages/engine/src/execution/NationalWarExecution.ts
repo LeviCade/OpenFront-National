@@ -305,14 +305,27 @@ export class NationalWarExecution implements Execution {
     // rejected WAR/peace clicks. Request IDs are correlation, not credentials.
     // E3 may project its authenticated journal; E2 never emits an outcome.
     if (hasJournal) {
-      const result = withOutcome.call(
-        port,
-        this.actor,
-        this.requestId === null
-          ? command
-          : { ...command, requestId: this.requestId },
-        this.requestId,
-      );
+      let result: unknown;
+      try {
+        result = withOutcome.call(
+          port,
+          this.actor,
+          this.requestId === null
+            ? command
+            : { ...command, requestId: this.requestId },
+          this.requestId,
+        );
+      } catch (error) {
+        // A reused token already belongs to another immutable E1 receipt.
+        // Never let that expected, unauthorized click terminate a Game tick.
+        // Returning without a receipt is fail-closed; NEVER claim acceptance.
+        if (
+          error instanceof Error &&
+          error.message === "NATIONAL command journal: reused foreign request ID"
+        )
+          return;
+        throw error;
+      }
       // Never interpret non-throwing or void execution as acceptance. E1's
       // verified recipient-bound journal is the only source of WAR outcomes.
       if (
