@@ -136,7 +136,10 @@ export class GameView implements GameLike {
    * This is UI eligibility ONLY; the authoritative host may reject the intent.
    * Never infer targets from unsighted tiles, hidden game state or other clients.
    */
-  public trustedVisibleAttack(playerID: string, tile: TileRef | undefined): boolean {
+  public trustedVisibleAttack(
+    playerID: string,
+    tile: TileRef | undefined,
+  ): boolean {
     if (
       !this._trustedNationalProjection ||
       !this._trustedProjectionReady ||
@@ -144,7 +147,8 @@ export class GameView implements GameLike {
       this.inSpawnPhase() ||
       !this.isValidRef(tile) ||
       !this.hasOwner(tile)
-    ) return false;
+    )
+      return false;
     const actor = this.myPlayer();
     const target = this.owner(tile);
     return (

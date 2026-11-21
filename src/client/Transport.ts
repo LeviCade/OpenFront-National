@@ -1354,7 +1354,8 @@ export class Transport {
       cfg?.gameType === GameType.Private &&
       cfg.nationalMode === true &&
       !this.nationalDiplomacyWireEnabled()
-    ) return;
+    )
+      return;
     if (this.intentGate !== null && !this.intentGate(intent)) return;
     const msg = {
       type: "intent",

@@ -456,7 +456,8 @@ export class NationalDiplomacyPanel extends LitElement {
     if (
       game.isTrustedNationalProjection?.() === true &&
       game.trustedProjectionReady?.() !== true
-    ) return false;
+    )
+      return false;
     const cfg = game.config().gameConfig();
     return (
       cfg.nationalMode === true &&

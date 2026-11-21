@@ -1,3 +1,4 @@
+import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
 /**
  * Reader for E3's authenticated per-recipient NATIONAL view ONLY.
  * This module never runs a GameRunner, simulates turns or loads private state.
@@ -6,7 +7,6 @@ import {
   GameUpdateType,
   type GameUpdateViewData,
 } from "@openfront/engine-api/game/GameUpdates";
-import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
 import type { GameEvent } from "@openfront/shared/EventBus";
 import type { ServerNationalStartMessage } from "@openfront/shared/WireSchemas";
 
@@ -115,7 +115,8 @@ export function readTrustedNationalObserverMap(
     !safeNumber(value.ownResources.treasury) ||
     !Array.isArray(value.countries) ||
     value.countries.length > 4096
-  ) throw new Error("NATIONAL invalid observer-map v1 metadata");
+  )
+    throw new Error("NATIONAL invalid observer-map v1 metadata");
   const validTile = (ref: unknown) => safeInteger(ref, 0, width * height - 1);
   let lastRef = -1;
   for (const tuple of value.tiles as unknown[]) {
@@ -127,7 +128,8 @@ export function readTrustedNationalObserverMap(
       !safeInteger(tuple[1], 0, 65535) ||
       !safeInteger(tuple[2], 0, 255) ||
       !safeInteger(tuple[3], 0, 15)
-    ) throw new Error("NATIONAL invalid visible tile page");
+    )
+      throw new Error("NATIONAL invalid visible tile page");
     lastRef = tuple[0];
   }
   for (const unit of value.units as unknown[]) {
@@ -140,7 +142,8 @@ export function readTrustedNationalObserverMap(
       unit.kind.length > 64 ||
       !validTile(unit.tile) ||
       (unit.troops !== undefined && !safeNumber(unit.troops))
-    ) throw new Error("NATIONAL invalid visible unit marker");
+    )
+      throw new Error("NATIONAL invalid visible unit marker");
   }
   for (const border of value.visibleBorders as unknown[]) {
     if (
@@ -148,7 +151,8 @@ export function readTrustedNationalObserverMap(
       typeof border.targetId !== "string" ||
       border.targetId.length > 128 ||
       (border.access !== "land" && border.access !== "naval")
-    ) throw new Error("NATIONAL invalid visible border");
+    )
+      throw new Error("NATIONAL invalid visible border");
   }
   for (const country of value.countries as unknown[]) {
     if (
@@ -161,7 +165,8 @@ export function readTrustedNationalObserverMap(
       !safeNumber(country.landPercent) ||
       typeof country.status !== "string" ||
       country.status.length > 64
-    ) throw new Error("NATIONAL invalid public country");
+    )
+      throw new Error("NATIONAL invalid public country");
   }
   return value as unknown as TrustedNationalObserverMap;
 }
@@ -177,7 +182,6 @@ export function observerMapTilePairs(
   }
   return pairs;
 }
-
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -208,7 +212,8 @@ export function parseTrustedNationalProjection(
   payload: string,
   expectedTick: number,
 ): TrustedNationalProjection {
-  if (payload.length > 2_000_000) throw new Error("NATIONAL oversized projection");
+  if (payload.length > 2_000_000)
+    throw new Error("NATIONAL oversized projection");
   const parsed: unknown = JSON.parse(payload);
   if (
     !record(parsed) ||
@@ -219,7 +224,8 @@ export function parseTrustedNationalProjection(
     !Array.isArray(parsed.packedTileUpdates) ||
     !record(parsed.updates) ||
     !Object.entries(parsed.updates).every(
-      ([key, entries]) => permittedUpdates.has(Number(key)) && Array.isArray(entries),
+      ([key, entries]) =>
+        permittedUpdates.has(Number(key)) && Array.isArray(entries),
     )
   ) {
     throw new Error("NATIONAL invalid recipient projection");
@@ -280,7 +286,9 @@ export function materializeTrustedNationalUpdate(
     tick: packet.tick,
     updates: safeUpdates,
     packedTileUpdates: Uint32Array.from(visibleTilePairs),
-    ...(units === undefined ? {} : { packedUnitUpdates: Float64Array.from(units) }),
+    ...(units === undefined
+      ? {}
+      : { packedUnitUpdates: Float64Array.from(units) }),
     ...(players === undefined
       ? {}
       : { packedPlayerUpdates: Float64Array.from(players) }),

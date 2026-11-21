@@ -55,6 +55,7 @@ import {
 } from "./InputHandler";
 import { rememberLobbyPublicGameType } from "./LobbyPublicGameType";
 import { rememberLobbyRoster } from "./LobbyRosterLevels";
+import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
 import { pagePin } from "./PagePin";
 import { groupTokenOf, loggableStartMessage } from "./PresenceGroup";
 import {
@@ -96,7 +97,6 @@ import {
   SendUpgradeStructureIntentEvent,
   Transport,
 } from "./Transport";
-import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
 import {
   materializeTrustedNationalUpdate,
   parseTrustedNationalProjection,
@@ -355,7 +355,10 @@ export function joinLobby(
       );
       if (currentGameRunner) {
         eventBus.emit(projection);
-      } else if (creatingTrustedGame && bufferedTrustedProjections.length < 12) {
+      } else if (
+        creatingTrustedGame &&
+        bufferedTrustedProjections.length < 12
+      ) {
         bufferedTrustedProjections.push(projection);
       }
       return;
@@ -857,7 +860,8 @@ async function createClientGame(
     trustedStatus.setAttribute("aria-live", "polite");
     trustedStatus.style.cssText =
       "position:fixed;bottom:10px;left:10px;z-index:70;max-width:min(340px,calc(100vw - 20px));padding:7px 11px;border:1px solid rgba(251,191,36,.6);border-radius:9px;background:rgba(9,18,34,.91);color:#f8fafc;font:12px/1.5 system-ui,sans-serif;pointer-events:none";
-    trustedStatus.textContent = "NATIONAL · Awaiting authorized terrain and roster…";
+    trustedStatus.textContent =
+      "NATIONAL · Awaiting authorized terrain and roster…";
     document.body.appendChild(trustedStatus);
   }
 
@@ -1112,7 +1116,8 @@ export class ClientGameRunner {
       !this.trustedNationalProjection ||
       !this.trustedProjectionActive ||
       !hasTrustedNationalPrivateCapability(this.eventBus, this.lobby.gameID)
-    ) return;
+    )
+      return;
     try {
       const observerMap = readTrustedNationalObserverMap(
         event.projection.nationalObserverMap,
@@ -1124,7 +1129,10 @@ export class ClientGameRunner {
           observerMap.height !== this.gameView.height() ||
           (!observerMap.reset &&
             observerMap.cursor !== this.trustedExpectedCursor)
-        ) throw new Error("NATIONAL observer-map dimensions or page cursor mismatch");
+        )
+          throw new Error(
+            "NATIONAL observer-map dimensions or page cursor mismatch",
+          );
         if (observerMap.reset) {
           this.gameView.resetTrustedProjectionSight();
           this.webglBuilder?.clearCaches();
@@ -1146,21 +1154,32 @@ export class ClientGameRunner {
         observerMap !== null &&
         this.myPlayer !== null &&
         observerMap.observerId !== this.myPlayer.id()
-      ) throw new Error("NATIONAL observer-map principal is not the authenticated seat");
+      )
+        throw new Error(
+          "NATIONAL observer-map principal is not the authenticated seat",
+        );
       if (observerMap !== null) {
         this.trustedExpectedCursor = observerMap.nextCursor ?? 0;
         if (observerMap.reset) this.trustedMapResetUpload?.();
         if (this.trustedStatus) {
           this.trustedStatus.dataset.trustedNationalMap =
             observerMap.nextCursor === null ? "visible" : "paging";
-          const publicAlive = observerMap.countries.filter((c) => c.alive).length;
+          const publicAlive = observerMap.countries.filter(
+            (c) => c.alive,
+          ).length;
           this.trustedStatus.textContent =
-            "👑 NATIONAL · TICK " + update.tick +
-            " · " + (observerMap.nextCursor === null
+            "👑 NATIONAL · TICK " +
+            update.tick +
+            " · " +
+            (observerMap.nextCursor === null
               ? "Visible terrain synchronized"
               : "Loading visible terrain…") +
-            " · " + publicAlive + " nations" +
-            " · " + observerMap.units.length + " visible units" +
+            " · " +
+            publicAlive +
+            " nations" +
+            " · " +
+            observerMap.units.length +
+            " visible units" +
             " · Your troops " +
             Math.floor(observerMap.ownResources.troops).toLocaleString();
         }
@@ -1186,7 +1205,8 @@ export class ClientGameRunner {
       this.trustedMapResetUpload?.();
       if (this.trustedStatus) {
         this.trustedStatus.dataset.trustedNationalMap = "blocked";
-        this.trustedStatus.textContent = "NATIONAL · Invalid server projection — controls disabled";
+        this.trustedStatus.textContent =
+          "NATIONAL · Invalid server projection — controls disabled";
       }
       console.error("NATIONAL projected view rejected", error);
     }
@@ -1199,7 +1219,9 @@ export class ClientGameRunner {
       // A new E2 national_start admitted the original authenticated account.
       // E3 must begin a fresh currently-visible page sweep, never resume an
       // old cached territory map/receipt after a disconnected socket.
-      if (!hasTrustedNationalPrivateCapability(this.eventBus, this.lobby.gameID))
+      if (
+        !hasTrustedNationalPrivateCapability(this.eventBus, this.lobby.gameID)
+      )
         return;
       this.trustedProjectionActive = true;
       this.trustedLastTick = -1;
@@ -1591,7 +1613,8 @@ export class ClientGameRunner {
   private inputEvent(event: MouseUpEvent) {
     if (
       !this.isActive ||
-      (this.trustedNationalProjection && !this.gameView.trustedProjectionReady()) ||
+      (this.trustedNationalProjection &&
+        !this.gameView.trustedProjectionReady()) ||
       this.renderer.uiState.ghostStructure !== null
     ) {
       return;
@@ -1782,7 +1805,10 @@ export class ClientGameRunner {
   }
 
   private doGroundAttackUnderCursor(): void {
-    if (this.trustedNationalProjection && !this.gameView.trustedProjectionReady())
+    if (
+      this.trustedNationalProjection &&
+      !this.gameView.trustedProjectionReady()
+    )
       return;
     const tile = this.getTileUnderCursor();
     if (tile === null) {
