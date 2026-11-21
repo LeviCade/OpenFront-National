@@ -41,15 +41,30 @@ function proof(mode) {
       virglTransportVerified: true,
     },
   };
-  return { payload,
-    signature: sign(null, Buffer.from(JSON.stringify(payload), "utf8"),
-      privateKey).toString("base64") };
+  return {
+    payload,
+    signature: sign(
+      null,
+      Buffer.from(JSON.stringify(payload), "utf8"),
+      privateKey,
+    ).toString("base64"),
+  };
 }
-const refuse = (code, cb) => assert.throws(cb, e => e?.message === code);
+const refuse = (code, cb) => assert.throws(cb, (e) => e?.message === code);
 test("every serial scenario validates an independently bound, short-lived public Ed25519 proof", () => {
   for (const mode of GPU_MODES) {
-    assert.equal(verifyPublicModeProof(mode, proof(mode), pem, NONCE, enrolled,
-      expected, NOW), true);
+    assert.equal(
+      verifyPublicModeProof(
+        mode,
+        proof(mode),
+        pem,
+        NONCE,
+        enrolled,
+        expected,
+        NOW,
+      ),
+      true,
+    );
   }
 });
 test("forged mode, SHA, runner, nonce and attempt cannot be waved through", () => {
@@ -63,28 +78,67 @@ test("forged mode, SHA, runner, nonce and attempt cannot be waved through", () =
     ["jobId", "99"],
   ]) {
     const fake = { ...p, payload: { ...p.payload, [field]: value } };
-    const reason = field === "jobId"
-      ? "HOST_PROOF_ED25519_SIGNATURE_INVALID"
-      : "HOST_PROOF_RUN_OR_MODE_MISMATCH";
-    refuse(reason, () => verifyPublicModeProof("national-desktop", fake,
-      pem, NONCE, enrolled, expected, NOW));
+    const reason =
+      field === "jobId"
+        ? "HOST_PROOF_ED25519_SIGNATURE_INVALID"
+        : "HOST_PROOF_RUN_OR_MODE_MISMATCH";
+    refuse(reason, () =>
+      verifyPublicModeProof(
+        "national-desktop",
+        fake,
+        pem,
+        NONCE,
+        enrolled,
+        expected,
+        NOW,
+      ),
+    );
   }
 });
 test("independent enrollment, expiry, host GPU chain and signature are required", () => {
   const p = proof("national-desktop");
   refuse("HOST_PUBLIC_KEY_NOT_ENROLLED", () =>
-    verifyPublicModeProof("national-desktop", p, pem, NONCE, [],
-      expected, NOW));
+    verifyPublicModeProof("national-desktop", p, pem, NONCE, [], expected, NOW),
+  );
   refuse("HOST_PROOF_EXPIRED_OR_REPLAYED", () =>
-    verifyPublicModeProof("national-desktop", p, pem, NONCE, enrolled,
-      expected, NOW + 121000));
-  const missingGPU = { ...p, payload: { ...p.payload,
-    host: { ...p.payload.host, gpuAccessLeaseVerified: false } } };
+    verifyPublicModeProof(
+      "national-desktop",
+      p,
+      pem,
+      NONCE,
+      enrolled,
+      expected,
+      NOW + 121000,
+    ),
+  );
+  const missingGPU = {
+    ...p,
+    payload: {
+      ...p.payload,
+      host: { ...p.payload.host, gpuAccessLeaseVerified: false },
+    },
+  };
   refuse("PHYSICAL_GPU_HOST_CHAIN_MISSING", () =>
-    verifyPublicModeProof("national-desktop", missingGPU,
-      pem, NONCE, enrolled, expected, NOW));
+    verifyPublicModeProof(
+      "national-desktop",
+      missingGPU,
+      pem,
+      NONCE,
+      enrolled,
+      expected,
+      NOW,
+    ),
+  );
   const forged = { ...p, signature: "A".repeat(86) + "==" };
   refuse("HOST_PROOF_ED25519_SIGNATURE_INVALID", () =>
-    verifyPublicModeProof("national-desktop", forged,
-      pem, NONCE, enrolled, expected, NOW));
+    verifyPublicModeProof(
+      "national-desktop",
+      forged,
+      pem,
+      NONCE,
+      enrolled,
+      expected,
+      NOW,
+    ),
+  );
 });

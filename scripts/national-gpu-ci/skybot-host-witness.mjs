@@ -32,12 +32,14 @@ import { verifyIndependentRelease } from "./verify-independent-release.mjs";
 export const HOST_ROOT = "/etc/skybot-ci/national-gpu-release";
 export const REPOSITORY = "LeviCade/OpenFront-National";
 export const REPOSITORY_ID = "1459234894";
-export const APPROVED_STAGING = "stage3/conductor2-class1-engineering-20261121";
+export const APPROVED_STAGING =
+  "stage3/conductor2-class1-engineering-20261121";
 export const OVERLAY_DIR = "/var/lib/libvirt/images/ci-disposable/overlays";
 const SHA = /^[a-f0-9]{40}$/;
 const HEX64 = /^[a-f0-9]{64}$/;
 const NUM = /^[1-9][0-9]*$/;
-const RUNNER = /^(?:skybot-gpu-openfront-national-[0-9a-f]{8}|skybot-ci-gpu-[a-zA-Z0-9-]{4,80})$/;
+const RUNNER =
+  /^(?:skybot-gpu-openfront-national-[0-9a-f]{8}|skybot-ci-gpu-[a-zA-Z0-9-]{4,80})$/;
 const RENDER = "/dev/dri/renderD128";
 const LEASE = "/run/skybot-ci/intel-virgl-acl.lease";
 // Production requires an operator-installed nonexportable Ed25519 key bridge.
@@ -377,27 +379,47 @@ export function signedHostRecord(payload, privateKeyPem, enrolled, hostTrust) {
 }
 /** Production signing returns a detached signature from a nonexportable HSM.
  * The host script sees only the public key and signature, never key bytes. */
-export function signHostWithExternalKey(payload, publicPem, enrolled, hostTrust, signMessage) {
+export function signHostWithExternalKey(
+  payload,
+  publicPem,
+  enrolled,
+  hostTrust,
+  signMessage,
+) {
   const fingerprint = digest(Buffer.from(publicPem, "utf8"));
-  requireTrue(enrolled?.includes(fingerprint) && hostTrust?.includes(fingerprint),
-    "HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED");
+  requireTrue(
+    enrolled?.includes(fingerprint) && hostTrust?.includes(fingerprint),
+    "HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED",
+  );
   const key = createPublicKey(publicPem);
-  requireTrue(key.asymmetricKeyType === "ed25519", "HOST_ED25519_PUBLIC_KEY_INVALID");
+  requireTrue(
+    key.asymmetricKeyType === "ed25519",
+    "HOST_ED25519_PUBLIC_KEY_INVALID",
+  );
   const bytes = Buffer.from(JSON.stringify(payload), "utf8");
   const response = signMessage(bytes);
-  requireTrue(typeof response === "string" &&
-    /^(?:[A-Za-z0-9+/]{4}){21}(?:[A-Za-z0-9+/]{2}==)$/.test(response),
-    "HOST_HSM_SIGNATURE_FORMAT_INVALID");
+  requireTrue(
+    typeof response === "string" &&
+      /^(?:[A-Za-z0-9+/]{4}){21}(?:[A-Za-z0-9+/]{2}==)$/.test(response),
+    "HOST_HSM_SIGNATURE_FORMAT_INVALID",
+  );
   const signature = Buffer.from(response, "base64");
-  requireTrue(signature.length === 64 && verify(null, bytes, key, signature),
-    "HOST_HSM_SIGNATURE_UNVERIFIED");
+  requireTrue(
+    signature.length === 64 && verify(null, bytes, key, signature),
+    "HOST_HSM_SIGNATURE_UNVERIFIED",
+  );
   return { payload, signature: response };
 }
 function liveHardwareSigner(message) {
   const file = lstatSync(HOST_HSM_SIGNER);
-  requireTrue(file.isFile() && !file.isSymbolicLink() &&
-    file.uid === 0 && file.gid === 0 && (file.mode & 0o777) === 0o500,
-    "ROOT_HSM_SIGNER_NOT_DEPLOYED");
+  requireTrue(
+    file.isFile() &&
+      !file.isSymbolicLink() &&
+      file.uid === 0 &&
+      file.gid === 0 &&
+      (file.mode & 0o777) === 0o500,
+    "ROOT_HSM_SIGNER_NOT_DEPLOYED",
+  );
   return execFileSync(HOST_HSM_SIGNER, [], {
     input: message,
     encoding: "utf8",
@@ -410,36 +432,49 @@ function liveHardwareSigner(message) {
  * preflights before an after-job release certificate can be published. A
  * one-mode HSM signature cannot certify three later unsigned browser runs. */
 export function verifyFourModeHostProofs(proofs, publicPem, expected, times) {
-  requireTrue(Array.isArray(proofs) && proofs.length === PROOF_MODES.length,
-    "FOUR_SIGNED_HOST_PREFLIGHTS_MISSING");
+  requireTrue(
+    Array.isArray(proofs) && proofs.length === PROOF_MODES.length,
+    "FOUR_SIGNED_HOST_PREFLIGHTS_MISSING",
+  );
   const key = createPublicKey(publicPem);
-  requireTrue(key.asymmetricKeyType === "ed25519",
-    "HOST_ED25519_PUBLIC_KEY_INVALID");
+  requireTrue(
+    key.asymmetricKeyType === "ed25519",
+    "HOST_ED25519_PUBLIC_KEY_INVALID",
+  );
   let previousTime = times.runStartedAtMs - 30000;
   for (let i = 0; i < PROOF_MODES.length; i++) {
     const proof = proofs[i];
     const p = proof?.payload;
-    requireTrue(p?.version === 1 && p.mode === PROOF_MODES[i] &&
-      p.repository === REPOSITORY &&
-      String(p.repositoryId) === REPOSITORY_ID &&
-      p.sourceSha === expected.sourceSha &&
-      same(p.runId, expected.runId) &&
-      same(p.runAttempt, expected.runAttempt) &&
-      same(p.jobId, expected.jobId) &&
-      p.runnerName === expected.runnerName &&
-      same(p.runnerId, expected.runnerId) &&
-      p.challenge === expected.challenge &&
-      Number.isSafeInteger(p.issuedAtMs) &&
-      Number.isSafeInteger(p.expiresAtMs) &&
-      p.issuedAtMs >= previousTime &&
-      p.issuedAtMs <= times.jobCompletedAtMs &&
-      p.expiresAtMs - p.issuedAtMs <= 120000 &&
-      p.expiresAtMs > p.issuedAtMs &&
-      typeof proof.signature === "string" &&
-      /^(?:[A-Za-z0-9+/]{4}){21}(?:[A-Za-z0-9+/]{2}==)$/.test(proof.signature) &&
-      verify(null, Buffer.from(JSON.stringify(p), "utf8"), key,
-        Buffer.from(proof.signature, "base64")),
-      "FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED");
+    requireTrue(
+      p?.version === 1 &&
+        p.mode === PROOF_MODES[i] &&
+        p.repository === REPOSITORY &&
+        String(p.repositoryId) === REPOSITORY_ID &&
+        p.sourceSha === expected.sourceSha &&
+        same(p.runId, expected.runId) &&
+        same(p.runAttempt, expected.runAttempt) &&
+        same(p.jobId, expected.jobId) &&
+        p.runnerName === expected.runnerName &&
+        same(p.runnerId, expected.runnerId) &&
+        p.challenge === expected.challenge &&
+        Number.isSafeInteger(p.issuedAtMs) &&
+        Number.isSafeInteger(p.expiresAtMs) &&
+        p.issuedAtMs >= previousTime &&
+        p.issuedAtMs <= times.jobCompletedAtMs &&
+        p.expiresAtMs - p.issuedAtMs <= 120000 &&
+        p.expiresAtMs > p.issuedAtMs &&
+        typeof proof.signature === "string" &&
+        /^(?:[A-Za-z0-9+/]{4}){21}(?:[A-Za-z0-9+/]{2}==)$/.test(
+          proof.signature,
+        ) &&
+        verify(
+          null,
+          Buffer.from(JSON.stringify(p), "utf8"),
+          key,
+          Buffer.from(proof.signature, "base64"),
+        ),
+      "FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED",
+    );
     previousTime = p.issuedAtMs;
   }
   return true;
@@ -575,7 +610,8 @@ async function main() {
   requireTrue(
     (phase === "postflight" && process.argv.length === 3) ||
       ((phase === "preflight" || phase === "refresh-preflight") &&
-        process.argv.length === 4 && PROOF_MODES.includes(mode)),
+        process.argv.length === 4 &&
+        PROOF_MODES.includes(mode)),
     "UNAPPROVED_HOST_WITNESS_ACTION",
   );
   const expected = readRootJson("trusted-github-run-context.json");
@@ -597,14 +633,22 @@ async function main() {
   const policy = readRootJson("host-trust-policy.json");
   const enrolled = pinned.trustedEd25519PublicKeySha256;
   const hostTrust = policy.trustedEd25519PublicKeySha256;
-  const hostSign = (payload) => signHostWithExternalKey(
-    payload, pem, enrolled, hostTrust, liveHardwareSigner);
+  const hostSign = (payload) =>
+    signHostWithExternalKey(
+      payload,
+      pem,
+      enrolled,
+      hostTrust,
+      liveHardwareSigner,
+    );
   let payload;
   if (phase === "preflight" || phase === "refresh-preflight") {
     const physical = probePhysicalPreflight(expected);
     const observed = readRootJson("controller-gpu-observation.json");
-    requireTrue(observed.mode === mode,
-      "CONTROLLER_OBSERVED_WRONG_GPU_SCENARIO");
+    requireTrue(
+      observed.mode === mode,
+      "CONTROLLER_OBSERVED_WRONG_GPU_SCENARIO",
+    );
     const guest = validateControllerObservation(observed, expected);
     requireTrue(
       Math.abs(Date.now() - observed.observedAtMs) <= 120000,
@@ -617,8 +661,7 @@ async function main() {
     const signed = hostSign(payload);
     // Retain first preflight as independently reviewed host anchor.
     if (phase === "preflight") {
-      requireTrue(mode === "national-desktop",
-        "FIRST_GPU_MODE_REQUIRED");
+      requireTrue(mode === "national-desktop", "FIRST_GPU_MODE_REQUIRED");
       safeWrite("controller-preflight.json", signed);
     }
     safeWrite("controller-preflight-" + mode + ".json", signed);
@@ -657,7 +700,8 @@ async function main() {
     );
     // Sign now, but do not publish a contradictory/failed release result.
     const allSignedModes = PROOF_MODES.map((mode) =>
-      readRootJson("controller-preflight-" + mode + ".json"));
+      readRootJson("controller-preflight-" + mode + ".json"),
+    );
     verifyFourModeHostProofs(allSignedModes, pem, expected, times);
     const signedPostflight = hostSign(payload);
     const verdict = verifyIndependentRelease({
