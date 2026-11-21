@@ -21,10 +21,10 @@ import { roundTrip } from "../util/Snapshot";
 const MATCH = "class4-e1-trusted-game";
 const EMPIRE = "class4_security_empire";
 const people = [
-  new PlayerInfo("Crown", PlayerType.Human, "C4SESS_A1", "C4KING_A"),
-  new PlayerInfo("Delegate", PlayerType.Human, "C4SESS_B1", "C4MEM_B"),
-  new PlayerInfo("Heir", PlayerType.Human, "C4SESS_C1", "C4MEM_C"),
-  new PlayerInfo("Foreign", PlayerType.Human, "C4SESS_D1", "C4OUT_D"),
+  new PlayerInfo("Crown", PlayerType.Human, "C4SESSA1", "C4KINGA1"),
+  new PlayerInfo("Delegate", PlayerType.Human, "C4SESSB1", "C4MEMBR1"),
+  new PlayerInfo("Heir", PlayerType.Human, "C4SESSC1", "C4MEMCR1"),
+  new PlayerInfo("Foreign", PlayerType.Human, "C4SESSD1", "C4OUTSD1"),
 ];
 const [A, B, C, D] = people.map((p) => p.id);
 const [CA, CB, CC, CD] = people.map((p) => p.clientID!);
@@ -50,7 +50,15 @@ async function match(): Promise<Game> {
 }
 
 function connect(game: Game, clientID: string) {
-  const packets: { nationalCommandResults?: readonly { requestId?: string; actorId: string; recipientId: string; type: string; accepted: boolean }[] }[] = [];
+  const packets: {
+    nationalCommandResults?: readonly {
+      requestId?: string;
+      actorId: string;
+      recipientId: string;
+      type: string;
+      accepted: boolean;
+    }[];
+  }[] = [];
   const errors: string[] = [];
   const runner = new GameRunner(
     game,
@@ -63,16 +71,29 @@ function connect(game: Game, clientID: string) {
   );
   return { clientID, packets, errors, runner };
 }
-function tick(game: Game, session: Session, requested?: Record<string, unknown>) {
+function tick(
+  game: Game,
+  session: Session,
+  requested?: Record<string, unknown>,
+) {
   session.runner.addTurn({
     turnNumber: game.ticks(),
     intents: requested
-      ? [StampedIntentSchema.parse({ ...requested, clientID: session.clientID })]
+      ? [
+          StampedIntentSchema.parse({
+            ...requested,
+            clientID: session.clientID,
+          }),
+        ]
       : [],
   });
   expect(session.runner.executeNextTick()).toBe(true);
 }
-function click(game: Game, session: Session, requested: Record<string, unknown>) {
+function click(
+  game: Game,
+  session: Session,
+  requested: Record<string, unknown>,
+) {
   tick(game, session, requested);
   tick(game, session);
 }
@@ -118,7 +139,13 @@ function results(session: Session, token: string) {
     .flatMap((p) => p.nationalCommandResults ?? [])
     .filter((r) => r.requestId === token);
 }
-function join(game: Game, a: Session, target: Session, targetId: string, tag: string) {
+function join(
+  game: Game,
+  a: Session,
+  target: Session,
+  targetId: string,
+  tag: string,
+) {
   click(game, a, {
     type: "national_offer_empire",
     empireId: EMPIRE,
@@ -224,10 +251,10 @@ describe("Class Four Game-owned NATIONAL trusted-host execution authority", () =
 
     // A takeover changes clientID ON THE SAME Player instance. Queued work
     // must retain CA, NOT read crown.clientID() at its later execution tick.
-    game.takeoverPlayer(crown, "C4SESS_A2");
+    game.takeoverPlayer(crown, "C4SESSA2");
     expect(game.player(A)).toBe(crown);
     expect(game.playerByClientID(CA)).toBeNull();
-    expect(game.playerByClientID("C4SESS_A2")).toBe(crown);
+    expect(game.playerByClientID("C4SESSA2")).toBe(crown);
     const afterTakeover = snapshotGameData(game);
     for (const [cmd, token] of [
       [delegation(B, false), "c4_stale_revoke"],
@@ -258,7 +285,7 @@ describe("Class Four Game-owned NATIONAL trusted-host execution authority", () =
       crown,
       delegation(B, false),
       "c4_new_controller_revoke",
-      "C4SESS_A2",
+      "C4SESSA2",
     );
     expect(newController.accepted).toBe(true);
     expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(false);
@@ -327,7 +354,9 @@ describe("Class Four Game-owned NATIONAL trusted-host execution authority", () =
     expect(results(c, "c4_emperor_grant")).toEqual([]);
     expect(results(d, "c4_emperor_grant")).toEqual([]);
     expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(true);
-    expect(game.nationalPoliticalAuthority()?.mayDeclareNational(B)).toBe(false);
+    expect(game.nationalPoliticalAuthority()?.mayDeclareNational(B)).toBe(
+      false,
+    );
     click(game, b, {
       type: "national_propose_peace",
       warId: imperial.warId,
@@ -360,7 +389,9 @@ describe("Class Four Game-owned NATIONAL trusted-host execution authority", () =
       warId: national.warId,
       requestId: "c4_after_transfer_denied",
     });
-    expect(warReceipt(game, B, "c4_after_transfer_denied").accepted).toBe(false);
+    expect(warReceipt(game, B, "c4_after_transfer_denied").accepted).toBe(
+      false,
+    );
     grant(game, a, B, true, "c4_old_crown_denied");
     expect(receipt(game, A, "c4_old_crown_denied").accepted).toBe(false);
     grant(game, c, B, true, "c4_new_crown_grant");

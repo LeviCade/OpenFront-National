@@ -23,7 +23,7 @@ jobs:
         run: npx --no-install vitest run tests/national/ClassFourTrustedHostAuthority.test.ts tests/national/RoundElevenImperialPeaceDelegation.test.ts tests/national/RoundElevenDelegatedPeaceWire.test.ts --reporter=verbose
       - name: Full source typecheck
         if: always()
-        run: npm run inst
+        run: npm run typecheck
       - name: Emit exact pinned formatter output only for E1-owned files
         if: always()
         run: |
