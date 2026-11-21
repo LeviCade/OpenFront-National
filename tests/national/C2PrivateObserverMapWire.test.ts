@@ -180,6 +180,7 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     expect(liveA.observation.visibleAssets.map((u) => u.id)).not.toContain(
       String(farCity.id()),
     );
+    expect(containsRef(a.map, game.ref(20, 100))).toBe(true);
     expect(a.map.units.map((u) => u.id)).toContain(nearCity.id());
     expect(a.map.units.map((u) => u.id)).not.toContain(farCity.id());
     expect(a.map.units.find((u) => u.id === nearCity.id())).not.toHaveProperty("troops");
@@ -198,7 +199,7 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     const followA = view(sockets[0].socket);
     expect(followA.map.reset).toBe(false);
     expect(followA.map.cursor).toBe(
-      a.map.nextCursor === null ? 0 : a.map.nextCursor,
+      a.map.nextCursor ?? 0,
     );
 
     // A's real E1 offer is visible to B, not A/C.

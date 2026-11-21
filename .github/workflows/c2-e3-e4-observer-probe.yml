@@ -48,3 +48,4 @@ jobs:
 # Final host-stamped E1 pact + E3 nested WAR/private resource canaries + fresh socket reset
 # C2 E3 valid sovereign ID accepts lawful E1 candidate intent
 # C2 E3 faithful actual Client.ws reconnect delivery fixture
+# Final pinned C2-E3 22-test, TypeScript, format and lint acceptance
