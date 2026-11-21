@@ -60,8 +60,7 @@ function play(
 ): void {
   runner.addTurn({
     turnNumber: game.ticks(),
-    intents:
-      command === undefined ? [] : [StampedIntentSchema.parse(command)],
+    intents: command === undefined ? [] : [StampedIntentSchema.parse(command)],
   });
   expect(runner.executeNextTick()).toBe(true);
 }
@@ -177,7 +176,9 @@ describe("R10 E2 authenticated empire/crown wire bridge", () => {
 
     const before = game.nationalPoliticalCommandResults(game.player(A));
     send(alpha, command("national_transfer_crown", "r10-crown", clientA));
-    expect(game.nationalPoliticalCommandResults(game.player(A))).toEqual(before);
+    expect(game.nationalPoliticalCommandResults(game.player(A))).toEqual(
+      before,
+    );
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
     expect(restored.nationalPoliticalAuthority()?.emperorOf(empireId)).toBe(B);
