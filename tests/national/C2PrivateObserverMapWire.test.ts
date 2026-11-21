@@ -33,9 +33,9 @@ import { setup } from "../util/Setup";
 import { TestConfig } from "../util/TestConfig";
 import type { Game } from "@openfront/engine/game/Game";
 
-const A = new PlayerInfo("North", PlayerType.Human, "C2E3CLIENTA", "C2E3NATIONA");
-const B = new PlayerInfo("South", PlayerType.Human, "C2E3CLIENTB", "C2E3NATIONB");
-const C = new PlayerInfo("West", PlayerType.Human, "C2E3CLIENTC", "C2E3NATIONC");
+const A = new PlayerInfo("North", PlayerType.Human, "C2E3CLIA", "C2E3NATIONA");
+const B = new PlayerInfo("South", PlayerType.Human, "C2E3CLIB", "C2E3NATIONB");
+const C = new PlayerInfo("West", PlayerType.Human, "C2E3CLIC", "C2E3NATIONC");
 const P = [A, B, C];
 const MATCH = "c2-e3-real-visibility";
 const EMPIRE = "c2_e3_verified_empire";
