@@ -82,15 +82,6 @@ function observation(game: Game, id: string) {
   return collectLiveNationalObservation(game, id).observation;
 }
 
-function currentWar(game: Game, a: string, b: string) {
-  return game.nationalWarState()?.wars.layers.filter(
-    (layer) =>
-      layer.endedTick === null &&
-      [layer.first.id, layer.second.id].includes(a) &&
-      [layer.first.id, layer.second.id].includes(b),
-  ) ?? [];
-}
-
 function runner(game: Game, clientID?: string) {
   const packets: GameUpdateViewData[] = [];
   const view = new GameRunner(
