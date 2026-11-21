@@ -44,3 +44,4 @@ jobs:
       - name: Full lint
         run: npm run lint
 # verified original authenticated pact actor session
+# Valid authenticated 8-character client IDs + reconnect reset proof

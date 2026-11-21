@@ -33,9 +33,9 @@ import { setup } from "../util/Setup";
 import { TestConfig } from "../util/TestConfig";
 import type { Game } from "@openfront/engine/game/Game";
 
-const A = new PlayerInfo("North", PlayerType.Human, "C2E3CLIENTA", "C2E3NATIONA");
-const B = new PlayerInfo("South", PlayerType.Human, "C2E3CLIENTB", "C2E3NATIONB");
-const C = new PlayerInfo("West", PlayerType.Human, "C2E3CLIENTC", "C2E3NATIONC");
+const A = new PlayerInfo("North", PlayerType.Human, "C2E3CLIA", "C2E3NATIONA");
+const B = new PlayerInfo("South", PlayerType.Human, "C2E3CLIB", "C2E3NATIONB");
+const C = new PlayerInfo("West", PlayerType.Human, "C2E3CLIC", "C2E3NATIONC");
 const P = [A, B, C];
 const MATCH = "c2-e3-real-visibility";
 const EMPIRE = "c2_e3_verified_empire";
@@ -233,6 +233,27 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     // The old socket never regains permission on a new physical ws.
     sockets[1].socket.readyState = 1;
     host.tick();
+    expect(sockets[1].socket.frames).toHaveLength(prior);
+
+    // A fully new, host-accepted connection for the SAME verified principal
+    // gets its own map reset and current invitation, not an old socket's
+    // previously delivered private command journal or fog cache.
+    const replacement: Socket = {
+      readyState: 1, frames: [],
+      send(bytes) { this.frames.push(bytes); },
+    };
+    sockets[1].client.ws = replacement as unknown as Client["ws"];
+    expect(host.resumeRecipient(sockets[1].client)).toBe(true);
+    host.tick();
+    const resumed = view(replacement);
+    expect(resumed.map.observerId).toBe(B.id);
+    expect(resumed.map.reset).toBe(true);
+    expect(resumed.map.cursor).toBe(0);
+    expect(resumed.data.nationalCommandResults).toBeUndefined();
+    expect(resumed.data.nationalAccessionOffers?.recipientId).toBe(B.id);
+    expect(resumed.data.nationalAccessionOffers?.offers).toEqual([
+      expect.objectContaining({ candidateId: B.id, proposerId: A.id }),
+    ]);
     expect(sockets[1].socket.frames).toHaveLength(prior);
   });
 
