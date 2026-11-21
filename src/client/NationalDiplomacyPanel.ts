@@ -2,6 +2,7 @@ import { GameType } from "@openfront/engine-api/game/GameTypes";
 import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { NationalMapTargetSelectedEvent } from "./controllers/NationalMapTargetController";
 import {
   confirmedNationalDiplomacy,
   createNationalDiplomacyRequestId,
@@ -20,6 +21,7 @@ import {
   type NationalFoundingAttempt,
   type NationalPoliticalAction,
 } from "./NationalDiplomacyState";
+import { GoToPlayerEvent } from "./TransformHandler";
 import {
   SendNationalAcceptPeaceIntentEvent,
   SendNationalAcceptEmpireIntentEvent,
@@ -384,11 +386,24 @@ export class NationalDiplomacyPanel extends LitElement {
         }
       }
     }
+    // A transfer or accession can revoke an imperial target's eligibility
+    // immediately. Never leave a stale visual target on the live map.
+    const currentWarKind =
+      this.warScope === "national" ? "nation" : this.warTargetKind;
+    if (
+      this.warTargetId &&
+      !this.warTargets(currentWarKind).some(
+        (target) => target.id === this.warTargetId,
+      )
+    ) {
+      this.selectWarTarget("");
+    }
     if (this.expanded) this.requestUpdate();
   }
 
   /** A dropped or replaced session must never retain optimistic success. */
   public connectionInterrupted(): void {
+    this.selectWarTarget("");
     if (this.confirmedDiplomacy !== null) {
       this.confirmedDiplomacy = null;
       this.diplomacyStatus =
@@ -879,6 +894,33 @@ export class NationalDiplomacyPanel extends LitElement {
     );
   }
 
+  /** Human war target selection moves the ordinary camera toward an actual
+   * current player; the overlay controller verifies real tile ownership.
+   * A selection can NEVER emit an Attack or manufacture a map location. */
+  private selectWarTarget(id: string): void {
+    const kind = this.warScope === "national" ? "nation" : this.warTargetKind;
+    const selected = this.warTargets(kind).some((target) => target.id === id);
+    this.warTargetId = selected ? id : "";
+    const game = this.game;
+    const playerId =
+      !selected || !game
+        ? null
+        : kind === "empire"
+          ? (game.nationalPolitics()?.empires.find((empire) => empire.id === id)
+              ?.leaderId ?? null)
+          : id;
+    const player = playerId
+      ? game?.players().find((item) => item.id() === playerId)
+      : null;
+    this.eventBus?.emit(
+      new NationalMapTargetSelectedEvent(player?.id() ?? null),
+    );
+    if (player?.nameLocation?.() && player.isAlive()) {
+      // Normal player-facing camera action: actual GameView name location.
+      this.eventBus?.emit(new GoToPlayerEvent(player, 9));
+    }
+  }
+
   private playerName(id: string): string {
     return (
       this.game
@@ -1172,7 +1214,7 @@ export class NationalDiplomacyPanel extends LitElement {
                       @change=${(event: Event) => {
                         this.warScope = (event.target as HTMLSelectElement)
                           .value as "national" | "imperial";
-                        this.warTargetId = "";
+                        this.selectWarTarget("");
                       }}
                       ?disabled=${warReason !== null}
                     >
@@ -1197,7 +1239,7 @@ export class NationalDiplomacyPanel extends LitElement {
                                 this.warTargetKind = (
                                   event.target as HTMLSelectElement
                                 ).value as "nation" | "empire";
-                                this.warTargetId = "";
+                                this.selectWarTarget("");
                               }}
                               ?disabled=${!canIssueWar}
                             >
@@ -1218,9 +1260,9 @@ export class NationalDiplomacyPanel extends LitElement {
                       class="w-full min-h-11 rounded-md border border-slate-400 bg-slate-900 px-3 py-2 text-base focus-visible:outline-2 focus-visible:outline-amber-300"
                       .value=${this.warTargetId}
                       @change=${(event: Event) =>
-                        (this.warTargetId = (
-                          event.target as HTMLSelectElement
-                        ).value)}
+                        this.selectWarTarget(
+                          (event.target as HTMLSelectElement).value,
+                        )}
                       ?disabled=${!canIssueWar || warTargets.length === 0}
                     >
                       <option value="">Choose an eligible target</option>

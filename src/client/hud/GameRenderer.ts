@@ -6,6 +6,7 @@ import { BuildPreviewController } from "../controllers/BuildPreviewController";
 import { HoverHighlightController } from "../controllers/HoverHighlightController";
 import { LiveStatsController } from "../controllers/LiveStatsController";
 import { MapLayerController } from "../controllers/MapLayerController";
+import { NationalMapTargetController } from "../controllers/NationalMapTargetController";
 import { SoundEffectController } from "../controllers/SoundEffectController";
 import { StructureHighlightController } from "../controllers/StructureHighlightController";
 import { ViewModeController } from "../controllers/ViewModeController";
@@ -358,6 +359,7 @@ export function createRenderer(
     attacksDisplay,
     chatDisplay,
     buildMenu,
+    new NationalMapTargetController(game, eventBus, transformHandler, inputEl),
     new MainRadialMenu(
       eventBus,
       game,
@@ -427,6 +429,9 @@ export class GameRenderer {
   }
 
   dispose() {
+    this.layers.forEach((layer) => {
+      if (layer instanceof NationalMapTargetController) layer.dispose();
+    });
     window.removeEventListener("resize", this.onResize);
     this.canvasSizeObserver?.disconnect();
     this.canvasSizeObserver = null;
