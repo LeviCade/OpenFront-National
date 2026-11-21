@@ -1033,6 +1033,13 @@ export class Transport {
 
   /** Never replay national commands buffered before a socket disconnect. */
   private dropBufferedNationalIntents(): void {
+    const cfg = this.lobbyConfig.gameStartInfo?.config;
+    // Every prior spawn, attack and diplomatic intent belongs to the old
+    // socket/seat. No queued game command may cross an authentication epoch.
+    if (cfg?.gameType === GameType.Private && cfg.nationalMode === true) {
+      this.buffer = this.buffer.filter((msg) => msg.type !== "intent");
+      return;
+    }
     this.buffer = this.buffer.filter(
       (msg) =>
         msg.type !== "intent" || !msg.intent.type.startsWith("national_"),
