@@ -4,6 +4,7 @@
  * Suggestions are NOT executions; conductor-owned command validators decide
  * legality, cost and actual effects when NATIONAL is wired into M0.
  */
+import type { NationalWarCommandOutcome } from "../politics/NationalGovernanceState";
 import type {
   NationId,
   NationalObservation,
@@ -109,8 +110,6 @@ export function initialNationalPlannerMemory(
     nextPlanningTick: 0,
     lastProcessedEvent: null,
     reputation: [],
-    rejectedWarTargets: [],
-    lastWarOutcomeSequence: -1,
   };
 }
 
@@ -124,15 +123,7 @@ export function initialNationalPlannerMemory(
 export function recordNationalWarOutcome(
   observation: NationalObservation,
   previous: NationalPlannerMemory,
-  outcome: {
-    readonly actorId: string;
-    readonly recipientId: string;
-    readonly commandKind: "national_declare_war";
-    readonly commandTargetId: string;
-    readonly sequence: number;
-    readonly tick: number;
-    readonly accepted: boolean;
-  },
+  outcome: NationalWarCommandOutcome,
   retryTicks: number = DEFAULT_RETRY_TICKS,
 ): NationalPlannerMemory {
   if (
@@ -141,6 +132,9 @@ export function recordNationalWarOutcome(
     outcome.recipientId !== previous.observerId
   )
     throw new Error("NATIONAL planner: foreign command outcome");
+  // The canonical Game journal has one union for declarations and peace.
+  // A peace result is not a declaration rejection or a target cooldown.
+  if (outcome.commandKind !== "national_declare_war") return previous;
   if (
     !Number.isSafeInteger(outcome.tick) ||
     outcome.tick < 0 ||
@@ -290,16 +284,22 @@ export function planNationalInterest(
       retryAfterTick: observation.tick + DEFAULT_RETRY_TICKS,
     });
   }
-  const memory = {
-    ...updated.memory,
-    rejectedWarTargets: rejectedWarTargets
-      .sort(
-        (a, b) =>
-          a.retryAfterTick - b.retryAfterTick ||
-          cmp(a.targetId, b.targetId),
-      )
-      .slice(-REJECTED_TARGET_LIMIT),
-  };
+  // Do not grow legacy NationExecution v2 snapshots with a spurious empty
+  // optional key. E2 owns the codec for genuinely observed WAR outcomes.
+  const memory: NationalPlannerMemory =
+    obsoleteTarget === null &&
+    updated.memory.rejectedWarTargets === undefined
+      ? updated.memory
+      : {
+          ...updated.memory,
+          rejectedWarTargets: rejectedWarTargets
+            .sort(
+              (a, b) =>
+                a.retryAfterTick - b.retryAfterTick ||
+                cmp(a.targetId, b.targetId),
+            )
+            .slice(-REJECTED_TARGET_LIMIT),
+        };
   if (observation.tick < memory.nextPlanningTick && !updated.sawNewEvent) {
     return { planned: false, decision: null, memory };
   }

@@ -5,6 +5,7 @@ import {
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import type { NationalPublicConflictView } from "@openfront/engine/national/observation/NationalOutbound";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { NationExecution } from "@openfront/engine/execution/NationExecution";
@@ -82,8 +83,15 @@ function observation(game: Game, id: string) {
   return collectLiveNationalObservation(game, id).observation;
 }
 
+// E3 produces the recipient-filtered public conflict DTO; E2 owns eventual
+// inclusion in engine-api. This optional intersection precisely mirrors the
+// runtime projection without pretending the upstream wire schema has changed.
+type R10Packet = GameUpdateViewData & {
+  readonly nationalConflicts?: NationalPublicConflictView;
+};
+
 function runner(game: Game, clientID?: string) {
-  const packets: GameUpdateViewData[] = [];
+  const packets: R10Packet[] = [];
   const view = new GameRunner(
     game,
     new Executor(game, "r10-ai-observation", clientID),
@@ -144,12 +152,15 @@ describe("R10 three-nation observed-information live match", () => {
     const warCalls = vi.spyOn(game, "performNationalWarCommand");
     const attackCalls = vi.spyOn(game, "addExecution");
     for (let i = 0; i < 150; i++) game.executeNextTick();
+    // Game.performNationalWarCommand returns VOID (legacy E2 legal port).
+    // The canonical Game-owned WAR layer, not a fabricated return value,
+    // proves whether the real AI's actual declaration was accepted.
     const botDeclaration = warCalls.mock.calls.some(
-      ([actor, command], index) =>
+      ([actor, command]) =>
         actor.id() === AI_A &&
         command.kind === "declare-national" &&
-        command.targetId === AI_B &&
-        warCalls.mock.results[index].value?.accepted === true,
+        command.aggressorId === AI_A &&
+        command.targetId === AI_B,
     );
     const attacks = attackCalls.mock.calls
       .flat()
@@ -158,8 +169,17 @@ describe("R10 three-nation observed-information live match", () => {
     attackCalls.mockRestore();
 
     expect(botDeclaration).toBe(true);
-    expect(attacks.length).toBeGreaterThan(0);
+    expect(
+      game.nationalWarState()?.wars.layers.some(
+        (layer) =>
+          layer.endedTick === null &&
+          layer.declaredBy === AI_A &&
+          layer.first.id === AI_A &&
+          layer.second.id === AI_B,
+      ),
+    ).toBe(true);
     expect(game.nationalWarAuthority()?.atWar(AI_A, AI_B)).toBe(true);
+    expect(attacks.length).toBeGreaterThan(0);
     expect(
       game.player(AI_A).troops() < startingTroops ||
         game.player(AI_A).outgoingAttacks().length > 0,
@@ -326,6 +346,7 @@ describe("R10 three-nation observed-information live match", () => {
       recordNationalWarOutcome(observed, memory, rejected),
     ).toEqual(memory);
     const chosen = planNationalInterest(observed, memory, 30);
+    expect(chosen.decision?.targetId).toBe(AI_A);
     expect(chosen.decision?.targetId).not.toBe(HUMAN);
     expect(
       planNationalInterest(

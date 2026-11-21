@@ -1,0 +1,31 @@
+name: E3 R10 targeted repair probe (temporary)
+on:
+  push:
+    branches:
+      - feature/r10-e3-ai-observation-roundtrip-20261121
+    paths:
+      - .github/workflows/e3-r10-targeted-repair.yml
+jobs:
+  targeted:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+      - run: npm ci --no-audit --no-fund
+      - name: TypeScript focused gate
+        run: npm run typecheck
+      - name: Targeted R10 and R8 regression tests
+        run: npx --no-install vitest run --project node tests/national/NationalCampaignRoundtripR10.test.ts tests/national/NationalLiveObservation.test.ts tests/national/NationalStrategicSimulationR8.test.ts tests/national/NationalPlanner.test.ts
+      - name: Pinned format output
+        if: always()
+        shell: bash
+        run: |
+          npx --no-install oxfmt --write packages/engine/src/national/ai/NationalPlanner.ts tests/national/NationalCampaignRoundtripR10.test.ts
+          for f in packages/engine/src/national/ai/NationalPlanner.ts tests/national/NationalCampaignRoundtripR10.test.ts; do
+            echo "__E3_FORMATTED_BEGIN__${f}"
+            cat "${f}"
+            echo "__E3_FORMATTED_END__${f}"
+          done
