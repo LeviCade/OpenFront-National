@@ -59,7 +59,7 @@ function seat(clientID: string, user: string): Client {
     "127.0.0.1",
     clientID,
     null,
-    {} as Client["ws"],
+    { readyState: WebSocket.OPEN } as Client["ws"],
     undefined,
     user,
     [],
@@ -219,7 +219,9 @@ async function atWar(m: Match) {
   expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(true);
   expect(layer(m.game, national.warId).scope).toBe("national");
   expect(layer(m.game, imperial.warId).scope).toBe("imperial");
-  return { nationalId: national.warId, imperialId: imperial.warId };
+  expect(national.warId).toBeDefined();
+  expect(imperial.warId).toBeDefined();
+  return { nationalId: national.warId!, imperialId: imperial.warId! };
 }
 
 describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host authority", () => {
@@ -248,7 +250,7 @@ describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host auth
     });
     admit(m, m.clients[0], {
       type: "national_accept_peace",
-      motionId: motion.motionId,
+      motionId: motion.motionId!,
       requestId: "c2_queued_old_imperial_accept",
     });
     admit(m, m.clients[0], {
@@ -281,13 +283,13 @@ describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host auth
     expect(layer(m.game, imperialId).endedTick).toBeNull();
     expect(
       m.game.nationalWarState()?.wars.motions.find(
-        (x) => x.id === motion.motionId,
+        (x) => x.id === motion.motionId!,
       )?.acceptedTick,
     ).toBeNull();
 
     act(m, 2, {
       type: "national_accept_peace",
-      motionId: motion.motionId,
+      motionId: motion.motionId!,
       requestId: "c2_successor_accept",
     });
     const lawful = military(m.game, C, "c2_successor_accept");
@@ -309,7 +311,7 @@ describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host auth
     expect(nationalMotion.accepted).toBe(true);
     act(m, 3, {
       type: "national_accept_peace",
-      motionId: nationalMotion.motionId,
+      motionId: nationalMotion.motionId!,
       requestId: "c2_d_national_accept",
     });
     expect(military(m.game, D, "c2_d_national_accept").accepted).toBe(true);
@@ -411,7 +413,7 @@ describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host auth
     expect(motion.accepted).toBe(true);
     act(m, 3, {
       type: "national_accept_peace",
-      motionId: motion.motionId,
+      motionId: motion.motionId!,
       requestId: "c2_same_side_illegal",
     });
     expect(military(m.game, D, "c2_same_side_illegal").accepted).toBe(false);
@@ -421,7 +423,7 @@ describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host auth
     // accept cannot execute after takeover of the SAME Player instance.
     admit(m, m.clients[0], {
       type: "national_accept_peace",
-      motionId: motion.motionId,
+      motionId: motion.motionId!,
       requestId: "c2_queued_stale_peace",
     });
     m.host.tick();
@@ -448,14 +450,14 @@ describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host auth
     expect(
       newHost.submit(m.clients[0], {
         type: "national_accept_peace",
-        motionId: motion.motionId,
+        motionId: motion.motionId!,
         requestId: "c2_old_retry",
       }),
     ).toBe(false);
     expect(
       newHost.submit(replacement, {
         type: "national_accept_peace",
-        motionId: motion.motionId,
+        motionId: motion.motionId!,
         requestId: "c2_new_accept",
       }),
     ).toBe(true);

@@ -139,6 +139,14 @@ export class NationalWarStateService {
     });
   }
 
+  /** The only replay permission oracle is the SAME live canonical WarLedger. */
+  mayReplayAsCurrentSovereign(
+    actorId: string,
+    command: NationalWarCommand,
+  ): boolean {
+    return this.wars.mayReplayAsCurrentSovereign(actorId, command);
+  }
+
   /** Validate BOTH ledgers before touching the live state. */
   restore(raw: unknown): void {
     const state = NationalWarStateSnapshotSchema.parse(raw);
