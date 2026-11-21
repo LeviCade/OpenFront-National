@@ -186,6 +186,8 @@ describe("R11 new live imperial NATIONAL peace delegation (M5/WAR-05)", () => {
       requestId: "r11-accept-delegated-peace" });
     expect(lastWar(game, C, "r11-accept-delegated-peace").accepted).toBe(true);
     expect(game.nationalWarAuthority()?.atWar(B, C)).toBe(false);
+    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(B, C)).toBe(false);
+    expect(game.nationalWarAuthority()?.atWar(B, D)).toBe(true);
     expect(game.nationalWarState()?.wars.layers.find((l) => l.id === imperialId)?.endedTick).toBeNull();
 
     // Pre-transfer snapshot has a real grant. Reconnect/replay preserves it.
@@ -203,8 +205,16 @@ describe("R11 new live imperial NATIONAL peace delegation (M5/WAR-05)", () => {
     expect(readVersioned(GameSnapshot, snapshotGameData(game).game).national?.politics.empires.find((e) => e.id === empire)?.delegatedNationalPeace).toBeUndefined();
     expect(game.nationalPoliticalAuthority()?.maySettleNational(A)).toBe(false);
     expect(game.nationalPoliticalAuthority()?.maySettleNational(B)).toBe(true);
-    grant(game, a, B, true, "r11-former-grant");
+    // A's target is now a valid subordinate. ONLY A's former status denies.
+    grant(game, a, A, true, "r11-former-grant");
     expect(lastPolicy(game, A, "r11-former-grant").accepted).toBe(false);
+    // The reigning successor can grant and rescind that SAME lawful power.
+    grant(game, b, A, true, "r11-successor-grant");
+    expect(lastPolicy(game, B, "r11-successor-grant").accepted).toBe(true);
+    expect(game.nationalPoliticalAuthority()?.maySettleNational(A)).toBe(true);
+    grant(game, b, A, false, "r11-successor-revoke");
+    expect(lastPolicy(game, B, "r11-successor-revoke").accepted).toBe(true);
+    expect(game.nationalPoliticalAuthority()?.maySettleNational(A)).toBe(false);
     click(game, a, { type: "national_propose_peace", warId: imperialId,
       requestId: "r11-former-imperial" });
     expect(lastWar(game, A, "r11-former-imperial").accepted).toBe(false);
@@ -220,6 +230,13 @@ describe("R11 new live imperial NATIONAL peace delegation (M5/WAR-05)", () => {
     expect(restored.nationalPoliticalAuthority()?.emperorOf(empire)).toBe(B);
     expect(restored.nationalPoliticalAuthority()?.maySettleNational(A)).toBe(false);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
+    const restoredViewer = principal(restored, ca);
+    for (let i = 0; i < 3; i++) {
+      advance(game, a);
+      advance(restored, restoredViewer);
+      expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
+    }
+    expect(restoredViewer.errors).toEqual([]);
     for (const actor of [a, b, c, d]) expect(actor.errors).toEqual([]);
   });
 
