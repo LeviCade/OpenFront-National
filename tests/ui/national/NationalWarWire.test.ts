@@ -32,9 +32,13 @@ import "../../../src/client/NationalDiplomacyPanel";
 import type { LobbyConfig } from "../../../src/client/ClientGameRunner";
 import type { NationalDiplomacyPanel } from "../../../src/client/NationalDiplomacyPanel";
 import {
+  readNationalConflicts,
   readNationalDiplomacyResults,
   validNationalWarReference,
   type NationalDiplomacyResult,
+  type NationalPublicConflicts,
+  type NationalPublicWarLayer,
+  type NationalPublicPeaceMotion,
 } from "../../../src/client/NationalDiplomacyState";
 import {
   SendNationalDeclareWarIntentEvent,
@@ -59,6 +63,7 @@ async function setup(
   const state = {
     tick: 10,
     diplomacyResults: [] as NationalDiplomacyResult[],
+    conflicts: null as NationalPublicConflicts | null,
     national: options.national ?? true,
     replay: options.replay ?? false,
     spawned: options.spawned ?? true,
@@ -125,6 +130,8 @@ async function setup(
     nationalFoundingResults: () => [],
     nationalFoundingOutcome: () => null,
     nationalDiplomacyResults: () => state.diplomacyResults,
+    nationalConflicts: () => state.conflicts,
+    nationalConflictsTick: () => state.conflicts ? state.tick : null,
     ticks: () => state.tick,
     isSpectator: () => state.spectator,
     inSpawnPhase: () => !state.spawned,
@@ -254,6 +261,16 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
       NationalProposePeaceIntentSchema.safeParse(intents()[0]).success,
     ).toBe(true);
     state.tick = 11;
+    state.diplomacyResults = [{
+      type: "national_propose_peace",
+      actorId: "nation-a",
+      recipientId: "nation-a",
+      requestId: intents()[0].requestId,
+      sequence: 7,
+      tick: 11,
+      accepted: false,
+      reason: "political-rule",
+    }];
     panel.refresh();
     await panel.updateComplete;
     await enter(panel, "#national-peace-motion-id", "national-11-1-5");
@@ -378,6 +395,161 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     );
     expect(panel.textContent).toContain("No completed action is confirmed");
     expect(panel.textContent).not.toContain("War accepted");
+  });
+
+  const canonicalWar: NationalPublicWarLayer = {
+    id: "war-11",
+    scope: "national",
+    first: { kind: "nation", id: "nation-a" },
+    second: { kind: "nation", id: "nation-b" },
+    declaredBy: "nation-a",
+    startedTick: 10,
+    endedTick: null,
+  };
+  const foreignOffer: NationalPublicPeaceMotion = {
+    id: "motion-12",
+    layerId: "war-11",
+    proposedBy: "nation-b",
+    proposingSide: 1,
+    proposedTick: 10,
+    acceptedTick: null,
+    acceptedBy: null,
+  };
+  function projection(
+    wars: readonly NationalPublicWarLayer[] = [canonicalWar],
+    motions: readonly NationalPublicPeaceMotion[] = [],
+  ): NationalPublicConflicts {
+    return { version: 1, recipientId: "nation-a", layers: wars, motions };
+  }
+
+  it("rejects foreign, malformed, duplicate and inconsistent E3 conflict projections", () => {
+    const valid = projection([canonicalWar], [foreignOffer]);
+    expect(readNationalConflicts(valid, "nation-a")).toEqual(valid);
+    expect(readNationalConflicts(valid, "nation-b")).toBeNull();
+    expect(readNationalConflicts({ ...valid, version: 2 }, "nation-a")).toBeNull();
+    expect(readNationalConflicts({ ...valid, layers: [canonicalWar, canonicalWar] }, "nation-a")).toBeNull();
+    expect(readNationalConflicts({ ...valid, motions: [{ ...foreignOffer, layerId: "missing" }] }, "nation-a")).toBeNull();
+    expect(readNationalConflicts({ ...valid, layers: [{ ...canonicalWar, endedTick: -1 }] }, "nation-a")).toBeNull();
+    expect(readNationalConflicts({ ...valid, motions: [{ ...foreignOffer, acceptedTick: 11, acceptedBy: null }] }, "nation-a")).toBeNull();
+  });
+
+  it("confirms real national WAR only after a matching current authoritative layer, and revokes stale state", async () => {
+    const { panel, state } = await setup();
+    await choose(panel, "#national-war-target", "nation-b");
+    panel.querySelector<HTMLButtonElement>("#national-declare-war")!.click();
+    const requestId = intents()[0].requestId as string;
+    state.tick = 11;
+    state.diplomacyResults = [{
+      type: "national_declare_war",
+      actorId: "nation-a",
+      recipientId: "nation-a",
+      requestId,
+      sequence: 9,
+      tick: 11,
+      accepted: true,
+      warId: "war-11",
+    }];
+    state.conflicts = projection([{ ...canonicalWar, startedTick: 11, declaredBy: "nation-b" }]);
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).not.toContain("War confirmed by game");
+
+    state.conflicts = projection([{ ...canonicalWar, startedTick: 11 }]);
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).toContain("War confirmed by game: war-11 is active");
+    expect(panel.textContent).toContain("WAR war-11");
+
+    state.tick = 12;
+    state.conflicts = projection([{ ...canonicalWar, startedTick: 11, endedTick: 12 }]);
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).toContain("has since changed");
+    expect(panel.textContent).not.toContain("War confirmed by game");
+  });
+
+  it("exposes eligible engine WAR IDs as selectors; rejects stale and unknown IDs", async () => {
+    const { panel, state } = await setup();
+    state.conflicts = projection();
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.querySelector("#national-peace-war-id")?.tagName).toBe("SELECT");
+    await choose(panel, "#national-peace-war-id", "war-11");
+    panel.querySelector<HTMLButtonElement>("#national-propose-peace")!.click();
+    expect(intents()).toHaveLength(1);
+    expect(intents()[0].warId).toBe("war-11");
+    state.tick = 11;
+    state.diplomacyResults = [{
+      type: "national_propose_peace",
+      actorId: "nation-a",
+      recipientId: "nation-a",
+      requestId: intents()[0].requestId,
+      sequence: 10,
+      tick: 11,
+      accepted: true,
+      warId: "war-11",
+      motionId: "motion-11",
+    }];
+    state.conflicts = projection([canonicalWar], [{
+      id: "motion-11", layerId: "war-11", proposedBy: "nation-a",
+      proposingSide: 0, proposedTick: 11, acceptedTick: null, acceptedBy: null,
+    }]);
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).toContain("Peace proposal confirmed by game: motion motion-11");
+
+    const late = await setup();
+    late.state.conflicts = projection([{ ...canonicalWar, endedTick: 11 }]);
+    late.panel.refresh();
+    await late.panel.updateComplete;
+    expect(late.panel.querySelector<HTMLButtonElement>("#national-propose-peace")!.disabled).toBe(true);
+    expect(late.panel.querySelector("#national-peace-war-id")?.tagName).toBe("SELECT");
+  });
+
+  it("shows a pending opponent motion, then confirms peace only after canonical cessation", async () => {
+    const { panel, state } = await setup();
+    state.conflicts = projection([canonicalWar], [foreignOffer]);
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.querySelector("#national-peace-motion-id")?.tagName).toBe("SELECT");
+    await choose(panel, "#national-peace-motion-id", "motion-12");
+    panel.querySelector<HTMLButtonElement>("#national-accept-peace")!.click();
+    expect(intents()[0].motionId).toBe("motion-12");
+    state.tick = 11;
+    state.diplomacyResults = [{
+      type: "national_accept_peace",
+      actorId: "nation-a",
+      recipientId: "nation-a",
+      requestId: intents()[0].requestId,
+      sequence: 12,
+      tick: 11,
+      accepted: true,
+      warId: "war-11",
+      motionId: "motion-12",
+    }];
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).not.toContain("Peace accepted by game");
+
+    state.conflicts = projection([{ ...canonicalWar, endedTick: 11 }], [{
+      ...foreignOffer, acceptedTick: 11, acceptedBy: "nation-a",
+    }]);
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.textContent).toContain("Peace accepted by game");
+    expect(panel.textContent).toContain("war-11");
+  });
+
+  it("blocks a second click even on later ticks while first diplomacy remains unresolved", async () => {
+    const { panel, state } = await setup();
+    await choose(panel, "#national-war-target", "nation-b");
+    panel.querySelector<HTMLButtonElement>("#national-declare-war")!.click();
+    state.tick = 11;
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.querySelector<HTMLButtonElement>("#national-declare-war")!.disabled).toBe(true);
+    expect(panel.querySelector<HTMLButtonElement>("#national-propose-peace")!.disabled).toBe(true);
+    expect(intents()).toHaveLength(1);
   });
 
   it("fails closed on malformed, foreign and non-cryptographic receipt IDs", () => {
