@@ -20,7 +20,8 @@ import {
   type Turn,
 } from "@openfront/engine-api/Schemas";
 import { GameRunner } from "@openfront/engine/GameRunner";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import WebSocket from "ws";
 import type { Client } from "../Client";
 
 export interface NationalTickReceipt {
@@ -103,11 +104,32 @@ export class TrustedNationalMatch {
     // Register projections only after validating every seat. The GameRunner
     // itself verifies clientID -> real PlayerID on each subsequent tick.
     for (const client of admittedPlayers) {
-      runner.registerTrustedNationalRecipient(client.clientID, (packet) => {
-        if (this.seats.get(client.clientID) === client && !client.spectator) {
-          this.deliver(client, packet);
-        }
-      });
+      // The Client object and socket originate from GameServer's verified
+      // roster. Capture this *socket*, not merely the account's reusable ID:
+      // reconnecting through another ws cannot inherit stale receipt state.
+      const admittedSocket = client.ws;
+      const sessionId = randomUUID(); // server minted, never transmitted
+      const active = () =>
+        this.seats.get(client.clientID) === client &&
+        client.ws === admittedSocket &&
+        admittedSocket.readyState === WebSocket.OPEN &&
+        !client.spectator &&
+        !!client.claims &&
+        !!client.publicId;
+      runner.registerTrustedNationalRecipient(
+        client.clientID,
+        {
+          clientID: client.clientID,
+          sessionId,
+          isConnected: active,
+          isSpectator: () => client.spectator,
+        },
+        (packet) => {
+          // GameRunner has already called E3 session.projectGameUpdate.
+          // Packet is an independent recipient-filtered object, not Game.
+          if (active()) this.deliver(client, packet);
+        },
+      );
     }
   }
 
