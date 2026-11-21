@@ -1,4 +1,7 @@
-import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
+import {
+  PlayerType,
+  type GameUpdates,
+} from "@openfront/engine-api/game/GameTypes";
 /**
  * NATIONAL per-recipient outbound packet projection.
  *
@@ -120,6 +123,7 @@ const resultTypes = new Set([
   "national_offer_empire",
   "national_accept_empire",
   "national_transfer_crown",
+  "national_set_peace_delegation",
   "national_found_pact",
   "national_invite_pact",
   "national_accept_pact",
@@ -136,6 +140,98 @@ const politicalReason = new Set([
   "invalid-war-command",
   "war-rule",
 ]);
+
+/**
+ * The complete, CURRENT pending accession invitation snapshot for one
+ * authenticated GameRunner human. Both constitutional directions are legal:
+ * emperor -> candidate, and candidate -> emperor. No raw E1 politics state,
+ * pact terms or issuing actor's private command receipt crosses this port.
+ *
+ * Unlike event receipts, this must be sent each tick, including an empty list:
+ * acceptance, crown transfer, elimination and replay can revoke the offer.
+ * Spectators/unknown principals have no such field at all.
+ */
+export interface NationalAccessionOffersView {
+  readonly version: 1;
+  readonly recipientId: string;
+  readonly offers: readonly {
+    readonly empireId: string;
+    readonly candidateId: string;
+    readonly proposerId: string;
+    readonly recipientId: string;
+  }[];
+}
+
+/** Derive offers ONLY from E1's per-Player authority read, never a global
+ * political snapshot or a client-requested observerId. */
+export function projectNationalAccessionOffers(
+  game: Game,
+  observerId: string | null,
+): NationalAccessionOffersView | undefined {
+  if (!game.config().nationalMode() || observerId === null) return undefined;
+  if (!game.hasPlayer(observerId)) return undefined;
+  const observer = game.player(observerId);
+  // A spectator, pre-spawn player or eliminated player cannot hold an
+  // actionable invitation, even after a stale GameRunner session restore.
+  if (
+    observer.type() !== PlayerType.Human ||
+    !observer.hasSpawned() ||
+    !observer.isAlive()
+  )
+    return { version: 1, recipientId: observerId, offers: [] };
+
+  // GameImpl independently verifies the exact registry Player object and
+  // reports only the still-pending offers for this recipient.
+  const offered = game.nationalAccessionOffers(observer);
+  const publicRoster = game.nationalPublicPoliticalView();
+  if (publicRoster === null)
+    throw new Error("NATIONAL private offer: missing public authority");
+  const leaders = new Map(
+    publicRoster.empires.map((empire) => [empire.id, empire.leaderId]),
+  );
+  const members = new Set(
+    publicRoster.empires.flatMap((empire) => empire.memberIds),
+  );
+  const unique = new Set<string>();
+  const offers: NationalAccessionOffersView["offers"][number][] = [];
+  for (const offer of offered) {
+    const leaderId = leaders.get(offer.empireId);
+    const pairKey = JSON.stringify([offer.empireId, offer.candidateId]);
+    if (
+      !publicId(offer.empireId) ||
+      !publicId(offer.candidateId) ||
+      !publicId(offer.proposerId) ||
+      !publicId(offer.recipientId) ||
+      offer.recipientId !== observerId ||
+      leaderId === undefined ||
+      members.has(offer.candidateId) ||
+      !game.hasPlayer(offer.candidateId) ||
+      !game.player(offer.candidateId).isAlive() ||
+      // Both consenting-party directions are permitted by E1.
+      !(
+        (offer.proposerId === leaderId &&
+          offer.recipientId === offer.candidateId) ||
+        (offer.proposerId === offer.candidateId &&
+          offer.recipientId === leaderId)
+      ) ||
+      unique.has(pairKey)
+    )
+      throw new Error("NATIONAL private offer: invalid recipient projection");
+    unique.add(pairKey);
+    offers.push({
+      empireId: offer.empireId,
+      candidateId: offer.candidateId,
+      proposerId: offer.proposerId,
+      recipientId: offer.recipientId,
+    });
+  }
+  offers.sort(
+    (a, b) =>
+      a.empireId.localeCompare(b.empireId) ||
+      a.candidateId.localeCompare(b.candidateId),
+  );
+  return { version: 1, recipientId: observerId, offers };
+}
 
 /** Keep end/acceptance proof briefly for the UI, never permanent history. */
 const PUBLIC_CONFLICT_RETENTION_TICKS = 240;
@@ -575,6 +671,10 @@ export class NationalOutboundFilter {
       this.observerId,
       data.tick,
     );
+    const privateAccessionOffers = projectNationalAccessionOffers(
+      game,
+      this.observerId,
+    );
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
     return {
@@ -590,6 +690,9 @@ export class NationalOutboundFilter {
       ...(publicConflictView === undefined
         ? {}
         : { nationalConflicts: publicConflictView }),
+      ...(privateAccessionOffers === undefined
+        ? {}
+        : { nationalAccessionOffers: privateAccessionOffers }),
       tick: data.tick,
       updates,
       packedTileUpdates: new Uint32Array(packedTile),

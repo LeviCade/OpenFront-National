@@ -117,7 +117,7 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       );
       mkdirSync(target, { recursive: true });
       const report = sample();
-      report.hardwareAcceptanceRequired = true;
+      report.hardwareAcceptanceRequired = false;
       report.viewport = mode.endsWith("mobile")
         ? "390x844 mobile"
         : "1280x800 desktop";
@@ -150,20 +150,21 @@ test("publish four separate reports; reject absent proof and nonmatching source"
         ),
       );
     }
-    assert.equal(publishEvidence(dir, SHA), true);
+    assert.equal(publishEvidence(dir, SHA, "diagnostic"), true);
     const published = JSON.parse(
       readFileSync(
-        join(dir, "gpu", "public", "release", "summary.json"),
+        join(dir, "gpu", "public", "diagnostic", "summary.json"),
         "utf8",
       ),
     );
     assert.deepEqual(Object.keys(published.modes), MODES);
     assert.equal(published.allModesPass, true);
-    assert.equal(published.lane, "release");
+    assert.equal(published.lane, "diagnostic");
+    assert.equal(published.releaseCertified, false);
     for (const mode of MODES) {
       const modeData = JSON.parse(
         readFileSync(
-          join(dir, "gpu", "public", "release", mode + ".json"),
+          join(dir, "gpu", "public", "diagnostic", mode + ".json"),
           "utf8",
         ),
       );
@@ -171,12 +172,54 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       assert.equal(modeData.outcome, "PASS");
       assert.equal(modeData.expectedViewport, modeData.actualViewport);
       assert.equal(modeData.screenshotCount, 1);
+      assert.match(modeData.screenshotSha256["home.png"], /^[a-f0-9]{64}$/);
     }
     for (const mode of MODES) {
       assert.deepEqual(published.modes[mode].screenshotNames, ["home.png"]);
-      assert.equal(published.modes[mode].hardware.proofAccepted, true);
+      assert.equal(published.modes[mode].hardware.proofAccepted, false);
     }
     assert.ok(!JSON.stringify(published).includes("UNPUBLISHABLE"));
+    // A signed-looking event in guest-owned JSON cannot certify a release.
+    for (const mode of MODES) {
+      const target = join(
+        dir,
+        mode.startsWith("legacy-")
+          ? "browser-legacy-ffa-" + mode.split("-")[1]
+          : "browser-" + mode,
+      );
+      const raw = JSON.parse(
+        readFileSync(join(target, "acceptance.json"), "utf8"),
+      );
+      raw.hardwareAcceptanceRequired = true;
+      writeFileSync(join(target, "acceptance.json"), JSON.stringify(raw));
+    }
+    // The first diagnostic lane is immutable; no mixed or stale artifacts.
+    assert.throws(
+      () => publishEvidence(dir, SHA, "diagnostic"),
+      /PUBLIC_EVIDENCE_DIRECTORY_NOT_EMPTY/,
+    );
+    assert.equal(publishEvidence(dir, SHA, "release"), false);
+    const untrusted = JSON.parse(
+      readFileSync(
+        join(dir, "gpu", "public", "release", "summary.json"),
+        "utf8",
+      ),
+    );
+    assert.equal(untrusted.releaseCertified, false);
+    assert.equal(untrusted.allModesPass, false);
+    for (const mode of MODES) {
+      assert.equal(untrusted.modes[mode].outcome, "UNVERIFIED");
+      assert.equal(untrusted.modes[mode].reason, "SIGNED_WITNESS_NOT_VERIFIED");
+      assert.equal(untrusted.modes[mode].hardware.proofAccepted, false);
+      assert.equal(
+        untrusted.modes[mode].hardware.browserClaimedSignedProof,
+        true,
+      );
+    }
+    rmSync(join(dir, "gpu", "public", "diagnostic"), {
+      recursive: true,
+      force: true,
+    });
     assert.equal(publishEvidence(dir, SHA, "diagnostic"), false);
     const unsigned = JSON.parse(
       readFileSync(
@@ -197,7 +240,11 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       join(dir, "browser-national-mobile", "acceptance.json"),
       JSON.stringify(changed),
     );
-    assert.equal(publishEvidence(dir, SHA), false);
+    rmSync(join(dir, "gpu", "public", "release"), {
+      recursive: true,
+      force: true,
+    });
+    assert.equal(publishEvidence(dir, SHA, "release"), false);
     const invalid = JSON.parse(
       readFileSync(
         join(dir, "gpu", "public", "release", "national-mobile.json"),

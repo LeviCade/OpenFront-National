@@ -26,6 +26,7 @@ import {
   METRIC_KEYS,
   proposeEmpireAccession,
   proposePactAmendment,
+  setNationalPeaceDelegation,
   transferCrown,
   validatePolitics,
   type LastSovereignResult,
@@ -88,6 +89,8 @@ const politicsSchema = z.object({
       leaderId: z.string(),
       memberIds: z.array(z.string()),
       crisisDeadlineMs: counter.nullable(),
+      // Older GameSnapshot v1 politics omit this; absent means DENY.
+      delegatedNationalPeace: z.array(z.string()).optional(),
     }),
   ),
   accessionOffers: z.array(
@@ -116,6 +119,12 @@ export type NationalCommand =
   | { kind: "offer-empire"; empireId: string; candidateId: PlayerID }
   | { kind: "accept-empire"; empireId: string; candidateId: PlayerID }
   | { kind: "transfer-crown"; empireId: string; successorId: PlayerID }
+  | {
+      kind: "set-national-peace-delegation";
+      empireId: string;
+      memberId: PlayerID;
+      enabled: boolean;
+    }
   | {
       kind: "found-pact";
       pactId: string;
@@ -207,7 +216,21 @@ export class NationalRuntime {
 
   /** Read the same authoritative projection after every command or restore. */
   authority(): PoliticalAuthorityAdapter {
-    return new PoliticalAuthorityAdapter(() => this.politics);
+    return new PoliticalAuthorityAdapter(
+      () => this.politics,
+      (memberId, action) =>
+        action === "peace" && this.hasDelegatedNationalPeace(memberId),
+    );
+  }
+
+  /** Canonical persisted policy, never a second resource/authority registry. */
+  hasDelegatedNationalPeace(memberId: PlayerID): boolean {
+    return this.politics.empires.some(
+      (e) =>
+        e.leaderId !== memberId &&
+        e.memberIds.includes(memberId) &&
+        (e.delegatedNationalPeace ?? []).includes(memberId),
+    );
   }
 
   constructor(ids: readonly PlayerID[]) {
@@ -410,6 +433,16 @@ export class NationalRuntime {
           command.empireId,
           actorId,
           command.candidateId,
+        );
+        break;
+      case "set-national-peace-delegation":
+        requireCommandId(command.empireId);
+        next = setNationalPeaceDelegation(
+          this.politics,
+          command.empireId,
+          actorId,
+          command.memberId,
+          command.enabled,
         );
         break;
       case "transfer-crown":

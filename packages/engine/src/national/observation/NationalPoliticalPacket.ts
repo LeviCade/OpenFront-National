@@ -7,6 +7,7 @@
  * E3 owns per-runner delivery, not political results or persistent journals.
  */
 import type { Game, Player } from "../../game/Game";
+import type { NationalPoliticalCommandKind } from "../politics/NationalGovernanceState";
 
 /** E1's ONE Game-owned journal. The new command-specific ports are filtered
  * views of the same persistent sequence space, not independent authorities. */
@@ -41,6 +42,7 @@ const POLITICAL_TYPES = {
   "offer-empire": "national_offer_empire",
   "accept-empire": "national_accept_empire",
   "transfer-crown": "national_transfer_crown",
+  "set-national-peace-delegation": "national_set_peace_delegation",
   "found-pact": "national_found_pact",
   "invite-pact": "national_invite_pact",
   "accept-pact": "national_accept_pact",
@@ -48,7 +50,10 @@ const POLITICAL_TYPES = {
   "approve-pact-amendment": "national_approve_pact_amendment",
   "betray-pact": "national_betray_pact",
   "expel-pact": "national_expel_pact",
-} as const;
+} as const satisfies Record<
+  NationalPoliticalCommandKind | "set-national-peace-delegation",
+  `national_${string}`
+>;
 const WAR_TYPES = {
   "declare-national": "national_declare_war",
   "declare-imperial": "national_declare_war",
@@ -172,7 +177,7 @@ function validRecord(record: AuthoritativeFounderOutcome, game: Game): void {
         POLITICAL_TYPES,
         record.commandKind,
       ) &&
-      !safeId(record.commandTargetId)) ||
+      (!safeId(record.commandTargetId) || !safeId(record.recipientId))) ||
     (record.commandTargetId !== undefined && !safeId(record.commandTargetId)) ||
     (record.warId !== undefined && !safeId(record.warId)) ||
     (record.motionId !== undefined && !safeId(record.motionId)) ||
@@ -373,8 +378,10 @@ export function actorNationalResults(
       continue;
     }
     const base = {
-      recipientId: actor.id(),
-      actorId: actor.id(),
+      // Every non-founder kind has an E1 authenticated recipient; only
+      // historic founder results omit it. Never trust a browser's recipient.
+      recipientId: record.recipientId ?? actor.id(),
+      actorId: record.actorId,
       accepted: record.accepted,
       tick: record.tick,
       sequence: record.sequence,
