@@ -9,7 +9,7 @@ permissions:
   contents: write
 jobs:
   format:
-    if: ${{ startsWith(github.event.head_commit.message, 'ci(class5): run pinned E6 formatting once') }}
+    if: ${{ startsWith(github.event.head_commit.message, 'ci(class5)') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
