@@ -27,7 +27,11 @@ import type { PresencePayload } from "./DesktopPresence";
 // message from a game with no server behind it (singleplayer, replays), has
 // none.
 export function groupTokenOf(message: ServerMessage): string | undefined {
-  if (message.type === "lobby_info" || message.type === "start") {
+  if (
+    message.type === "lobby_info" ||
+    message.type === "start" ||
+    message.type === "national_start"
+  ) {
     return message.groupToken;
   }
   return undefined;

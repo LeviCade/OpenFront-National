@@ -1,3 +1,4 @@
+import type { ClientID } from "@openfront/engine-api/Schemas";
 /**
  * NATIONAL authenticated diplomacy commands + attack adapter to E1's
  * ONE GameImpl-owned, snapshotted WarLedger/DefenseLevyLedger service.
@@ -58,6 +59,10 @@ const stateSchema = z.object({
     .max(128)
     .regex(/^[A-Za-z0-9_-]+$/)
     .nullable(),
+  authenticatedClientID: z
+    .string()
+    .regex(/^[A-Za-z0-9]{8,10}$/)
+    .nullable(),
 });
 type State = z.infer<typeof stateSchema>;
 
@@ -98,12 +103,17 @@ interface WarGamePort {
     };
   } | null;
   /** Existing legacy WAR callers preserve their throwing/void semantics. */
-  performNationalWarCommand(actor: Player, command: CanonicalWarCommand): void;
+  performNationalWarCommand(
+    actor: Player,
+    command: CanonicalWarCommand,
+    authenticatedClientID?: ClientID,
+  ): void;
   /** E1's *separate* authoritative typed outcome + Game journal port. */
   performNationalWarCommandWithOutcome?(
     actor: Player,
     command: CanonicalWarCommand,
     requestId?: string | null,
+    authenticatedClientID?: ClientID,
   ): unknown;
   nationalWarCommandResults?(observer: Player): readonly unknown[];
   nationalLevySource(nationId: string): TroopSource | null;
@@ -219,6 +229,8 @@ export class NationalWarExecution implements Execution {
     private command: NationalWarCommand,
     // Optional E4 click correlation. E1's journal owns acceptance/idempotency.
     private requestId: string | null = null,
+    /** Original authenticated admission, not the mutable Player.clientID(). */
+    private authenticatedClientID: ClientID | null = null,
   ) {}
 
   isActive(): boolean {
@@ -314,6 +326,7 @@ export class NationalWarExecution implements Execution {
             ? command
             : { ...command, requestId: this.requestId },
           this.requestId,
+          this.authenticatedClientID ?? undefined,
         );
       } catch (error) {
         // A reused token already belongs to another immutable E1 receipt.
@@ -321,8 +334,10 @@ export class NationalWarExecution implements Execution {
         // Returning without a receipt is fail-closed; NEVER claim acceptance.
         if (
           error instanceof Error &&
-          error.message ===
-            "NATIONAL command journal: reused foreign request ID"
+          (error.message ===
+            "NATIONAL command journal: reused foreign request ID" ||
+            error.message === "NATIONAL: stale authenticated actor session" ||
+            error.message === "NATIONAL: missing authenticated actor session")
         )
           return;
         throw error;
@@ -364,6 +379,7 @@ export class NationalWarExecution implements Execution {
         this.requestId === null
           ? command
           : { ...command, requestId: this.requestId },
+        this.authenticatedClientID ?? undefined,
       );
     } catch (error) {
       // Before E1's authoritative receipt port is merged, an ordinary
@@ -386,6 +402,7 @@ export class NationalWarExecution implements Execution {
       actor: w.player(this.actor),
       command: this.command,
       requestId: this.requestId,
+      authenticatedClientID: this.authenticatedClientID,
     });
   }
 
@@ -395,15 +412,17 @@ export class NationalWarExecution implements Execution {
     this.actor = reader.player(state.actor);
     this.command = state.command;
     this.requestId = state.requestId;
+    this.authenticatedClientID = state.authenticatedClientID;
   }
 }
 
 export const NationalWarExecutionSnapshot = execSnapshotType({
   name: "NationalWar",
-  version: 2,
+  version: 3,
   schema: stateSchema,
   migrations: {
     1: (old: object) => ({ ...old, requestId: null }),
+    2: (old: object) => ({ ...old, authenticatedClientID: null }),
   },
   cls: () => NationalWarExecution,
 });
