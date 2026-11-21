@@ -85,6 +85,39 @@ export class Executor {
           null,
           intent.requestId ?? null,
         );
+      case "national_offer_empire":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          {
+            kind: "offer-empire",
+            empireId: intent.empireId,
+            candidateId: intent.candidateId,
+          },
+          intent.requestId ?? null,
+        );
+      case "national_accept_empire":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          {
+            kind: "accept-empire",
+            empireId: intent.empireId,
+            candidateId: intent.candidateId,
+          },
+          intent.requestId ?? null,
+        );
+      case "national_transfer_crown":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          {
+            kind: "transfer-crown",
+            empireId: intent.empireId,
+            successorId: intent.successorId,
+          },
+          intent.requestId ?? null,
+        );
       case "national_declare_war":
         return new NationalWarExecution(
           player,

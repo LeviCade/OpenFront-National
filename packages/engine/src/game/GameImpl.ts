@@ -80,6 +80,7 @@ import {
   NationalRuntime,
   NationalRuntimeSnapshotSchema,
   type NationalCommand,
+  type NationalAccessionOfferView,
   type NationalPublicPoliticalView,
   type NationalUngovernableWarning,
 } from "../national/NationalRuntime";
@@ -934,6 +935,25 @@ export class GameImpl implements Game {
       }
     }
     return this._nationalWar.interceptAcceptedAttacks(attacks);
+  }
+
+  /**
+   * Private E3 recipient port: never expose another player's accession offer
+   * or let a borrowed Player object select someone else's recipient journal.
+   */
+  nationalAccessionOffers(
+    observer: Player,
+  ): readonly NationalAccessionOfferView[] {
+    if (
+      this._national === null ||
+      this._players.get(observer.id()) !== observer ||
+      observer.type() !== PlayerType.Human ||
+      !observer.hasSpawned() ||
+      !observer.isAlive()
+    )
+      return [];
+    this.synchronizeNationalState();
+    return this._national.incomingAccessionOffers(observer.id());
   }
 
   /** Whitelisted engine-only public facts; E3 owns actual packet filtering. */

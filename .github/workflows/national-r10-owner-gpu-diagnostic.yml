@@ -1,0 +1,82 @@
+name: NATIONAL R10 — Owner-only four-mode GPU DIAGNOSTIC (not release)
+
+on:
+  push:
+    branches:
+      - stage3/r10-four-green-source-candidate-20261121
+      - stage3/r10-reviewed-gpu-20261121
+    paths:
+      - scripts/national-gpu-ci/OWNER_GPU_DIAGNOSTIC_TRIGGER
+
+permissions:
+  contents: read
+
+concurrency:
+  group: national-r10-owner-gpu-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  four-mode-diagnostic:
+    if: >-
+      github.repository == 'LeviCade/OpenFront-National' &&
+      github.actor == 'LeviCade' &&
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/stage3/r10-four-green-source-candidate-20261121' ||
+      github.ref == 'refs/heads/stage3/r10-reviewed-gpu-20261121')
+    runs-on: skybot-ci-gpu
+    timeout-minutes: 55
+    env:
+      CHROME_BIN: /opt/skybot-gpu-runtime/chrome-headless-shell-linux64/chrome-headless-shell
+      NATIONAL_CHROME_ANGLE_BACKEND: gl-egl
+      EGL_PLATFORM: surfaceless
+      NATIONAL_REQUIRE_HARDWARE_GPU: "0"
+      NATIONAL_GPU_CANDIDATE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify owner-only disposable GPU and immutable source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = LeviCade/OpenFront-National
+          test "$GITHUB_ACTOR" = LeviCade
+          test "$GITHUB_EVENT_NAME" = push
+          case "$GITHUB_REF" in
+            refs/heads/stage3/r10-four-green-source-candidate-20261121|refs/heads/stage3/r10-reviewed-gpu-20261121) ;;
+            *) echo 'REFUSED: diagnostic must use Conductor-reviewed staging ref' >&2; exit 1 ;;
+          esac
+          test "${RUNNER_ENVIRONMENT}" = self-hosted
+          test "$(id -u)" -ne 0
+          test -x "$CHROME_BIN"
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          BASE_SHA=0e52b5eeb7490ce83898f2a9696732c7e7d6b21c
+          git cat-file -e "$BASE_SHA^{commit}"
+          git merge-base --is-ancestor "$BASE_SHA" "$NATIONAL_GPU_CANDIDATE_SHA"
+          test "$NATIONAL_REQUIRE_HARDWARE_GPU" = 0
+          mkdir -p national-qa-artifacts/gpu/diagnostic
+          printf '%s\n' "$GITHUB_SHA" > national-qa-artifacts/gpu/diagnostic/source-sha.txt
+          printf 'DIAGNOSTIC_ONLY_NOT_RELEASE_ATTESTATION\n' > national-qa-artifacts/gpu/diagnostic/classification.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - name: Install the pinned dependencies only once
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+          node --test scripts/national-gpu-ci/verify-workflow.mjs
+      - name: Run four real E5 browser scenarios on one GPU guest
+        shell: bash
+        run: bash scripts/national-gpu-ci/run-four-modes.sh diagnostic
+      - name: Upload bounded diagnostic outcomes only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: national-r10-four-mode-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: national-qa-artifacts/gpu/public/diagnostic/
+          if-no-files-found: warn
+          retention-days: 7

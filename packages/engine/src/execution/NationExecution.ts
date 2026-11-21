@@ -20,6 +20,7 @@ import {
 import { assertNever, simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
+import * as NationalPlanner from "../national/ai/NationalPlanner";
 import {
   deriveNationalWarSides,
   initialNationalPlannerMemory,
@@ -32,8 +33,10 @@ import {
 } from "../national/observation/LiveObservation";
 import {
   advanceLastKnown,
+  type NationalObservation,
   type NationalSightMemory,
 } from "../national/observation/NationalObservation";
+import type { NationalWarCommandOutcome } from "../national/politics/NationalGovernanceState";
 import {
   NationSchema,
   nationData,
@@ -57,6 +60,29 @@ import { NationWarshipBehavior } from "./nation/NationWarshipBehavior";
 import { tutorialCollapse } from "./nation/TutorialCollapse";
 import { tutorialSilo, tutorialWarship } from "./nation/TutorialSilo";
 import { SpawnExecution } from "./SpawnExecution";
+
+/**
+ * E2 owns persistence and the live execution hook. E3's pure planner owns
+ * rejected-target expiry and replay deduplication; no duplicate WAR ledger.
+ * The optional module export permits each independent PR to compile before
+ * the Conductor assembles E2 + E3.
+ */
+type NationalExecutionPlannerMemory = NationalPlannerMemory & {
+  readonly rejectedWarTargets?: readonly {
+    readonly targetId: string;
+    readonly retryAfterTick: number;
+  }[];
+  readonly lastWarOutcomeSequence?: number;
+};
+
+const warOutcomePlanner = NationalPlanner as typeof NationalPlanner & {
+  readonly recordNationalWarOutcome?: (
+    observation: NationalObservation,
+    memory: NationalExecutionPlannerMemory,
+    outcome: NationalWarCommandOutcome,
+    retryTicks?: number,
+  ) => NationalExecutionPlannerMemory;
+};
 
 export class NationExecution implements Execution {
   private active = true;
@@ -83,7 +109,7 @@ export class NationExecution implements Execution {
 
   // E3-owned execution snapshot state: no game-global WeakMap, no AI
   // access to an unrestricted Game/Player observation.
-  private nationalPlannerMemory: NationalPlannerMemory | null = null;
+  private nationalPlannerMemory: NationalExecutionPlannerMemory | null = null;
   private nationalSightMemory: NationalSightMemory | null = null;
 
   constructor(
@@ -315,9 +341,14 @@ export class NationExecution implements Execution {
   private tickNational(ticks: number): void {
     const player = this.player;
     if (player === null || !player.hasSpawned()) return;
+    // The E3 planner owns cadence and public-event reactions. Poll only
+    // every fifth tick before the ordinary deadline: a bounded 0–4 tick
+    // public-WAR reaction delay without a costly full observation on every
+    // simulation tick. The observation itself stays E3-principal-filtered.
     if (
       this.nationalPlannerMemory !== null &&
-      ticks < this.nationalPlannerMemory.nextPlanningTick
+      ticks < this.nationalPlannerMemory.nextPlanningTick &&
+      ticks % 5 !== 0
     )
       return;
     const verified = collectLiveNationalObservation(this.mg, player.id());
@@ -416,38 +447,42 @@ export class NationExecution implements Execution {
 
     if (sides.allies.has(targetId)) return;
     if (!sides.enemies.has(targetId)) {
-      // An independent AI may begin a scoped national war against a real,
-      // observed neighboring nation. The Game-owned E2 ledger has the FINAL
-      // say on treaties, empire authority, living actors and duplicate wars.
-      // No invented diplomacy or raw WarLedger mutation is permitted.
-      const commandPort = this.mg as Game & {
-        performNationalWarCommand?: (
-          actor: Player,
-          command: {
-            kind: "declare-national";
-            warId: string;
-            aggressorId: string;
-            targetId: string;
-          },
-        ) => void;
-      };
-      if (
-        typeof commandPort.performNationalWarCommand !== "function" ||
-        this.mg.nationalPoliticalAuthority()?.empireOf(player.id()) !== null
-      )
+      // The live Game authority returns a principal-bound accepted/rejected
+      // receipt. Dispatch is NOT acceptance. Only E1's Game-owned journal
+      // decides WAR legality; the E3 planner consumes that exact result.
+      if (this.mg.nationalPoliticalAuthority()?.empireOf(player.id()) !== null)
         return;
+      let outcome: ReturnType<Game["performNationalWarCommandWithOutcome"]>;
       try {
-        commandPort.performNationalWarCommand(player, {
+        outcome = this.mg.performNationalWarCommandWithOutcome(player, {
           kind: "declare-national",
           warId: "ai_" + simpleHash(player.id() + ":" + targetId + ":" + ticks),
           aggressorId: player.id(),
           targetId,
         });
       } catch {
-        // Protected pact, immutable war rules, or an opponent who just died.
-        // Fail closed; never bypass the canonical command validator.
+        // Invalid actor/engine authority must never reach AttackExecution.
         return;
       }
+      if (
+        outcome.commandKind !== "national_declare_war" ||
+        outcome.actorId !== player.id() ||
+        outcome.recipientId !== player.id() ||
+        outcome.commandTargetId !== targetId
+      )
+        return;
+      // Optional until E3's PR #60 joins E2. No second rejection planner:
+      // E3 owns its bounded blocked-target cooldown and replay sequence.
+      const recordOutcome = warOutcomePlanner.recordNationalWarOutcome;
+      if (recordOutcome !== undefined) {
+        this.nationalPlannerMemory = recordOutcome(
+          observation,
+          this.nationalPlannerMemory ??
+            initialNationalPlannerMemory(player.id()),
+          outcome,
+        );
+      }
+      if (!outcome.accepted) return;
     }
     if (!war.authorizeOffensiveAction(player.id(), targetId)) return;
     this.mg.addExecution(
@@ -648,6 +683,10 @@ export class NationExecution implements Execution {
               reputation: this.nationalPlannerMemory.reputation.map(
                 (entry) => ({ ...entry }),
               ),
+              rejectedWarTargets:
+                this.nationalPlannerMemory.rejectedWarTargets?.map((entry) => ({
+                  ...entry,
+                })),
               lastProcessedEvent:
                 this.nationalPlannerMemory.lastProcessedEvent === null
                   ? null
@@ -773,6 +812,18 @@ const NationStateSchema = z.object({
           lastObservedTick: z.number(),
         }),
       ),
+      // Optional fields retain R9 snapshot compatibility. E3's pure planner
+      // controls the lifetime and semantics; execution only persists them.
+      rejectedWarTargets: z
+        .array(
+          z.object({
+            targetId: z.string(),
+            retryAfterTick: z.number().int().nonnegative(),
+          }),
+        )
+        .max(16)
+        .optional(),
+      lastWarOutcomeSequence: z.number().int().min(-1).optional(),
     })
     .nullable(),
   nationalSightMemory: z

@@ -22,7 +22,15 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { reconcileDiplomacyEvidence } from "./browser-verdict.mjs";
 import { verifyHardwareWebgl } from "./gpu-attestation.mjs";
+import {
+  assertSoloLaunch,
+  assertSoloSelection,
+  dispatchSoloPointer,
+  NATIONAL_BUTTON_LABEL,
+  NATIONAL_BUTTON_SELECTOR,
+} from "./solo-selection.mjs";
 
 const mobile = process.argv.includes("--mobile");
 const legacy = process.argv.includes("--legacy");
@@ -210,8 +218,13 @@ const probe = `(() => {
     const updateCandidates = [data, ...(data.gameUpdate ? [data.gameUpdate] : []), ...(Array.isArray(data.gameUpdates) ? data.gameUpdates : [])];
     for (const candidate of updateCandidates) {
       if (!candidate || typeof candidate !== 'object') continue;
+      if (Number.isSafeInteger(candidate.tick)) info.tick = candidate.tick;
       if (candidate.nationalPolitics) info.publicPolitics = candidate.nationalPolitics;
       if (candidate.nationalCommandResults) info.commandResults = candidate.nationalCommandResults;
+      if (candidate.nationalConflicts) info.publicConflicts = candidate.nationalConflicts;
+      if (candidate.packedAttackUpdates?.length > 0) info.hasAuthoritativeAttackDelta = true;
+      if (candidate.packedMotionPlans?.length > 0) info.hasAuthoritativeMotion = true;
+      if (candidate.packedTileUpdates?.length > 0) info.hasTerritoryDelta = true;
       if (candidate.type === 'snapshot_result') info.snapshotAvailable = candidate.snapshot != null;
     }
     packets.push(info);
@@ -269,6 +282,24 @@ const probe = `(() => {
   });
   Object.defineProperty(window, '__nationalQaWorkerEvidence', {
     value: packets, configurable: false, writable: false,
+  });
+  // Observe only the genuine bubbling Solo launch. Do not modify its detail.
+  const soloLaunches = [];
+  document.addEventListener('join-lobby', (event) => {
+    const config = event.detail?.gameStartInfo?.config;
+    if (!config) return;
+    soloLaunches.push({
+      origin: event.target?.localName ?? null,
+      source: event.detail?.source ?? null,
+      gameType: config.gameType ?? null,
+      gameMode: config.gameMode ?? null,
+      difficulty: config.difficulty ?? null,
+      hasNationalMode: Object.prototype.hasOwnProperty.call(config, 'nationalMode'),
+      nationalMode: config.nationalMode ?? null,
+    });
+  }, true);
+  Object.defineProperty(window, '__nationalQaSoloLaunches', {
+    value: soloLaunches, configurable: false, writable: false,
   });
 })();`;
 
@@ -423,39 +454,27 @@ async function main() {
           const css = getComputedStyle(el);
           if (!rect.width || !rect.height || css.display === 'none' || css.visibility === 'hidden') continue;
           if (${requireEnabled} && (el.disabled || el.getAttribute('aria-disabled') === 'true')) continue;
-          found.push({ text, x: Math.round(rect.x + rect.width/2), y: Math.round(rect.y + rect.height/2), checked: !!el.checked });
+          found.push({ text, element: el, checked: !!el.checked });
         }
       };
       walk(root);
-      return found.sort((a,b) => a.text.length-b.text.length)[0] ?? null;
+      const picked = found.sort((a,b) => a.text.length-b.text.length)[0];
+      if (!picked) return null;
+      picked.element.scrollIntoView({ block: "center", inline: "nearest" });
+      const bounds = picked.element.getBoundingClientRect();
+      if (bounds.width <= 0 || bounds.height <= 0) return null;
+      return {
+        text: picked.text,
+        checked: picked.checked,
+        x: Math.round(bounds.x + bounds.width / 2),
+        y: Math.round(bounds.y + bounds.height / 2),
+      };
     })()`);
   const hit = async (x, y) => {
-    if (mobile) {
-      await send("Input.dispatchTouchEvent", {
-        type: "touchStart",
-        touchPoints: [{ x, y, id: 1 }],
-      });
-      await send("Input.dispatchTouchEvent", {
-        type: "touchEnd",
-        touchPoints: [],
-      });
-      record("actual-touch-input", { x: Math.round(x), y: Math.round(y) });
-      return;
-    }
-    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
-    await send("Input.dispatchMouseEvent", {
-      type: "mousePressed",
-      x,
-      y,
-      button: "left",
-      clickCount: 1,
-    });
-    await send("Input.dispatchMouseEvent", {
-      type: "mouseReleased",
-      x,
-      y,
-      button: "left",
-      clickCount: 1,
+    const route = await dispatchSoloPointer(send, mobile, x, y);
+    record(route === "touch" ? "actual-touch-input" : "actual-mouse-input", {
+      x: Math.round(x),
+      y: Math.round(y),
     });
   };
   const click = async (label, scope = "", attempts = 90) => {
@@ -464,12 +483,117 @@ async function main() {
     record("clicked", { label, text: target.text });
     return target;
   };
+  const nationalSelection = () =>
+    evaluate(`(() => {
+      const button = window.__nationalQaFind("button[data-national-difficulty]");
+      const modal = window.__nationalQaFind('single-player-modal');
+      if (!button || !modal) return null;
+      return {
+        label: button.getAttribute('aria-label'),
+        pressed: button.getAttribute('aria-pressed'),
+        disabled: button.disabled === true,
+        nationalMode: modal.nationalMode === true,
+        difficulty: modal.selectedDifficulty,
+        gameMode: modal.gameMode,
+      };
+    })()`);
+  const selectNational = async () => {
+    const before = await nationalSelection();
+    if (!before || before.label !== NATIONAL_BUTTON_LABEL) {
+      throw Error("NATIONAL_DIFFICULTY_BUTTON_MISSING_OR_MISLABELED");
+    }
+    if (!before.disabled && before.pressed !== "true") {
+      await clickSelector(NATIONAL_BUTTON_SELECTOR);
+    }
+    const selected = await poll(
+      async () => {
+        const state = await nationalSelection();
+        return state?.pressed === "true" &&
+          state.nationalMode === true &&
+          state.difficulty === "Impossible"
+          ? state
+          : null;
+      },
+      "E4 NATIONAL difficulty selected via native Chrome input",
+      40,
+      150,
+    );
+    assertSoloSelection(selected, true);
+    record("national-difficulty-selected", {
+      ariaPressed: selected.pressed,
+      difficulty: selected.difficulty,
+      gameMode: selected.gameMode,
+      via: mobile ? "touch" : "mouse",
+    });
+  };
+  const selectOrdinaryImpossible = async () => {
+    const target = await poll(
+      () =>
+        evaluate(`(() => {
+          const settings = window.__nationalQaFind('game-config-settings');
+          const normal = [...(settings?.querySelectorAll('button') ?? [])].find(
+            (button) =>
+              !button.hasAttribute('data-national-difficulty') &&
+              [...button.querySelectorAll('difficulty-display')].some(
+                (display) => display.difficultyKey === 'Impossible'
+              )
+          );
+          if (!normal || normal.disabled) return null;
+          normal.scrollIntoView({ block: 'center', inline: 'nearest' });
+          const rect = normal.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0
+            ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+            : null;
+        })()`),
+      "ordinary Impossible difficulty in live E4 Solo",
+      40,
+      150,
+    );
+    await hit(target.x, target.y);
+    const ordinary = await poll(
+      async () => {
+        const state = await nationalSelection();
+        return state?.pressed === "false" &&
+          state.nationalMode === false &&
+          state.difficulty === "Impossible"
+          ? state
+          : null;
+      },
+      "ordinary Impossible deselects NATIONAL",
+      40,
+      150,
+    );
+    assertSoloSelection(ordinary, false);
+    record("ordinary-solo-difficulty-restored", {
+      ariaPressed: ordinary.pressed,
+      difficulty: ordinary.difficulty,
+      via: mobile ? "touch" : "mouse",
+    });
+  };
+  const confirmLaunch = async (national) => {
+    const launches = await poll(
+      async () => {
+        const events = await evaluate(
+          "window.__nationalQaSoloLaunches?.slice(0, 2) ?? []",
+        );
+        return Array.isArray(events) && events.length > 0 ? events : null;
+      },
+      "real bubbling single-player join-lobby event",
+      80,
+      175,
+    );
+    record(
+      "actual-singleplayer-launch-config",
+      assertSoloLaunch(launches, national),
+    );
+  };
   const clickSelector = async (selector) => {
     const target = await poll(
       () =>
         evaluate(`(() => {
       const node = window.__nationalQaFind(${JSON.stringify(selector)});
       if (!node || node.disabled) return null;
+      node.scrollIntoView({ block: "center", inline: "nearest" });
       const bounds = node.getBoundingClientRect();
       return bounds.width && bounds.height
         ? { x: bounds.x + bounds.width/2, y: bounds.y + bounds.height/2 }
@@ -486,6 +610,7 @@ async function main() {
         evaluate(`(() => {
       const element = window.__nationalQaFind(${JSON.stringify(selector)});
       if (!element || element.disabled) return null;
+      element.scrollIntoView({ block: "center", inline: "nearest" });
       const rect=element.getBoundingClientRect();
       return rect.width && rect.height ? { x:rect.x+rect.width/2, y:rect.y+rect.height/2 } : null;
     })()`),
@@ -507,6 +632,73 @@ async function main() {
     await send("Input.insertText", { text: value });
     record("typed", { selector, chars: value.length });
   };
+  // Select real Lit form values through Chrome's keyboard event path, not
+  // DOM.value assignment or a forged event. The selected option must be live.
+  const chooseNativeSelect = async (selector, requiredId = null) => {
+    const options = await evaluate(
+      "(() => { const e=window.__nationalQaFind(" +
+        JSON.stringify(selector) +
+        "); return e && e.tagName==='SELECT' && !e.disabled ? Array.from(e.options).map(o => ({value:o.value, disabled:o.disabled})) : null; })()",
+    );
+    if (!Array.isArray(options))
+      throw Error("UI_SELECT_MISSING_OR_DISABLED: " + selector);
+    if (
+      requiredId !== null &&
+      !options.some((o) => o.value === requiredId && !o.disabled)
+    ) {
+      throw Error("ENGINE_REFERENCE_NOT_SELECTABLE_FOR_PRINCIPAL: " + selector);
+    }
+    if (!options.some((o) => o.value && !o.disabled)) {
+      throw Error("NO_REAL_SELECTABLE_GAME_TARGET: " + selector);
+    }
+    await clickSelector(selector);
+    for (let i = 0; i < options.length + 2; i++) {
+      await send("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "ArrowDown",
+        code: "ArrowDown",
+      });
+      await send("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "ArrowDown",
+        code: "ArrowDown",
+      });
+      await send("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "Enter",
+        code: "Enter",
+      });
+      await send("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "Enter",
+        code: "Enter",
+      });
+      const picked = await evaluate(
+        "window.__nationalQaFind(" +
+          JSON.stringify(selector) +
+          ")?.value ?? ''",
+      );
+      if (
+        picked &&
+        (requiredId === null || picked === requiredId) &&
+        options.some((o) => o.value === picked && !o.disabled)
+      ) {
+        record("native-select", { selector, optionValue: picked });
+        return picked;
+      }
+    }
+    throw Error("CHROMIUM_NATIVE_OPTION_NOT_SELECTED: " + selector);
+  };
+  const currentConflicts = () =>
+    evaluate(
+      "(() => {" +
+        "const g=window.__nationalQaFind('national-diplomacy-panel')?.game;" +
+        "return g ? { actorId:g.myPlayer?.()?.id?.() ?? null," +
+        "tick:g.ticks?.() ?? null," +
+        "projection:g.nationalConflicts?.() ?? null," +
+        "projectionTick:g.nationalConflictsTick?.() ?? null } : null;" +
+        "})()",
+    );
   const capture = async (name) => {
     await worker();
     await screenshot(name);
@@ -534,6 +726,10 @@ async function main() {
         stage: name,
         error: String(err),
         observed: await description().catch(() => null),
+      });
+      record("stage-failed", {
+        stage: name,
+        failureClass: String(err).slice(0, 160),
       });
       await capture("failure-" + name).catch(() => {});
       throw err;
@@ -684,28 +880,29 @@ async function main() {
     });
     await step("solo", async () => {
       await click("^solo$", "", 80);
-      await poll(
-        () =>
-          evaluate(
-            "!!document.querySelector('single-player-modal input[aria-label=\"Enable NATIONAL sovereignty in Solo\"]')",
-          ),
-        "Solo modal controls",
+      const control = await poll(
+        nationalSelection,
+        "E4 NATIONAL difficulty button visible in Solo modal",
+        40,
+        150,
       );
+      if (control.label !== NATIONAL_BUTTON_LABEL) {
+        throw Error("NATIONAL_SOLO_BUTTON_ACCESSIBILITY_CONTRACT_MISMATCH");
+      }
+      if (control.pressed !== "false" || control.nationalMode) {
+        throw Error("NATIONAL_MUST_NOT_DEFAULT_ON");
+      }
       await capture("solo-modal");
     });
     if (legacy) {
+      await step("legacy-configuration", async () => {
+        await selectNational();
+        await selectOrdinaryImpossible();
+        await capture("legacy-difficulty-restored");
+      });
       await step("legacy-ffa", async () => {
-        const national = await locate(
-          "Enable NATIONAL sovereignty in Solo",
-          "single-player-modal",
-          false,
-        );
-        if (!national || national.checked) {
-          throw Error(
-            "Legacy FFA did not start from an unselected NATIONAL checkbox",
-          );
-        }
         await click("start|play", "single-player-modal", 65);
+        await confirmLaunch(false);
         const ffaStatus = await poll(
           () =>
             evaluate(`(() => {
@@ -746,26 +943,75 @@ async function main() {
           workerPacketCount: observed.length,
         });
       });
+      await step("legacy-player-action", async () => {
+        const initial = await worker();
+        const lastTick = Math.max(0, ...initial.map((p) => p.tick ?? 0));
+        const spawnBefore = await evaluate(
+          "(() => { const e=window.__nationalQaFind('game-right-sidebar'); const g=e?.game ?? e?.gameView; const p=g?.myPlayer?.(); return p ? {spawned:p.hasSpawned?.() === true, tiles:p.numTilesOwned?.() ?? 0} : null; })()",
+        );
+        for (const [u, v] of [
+          [0.55, 0.55],
+          [0.38, 0.48],
+          [0.7, 0.42],
+        ]) {
+          const position = await evaluate(
+            "(() => { const canvas = [...document.querySelectorAll('canvas')].filter((e) => e.getBoundingClientRect().width > 150).sort((a,b) => b.getBoundingClientRect().width-a.getBoundingClientRect().width)[0]; const r=canvas?.getBoundingClientRect(); return r ? { x: r.x + r.width * " +
+              u +
+              ", y:r.y + r.height * " +
+              v +
+              " } : null; })()",
+          );
+          if (!position) throw Error("LEGACY_PLAYABLE_CANVAS_MISSING");
+          await hit(position.x, position.y);
+          await sleep(450);
+        }
+        const activity = await poll(
+          async () => {
+            const packets = await worker();
+            return packets.some(
+              (p) =>
+                (p.tick ?? 0) > lastTick &&
+                (p.hasTerritoryDelta === true ||
+                  p.hasAuthoritativeAttackDelta === true),
+            );
+          },
+          "legacy real map input followed by authoritative tile or attack update",
+          35,
+          300,
+        );
+        if (!activity) throw Error("LEGACY_PLAYER_ACTION_UNCONFIRMED");
+        const spawned = await poll(
+          async () => {
+            const state = await evaluate(
+              "(() => { const e=window.__nationalQaFind('game-right-sidebar'); const g=e?.game ?? e?.gameView; const p=g?.myPlayer?.(); return p ? {spawned:p.hasSpawned?.() === true, tiles:p.numTilesOwned?.() ?? 0} : null; })()",
+            );
+            return state?.spawned &&
+              state.tiles > 0 &&
+              (!spawnBefore?.spawned || state.tiles > spawnBefore.tiles)
+              ? state
+              : null;
+          },
+          "real legacy player spawn/territory after map input",
+          35,
+          300,
+        );
+        if (!spawned) throw Error("LEGACY_SPAWN_NOT_AUTHORITATIVELY_OBSERVED");
+        record("legacy-actual-map-interaction-authoritative-update", {
+          via: mobile ? "touch" : "mouse",
+          lastTick,
+          playerTiles: spawned.tiles,
+        });
+        await capture("legacy-player-action");
+      });
       return;
     }
     await step("national-mode", async () => {
-      const checkbox = await locate(
-        "Enable NATIONAL sovereignty in Solo",
-        "single-player-modal",
-      );
-      if (!checkbox) throw Error("NATIONAL opt-in control missing");
-      if (!checkbox.checked) await hit(checkbox.x, checkbox.y);
-      await poll(
-        () =>
-          evaluate(
-            "document.querySelector('single-player-modal input[aria-label=\"Enable NATIONAL sovereignty in Solo\"]')?.checked === true",
-          ),
-        "NATIONAL selected",
-      );
+      await selectNational();
       await capture("national-enabled");
     });
     await step("start", async () => {
       await click("start|play", "single-player-modal", 65);
+      await confirmLaunch(true);
       const launch = await poll(
         () =>
           evaluate(`(() => {
@@ -960,116 +1206,350 @@ async function main() {
       record("authoritative-duplicate-rejected");
       await capture("founding-rejected");
     });
-    await step("save-restore", async () => {
-      const rosterPackets = await worker();
-      const lastRoster = [...rosterPackets]
-        .reverse()
-        .find((p) => p.publicPolitics?.empires)?.publicPolitics;
-      if (!lastRoster?.empires?.some((e) => e.id === "R5_Browser_QA")) {
-        throw Error(
-          "Cannot save without authoritative public political roster",
-        );
+    // Save/restore is a separate protected-server gate. Do not block the
+    // concrete WAR→attack→peace slice behind an unavailable browser save UI.
+    // Do not treat this separation as a release-security pass.
+    let warId = null;
+    let warTargetId = null;
+    let combatBaseline = null;
+    let peaceMotionId = null;
+    await step("declare-war", async () => {
+      const hooked = await evaluate(
+        "(async () => {" +
+          "const panel=window.__nationalQaFind('national-diplomacy-panel');" +
+          "if (!panel?.eventBus || !panel.game?.myPlayer()) return false;" +
+          "const T=await import('/src/client/Transport.ts');" +
+          "window.__nationalQaDiplomacyRequests=[];" +
+          "panel.eventBus.on(T.SendNationalDeclareWarIntentEvent,e=>window.__nationalQaDiplomacyRequests.push({type:'national_declare_war',requestId:e.requestId,targetId:e.targetId,scope:e.scope}));" +
+          "panel.eventBus.on(T.SendNationalProposePeaceIntentEvent,e=>window.__nationalQaDiplomacyRequests.push({type:'national_propose_peace',requestId:e.requestId,warId:e.warId}));" +
+          "panel.eventBus.on(T.SendNationalAcceptPeaceIntentEvent,e=>window.__nationalQaDiplomacyRequests.push({type:'national_accept_peace',requestId:e.requestId,motionId:e.motionId}));" +
+          "return true;" +
+          "})()",
+      );
+      if (!hooked) throw Error("WAR_EVENTBUS_OBSERVER_NOT_CONNECTED");
+      const targetId = await chooseNativeSelect("#national-war-target");
+      const before = await currentConflicts();
+      if (!before?.actorId || !Number.isSafeInteger(before.tick)) {
+        throw Error("NO_AUTHENTICATED_NATIONAL_ACTOR_FOR_WAR");
       }
-      await clickSelector('img[alt="settings"]');
-      // The live game may permit saving only for a signed-in user. A
-      // deliberately denied raw NATIONAL worker snapshot MUST remain denied.
-      if (!(await evaluate("!!window.__nationalQaFind('[data-save-game]')"))) {
-        throw Error(
-          "No authenticated trusted-host save path available for NATIONAL Solo",
-        );
-      }
-      await clickSelector("[data-save-game]");
-      await poll(
-        async () => {
-          const status = await evaluate(
-            "window.__nationalQaFind('[data-save-status]')?.innerText ?? ''",
-          );
-          return (
-            /saved|success/i.test(status) &&
-            !/failed|error|unavailable/i.test(status)
-          );
-        },
-        "verified saved game acknowledgement",
-        65,
-      );
-      await capture("saved-confirmed");
-      await send("Page.navigate", { url: base });
-      await poll(() => locate("^solo$"), "returned home for save restore", 95);
-      await click("^solo$");
-      await clickSelector("[data-saved-games-toggle]");
-      await poll(
-        () =>
-          evaluate(
-            "!!window.__nationalQaFind('[data-save-id] [data-action=play]')",
-          ),
-        "trusted-host saved game row",
-        70,
-      );
-      const savedId = await evaluate(
-        "window.__nationalQaFind('[data-save-id]')?.getAttribute('data-save-id')",
-      );
-      await clickSelector("[data-save-id] [data-action=play]");
-      const restored = await poll(
-        async () => {
-          const packets = await worker();
-          const publicView = [...packets]
-            .reverse()
-            .find((p) => p.publicPolitics?.empires)?.publicPolitics;
-          return publicView?.empires?.some((e) => e.id === "R5_Browser_QA")
-            ? publicView
-            : null;
-        },
-        "restored authoritative political roster",
-        100,
-        300,
+      await clickSelector("#national-declare-war");
+      const request = await evaluate(
+        "window.__nationalQaDiplomacyRequests?.find(x=>x.type==='national_declare_war') ?? null",
       );
       if (
-        JSON.stringify(restored.empires) !== JSON.stringify(lastRoster.empires)
+        !request ||
+        request.scope !== "national" ||
+        request.targetId !== targetId ||
+        !/^nc_[a-f0-9]{32}$/.test(request.requestId)
+      ) {
+        throw Error("WAR_CLICK_DID_NOT_EMIT_REAL_REQUEST");
+      }
+      record("actual-war-button-request", { type: request.type, targetId });
+      const matched = await poll(
+        async () => {
+          const state = await currentConflicts();
+          const verdict = reconcileDiplomacyEvidence(await worker(), {
+            type: request.type,
+            requestId: request.requestId,
+            actorId: before.actorId,
+            targetId,
+            issuedTick: before.tick,
+            projection: state?.projection,
+            projectionTick: state?.projectionTick,
+          });
+          const status = await evaluate(
+            "window.__nationalQaFind('[data-national-diplomacy-status]')?.innerText ?? ''",
+          );
+          if (verdict.reason === "ENGINE_REJECTED_ACTION") {
+            return {
+              rejected: true,
+              reason: "ENGINE_REJECTED_WAR_DECLARATION",
+            };
+          }
+          return verdict.accepted && /War confirmed by game/i.test(status)
+            ? { ...verdict, uiConfirmed: true }
+            : null;
+        },
+        "actual user war click + recipient-scoped result + active public layer",
+        90,
+        350,
+      );
+      if (matched.rejected) throw Error(matched.reason);
+      warId = matched.warId;
+      warTargetId = targetId;
+      record("authoritative-war-declared", {
+        warId,
+        receiptTick: matched.receiptTick,
+        sequence: matched.sequence,
+        uiConfirmed: matched.uiConfirmed,
+      });
+      await capture("declared-war-live");
+    });
+    await step("map-assault", async () => {
+      const listened = await evaluate(
+        "(async () => {" +
+          "const panel=window.__nationalQaFind('national-diplomacy-panel');" +
+          "if (!panel?.eventBus) return false;" +
+          "const T=await import('/src/client/Transport.ts');" +
+          "window.__nationalQaMapAttacks=[];" +
+          "panel.eventBus.on(T.SendAttackIntentEvent,e=>window.__nationalQaMapAttacks.push({targetId:e.targetID,troops:e.troops}));" +
+          "return true;" +
+          "})()",
+      );
+      if (!listened) throw Error("REAL_MAP_ATTACK_OBSERVER_UNAVAILABLE");
+      if (!warTargetId) throw Error("WAR_TARGET_NOT_AUTHENTICATED");
+      combatBaseline = await evaluate(
+        "(() => {" +
+          "const g=window.__nationalQaFind('national-diplomacy-panel')?.game;" +
+          "const t=g?.players?.()?.find(p=>p.id?.()===" +
+          JSON.stringify(warTargetId) +
+          ");" +
+          "return t ? {id:t.id(),smallID:t.smallID?.() ?? null," +
+          "troops:t.troops?.() ?? null," +
+          "tiles:t.numTilesOwned?.() ?? null} : null;" +
+          "})()",
+      );
+      if (
+        !combatBaseline ||
+        !Number.isSafeInteger(combatBaseline.smallID) ||
+        !Number.isSafeInteger(combatBaseline.tiles) ||
+        combatBaseline.tiles <= 0
+      ) {
+        throw Error("CANONICAL_WAR_TARGET_BASELINE_UNAVAILABLE");
+      }
+      const existing = await worker();
+      const lastSequence = Math.max(0, ...existing.map((p) => p.sequence ?? 0));
+      const previousOutgoing = await evaluate(
+        "(() => {const a=window.__nationalQaFind('national-diplomacy-panel')" +
+          "?.game?.myPlayer?.()?.outgoingAttacks?.();" +
+          "return Array.isArray(a) ? a.filter(x=>x.targetID===" +
+          combatBaseline.smallID +
+          ").length : null;})()",
+      );
+      if (!Number.isSafeInteger(previousOutgoing)) {
+        throw Error("PLAYER_ATTACK_STATE_UNAVAILABLE");
+      }
+      // Collapse the UI, then operate the actual canvas through CDP input.
+      await click("NATIONAL.*Diplomacy", "national-diplomacy-panel", 35);
+      for (const [u, v] of [
+        [0.55, 0.55],
+        [0.4, 0.44],
+        [0.65, 0.45],
+        [0.52, 0.62],
+        [0.7, 0.7],
+      ]) {
+        const point = await evaluate(
+          "(() => { const c=[...document.querySelectorAll('canvas')].filter(e=>e.getBoundingClientRect().width>150).sort((a,b)=>b.getBoundingClientRect().width-a.getBoundingClientRect().width)[0]; const r=c?.getBoundingClientRect(); return r? {x:r.x+r.width*" +
+            u +
+            ",y:r.y+r.height*" +
+            v +
+            "}:null; })()",
+        );
+        if (!point) throw Error("REAL_MAP_CANVAS_MISSING");
+        await hit(point.x, point.y);
+        await sleep(500);
+        const actions = await evaluate("window.__nationalQaMapAttacks ?? []");
+        if (
+          actions.some(
+            (a) =>
+              a.targetId === warTargetId &&
+              Number.isFinite(a.troops) &&
+              a.troops > 0,
+          )
+        )
+          break;
+      }
+      const attacks = await evaluate("window.__nationalQaMapAttacks ?? []");
+      if (
+        !attacks.some(
+          (a) =>
+            a.targetId === warTargetId &&
+            Number.isFinite(a.troops) &&
+            a.troops > 0,
+        )
+      ) {
+        throw Error("MAP_ATTACK_ON_DECLARED_WAR_TARGET_NOT_DISPATCHED");
+      }
+      const authoritative = await poll(
+        async () => {
+          const packets = await worker();
+          const attackCount = await evaluate(
+            "(() => {const a=window.__nationalQaFind('national-diplomacy-panel')" +
+              "?.game?.myPlayer?.()?.outgoingAttacks?.();" +
+              "return Array.isArray(a) ? a.filter(x=>x.targetID===" +
+              combatBaseline.smallID +
+              ").length : null;})()",
+          );
+          const resultFromEngine = packets.some(
+            (p) =>
+              p.sequence > lastSequence &&
+              (p.hasAuthoritativeAttackDelta === true ||
+                p.hasAuthoritativeMotion === true),
+          );
+          return (
+            Number.isSafeInteger(attackCount) &&
+            attackCount > previousOutgoing &&
+            resultFromEngine
+          );
+        },
+        "actual own outgoing attack plus authoritative combat packet",
+        60,
+        300,
+      );
+      if (!authoritative) throw Error("MAP_ASSAULT_LACKS_OWN_ENGINE_ATTACK");
+      record("actual-war-map-assault", {
+        input: mobile ? "touch" : "mouse",
+        dispatched: attacks.length,
+        observedEngineChange: true,
+      });
+      await capture("map-assault-confirmed");
+      await click("NATIONAL.*Diplomacy", "national-diplomacy-panel", 35);
+    });
+    await step("combat-impact", async () => {
+      if (!combatBaseline || combatBaseline.id !== warTargetId) {
+        throw Error("COMBAT_DAMAGE_BASELINE_MISSING");
+      }
+      const impact = await poll(
+        async () => {
+          const state = await evaluate(
+            "(() => {" +
+              "const g=window.__nationalQaFind('national-diplomacy-panel')?.game;" +
+              "const t=g?.players?.()?.find(p=>p.id?.()===" +
+              JSON.stringify(warTargetId) +
+              ");" +
+              "return t ? {id:t.id(),troops:t.troops?.() ?? null," +
+              "tiles:t.numTilesOwned?.() ?? null} : null;" +
+              "})()",
+          );
+          if (!state || !Number.isSafeInteger(state.tiles)) {
+            return null;
+          }
+          const troopLoss =
+            Number.isFinite(combatBaseline.troops) &&
+            Number.isFinite(state.troops) &&
+            state.troops < combatBaseline.troops;
+          return troopLoss || state.tiles < combatBaseline.tiles ? state : null;
+        },
+        "engine-derived war target troop loss or territory loss",
+        120,
+        300,
+      );
+      if (!impact) throw Error("REAL_WAR_DAMAGE_NOT_OBSERVED");
+      record("authoritative-combat-impact", {
+        warId,
+        targetId: warTargetId,
+        actualOpponentLoss: true,
+      });
+      await capture("combat-impact-canonical");
+    });
+    await step("propose-peace", async () => {
+      if (!warId) throw Error("NO_GAME_ISSUED_WAR_ID_FOR_PEACE");
+      await chooseNativeSelect("#national-peace-war-id", warId);
+      const before = await currentConflicts();
+      if (!before?.actorId || !Number.isSafeInteger(before.tick)) {
+        throw Error("NO_AUTHENTICATED_PRINCIPAL_FOR_PEACE");
+      }
+      await clickSelector("#national-propose-peace");
+      const request = await evaluate(
+        "window.__nationalQaDiplomacyRequests?.find(x=>x.type==='national_propose_peace') ?? null",
+      );
+      if (
+        !request ||
+        request.warId !== warId ||
+        !/^nc_[a-f0-9]{32}$/.test(request.requestId)
+      ) {
+        throw Error("PEACE_CLICK_DID_NOT_EMIT_REAL_REQUEST");
+      }
+      const matched = await poll(
+        async () => {
+          const state = await currentConflicts();
+          const result = reconcileDiplomacyEvidence(await worker(), {
+            type: request.type,
+            requestId: request.requestId,
+            actorId: before.actorId,
+            issuedTick: before.tick,
+            warId,
+            projection: state?.projection,
+            projectionTick: state?.projectionTick,
+          });
+          const status = await evaluate(
+            "window.__nationalQaFind('[data-national-diplomacy-status]')?.innerText ?? ''",
+          );
+          if (result.reason === "ENGINE_REJECTED_ACTION") {
+            return { rejected: true, reason: "ENGINE_REJECTED_PEACE_PROPOSAL" };
+          }
+          return result.accepted &&
+            /Peace proposal confirmed by game/i.test(status)
+            ? result
+            : null;
+        },
+        "real peace proposal receipt + exact game motion",
+        90,
+        350,
+      );
+      if (matched.rejected) throw Error(matched.reason);
+      peaceMotionId = matched.motionId;
+      record("authoritative-peace-proposal", {
+        warId,
+        motionId: peaceMotionId,
+        sequence: matched.sequence,
+      });
+      await capture("peace-motion-proposed");
+    });
+    await step("accept-peace", async () => {
+      if (!peaceMotionId) throw Error("NO_ENGINE_PEACE_MOTION_ID");
+      // A nation cannot accept its OWN proposed peace via a fake second
+      // principal. E1/E4 must expose a real opposing actor turn/session.
+      await chooseNativeSelect("#national-peace-motion-id", peaceMotionId);
+      const before = await currentConflicts();
+      await clickSelector("#national-accept-peace");
+      const request = await evaluate(
+        "window.__nationalQaDiplomacyRequests?.find(x=>x.type==='national_accept_peace') ?? null",
+      );
+      if (
+        !request ||
+        request.motionId !== peaceMotionId ||
+        !/^nc_[a-f0-9]{32}$/.test(request.requestId)
       ) {
         throw Error(
-          "NATIONAL restored authoritative roster differs from saved roster",
+          "PEACE_ACCEPTANCE_NOT_SUBMITTED_BY_REAL_OPPOSING_PRINCIPAL",
         );
       }
-      record("trusted-host-save-restore-passed", {
-        savedId,
-        empires: restored.empires.length,
-      });
-      await capture("restored-roster");
-    });
-    await step("sovereign-victory", async () => {
-      const actorId = await evaluate(
-        "window.__nationalQaFind('national-diplomacy-panel')?.game?.myPlayer()?.id() ?? null",
-      );
-      if (typeof actorId !== "string" || !actorId) {
-        throw Error(
-          "No authenticated current player at sovereign-victory check",
-        );
-      }
-      const prize = await poll(
+      const accepted = await poll(
         async () => {
-          const pkts = await worker();
-          const verified = pkts.find(
-            (p) =>
-              p.publicPolitics?.victory?.resolved === true &&
-              p.publicPolitics?.victory?.prizes?.some(
-                (award) =>
-                  award.kind === "SovereignVictor" &&
-                  award.nationId === actorId,
-              ),
-          );
-          return verified?.publicPolitics?.victory ?? null;
+          const state = await currentConflicts();
+          const result = reconcileDiplomacyEvidence(await worker(), {
+            type: request.type,
+            requestId: request.requestId,
+            actorId: before?.actorId,
+            issuedTick: before?.tick,
+            warId,
+            motionId: peaceMotionId,
+            projection: state?.projection,
+            projectionTick: state?.projectionTick,
+          });
+          return result.accepted
+            ? result
+            : result.reason === "ENGINE_REJECTED_ACTION"
+              ? { rejected: true, reason: "ENGINE_REJECTED_PEACE_ACCEPTANCE" }
+              : null;
         },
-        "E1 authoritative public resolved victory containing this actor's SovereignVictor prize",
-        70,
-        250,
+        "authentic opposing peace acceptance + ended public war layer",
+        90,
+        350,
       );
-      record("authoritative-sovereign-victory", {
-        nationId: actorId,
-        sovereignPowerCount: prize.sovereignPowerCount,
-        prizes: prize.prizes,
+      if (accepted.rejected) throw Error(accepted.reason);
+      record("authoritative-peace-accepted", {
+        warId,
+        motionId: peaceMotionId,
+        receiptTick: accepted.receiptTick,
+        sequence: accepted.sequence,
       });
-      await capture("sovereign-victory");
+      await capture("peace-accepted-ended-war");
     });
+    // This browser scenario is not a public-release verdict. Trusted saved
+    // game restoration, replay/victory and hostile-client private state must
+    // still be independently demonstrated on a protected authority.
   } finally {
     await worker().catch(() => {});
     persist();

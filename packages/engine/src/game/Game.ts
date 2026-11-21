@@ -54,6 +54,7 @@ import type {
 } from "../national/conflict/DefenseLevy";
 import type {
   NationalCommand,
+  NationalAccessionOfferView,
   NationalPublicPoliticalView,
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
@@ -608,6 +609,10 @@ export interface Game extends GameLike {
   > | null;
   /** Enumerates public empire leaders/members and warning/victory facts only. */
   nationalPublicPoliticalView(): NationalPublicPoliticalView | null;
+  /** Private pending invitations addressed only to this authenticated human. */
+  nationalAccessionOffers(
+    observer: Player,
+  ): readonly NationalAccessionOfferView[];
   nationalVictoryRoster(): LastSovereignResult | null;
   nationalUngovernableWarnings(): readonly NationalUngovernableWarning[];
   /** Canonical E2 WarLedger-backed live query, never a mutable ledger. */

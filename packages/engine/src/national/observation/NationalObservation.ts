@@ -96,7 +96,10 @@ export type PublicDiplomaticEventKind =
   | "treaty-kept"
   | "treaty-broken"
   | "threat-fulfilled"
-  | "bluff-exposed";
+  | "bluff-exposed"
+  /** Canonical WAR layer transitions are public, but motions are private. */
+  | "war-started"
+  | "war-ended";
 
 export interface NationalDiplomaticEvent {
   readonly id: string;

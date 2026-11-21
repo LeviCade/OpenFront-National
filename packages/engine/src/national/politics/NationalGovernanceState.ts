@@ -83,8 +83,10 @@ export type NationalWarCommandOutcome = {
 };
 export type NationalPoliticalCommandResult = Omit<
   NationalFoundEmpireResult,
-  "commandFingerprint"
+  "commandFingerprint" | "commandKind" | "commandTargetId" | "recipientId"
 > & {
+  /** Authenticated request owner, not the proposed accession invitee. */
+  recipientId: string;
   commandKind: NationalPoliticalCommandKind;
   commandTargetId: string;
 };
@@ -93,12 +95,17 @@ export type NationalPoliticalCommandResult = Omit<
 function politicalResultView(
   result: NationalFoundEmpireResult,
 ): NationalPoliticalCommandResult {
-  if (result.commandKind === undefined || result.commandTargetId === undefined)
+  if (
+    result.commandKind === undefined ||
+    result.commandTargetId === undefined ||
+    (result.recipientId !== undefined && result.recipientId !== result.actorId)
+  )
     throw new Error("NATIONAL journal: missing political result identity");
   return {
     sequence: result.sequence,
     requestId: result.requestId,
     actorId: result.actorId,
+    recipientId: result.recipientId ?? result.actorId,
     empireId: result.empireId,
     commandKind: politicalCommandKind.parse(result.commandKind),
     commandTargetId: result.commandTargetId,
@@ -326,6 +333,10 @@ export class NationalGovernanceState {
             commandKind,
             commandTargetId: empireId,
             commandFingerprint: commandFingerprint!,
+            // All non-founder receipts are private to the initiating actor;
+            // accession invitees learn offers through an independent, filtered
+            // read port, not by receiving another player's command receipt.
+            recipientId: actorId,
           }),
       ...(warReferences === null
         ? {}
@@ -491,6 +502,9 @@ export class NationalGovernanceState {
       )
         throw new Error("NATIONAL journal: invalid or future receipt");
       const isWar = warCommandKind.safeParse(receipt.commandKind).success;
+      const isPolitical = politicalCommandKind.safeParse(
+        receipt.commandKind,
+      ).success;
       if (
         (isWar &&
           (receipt.recipientId !== receipt.actorId ||
@@ -507,9 +521,12 @@ export class NationalGovernanceState {
             (receipt.commandKind === "national_declare_war" &&
               receipt.motionId !== undefined))) ||
         (!isWar &&
-          (receipt.recipientId !== undefined ||
-            receipt.warId !== undefined ||
-            receipt.motionId !== undefined))
+          (receipt.warId !== undefined ||
+            receipt.motionId !== undefined ||
+            (isPolitical
+              ? receipt.recipientId !== undefined &&
+                receipt.recipientId !== receipt.actorId
+              : receipt.recipientId !== undefined)))
       )
         throw new Error("NATIONAL journal: invalid WAR receipt");
       requests.add(receipt.requestId);

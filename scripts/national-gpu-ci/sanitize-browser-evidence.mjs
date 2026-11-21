@@ -21,6 +21,16 @@ export const MODES = [
   "legacy-desktop",
   "legacy-mobile",
 ];
+export const REPORT_FOLDERS = Object.freeze({
+  "national-desktop": "browser-national-desktop",
+  "national-mobile": "browser-national-mobile",
+  "legacy-desktop": "browser-legacy-ffa-desktop",
+  "legacy-mobile": "browser-legacy-ffa-mobile",
+});
+const pixelMatches = (value) =>
+  Array.isArray(value) &&
+  value.length === 4 &&
+  [51, 102, 153, 255].every((n, i) => value[i] === n);
 const STAGES = new Set([
   "boot",
   "home",
@@ -50,6 +60,7 @@ const SCREENSHOTS = new Set([
   "sovereign-victory",
 ]);
 const PNG_MAGIC = Buffer.from("89504e470d0a1a0a", "hex");
+const PNG_IEND = Buffer.from("0000000049454e44ae426082", "hex");
 const screenshotName = (value) => {
   if (!value.endsWith(".png")) return false;
   const label = value.slice(0, -4);
@@ -117,8 +128,9 @@ export function summarizeBrowserEvidence(report, expectedSha) {
       .slice(0, 40),
     packetCounts: {
       observed: packets.length,
-      withPublicPolitics: packets.filter((p) => p?.publicPolitics !== null)
-        .length,
+      withPublicPolitics: packets.filter(
+        (p) => p?.publicPolitics !== null && p?.publicPolitics !== undefined,
+      ).length,
       acceptedResults: packets.reduce(
         (sum, p) =>
           sum +
@@ -146,8 +158,11 @@ export function summarizeBrowserEvidence(report, expectedSha) {
   };
 }
 
-export function publishEvidence(root, expectedSha) {
-  const publicDir = join(root, "gpu", "public");
+export function publishEvidence(root, expectedSha, kind = "release") {
+  if (!["diagnostic", "release"].includes(kind)) {
+    throw Error("Unrecognized GPU acceptance lane");
+  }
+  const publicDir = join(root, "gpu", "public", kind);
   mkdirSync(publicDir, { recursive: true });
   const resultsPath = join(root, "gpu", "scenarios.jsonl");
   const lines = existsSync(resultsPath)
@@ -177,7 +192,7 @@ export function publishEvidence(root, expectedSha) {
     modes: {},
   };
   for (const mode of MODES) {
-    const origin = join(root, "browser-" + mode);
+    const origin = join(root, REPORT_FOLDERS[mode]);
     const file = join(origin, "acceptance.json");
     let raw = null;
     if (
@@ -193,51 +208,167 @@ export function publishEvidence(root, expectedSha) {
     }
     const summary = summarizeBrowserEvidence(raw, expectedSha);
     const status = recorded.get(mode);
+    const expectedViewport = mode.endsWith("mobile")
+      ? "390x844 mobile"
+      : "1280x800 desktop";
+    const actualViewport =
+      raw?.viewport === "390x844 mobile" || raw?.viewport === "1280x800 desktop"
+        ? raw.viewport
+        : null;
     if (
       !summary.sourceMatches ||
       (status?.result !== "PASS" && status?.result !== "FAIL")
     )
       valid = false;
-    if (status?.result === "PASS" && !summary.hardware.proofAccepted)
-      valid = false;
+    const historicalEvents = Array.isArray(raw?.events) ? raw.events : [];
+    const hasEvent = (name) =>
+      historicalEvents.some((event) => event?.name === name);
+    const stageComplete = mode.startsWith("legacy-")
+      ? summary.completedStages.includes("legacy-ffa") &&
+        hasEvent("legacy-ffa-verified")
+      : summary.completedStages.includes("sovereign-victory") &&
+        hasEvent("authoritative-empire-accepted") &&
+        hasEvent("authoritative-duplicate-rejected") &&
+        hasEvent("authoritative-sovereign-victory");
+    const gl1 = raw?.actualHardware?.webgl1;
+    const gl2 = raw?.actualHardware?.webgl;
+    const physicalDiagnostic =
+      gl1?.supported === true &&
+      gl2?.supported === true &&
+      gl1.contextLost === false &&
+      gl2.contextLost === false &&
+      pixelMatches(gl1.shaderPixel) &&
+      pixelMatches(gl2.shaderPixel) &&
+      typeof gl1.unmaskedRenderer === "string" &&
+      /virgl/i.test(gl1.unmaskedRenderer) &&
+      !/swiftshader|llvmpipe|lavapipe|softpipe|software|swrast/i.test(
+        gl1.unmaskedRenderer,
+      ) &&
+      summary.hardware.renderer !== null;
+    const signed =
+      kind === "release" &&
+      raw?.hardwareAcceptanceRequired === true &&
+      summary.hardware.proofAccepted === true;
+    const laneMatches =
+      raw?.hardwareAcceptanceRequired === (kind === "release");
+    const viewportMatches = actualViewport === expectedViewport;
+    const statusExitMatches =
+      status?.result === (status?.exitCode === 0 ? "PASS" : "FAIL");
+    const reportedPass = status?.result === "PASS";
+    const scenarioAccepted =
+      summary.sourceMatches &&
+      laneMatches &&
+      viewportMatches &&
+      statusExitMatches &&
+      physicalDiagnostic &&
+      stageComplete &&
+      (kind === "diagnostic" || signed);
+    if (reportedPass && !scenarioAccepted) valid = false;
+    if (!statusExitMatches) valid = false;
+    const outcome = !status
+      ? "NOT_RUN"
+      : reportedPass
+        ? scenarioAccepted
+          ? "PASS"
+          : "UNVERIFIED"
+        : "FAIL";
+    const reason = !status
+      ? "PROCESS_NOT_RUN"
+      : !raw
+        ? "REPORT_MISSING_OR_INVALID"
+        : !summary.sourceMatches
+          ? "SOURCE_MISMATCH"
+          : !viewportMatches
+            ? "VIEWPORT_MISMATCH"
+            : !laneMatches
+              ? "EVIDENCE_LANE_MISMATCH"
+              : !physicalDiagnostic
+                ? "GPU_OBSERVATION_INCOMPLETE"
+                : status.exitCode !== 0
+                  ? summary.stageReached
+                    ? "GAMEPLAY_STAGE_" +
+                      summary.stageReached.toUpperCase().replaceAll("-", "_")
+                    : "BROWSER_PROCESS_FAILURE"
+                  : !stageComplete
+                    ? "GAMEPLAY_INCOMPLETE"
+                    : kind === "release" && !signed
+                      ? "SIGNED_WITNESS_NOT_VERIFIED"
+                      : "NONE";
+    summary.hardware.diagnosticObserved = physicalDiagnostic;
+    summary.hardware.proofAccepted = signed;
+    summary.hardware.verdict = signed ? summary.hardware.verdict : null;
     const images = [];
-    if (existsSync(origin)) {
+    if (existsSync(origin) && lstatSync(origin).isDirectory()) {
       const outputDir = join(publicDir, mode);
       mkdirSync(outputDir, { recursive: true });
       for (const name of readdirSync(origin).sort()) {
         if (!screenshotName(name) || images.length >= 30) continue;
         const path = join(origin, name);
         const info = lstatSync(path);
+        if (!info.isFile() || info.size < 45 || info.size > 4_000_000) continue;
+        const png = readFileSync(path);
         if (
-          !info.isFile() ||
-          info.size > 8_000_000 ||
-          info.size < PNG_MAGIC.length
+          !png.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC) ||
+          !png.subarray(-12).equals(PNG_IEND) ||
+          png.subarray(12, 16).toString("ascii") !== "IHDR" ||
+          png.readUInt32BE(16) < 1 ||
+          png.readUInt32BE(16) > 4096 ||
+          png.readUInt32BE(20) < 1 ||
+          png.readUInt32BE(20) > 4096
         )
-          continue;
-        if (!readFileSync(path).subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC))
           continue;
         copyFileSync(path, join(outputDir, name));
         images.push(name);
       }
     }
     result.modes[mode] = {
-      outcome: status?.result ?? "NOT_RUN",
+      scenario: mode,
+      reportPath: REPORT_FOLDERS[mode] + "/acceptance.json",
+      outcome,
+      reason,
       exitCode: number(status?.exitCode),
+      stageComplete,
+      viewportMatches,
+      laneMatches,
+      releaseCertified: false,
+      reportPresent: raw !== null,
+      expectedViewport,
+      actualViewport,
+      firstFailedStage: status?.exitCode !== 0 ? summary.stageReached : null,
+      screenshotCount: images.length,
       ...summary,
       screenshotNames: images,
     };
+    writeFileSync(
+      join(publicDir, mode + ".json"),
+      JSON.stringify(result.modes[mode], null, 2) + "\n",
+    );
   }
+  result.schema = 2;
+  result.lane = kind;
+  result.exactCandidateSha = SHA.test(expectedSha ?? "") ? expectedSha : null;
+  result.allModesPass =
+    valid && MODES.every((mode) => result.modes[mode].outcome === "PASS");
+  result.classification =
+    kind === "diagnostic"
+      ? "UNSIGNED_DIAGNOSTIC_NOT_RELEASE"
+      : "E5_BROWSER_SIGNED_GATE_PENDING_HOST_CLEANUP";
+  result.releaseCertified = false;
+  result.hostCleanupVerified = false;
   writeFileSync(
     join(publicDir, "summary.json"),
     JSON.stringify(result, null, 2) + "\n",
   );
-  return valid;
+  return result.allModesPass;
 }
 
 if (process.argv[1]?.endsWith("sanitize-browser-evidence.mjs")) {
+  const index = process.argv.indexOf("--kind");
+  const kind = index < 0 ? "release" : process.argv[index + 1];
   const valid = publishEvidence(
     process.env.NATIONAL_QA_ARTIFACT_ROOT ?? "national-qa-artifacts",
     process.env.NATIONAL_GPU_CANDIDATE_SHA,
+    kind,
   );
   console.info(
     "PUBLIC_GPU_EVIDENCE=" + (valid ? "VALID" : "INCOMPLETE_OR_UNTRUSTED"),
