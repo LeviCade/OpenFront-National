@@ -75,6 +75,8 @@ export function verifyPublicModeProof(
     String(p.runId) !== String(expected.runId) ||
     String(p.runAttempt) !== String(expected.runAttempt) ||
     p.runnerName !== expected.runnerName ||
+    !DECIMAL.test(String(p.jobId ?? "")) ||
+    !DECIMAL.test(String(p.runnerId ?? "")) ||
     p.challenge !== challenge
   ) {
     reject("HOST_PROOF_RUN_OR_MODE_MISMATCH");
@@ -118,6 +120,38 @@ export function verifyPublicModeProof(
   return true;
 }
 
+/**
+ * Validate the live numeric JIT runner/job independently against the public
+ * GitHub Actions control plane. Never infer jobId from a guest environment
+ * string, the workflow label, or the signer's own payload.
+ */
+export function verifyGitHubJobBinding(payload, jobs, expected) {
+  if (
+    !jobs ||
+    !Number.isSafeInteger(jobs.total_count) ||
+    jobs.total_count < 1 ||
+    jobs.total_count > 100 ||
+    !Array.isArray(jobs.jobs) ||
+    jobs.jobs.length !== jobs.total_count
+  ) {
+    reject("GITHUB_JOB_INVENTORY_INCOMPLETE");
+  }
+  const candidates = jobs.jobs.filter(
+    (job) =>
+      String(job.run_id) === String(expected.runId) &&
+      String(job.run_attempt) === String(expected.runAttempt) &&
+      job.runner_name === expected.runnerName &&
+      String(job.runner_id) === String(payload.runnerId) &&
+      job.status === "in_progress",
+  );
+  if (
+    candidates.length !== 1 ||
+    String(candidates[0].id) !== String(payload.jobId)
+  ) {
+    reject("HOST_PROOF_GITHUB_JOB_RUNNER_MISMATCH");
+  }
+  return true;
+}
 function readPublicFile(path, maxSize) {
   const stats = lstatSync(path);
   if (
@@ -153,7 +187,7 @@ export function validatePublicHandoff(mode, expected, now = Date.now()) {
       "utf8",
     ),
   ).trustedEd25519PublicKeySha256;
-  return verifyPublicModeProof(
+  verifyPublicModeProof(
     mode,
     signed,
     pem,
@@ -162,6 +196,7 @@ export function validatePublicHandoff(mode, expected, now = Date.now()) {
     expected,
     now,
   );
+  return signed.payload;
 }
 async function cli() {
   const mode = process.argv[2];
@@ -176,7 +211,21 @@ async function cli() {
   const deadline = Date.now() + 75_000;
   while (Date.now() < deadline) {
     try {
-      validatePublicHandoff(mode, expected);
+      const signedPayload = validatePublicHandoff(mode, expected);
+      // Public repository API, no credential/token or private job data.
+      const response = await fetch(
+        "https://api.github.com/repos/LeviCade/OpenFront-National/actions/runs/" +
+          expected.runId + "/jobs?per_page=100",
+        {
+          headers: {
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+          signal: AbortSignal.timeout(10000),
+        },
+      );
+      if (!response.ok) reject("GITHUB_JOB_VERIFICATION_UNAVAILABLE");
+      verifyGitHubJobBinding(await response.json(), signedPayload, expected);
       console.info(
         "E6_PUBLIC_HOST_PROOF=" + mode + ":ED25519_VERIFIED_NOT_RELEASE",
       );
