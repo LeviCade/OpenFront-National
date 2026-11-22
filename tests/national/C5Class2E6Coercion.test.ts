@@ -13,6 +13,7 @@ import {
   initialNationalCoercionMemory,
   observedImperialReach,
   planObservedImperialCoercion,
+  proposeCanonicalImperialUltimatumIntent,
   updateNationalCoercionMemory,
   type ObservedImperialUltimatum,
 } from "@openfront/engine/national/ai/NationalCoercionStrategy";
@@ -418,6 +419,50 @@ describe("C5 Class Two E6 sovereign coercion — AI-01/04/05/06/07, ECON-06/07",
       planNationalInterest(obs, initialNationalPlannerMemory(A), 30).decision
         ?.objective,
     ).toBe("expand");
+  });
+
+  it("E3 adapter maps only timely recipient commands into canonical intent shapes", () => {
+    const incoming=projected(baseWorld());
+    const decline=planObservedImperialCoercion(incoming,[demand()],initialNationalCoercionMemory(A))!;
+    const refuse=proposeCanonicalImperialUltimatumIntent(incoming,[demand()],decline,"e6_req_1");
+    expect(refuse).toEqual({type:"national_respond_ultimatum",ultimatumId:"ultimatum-1",decision:"refuse",requestId:"e6_req_1"});
+    const reachable=projected({...baseWorld(),frontiers:[
+      {observerId:A,targetId:B,access:"land"},
+      {observerId:A,targetId:C,access:"land"},
+    ]});
+    const accept=planObservedImperialCoercion(reachable,[demand()],initialNationalCoercionMemory(A))!;
+    expect(accept.kind).toBe("acknowledge-consent");
+    expect(proposeCanonicalImperialUltimatumIntent(reachable,[demand()],accept,"e6_req_2"))
+      .toEqual({type:"national_respond_ultimatum",ultimatumId:"ultimatum-1",decision:"accept",requestId:"e6_req_2"});
+    expect(proposeCanonicalImperialUltimatumIntent(reachable,[demand()],accept,"bad request")).toBeNull();
+    expect(proposeCanonicalImperialUltimatumIntent({...reachable,tick:110},[demand()],accept,"e6_late")).toBeNull();
+    expect(proposeCanonicalImperialUltimatumIntent(projected(baseWorld(),B),[demand()],decline,"e6_foreign")).toBeNull();
+    const alreadyConsented={...demand("consented"),response:"accept" as const};
+    const joining=planObservedImperialCoercion(reachable,[alreadyConsented],initialNationalCoercionMemory(A))!;
+    expect(joining.kind).toBe("accept-consent");
+    // Joining is NOT one of E3's commands: it requires the separate Game political receipt.
+    expect(proposeCanonicalImperialUltimatumIntent(reachable,[alreadyConsented],joining,"e6_join")).toBeNull();
+  });
+
+  it("E3 adapter validates actual issuer role and reach before any enforce/issue proposal",()=>{
+    const w=baseWorld();
+    const issuer=projected(w,C);
+    const view={...demand("decision-required"),role:"issuer" as const};
+    const enforcing=planObservedImperialCoercion(issuer,[view],initialNationalCoercionMemory(C))!;
+    expect(enforcing.kind).toBe("enforce");
+    expect(proposeCanonicalImperialUltimatumIntent(issuer,[view],enforcing,"e6_enforce"))
+      .toEqual({type:"national_resolve_ultimatum",ultimatumId:"ultimatum-1",decision:"enforce",requestId:"e6_enforce"});
+    const missing=projected({...w,frontiers:w.frontiers.filter(f=>f.observerId!==C)},C);
+    expect(proposeCanonicalImperialUltimatumIntent(missing,[view],enforcing,"e6_unreachable")).toBeNull();
+    const backing=planObservedImperialCoercion(missing,[view],initialNationalCoercionMemory(C))!;
+    expect(proposeCanonicalImperialUltimatumIntent(missing,[view],backing,"e6_retreat"))
+      .toEqual({type:"national_resolve_ultimatum",ultimatumId:"ultimatum-1",decision:"back-down",requestId:"e6_retreat"});
+    expect(proposeCanonicalImperialUltimatumIntent(issuer,[{...view,role:"recipient"}],enforcing,"e6_spoof")).toBeNull();
+    const issuing=planObservedImperialCoercion(issuer,[],initialNationalCoercionMemory(C))!;
+    expect(issuing.kind).toBe("issue");
+    expect(proposeCanonicalImperialUltimatumIntent(issuer,[],issuing,"e6_new"))
+      .toEqual({type:"national_issue_ultimatum",empireId:"crown",targetId:A,threat:"imperial-war",durationTicks:30,requestId:"e6_new"});
+    expect(proposeCanonicalImperialUltimatumIntent(issuer,[{...view,phase:"pending",role:"issuer"}],issuing,"e6_duplicate")).toBeNull();
   });
 
   it("imperial issuer distinguishes legitimate reachable enforcement from an actual backdown", () => {
