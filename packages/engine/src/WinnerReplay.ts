@@ -18,6 +18,7 @@ export {
   createTrustedNationalGameRunner,
   createTrustedNationalGameRunnerFromSnapshot,
 } from "./GameRunner";
+export { decodeSnapshotValue } from "./snapshot/SnapshotCodec";
 
 export interface ReplayedWinner {
   // undefined when the turns run out before anyone wins, or the match was
