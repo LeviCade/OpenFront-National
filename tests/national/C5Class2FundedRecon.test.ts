@@ -138,6 +138,15 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     expect(visible(game, BUYER.id, far.id())).toBeUndefined();
     // Existing lawful geographic sight may reveal this co-located structure;
     // the purchase must NEVER be the authority for an unrelated owner.
+    console.info("[M7 cross-owner attribution] " + JSON.stringify({
+      targetId: TARGET.id,
+      strangerId: STRANGER.id,
+      unrelatedOwner: unrelated.owner().id(),
+      unrelatedAssetId: unrelated.id(),
+      purchased: game.nationalReconnaissanceFor(BUYER.id),
+      visible: visible(game, BUYER.id, unrelated.id()),
+    }));
+    expect(unrelated.owner().id()).toBe(STRANGER.id);
     expect(visible(game, BUYER.id, unrelated.id())?.source).not.toBe("recon");
     expect(packetHasUnit(packet(game, BUYER.clientID!), ship.id())).toBe(true);
 
@@ -271,6 +280,10 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     game.addExecution(execution);
     const { restored, bytes, again } = await roundTrip(game, "big_plains");
     expect(again).toEqual(bytes);
+    // GameImpl first INITs queued executions, then invokes tick on the next
+    // turn. The original and restored Game must match across both boundaries.
+    game.executeNextTick();
+    restored.executeNextTick();
     game.executeNextTick();
     restored.executeNextTick();
     // The real game can also credit recurring income on execution ticks;
