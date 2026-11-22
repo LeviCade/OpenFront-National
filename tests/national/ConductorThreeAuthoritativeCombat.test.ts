@@ -222,7 +222,6 @@ async function atWar(m: Match) {
   return { nationalId: national.warId!, imperialId: imperial.warId! };
 }
 
-
 /** Only test geography is seeded; all WAR and combat operations are canonical. */
 function front(game: Game, aggressorId: string, defenderId: string) {
   const aggressor = game.player(aggressorId);
@@ -237,7 +236,12 @@ function front(game: Game, aggressorId: string, defenderId: string) {
 }
 
 /** Distinguishes socket admission, canonical turn commitment and real capture. */
-function attackWitness(m: Match, index: number, aggressorId: string, defenderId: string) {
+function attackWitness(
+  m: Match,
+  index: number,
+  aggressorId: string,
+  defenderId: string,
+) {
   const aggressor = m.game.player(aggressorId);
   const defender = m.game.player(defenderId);
   const before = {
@@ -257,7 +261,11 @@ function attackWitness(m: Match, index: number, aggressorId: string, defenderId:
   const receipt = m.host.tick();
   expect(receipt.committedIntents).toBe(1);
   let observedArmy = aggressor.outgoingAttacks().length > 0;
-  for (let i = 0; i < 40 && aggressor.numTilesOwned() === before.attackerTiles; i++) {
+  for (
+    let i = 0;
+    i < 40 && aggressor.numTilesOwned() === before.attackerTiles;
+    i++
+  ) {
     m.host.tick();
     observedArmy ||= aggressor.outgoingAttacks().length > 0;
   }
@@ -328,9 +336,13 @@ describe("Third Conductor E1 — authoritative attack and succession combat", ()
     expect(m.game.nationalPublicPoliticalView()).toEqual(politicsBefore);
     expect(layer(m.game, imperialId).endedTick).toBeNull();
     expect(layer(m.game, nationalId).endedTick).toBeNull();
-    expect(m.game.nationalWarState()?.wars.motions.some(
-      (x) => x.id === motion.motionId && x.acceptedTick === null,
-    )).toBe(true);
+    expect(
+      m.game
+        .nationalWarState()
+        ?.wars.motions.some(
+          (x) => x.id === motion.motionId && x.acceptedTick === null,
+        ),
+    ).toBe(true);
     act(m, 2, { ...delegate(B, true), requestId: "c3_c_delegates_b" });
     expect(political(m.game, C, "c3_c_delegates_b").accepted).toBe(true);
     front(m.game, C, D);
@@ -350,9 +362,13 @@ describe("Third Conductor E1 — authoritative attack and succession combat", ()
     expect(peace.accepted).toBe(true);
     front(m.game, A, D);
     const tilesBeforeAttack = m.game.player(A).numTilesOwned();
-    expect(m.host.submit(m.clients[0], {
-      type: "attack", targetID: D, troops: 220_000,
-    })).toBe(true);
+    expect(
+      m.host.submit(m.clients[0], {
+        type: "attack",
+        targetID: D,
+        troops: 220_000,
+      }),
+    ).toBe(true);
     expect(m.host.tick().committedIntents).toBe(1);
     expect(m.game.player(A).outgoingAttacks().length).toBeGreaterThan(0);
     const { restored, bytes, again } = await roundTrip(m.game, "plains");
@@ -365,9 +381,10 @@ describe("Third Conductor E1 — authoritative attack and succession combat", ()
       dTroops: game.player(D).troops(),
       aTiles: game.player(A).numTilesOwned(),
       dTiles: game.player(D).numTilesOwned(),
-      attacks: game.player(A).outgoingAttacks().map(
-        (attack) => ({ id: attack.id(), troops: attack.troops() }),
-      ),
+      attacks: game
+        .player(A)
+        .outgoingAttacks()
+        .map((attack) => ({ id: attack.id(), troops: attack.troops() })),
       wars: game.nationalWarState(),
     });
     for (let i = 0; i < 8; i++) {
@@ -378,16 +395,23 @@ describe("Third Conductor E1 — authoritative attack and succession combat", ()
     expect(m.game.player(A).numTilesOwned()).toBeGreaterThan(tilesBeforeAttack);
     expect(layer(m.game, imperialId).endedTick).toBeNull();
     expect(layer(m.game, nationalId).endedTick).toBeNull();
-    expect(m.game.nationalWarState()?.wars.motions.some(
-      (x) => x.id === peace.motionId && x.acceptedTick === null,
-    )).toBe(true);
-    console.info("C3_E1_RESTART_WITNESS_JSON=" + JSON.stringify({
-      kind: "c3-e1-in-flight-restart-v1",
-      snapshotLength: bytes.length,
-      pendingPeace: peace.motionId,
-      militaryState: militaryState(m.game),
-      source: "GameSnapshot/restoreGame/real AttackExecution",
-    }));
+    expect(
+      m.game
+        .nationalWarState()
+        ?.wars.motions.some(
+          (x) => x.id === peace.motionId && x.acceptedTick === null,
+        ),
+    ).toBe(true);
+    console.info(
+      "C3_E1_RESTART_WITNESS_JSON=" +
+        JSON.stringify({
+          kind: "c3-e1-in-flight-restart-v1",
+          snapshotLength: bytes.length,
+          pendingPeace: peace.motionId,
+          militaryState: militaryState(m.game),
+          source: "GameSnapshot/restoreGame/real AttackExecution",
+        }),
+    );
   });
 
   it("blocks a queued OLD-session human Attack before troop debit, identically after canonical snapshot restore", async () => {
@@ -396,7 +420,10 @@ describe("Third Conductor E1 — authoritative attack and succession combat", ()
     front(m.game, A, D);
     const oldAttack = new Executor(m.game, MATCH, undefined).createExec(
       StampedIntentSchema.parse({
-        type: "attack", targetID: D, troops: 220_000, clientID: OLD_A,
+        type: "attack",
+        targetID: D,
+        troops: 220_000,
+        clientID: OLD_A,
       }),
     );
     m.game.addExecution(oldAttack);
@@ -418,17 +445,28 @@ describe("Third Conductor E1 — authoritative attack and succession combat", ()
     expect(m.game.player(A).outgoingAttacks()).toHaveLength(0);
     expect(restored.player(A).outgoingAttacks()).toHaveLength(0);
     expect(canonical(restored)).toEqual(canonical(m.game));
-    expect(m.host.submit(m.clients[0], {
-      type: "attack", targetID: D, troops: 220_000,
-    })).toBe(false);
+    expect(
+      m.host.submit(m.clients[0], {
+        type: "attack",
+        targetID: D,
+        troops: 220_000,
+      }),
+    ).toBe(false);
     for (const client of m.clients) m.host.revokeRecipient(client);
     const successor = seat(NEW_A, "acct-replacement");
     const replacementHost = new TrustedNationalMatch(
-      MATCH, m.runner, [successor, ...m.clients.slice(1)], () => {},
+      MATCH,
+      m.runner,
+      [successor, ...m.clients.slice(1)],
+      () => {},
     );
-    expect(replacementHost.submit(successor, {
-      type: "attack", targetID: D, troops: 220_000,
-    })).toBe(true);
+    expect(
+      replacementHost.submit(successor, {
+        type: "attack",
+        targetID: D,
+        troops: 220_000,
+      }),
+    ).toBe(true);
     const beforeTroops = m.game.player(A).troops();
     replacementHost.tick();
     replacementHost.tick();
@@ -439,17 +477,29 @@ describe("Third Conductor E1 — authoritative attack and succession combat", ()
     const m = await createMatch();
     await atWar(m);
     front(m.game, A, D);
-    expect(m.host.submit({ ...m.clients[0] } as Client, {
-      type: "attack", targetID: D, troops: 220_000,
-    })).toBe(false);
-    expect(m.host.submit(m.clients[0], {
-      type: "attack", targetID: D, troops: 220_000,
-    })).toBe(true);
+    expect(
+      m.host.submit({ ...m.clients[0] } as Client, {
+        type: "attack",
+        targetID: D,
+        troops: 220_000,
+      }),
+    ).toBe(false);
+    expect(
+      m.host.submit(m.clients[0], {
+        type: "attack",
+        targetID: D,
+        troops: 220_000,
+      }),
+    ).toBe(true);
     const beforeTiles = m.game.player(A).numTilesOwned();
     m.host.revokeRecipient(m.clients[0]);
-    expect(m.host.submit(m.clients[0], {
-      type: "attack", targetID: D, troops: 220_000,
-    })).toBe(false);
+    expect(
+      m.host.submit(m.clients[0], {
+        type: "attack",
+        targetID: D,
+        troops: 220_000,
+      }),
+    ).toBe(false);
     expect(m.host.tick().committedIntents).toBe(0);
     m.host.tick();
     expect(m.game.player(A).outgoingAttacks()).toHaveLength(0);

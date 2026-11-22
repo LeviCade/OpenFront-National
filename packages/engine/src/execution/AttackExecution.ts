@@ -1,5 +1,4 @@
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
-import type { ClientID } from "@openfront/engine-api/Schemas";
 import {
   Difficulty,
   MessageType,
@@ -10,6 +9,7 @@ import {
   TerraNullius,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
+import type { ClientID } from "@openfront/engine-api/Schemas";
 import { renderTroops } from "@openfront/engine-lib/Format";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import {
