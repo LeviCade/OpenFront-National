@@ -134,6 +134,8 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     for (let i = 0; i < duration + 3 && building.isUnderConstruction(); i++)
       game.executeNextTick();
     expect(building.isUnderConstruction()).toBe(false);
+    // Ambient ticks also award ordinary personal income to the leader.
+    const personalAfterConstruction = [leader.gold(), member.gold()];
     const before = treasury(game);
     const level = building.level();
     const nextCost = game.unitInfo(UnitType.City).cost(game, member);
@@ -142,7 +144,7 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     });
     expect(building.level()).toBe(level + 1);
     expect(treasury(game)).toBe(before - nextCost);
-    expect([leader.gold(), member.gold()]).toEqual(personal);
+    expect([leader.gold(), member.gold()]).toEqual(personalAfterConstruction);
 
     const { restored } = await roundTrip(game, "plains");
     expect(restored.player(S).units(UnitType.City)[0].level()).toBe(level + 1);
@@ -157,7 +159,7 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     expect(game.unit(building.id())).toBeUndefined();
     expect(member.units(UnitType.City)).toHaveLength(0);
     expect(treasury(game)).toBe(beforeDemolition);
-    expect([leader.gold(), member.gold()]).toEqual(personal);
+    expect([leader.gold(), member.gold()]).toEqual(personalAfterConstruction);
   });
 
   it("rejects insufficient funds, outsiders, other members, inactive units and former crown without mutations", async () => {
