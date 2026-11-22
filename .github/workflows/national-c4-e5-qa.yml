@@ -67,7 +67,7 @@ jobs:
             exit 1
           fi
   local-browser-auth:
-    name: Three ordinary UI logins and absent music request diagnostic (not gameplay)
+    name: Three ordinary UI logins, native lobby and absent music diagnostic (not gameplay)
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
@@ -85,7 +85,7 @@ jobs:
           npm install --global --ignore-scripts npm@12.1.0
           npm run inst
       - run: node --check scripts/national-qa/private-staging-browser.mjs
-      - run: node scripts/national-qa/private-staging-browser.mjs --auth-only
+      - run: node --import tsx scripts/national-qa/private-staging-browser.mjs --lobby-only
   production-runtime:
     name: Independent exact production compile and post-build application witness
     runs-on: ubuntu-latest

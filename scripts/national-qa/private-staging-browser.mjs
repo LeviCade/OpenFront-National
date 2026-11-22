@@ -1,6 +1,7 @@
 // E5 operator extension of E2's pinned national-staging/browser-auth-check.mjs.
 // Auth, profiles, native lobby creation/join and host tick correlation.
 // This is partial automated participation, NEVER a victory or human witness.
+import { decodeServerMessage } from "@openfront/shared/ZbinWire";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -24,6 +25,8 @@ import {
 } from "../national-staging/operator-harness.mjs";
 
 const authOnly = process.argv.includes("--auth-only");
+const lobbyOnly = process.argv.includes("--lobby-only");
+const diagnosticOnly = authOnly || lobbyOnly;
 const fixture = makeEnvironment();
 const head = fixture.env.GIT_COMMIT;
 const screenshotHashes = new Set();
@@ -59,7 +62,7 @@ async function openProfile(executable, index, email) {
   mkdirSync(directory, { mode: 0o700 });
   const child = launch(
     [
-      ...(authOnly ? ["--headless=new"] : []),
+      ...(diagnosticOnly ? ["--headless=new"] : []),
       "--lang=en-US",
       "--no-sandbox",
       "--disable-dev-shm-usage",
@@ -111,6 +114,7 @@ async function openProfile(executable, index, email) {
   await until(() => ws.readyState === WebSocket.OPEN, "browser DevTools");
   const pending = new Map();
   const profileRequests = new Set();
+  const localSockets = new Set();
   const observed = {
     mail: 0,
     exchange: 0,
@@ -118,6 +122,7 @@ async function openProfile(executable, index, email) {
     profile: 0,
     account: null,
     missingMusicRequests: 0,
+    lobby: null,
   };
   let seq = 0;
   let protocolFailure = false;
@@ -134,6 +139,7 @@ async function openProfile(executable, index, email) {
     profileReadFailures,
     accountMismatch,
     missingMusicRequests: observed.missingMusicRequests,
+    observedLobbySeats: observed.lobby?.lobby?.clients?.length ?? 0,
   });
   function send(method, params = {}) {
     return new Promise((resolve, reject) => {
@@ -180,6 +186,25 @@ async function openProfile(executable, index, email) {
         // continue/fail arrives. That is not an authorization success.
         void task.catch(() => {});
         return;
+      }
+      if (m.method === "Network.webSocketCreated") {
+        if (allowedLocal(m.params.url)) localSockets.add(m.params.requestId);
+      }
+      if (
+        m.method === "Network.webSocketFrameReceived" &&
+        localSockets.has(m.params.requestId) &&
+        m.params.response.opcode === 2
+      ) {
+        // Passive observation of real server frames, never an injected client intent.
+        try {
+          const packet = decodeServerMessage(
+            Buffer.from(m.params.response.payloadData, "base64"),
+          );
+          if (packet.type === "lobby_info") observed.lobby = packet;
+        } catch {
+          // Other local sockets or post-start frames may need a different codec.
+          // No undecoded frame can become a roster witness.
+        }
       }
       if (m.method === "Network.responseReceived") {
         const u = new URL(m.params.response.url);
@@ -356,7 +381,7 @@ async function openProfile(executable, index, email) {
 
 try {
   assert.match(head, /^[a-f0-9]{40}$/);
-  if (!authOnly) {
+  if (!diagnosticOnly) {
     stage = "E6 physical operator authorization";
     assert.equal(process.env.NATIONAL_GPU_CANDIDATE_SHA, head);
     assert.equal(process.env.NATIONAL_E6_APPROVED_CANDIDATE_SHA, head);
@@ -463,6 +488,19 @@ try {
       "three visible lobby participants",
       60_000,
     );
+    stage = "same three authoritative server lobby seats";
+    await until(() => {
+      const packets = profiles.map((p) => p.observed.lobby);
+      if (!packets.every((p) => p?.lobby?.gameConfig?.nationalMode === true && p.lobby.clients?.length === 3)) return false;
+      const seats = packets.map((p) => p.myClientID);
+      return new Set(seats).size === 3 && seats.every((seat) => typeof seat === "string") && packets.every((p) => {
+        const roster = p.lobby.clients.map((client) => client.clientID);
+        return new Set(roster).size === 3 && seats.every((seat) => roster.includes(seat));
+      });
+    }, stage, 60_000);
+    assert(profiles.every((p) => p.observed.missingMusicRequests === 0));
+    console.log("LOCAL_STAGING_BROWSER_LOBBY_PASS browser_profiles=3 authoritative_roster=3 distinct_seats=3 national=true gameplay=0 gpu_attestation=0 human_witnesses=0 missing_music_requests=0");
+    if (!lobbyOnly) {
     stage = "native start control";
     await until(
       () => a.click('#page-host-lobby o-button[width="block"][size="lg"]'),
@@ -585,6 +623,7 @@ try {
       }),
     );
     process.exitCode = 2;
+    }
   }
 } catch {
   // Never expose DevTools errors, URLs, credential bodies or profile IDs.
