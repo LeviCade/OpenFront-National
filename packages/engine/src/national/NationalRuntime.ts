@@ -123,7 +123,7 @@ type AdministrationRow = z.infer<typeof administrationSchema>;
 
 export type ImperialPolicy = {
   readonly workerIncomeBps: number;
-  readonly allowedConstruction: readonly UnitType[] | null;
+  readonly allowedConstruction: UnitType[] | null;
 };
 
 export type NationalImperialAdministrationCommand =
