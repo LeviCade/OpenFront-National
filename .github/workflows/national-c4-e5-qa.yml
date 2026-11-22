@@ -154,6 +154,9 @@ jobs:
       - name: Exact asset inventory
         if: always()
         run: node scripts/national-qa/asset-audit.mjs --strict-release
+      - name: Read embedded original media notices without granting clearance
+        if: always()
+        run: python3 scripts/national-qa/embedded-media-notices.py
       - name: Preserve source identity and sanitized reports
         if: always()
         run: |
@@ -166,6 +169,7 @@ jobs:
           path: |
             national-qa-artifacts/dependencies.json
             national-qa-artifacts/assets.json
+            national-qa-artifacts/embedded-media-notices.json
             national-qa-artifacts/head.txt
           if-no-files-found: error
           retention-days: 14
