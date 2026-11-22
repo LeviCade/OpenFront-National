@@ -4,7 +4,10 @@ import {
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
 import type { MapFiles } from "@openfront/engine-api/game/MapFiles";
-import { decodeSnapshotValue, type GameRunner } from "@openfront/engine/WinnerReplay";
+import {
+  decodeSnapshotValue,
+  type GameRunner,
+} from "@openfront/engine/WinnerReplay";
 import {
   WireGameStartInfoSchema,
   type WireGameStartInfo,
