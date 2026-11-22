@@ -944,10 +944,7 @@ export async function startWorker() {
             admissionGuard.rollback();
             return;
           }
-          if (
-            game?.gameConfig.nationalMode === true &&
-            result.response.ban
-          ) {
+          if (game?.gameConfig.nationalMode === true && result.response.ban) {
             admissionGuard.rollback();
             ws.close(CloseCode.Unauthorized, CloseReason.LoginRequired);
             return;

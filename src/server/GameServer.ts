@@ -667,11 +667,13 @@ export class GameServer {
     // A separately signed login may still refer to the same provider-linked
     // account row. Reject the alias before it can sabotage the starting roster.
     if (this.gameConfig.nationalMode === true) {
-      const occupiedByAnotherPrincipal = this.clients.players().some(
-        (seated) =>
-          seated.publicId === client.publicId &&
-          seated.persistentID !== client.persistentID,
-      );
+      const occupiedByAnotherPrincipal = this.clients
+        .players()
+        .some(
+          (seated) =>
+            seated.publicId === client.publicId &&
+            seated.persistentID !== client.persistentID,
+        );
       if (occupiedByAnotherPrincipal) return "not_trusted";
     }
 

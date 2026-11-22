@@ -101,10 +101,16 @@ function fixture(
     },
     deps: { createNationalRunner: realRunner, turnIntervalMs: () => 1000 },
   });
+  const admittedAccounts = new Set<string>();
   for (const client of seats) {
-    expect(game.joinClient(client)).toBe(
-      client.claims === null ? "not_trusted" : "joined",
-    );
+    const eligible =
+      client.claims !== null &&
+      client.publicId !== undefined &&
+      !admittedAccounts.has(client.publicId);
+    expect(game.joinClient(client)).toBe(eligible ? "joined" : "not_trusted");
+    if (eligible && client.publicId !== undefined) {
+      admittedAccounts.add(client.publicId);
+    }
   }
   if (extra) expect(game.joinClient(extra)).toBe("joined");
   return { game, seats };
@@ -312,8 +318,12 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
       },
     ) as Client;
     const two = fixture([verified(0), verified(1), duplicate]);
+    expect(two.game.getClientIdForPersistentId(duplicate.persistentID)).toBeNull();
     await boot(two.game);
-    expect(two.game.hasEnded()).toBe(true);
+    expect(two.game.hasEnded()).toBe(false);
+    expect(
+      sent(duplicate).some((m) => m.type === "national_start" || m.type === "national_projection"),
+    ).toBe(false);
   });
 
   it("refuses to grant spectators any private NATIONAL projection", async () => {
