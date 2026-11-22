@@ -3,6 +3,8 @@ import { Structures, UnitType } from "./GameTypes";
 export interface NationalImperialAdministrationView {
   readonly empireId: string;
   readonly workerIncomeBps: number;
+  /** Optional on earlier V1 hosts; current hosts always publish this member-only commercial rate. */
+  readonly nonWorkerIncomeBps?: number;
   readonly allowedConstruction: readonly UnitType[] | null;
   readonly treasury: string;
   readonly canAmend: boolean;
@@ -42,6 +44,7 @@ export function readNationalImperialAdministration(
         "streamId",
         "empireId",
         "workerIncomeBps",
+        "nonWorkerIncomeBps",
         "allowedConstruction",
         "treasury",
         "canAmend",
@@ -64,6 +67,11 @@ export function readNationalImperialAdministration(
     !Number.isInteger(value.workerIncomeBps) ||
     value.workerIncomeBps < 0 ||
     value.workerIncomeBps > 10000 ||
+    (value.nonWorkerIncomeBps !== undefined &&
+      (typeof value.nonWorkerIncomeBps !== "number" ||
+        !Number.isInteger(value.nonWorkerIncomeBps) ||
+        value.nonWorkerIncomeBps < 0 ||
+        value.nonWorkerIncomeBps > 10000)) ||
     typeof value.treasury !== "string" ||
     !/^(0|[1-9][0-9]{0,127})$/.test(value.treasury) ||
     typeof value.canAmend !== "boolean"
@@ -122,6 +130,9 @@ export function readNationalImperialAdministration(
       : {}),
     empireId: value.empireId,
     workerIncomeBps: value.workerIncomeBps,
+    ...(value.nonWorkerIncomeBps === undefined
+      ? {}
+      : { nonWorkerIncomeBps: value.nonWorkerIncomeBps as number }),
     treasury: value.treasury,
     canAmend: value.canAmend,
     allowedConstruction: allowed === null ? null : ([...allowed] as UnitType[]),

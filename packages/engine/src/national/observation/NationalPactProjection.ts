@@ -120,6 +120,9 @@ export function projectNationalImperialAdministration(
     ...(streamId === undefined ? {} : { streamId }),
     empireId: source.empireId,
     workerIncomeBps: source.workerIncomeBps,
+    ...(source.nonWorkerIncomeBps === undefined
+      ? {}
+      : { nonWorkerIncomeBps: source.nonWorkerIncomeBps }),
     allowedConstruction:
       source.allowedConstruction === null
         ? null

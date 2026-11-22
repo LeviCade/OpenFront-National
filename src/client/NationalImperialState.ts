@@ -8,6 +8,7 @@ export type ImperialPolicyCommand =
       empireId: string;
       policy: {
         workerIncomeBps: number;
+        nonWorkerIncomeBps?: number;
         allowedConstruction: UnitType[] | null;
       };
     }
@@ -45,6 +46,7 @@ export function imperialPolicyKey(
     view.empireId,
     view.canAmend,
     view.workerIncomeBps,
+    view.nonWorkerIncomeBps,
     view.allowedConstruction,
     view.armyMode,
     view.hybridThresholdBps,
@@ -62,6 +64,9 @@ export function imperialPolicyIntentAvailable(
           empireId: view.empireId,
           policy: {
             workerIncomeBps: view.workerIncomeBps,
+            ...(view.nonWorkerIncomeBps === undefined
+              ? {}
+              : { nonWorkerIncomeBps: view.nonWorkerIncomeBps }),
             allowedConstruction:
               view.allowedConstruction === null
                 ? null

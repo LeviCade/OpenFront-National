@@ -901,6 +901,7 @@ describe("C4 E4 native constitutional controls", () => {
     optionsState.administration = {
       empireId: "empire",
       workerIncomeBps: 1250,
+      nonWorkerIncomeBps: 3750,
       allowedConstruction: [],
       treasury: "900719925474099399",
       canAmend: true,
@@ -917,6 +918,7 @@ describe("C4 E4 native constitutional controls", () => {
     );
     expect(admin?.textContent).toContain("900719925474099399");
     expect(admin?.textContent).toContain("12.50%");
+    expect(admin?.textContent).toContain("37.50%");
     expect(admin?.textContent).toContain("No regulated construction");
     const policyAvailable = imperialPolicyIntentAvailable(
       optionsState.administration,
@@ -930,6 +932,8 @@ describe("C4 E4 native constitutional controls", () => {
       const form = policy!.closest("form")!;
       form.querySelector<HTMLInputElement>('[name="basisPoints"]')!.value =
         "2500";
+      form.querySelector<HTMLInputElement>('[name="commercialBasisPoints"]')!.value =
+        "3000";
       form.querySelector<HTMLInputElement>('[name="confirm"]')!.checked = true;
       policy!.click();
       await element.updateComplete;
@@ -939,7 +943,11 @@ describe("C4 E4 native constitutional controls", () => {
         command: {
           kind: "set-policy",
           empireId: "empire",
-          policy: { workerIncomeBps: 2500, allowedConstruction: [] },
+          policy: {
+            workerIncomeBps: 2500,
+            nonWorkerIncomeBps: 3000,
+            allowedConstruction: [],
+          },
         },
       });
       expect(admin?.textContent).toContain(
