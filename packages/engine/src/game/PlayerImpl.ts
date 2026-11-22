@@ -65,6 +65,7 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
+import { transferActiveTroops } from "../national/politics/ImperialAccounting";
 import { AttackImpl } from "./AttackImpl";
 import {
   Alliance,
@@ -1372,6 +1373,39 @@ export class PlayerImpl implements Player {
     return actualRemoved;
   }
 
+  /** Treasury disposition is a transfer, not newly earned worker revenue. */
+  static prepareNationalGoldCredits(
+    credits: readonly { player: PlayerImpl; amount: bigint }[],
+  ): () => void {
+    const seen = new Set<PlayerImpl>();
+    const next: { player: PlayerImpl; gold: bigint }[] = [];
+    for (const { player, amount } of credits) {
+      if (!(player instanceof PlayerImpl) || seen.has(player) || amount <= 0n)
+        throw new Error("NATIONAL: invalid treasury credit");
+      seen.add(player);
+      next.push({ player, gold: player._gold + amount });
+    }
+    return () => {
+      for (const row of next) row.player._gold = row.gold;
+    };
+  }
+
+  static transferNationalActiveTroops(
+    source: PlayerImpl,
+    destination: PlayerImpl,
+    capacity: number,
+    amount: number,
+  ): void {
+    if (source === destination || !Number.isSafeInteger(capacity) ||
+        !Number.isSafeInteger(amount))
+      throw new Error("NATIONAL: invalid active troop transfer");
+    const [sourceAfter, destinationAfter] = transferActiveTroops(
+      source._troops, destination._troops, BigInt(capacity), BigInt(amount),
+    );
+    source._troops = sourceAfter;
+    destination._troops = destinationAfter;
+  }
+
   troops(): number {
     return Number(this._troops);
   }
@@ -1448,6 +1482,8 @@ export class PlayerImpl implements Player {
     spawnTile: TileRef,
     params: UnitParams<T>,
   ): Unit {
+    if (!this.mg.nationalAllowsConstruction(this, type))
+      throw new Error("NATIONAL: construction prohibited by imperial decree");
     if (this.mg.config().isUnitDisabled(type)) {
       throw new Error(
         `Attempted to build disabled unit ${type} at tile ${spawnTile} by player ${this.name()}`,
@@ -1504,6 +1540,7 @@ export class PlayerImpl implements Player {
     unitType: UnitType,
     knownCost: Gold | null = null,
   ): boolean {
+    if (!this.mg.nationalAllowsConstruction(this, unitType)) return false;
     if (this.mg.config().isUnitDisabled(unitType)) {
       return false;
     }
@@ -1548,6 +1585,8 @@ export class PlayerImpl implements Player {
   }
 
   upgradeUnit(unit: Unit) {
+    if (!this.mg.nationalAllowsConstruction(this, unit.type()))
+      throw new Error("NATIONAL: upgrade prohibited by imperial decree");
     const cost = this.mg.unitInfo(unit.type()).cost(this.mg, this);
     this.removeGold(cost);
     unit.increaseLevel();

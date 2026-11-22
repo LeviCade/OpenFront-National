@@ -72,3 +72,13 @@
 ## Change control
 
 Every change must cite an ID, explain national-interest consequences, provide enforceable state transitions, respect fair AI visibility and add acceptance scenarios. "It seems realistic" is not enough if it creates contradictory wars or invisible unlimited liabilities.
+
+
+## Class Two M5 engineering resolution (D-011/D-012; partial)
+
+- Worker production is routed once at PlayerExecution, not generic addGold (which also credits transfers, conquest and trade). Rate is integer basis points; floor each contribution and keep residual personal. Other revenue sources and imperial spending remain open.
+- Construction policy covers structures and warships. Player-initiated build, upgrade and demolition check the live policy at execution acceptance; already accepted work can finish. Direct imperial construction/payment is not part of this slice.
+- National active reserves remain decentralized. Crown may transfer an integral amount between live constituents only when destination capacity permits. Deployed troops and their return ownership are unchanged. Centralized/hybrid conversion and pooled-army disposition remain OPEN (item 7).
+- On dissolution, credit the living former leader; otherwise divide treasury equally across living members, assigning integer residuals by ascending member ID. When no constituent survives, keep an unspendable terminal estate; no dead nation receives spendable income and no gold disappears from the ledger.
+- OPEN item 6, initial deterministic extinction rule: retire imperial war layers tied to a dissolved sovereign without creating new national wars; leave existing national layers and historical records intact. This avoids ownerless active wars or a re-founded empire ID resurrecting conflict. Succession never retires those layers.
+- No external wire commands added here. The trusted GameImpl path enforces current crown and authenticated principal; request-ID journaling and stamped client/AI integration are separate remaining work.

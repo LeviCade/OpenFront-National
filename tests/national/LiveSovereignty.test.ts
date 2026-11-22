@@ -8,6 +8,8 @@ import {
   NationalFoundEmpireExecution,
   NationalFoundEmpireExecutionSnapshot,
 } from "@openfront/engine/execution/NationalFoundEmpireExecution";
+import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
+import { ConstructionExecution } from "@openfront/engine/execution/ConstructionExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { WinCheckExecution } from "@openfront/engine/execution/WinCheckExecution";
 import type { Game } from "@openfront/engine/game/Game";
@@ -385,7 +387,7 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
     expect(legacy.getWinner()).toBeNull();
   });
 
-  it("SOV-05: authentic eight-metric deficit warns for 100 ticks, persists through restore and blocks asset-unsafe collapse", async () => {
+  it("SOV-05: authentic eight-metric deficit warns for 100 ticks, persists through restore and dissolves", async () => {
     const game = await realGame(2);
     const north = game.player(N);
     const south = game.player(S);
@@ -417,35 +419,21 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
       game.executeNextTick();
       restored.executeNextTick();
     }
-    expect(game.nationalUngovernableWarnings()[0]).toMatchObject({
-      empireId: "empire-r3",
-      deadlineMs: deadline,
-      remainingMs: 0,
-      blockedByAssetDisposition: true,
-    });
+    expect(game.ticks() * 100).toBeGreaterThanOrEqual(deadline);
+    expect(game.nationalUngovernableWarnings()).toEqual([]);
     expect(restored.nationalUngovernableWarnings()).toEqual(
       game.nationalUngovernableWarnings(),
     );
     expect(snapshot(restored)).toEqual(snapshot(game));
-    expect(game.nationalPoliticalAuthority()?.empireExists("empire-r3")).toBe(
-      true,
-    );
-    // The emperor can no longer evade the expired deadline by transferring.
+    expect(game.nationalPoliticalAuthority()?.empireExists("empire-r3")).toBe(false);
+    expect(game.nationalPoliticalAuthority()?.empireOf(S)).toBeNull();
     expect(() =>
       game.performNationalCommand(north, {
         kind: "transfer-crown",
         empireId: "empire-r3",
         successorId: S,
       }),
-    ).toThrow(/deadline/);
-    // The warning clears when one strict inequality becomes a tie. This is
-    // an actual engine unit deletion, not a fabricated metric override.
-    south.units(UnitType.City)[0].delete();
-    restored.player(S).units(UnitType.City)[0].delete();
-    game.executeNextTick();
-    restored.executeNextTick();
-    expect(game.nationalUngovernableWarnings()).toEqual([]);
-    expect(restored.nationalUngovernableWarnings()).toEqual([]);
+    ).toThrow();
     expect(snapshot(restored)).toEqual(snapshot(game));
   });
 
@@ -521,5 +509,87 @@ describe("Class Two E1 COAL-02/07 recipient pact reads", () => {
     expect(game.nationalPactViewsFor(w)[0].canAccept).toBe(true);
     expect(game.nationalPactViewsFor(n)[0].pendingAmendment).toBeNull();
     expect(game.nationalPactViewsFor(n)[0].expellableMemberIds).toEqual([]);
+  });
+});
+
+describe("Class Two E1 M5 administration", () => {
+  it("D-011 routes actual worker production, guards live construction and transfers current crown", async () => {
+    const game = await realGame(3);
+    const n = game.player(N), s = game.player(S), w = game.player(W);
+    foundAndJoined(game);
+    const policy = {
+      kind: "set-policy" as const, empireId: "empire-r3",
+      policy: { workerIncomeBps: 10_000, allowedConstruction: [] },
+    };
+    const prior = snapshot(game);
+    expect(() => game.performNationalImperialAdministration(s, policy)).toThrow(/emperor/);
+    expect(snapshot(game)).toEqual(prior);
+    game.performNationalImperialAdministration(n, policy);
+    // Real PlayerExecution production. Direct tick removes scheduling
+    // ambiguity about the number of other worker executions in this fixture.
+    const work = new PlayerExecution(s);
+    work.init(game, game.ticks());
+    const before = s.gold();
+    const gross = game.config().goldAdditionRate(s);
+    expect(gross).toBeGreaterThan(0n);
+    work.tick(game.ticks());
+    expect(s.gold()).toBe(before);
+    expect(game.nationalImperialAdministrationFor(n)?.treasury).toBe(gross.toString());
+    expect(game.nationalImperialAdministrationFor(w)).toBeNull();
+    // Direct grants are not worker production.
+    s.addGold(50_000_000n);
+    expect(game.nationalImperialAdministrationFor(s)?.treasury).toBe(gross.toString());
+    const cityTile = [...s.tiles()][0];
+    const savedGold = s.gold();
+    const build = new ConstructionExecution(s, UnitType.City, cityTile);
+    build.init(game, game.ticks());
+    build.tick(game.ticks());
+    expect(s.units(UnitType.City)).toHaveLength(0);
+    expect(s.gold()).toBe(savedGold);
+    // Transfer preserves the treasury and automatically revokes the old crown.
+    game.performNationalCommand(n, {
+      kind: "transfer-crown", empireId: "empire-r3", successorId: S,
+    });
+    expect(() => game.performNationalImperialAdministration(n, policy)).toThrow(/emperor/);
+    expect(game.nationalImperialAdministrationFor(s)?.canAmend).toBe(true);
+    expect(game.nationalImperialAdministrationFor(s)?.treasury).toBe(gross.toString());
+    const { restored } = await roundTrip(game, "plains");
+    expect(restored.nationalImperialAdministrationFor(restored.player(S))).toEqual(game.nationalImperialAdministrationFor(s));
+    for (const g of [game, restored]) {
+      const leader = g.player(S);
+      const start = leader.gold();
+      g.performNationalImperialAdministration(leader, { kind: "dissolve", empireId: "empire-r3" });
+      expect(leader.gold() - start).toBe(gross);
+      expect(g.nationalPoliticalAuthority()?.empireOf(N)).toBeNull();
+      expect(g.nationalImperialAdministrationFor(leader)).toBeNull();
+    }
+    expect(snapshot(restored)).toEqual(snapshot(game));
+  });
+
+  it("D-011 transfers real active reserves atomically and rejects outsider or excess transfers", async () => {
+    const game = await realGame(3);
+    foundAndJoined(game);
+    const n = game.player(N), s = game.player(S);
+    n.setTroops(100);
+    s.setTroops(1);
+    expect(game.config().maxTroops(s)).toBeGreaterThan(11);
+    const command = { kind: "transfer-troops" as const, empireId: "empire-r3", sourceId: N, destinationId: S, amount: 10 };
+    game.performNationalImperialAdministration(n, command);
+    expect([n.troops(), s.troops()]).toEqual([90, 11]);
+    expect(() => game.performNationalImperialAdministration(n, { ...command, amount: 91 })).toThrow();
+    expect(() => game.performNationalImperialAdministration(n, { ...command, destinationId: W })).toThrow();
+    expect(() => game.performNationalImperialAdministration(s, command)).toThrow();
+    expect([n.troops(), s.troops()]).toEqual([90, 11]);
+  });
+
+  it("legacy worker production credits the entire actual gold grant", async () => {
+    const game = await realGame(2, false);
+    const n = game.player(N);
+    const execution = new PlayerExecution(n);
+    execution.init(game, game.ticks());
+    const before = n.gold(), gross = game.config().goldAdditionRate(n);
+    execution.tick(game.ticks());
+    expect(n.gold() - before).toBe(gross);
+    expect(game.nationalImperialAdministrationFor(n)).toBeNull();
   });
 });

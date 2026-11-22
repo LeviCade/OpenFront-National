@@ -106,6 +106,25 @@ export class WarLedger {
     };
   }
 
+  /** D-012: extinction retires only layers tied to the extinct sovereign.
+   * This is not a negotiated peace; unrelated national layers survive.
+   */
+  retireEmpireWars(empireIds: readonly string[], tick: number): void {
+    requireTick(tick);
+    if (tick < this.lastTick) throw new Error("nonmonotonic imperial extinction");
+    const extinct = new Set(empireIds);
+    let changed = false;
+    for (const layer of this.layers.values()) {
+      if (layer.endedTick === null && [layer.first, layer.second].some(
+        (party) => party.kind === "empire" && extinct.has(party.id),
+      )) {
+        layer.endedTick = tick;
+        changed = true;
+      }
+    }
+    if (changed) this.lastTick = tick;
+  }
+
   /** Restores a complete standalone state, never silently drops a war layer. */
   restoreState(state: ConflictLedgerState): void {
     if (state.version !== 1) throw new Error("unknown conflict ledger version");

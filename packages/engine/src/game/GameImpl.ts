@@ -85,6 +85,8 @@ import {
   type NationalUngovernableWarning,
   type NationalPublicPactView,
   type NationalRecipientPactView,
+  type NationalImperialAdministrationCommand,
+  type NationalImperialAdministrationView,
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import {
@@ -611,6 +613,8 @@ export class GameImpl implements Game {
       })),
       this._ticks,
       !this.inSpawnPhase(),
+      "preserve-pending",
+      (credits, empireIds) => this.commitImperialDisposition(credits, empireIds),
     );
     this.revokeNationalObserverMemory();
   }
@@ -1025,13 +1029,93 @@ export class GameImpl implements Game {
   }
 
   nationalPublicPactRoster(): readonly NationalPublicPactView[] {
+    this.synchronizeNationalState();
     return this._national?.publicPactRoster() ?? [];
   }
 
   nationalPactViewsFor(observer: Player): readonly NationalRecipientPactView[] {
     if (this._players.get(observer.id()) !== observer ||
         !observer.hasSpawned() || !observer.isAlive()) return [];
+    this.synchronizeNationalState();
     return this._national?.pactViewsFor(observer.id()) ?? [];
+  }
+
+  private commitImperialDisposition(
+    credits: ReadonlyMap<PlayerID, bigint>,
+    empireIds: readonly string[],
+  ): void {
+    const staged = PlayerImpl.prepareNationalGoldCredits(
+      [...credits].map(([id, amount]) => {
+        const player = this._players.get(id);
+        if (!player || !player.hasSpawned() || !player.isAlive())
+          throw new Error("NATIONAL: invalid treasury disposition recipient");
+        return { player, amount };
+      }),
+    );
+    // Retirement validates the engine tick before changing any layer.
+    // Publishing staged credits thereafter cannot invoke external code.
+    this._nationalWar?.retireEmpireWars(empireIds, this._ticks);
+    staged();
+  }
+
+  nationalImperialAdministrationFor(observer: Player): NationalImperialAdministrationView | null {
+    if (this._players.get(observer.id()) !== observer ||
+        !observer.hasSpawned() || !observer.isAlive()) return null;
+    this.synchronizeNationalState();
+    return this._national?.imperialAdministrationFor(observer.id()) ?? null;
+  }
+
+  /** Trusted engine entry; external stamped intent wiring remains separate. */
+  performNationalImperialAdministration(
+    actor: Player,
+    command: NationalImperialAdministrationCommand,
+    authenticatedClientID?: ClientID,
+  ): void {
+    if (!this._national) throw new Error("NATIONAL is not enabled");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
+    if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
+      throw new Error("NATIONAL: inactive administration actor");
+    this.synchronizeNationalState();
+    this._national.assertEmperor(actor.id(), command.empireId);
+    switch (command.kind) {
+      case "set-policy":
+        this._national.setImperialPolicy(actor.id(), command.empireId, command.policy);
+        break;
+      case "transfer-troops": {
+        const source = this._players.get(command.sourceId);
+        const destination = this._players.get(command.destinationId);
+        const authority = this._national.authority();
+        if (!source || !destination || source === destination ||
+            !source.hasSpawned() || !source.isAlive() ||
+            !destination.hasSpawned() || !destination.isAlive() ||
+            authority.empireOf(source.id()) !== command.empireId ||
+            authority.empireOf(destination.id()) !== command.empireId)
+          throw new Error("NATIONAL: transfer requires two live constituent nations");
+        PlayerImpl.transferNationalActiveTroops(
+          source, destination, Math.floor(this._config.maxTroops(destination)), command.amount,
+        );
+        break;
+      }
+      case "dissolve":
+        this._national.voluntarilyDissolve(actor.id(), command.empireId,
+          (credits, empireIds) => this.commitImperialDisposition(credits, empireIds));
+        this.revokeNationalObserverMemory();
+        break;
+      default:
+        throw new Error("NATIONAL: unsupported administration command");
+    }
+  }
+
+  creditNationalWorkerIncome(player: Player, gross: bigint): void {
+    if (this._national && this._players.get(player.id()) !== player)
+      throw new Error("NATIONAL: invalid worker income owner");
+    player.addGold(this._national?.routeWorkerIncome(player.id(), gross) ?? gross);
+  }
+
+  nationalAllowsConstruction(player: Player, type: UnitType): boolean {
+    if (!this._national) return true;
+    if (this._players.get(player.id()) !== player) return false;
+    return this._national.allowsConstruction(player.id(), type);
   }
 
   /** Complete NATIONAL victor roster; old game Winner schema stays unchanged. */

@@ -58,6 +58,8 @@ import type {
   NationalPublicPoliticalView,
   NationalPublicPactView,
   NationalRecipientPactView,
+  NationalImperialAdministrationCommand,
+  NationalImperialAdministrationView,
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
@@ -615,6 +617,14 @@ export interface Game extends GameLike {
   nationalPublicPoliticalView(): NationalPublicPoliticalView | null;
   nationalPublicPactRoster(): readonly NationalPublicPactView[];
   nationalPactViewsFor(observer: Player): readonly NationalRecipientPactView[];
+  nationalImperialAdministrationFor(observer: Player): NationalImperialAdministrationView | null;
+  performNationalImperialAdministration(
+    actor: Player,
+    command: NationalImperialAdministrationCommand,
+    authenticatedClientID?: ClientID,
+  ): void;
+  creditNationalWorkerIncome(player: Player, gross: Gold): void;
+  nationalAllowsConstruction(player: Player, type: UnitType): boolean;
   /** Private pending invitations addressed only to this authenticated human. */
   nationalAccessionOffers(
     observer: Player,
