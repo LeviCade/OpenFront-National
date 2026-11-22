@@ -51,4 +51,11 @@ jobs:
       - name: Focused lint and formatting
         run: |
           npx --no-install oxlint packages/engine/src/national/observation/LiveObservation.ts tests/national/C5CoastalVisibility.test.ts
-          npx --no-install oxfmt --check packages/engine/src/national/observation/LiveObservation.ts tests/national/C5CoastalVisibility.test.ts
+          FILES=(packages/engine/src/national/observation/LiveObservation.ts tests/national/C5CoastalVisibility.test.ts)
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            echo C5_E6_FORMAT_PATCH_BEGIN
+            git -c color.ui=false diff -- "${FILES[@]}"
+            echo C5_E6_FORMAT_PATCH_END
+            exit 1
+          fi
