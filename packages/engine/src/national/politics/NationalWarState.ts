@@ -81,7 +81,7 @@ export type NationalWarStateSnapshot = z.infer<
   typeof NationalWarStateSnapshotSchema
 >;
 
-export type NationalWarCommand =
+export type NationalWarCommand = (
   | {
       kind: "declare-national";
       warId: string;
@@ -95,11 +95,8 @@ export type NationalWarCommand =
       target: ConflictParty;
     }
   | { kind: "propose-peace"; motionId: string; warId: string }
-  | { kind: "accept-peace"; motionId: string };
-/** Executions may additionally carry the policy epoch captured at admission. */
-export type VersionedNationalWarCommand = NationalWarCommand & {
-  readonly policyVersion?: number;
-};
+  | { kind: "accept-peace"; motionId: string }
+) & { readonly policyVersion?: number };
 
 /** Read-only port for E2 attack acceptance and E3 authorized observation. */
 export interface NationalWarAuthority {
