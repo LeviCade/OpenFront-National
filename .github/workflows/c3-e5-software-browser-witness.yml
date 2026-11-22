@@ -46,6 +46,35 @@ jobs:
         run: node --test tests/e2e/national/C3ScreenshotEvidence.test.mjs
       - name: Source-only acceptance predicate controls
         run: npx --no-install vitest run --project node tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs
+      - name: Require genuine three-session PRIVATE NATIONAL preflight to BLOCK without credentials
+        shell: bash
+        run: |
+          set +e
+          NATIONAL_QA_PRIVATE_CDP_PORTS="" NATIONAL_GPU_CANDIDATE_SHA="$REQUIRED_SHA" node scripts/national-qa/browser-c2-run.mjs --mode private-national
+          status=$?
+          set -e
+          test "$status" -eq 1
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          const r = JSON.parse(readFileSync("national-qa-artifacts/c2/private-national.json", "utf8"));
+          if (r.exactSource !== process.env.REQUIRED_SHA ||
+              r.gameplay !== "BLOCKED" || r.hardware !== "BLOCKED" ||
+              r.firstFailure !== "THREE_AUTHENTICATED_BROWSER_CDP_PORTS_MISSING")
+            throw Error("UNAUTHENTICATED_PRIVATE_PREFLIGHT_WAS_NOT_BLOCKED");
+          console.log("C3_E5_PRIVATE_REAL_SESSION_PREFLIGHT_BLOCKED " + JSON.stringify({
+            source: r.exactSource,
+            gameplay: r.gameplay,
+            hardware: r.hardware,
+            firstFailure: r.firstFailure,
+          }));
+          NODE
+      - name: Publish sanitized private readiness refusal
+        uses: actions/upload-artifact@v4
+        with:
+          name: c3-e5-private-preflight-${{ env.REQUIRED_SHA }}
+          path: national-qa-artifacts/c2/private-national.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Syntax, formatter and lint
         run: |
           node --check scripts/national-qa/browser-c2-run.mjs
