@@ -705,12 +705,31 @@ export class GameImpl implements Game {
    */
   private assertWarPolicyAdmission(
     actorId: PlayerID,
-    command: { readonly policyVersion?: number },
+    command: {
+      readonly admissionEmpireId?: string | null;
+      readonly policyVersion?: number | null;
+    },
   ): void {
-    if (command.policyVersion === undefined) return;
-    const current = this._national?.warPolicyVersionFor(actorId) ?? null;
-    if (!Number.isSafeInteger(command.policyVersion) ||
-        command.policyVersion < 0 || current !== command.policyVersion)
+    // Only the trusted executor adds membership and epoch fields together.
+    // Legacy trusted direct Game port calls are allowed to remain unversioned.
+    if (command.admissionEmpireId === undefined) {
+      if (command.policyVersion !== undefined)
+        throw new Error("NATIONAL WAR: unbound imperial policy epoch");
+      return;
+    }
+    const currentEmpire = this._national?.authority().empireOf(actorId) ?? null;
+    const currentVersion = this._national?.warPolicyVersionFor(actorId) ?? null;
+    if (
+      (command.admissionEmpireId !== null &&
+        (typeof command.admissionEmpireId !== "string" ||
+          command.admissionEmpireId.length === 0)) ||
+      (command.policyVersion !== null &&
+        (typeof command.policyVersion !== "number" ||
+          !Number.isSafeInteger(command.policyVersion) ||
+          command.policyVersion < 0)) ||
+      currentEmpire !== command.admissionEmpireId ||
+      currentVersion !== (command.policyVersion ?? null)
+    )
       throw new Error("NATIONAL WAR: stale or invalid imperial policy epoch");
   }
 
@@ -788,6 +807,8 @@ export class GameImpl implements Game {
             : { kind: command.kind, motionId: command.motionId };
     const fingerprint = JSON.stringify({
       ...intent,
+      ...(command.admissionEmpireId === undefined
+        ? {} : { admissionEmpireId: command.admissionEmpireId }),
       ...(command.policyVersion === undefined
         ? {} : { policyVersion: command.policyVersion }),
     });
