@@ -136,10 +136,20 @@ test("source, repository ID, workflow attempt, runner ID, stage and writer must 
     ["run", "run_attempt", 2, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
     ["run", "head_sha", "f".repeat(40), "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
     ["run", "head_branch", "main", "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
-    ["run", "path", ".github/workflows/other.yml", "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    [
+      "run",
+      "path",
+      ".github/workflows/other.yml",
+      "GITHUB_JOB_RUN_RUNNER_MISMATCH",
+    ],
     ["job", "head_sha", "f".repeat(40), "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
     ["job", "run_attempt", undefined, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
-    ["approval", "approvedStagingRef", "stage3/conductor3-class1-integration-20261121", "TRUSTED_RUN_CONTEXT_INCOMPLETE"],
+    [
+      "approval",
+      "approvedStagingRef",
+      "stage3/conductor3-class1-integration-20261121",
+      "TRUSTED_RUN_CONTEXT_INCOMPLETE",
+    ],
     ["job", "runner_id", 222, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
     [
       "stage",

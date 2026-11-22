@@ -68,11 +68,16 @@ jobs:
               .github/workflows/national-c2-e6-source-acceptance.yml \
               scripts/national-gpu-ci/ \
               docs/release/NATIONAL_C3_CLASS1_E6_PHYSICAL_OPERATOR_GATE.md
+            git restore --source=HEAD -- scripts/national-gpu-ci/ \
+              .github/workflows/national-hardware-acceptance.yml \
+              .github/workflows/national-c2-e6-source-acceptance.yml \
+              docs/release/NATIONAL_C3_CLASS1_E6_PHYSICAL_OPERATOR_GATE.md
             exit 1
           fi
       - name: Shell and exact workflow contract
         if: ${{ !cancelled() }}
         run: |
+          git diff --exit-code
           bash -n scripts/national-gpu-ci/run-four-modes.sh
           node --test scripts/national-gpu-ci/verify-workflow.mjs
       - name: E6 independent adversarial tests

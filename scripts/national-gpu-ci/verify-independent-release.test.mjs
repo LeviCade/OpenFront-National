@@ -77,6 +77,7 @@ function fixture() {
       reason: "SIGNED_WITNESS_NOT_VERIFIED",
       firstFailedStage: null,
       releaseCertified: false,
+      evidenceReadyForHostReview: true,
       exitCode: 0,
       stageComplete: true,
       reportPresent: true,
@@ -103,6 +104,7 @@ function fixture() {
     exactCandidateSha: sourceSha,
     lane: "release",
     releaseCertified: false,
+    evidenceReadyForHostReview: true,
     hostCleanupVerified: false,
     modes: modeReports,
   };

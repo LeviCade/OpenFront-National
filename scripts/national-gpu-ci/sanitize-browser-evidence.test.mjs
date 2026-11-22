@@ -240,7 +240,7 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       () => publishEvidence(dir, SHA, "diagnostic"),
       /PUBLIC_EVIDENCE_DIRECTORY_NOT_EMPTY/,
     );
-    assert.equal(publishEvidence(dir, SHA, "release"), false);
+    assert.equal(publishEvidence(dir, SHA, "release"), true);
     const untrusted = JSON.parse(
       readFileSync(
         join(dir, "gpu", "public", "release", "summary.json"),
@@ -249,6 +249,7 @@ test("publish four separate reports; reject absent proof and nonmatching source"
     );
     assert.equal(untrusted.releaseCertified, false);
     assert.equal(untrusted.allModesPass, false);
+    assert.equal(untrusted.evidenceReadyForHostReview, true);
     for (const mode of MODES) {
       assert.equal(untrusted.modes[mode].outcome, "UNVERIFIED");
       assert.equal(untrusted.modes[mode].reason, "SIGNED_WITNESS_NOT_VERIFIED");
@@ -276,6 +277,21 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       unsigned.modes["legacy-desktop"].hardware.proofAccepted,
       false,
     );
+    // A zero process exit without captured screenshot evidence remains red.
+    rmSync(join(dir, "gpu", "public", "release"), {
+      recursive: true,
+      force: true,
+    });
+    rmSync(join(dir, "browser-national-mobile", "peace-accepted-ended-war.png"));
+    assert.equal(publishEvidence(dir, SHA, "release"), false);
+    const missing = JSON.parse(
+      readFileSync(
+        join(dir, "gpu", "public", "release", "summary.json"),
+        "utf8",
+      ),
+    );
+    assert.equal(missing.evidenceReadyForHostReview, false);
+    assert.equal(missing.modes["national-mobile"].reason, "SCREENSHOT_MISSING");
     const changed = sample();
     changed.exactSource = "b".repeat(40);
     writeFileSync(

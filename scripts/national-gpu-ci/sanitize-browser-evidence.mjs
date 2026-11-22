@@ -335,13 +335,13 @@ export function publishEvidence(root, expectedSha, kind = "release") {
       statusExitMatches &&
       physicalDiagnostic &&
       stageComplete &&
-      (kind === "diagnostic" || signed);
+      (kind === "diagnostic" || browserClaimedSignedProof);
     if (reportedPass && !scenarioAccepted) valid = false;
     if (!statusExitMatches) valid = false;
     let outcome = !status
       ? "NOT_RUN"
       : reportedPass
-        ? scenarioAccepted
+        ? scenarioAccepted && kind === "diagnostic"
           ? "PASS"
           : "UNVERIFIED"
         : "FAIL";
@@ -364,9 +364,11 @@ export function publishEvidence(root, expectedSha, kind = "release") {
                     : "BROWSER_PROCESS_FAILURE"
                   : !stageComplete
                     ? "GAMEPLAY_INCOMPLETE"
-                    : kind === "release" && !signed
-                      ? "SIGNED_WITNESS_NOT_VERIFIED"
-                      : "NONE";
+                    : kind === "release" && !browserClaimedSignedProof
+                      ? "BROWSER_SIGNED_PREFLIGHT_NOT_REPORTED"
+                      : kind === "release"
+                        ? "SIGNED_WITNESS_NOT_VERIFIED"
+                        : "NONE";
     summary.hardware.diagnosticObserved = physicalDiagnostic;
     summary.hardware.browserClaimedSignedProof = browserClaimedSignedProof;
     summary.hardware.proofAccepted = signed;
@@ -397,7 +399,7 @@ export function publishEvidence(root, expectedSha, kind = "release") {
         screenshotSha256[name] = createHash("sha256").update(png).digest("hex");
       }
     }
-    if (reportedPass && images.length === 0 && outcome === "PASS") {
+    if (reportedPass && scenarioAccepted && images.length === 0) {
       valid = false;
       outcome = "UNVERIFIED";
       reason = "SCREENSHOT_MISSING";
@@ -412,6 +414,8 @@ export function publishEvidence(root, expectedSha, kind = "release") {
       viewportMatches,
       laneMatches,
       releaseCertified: false,
+      evidenceReadyForHostReview:
+        kind === "release" && reportedPass && scenarioAccepted && images.length > 0,
       reportPresent: raw !== null,
       expectedViewport,
       actualViewport,
@@ -431,6 +435,10 @@ export function publishEvidence(root, expectedSha, kind = "release") {
   result.exactCandidateSha = SHA.test(expectedSha ?? "") ? expectedSha : null;
   result.allModesPass =
     valid && MODES.every((mode) => result.modes[mode].outcome === "PASS");
+  result.evidenceReadyForHostReview =
+    kind === "release" &&
+    valid &&
+    MODES.every((mode) => result.modes[mode].evidenceReadyForHostReview);
   result.classification =
     kind === "diagnostic"
       ? "UNSIGNED_DIAGNOSTIC_NOT_RELEASE"
@@ -441,7 +449,8 @@ export function publishEvidence(root, expectedSha, kind = "release") {
     join(publicDir, "summary.json"),
     JSON.stringify(result, null, 2) + "\n",
   );
-  return result.allModesPass;
+  // Successful transport of complete evidence is not release acceptance.
+  return kind === "release" ? result.evidenceReadyForHostReview : result.allModesPass;
 }
 
 if (process.argv[1]?.endsWith("sanitize-browser-evidence.mjs")) {
@@ -453,7 +462,12 @@ if (process.argv[1]?.endsWith("sanitize-browser-evidence.mjs")) {
     kind,
   );
   console.info(
-    "PUBLIC_GPU_EVIDENCE=" + (valid ? "VALID" : "INCOMPLETE_OR_UNTRUSTED"),
+    "PUBLIC_GPU_EVIDENCE=" +
+      (valid
+        ? kind === "release"
+          ? "READY_FOR_INDEPENDENT_HOST_REVIEW_NOT_CERTIFIED"
+          : "VALID_DIAGNOSTIC"
+        : "INCOMPLETE_OR_UNTRUSTED"),
   );
   if (!valid) process.exitCode = 1;
 }

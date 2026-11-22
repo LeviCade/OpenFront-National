@@ -212,6 +212,7 @@ export function verifyIndependentRelease({
     summary.exactCandidateSha !== expected.sourceSha ||
     summary.expectedSourceSha !== expected.sourceSha ||
     summary.releaseCertified !== false ||
+    summary.evidenceReadyForHostReview !== true ||
     summary.hostCleanupVerified !== false ||
     !isObject(summary.modes) ||
     Object.keys(summary.modes).length !== MODES.length
@@ -245,6 +246,7 @@ export function verifyIndependentRelease({
       report.reason !== "SIGNED_WITNESS_NOT_VERIFIED" ||
       report.firstFailedStage !== null ||
       report.releaseCertified !== false ||
+      report.evidenceReadyForHostReview !== true ||
       report.sourceMatches !== true ||
       report.exactSource !== expected.sourceSha ||
       report.reportPresent !== true ||

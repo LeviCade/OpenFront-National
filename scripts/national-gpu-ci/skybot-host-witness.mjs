@@ -32,14 +32,14 @@ import { verifyIndependentRelease } from "./verify-independent-release.mjs";
 export const HOST_ROOT = "/etc/skybot-ci/national-gpu-release";
 export const REPOSITORY = "LeviCade/OpenFront-National";
 export const REPOSITORY_ID = "1459234894";
-const STAGING = /^stage3\/conductor[1-9][0-9]*-class[1-9][0-9]*-integration-[0-9]{8}$/;
+const STAGING =
+  /^stage3\/conductor[1-9][0-9]*-class[1-9][0-9]*-integration-[0-9]{8}$/;
 const HARDWARE_WORKFLOW = ".github/workflows/national-hardware-acceptance.yml";
 export const OVERLAY_DIR = "/var/lib/libvirt/images/ci-disposable/overlays";
 const SHA = /^[a-f0-9]{40}$/;
 const HEX64 = /^[a-f0-9]{64}$/;
 const NUM = /^[1-9][0-9]*$/;
-const RUNNER =
-  /^skybot-gpu-openfront-national-[0-9a-f]{8}$/;
+const RUNNER = /^skybot-gpu-openfront-national-[0-9a-f]{8}$/;
 const RENDER = "/dev/dri/renderD128";
 const LEASE = "/run/skybot-ci/intel-virgl-acl.lease";
 // Production requires an operator-installed nonexportable Ed25519 key bridge.
@@ -597,7 +597,8 @@ async function controllerContext(token, expected) {
     prefix + "/git/ref/heads/" + expected.approvedStagingRef,
   );
   requireTrue(
-    latestStage.ref === stage.ref && latestStage.object?.sha === stage.object?.sha,
+    latestStage.ref === stage.ref &&
+      latestStage.object?.sha === stage.object?.sha,
     "CONDUCTOR_SOURCE_ANCESTRY_UNVERIFIED",
   );
   const times = verifyControllerRun({
