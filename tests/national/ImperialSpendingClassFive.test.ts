@@ -205,7 +205,6 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     const unit = city(game);
     policy(game, 0);
     const before = treasury(game);
-    const memberGold = game.player(S).gold();
     queue(game, "c5-demolish-receipt", {
       kind: "demolish-structure",
       empireId,
