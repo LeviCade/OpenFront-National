@@ -1,6 +1,7 @@
 import { assetUrl } from "@openfront/shared/AssetUrls";
 import { Howl } from "howler";
 import { AudioMixer, streamsMusic } from "./AudioMixer";
+import { MENU_THEME_PATH } from "./MusicAvailability";
 
 // Long enough not to sound like a cut, short enough that the lobby is not
 // still playing menu music when the map appears.
@@ -84,6 +85,9 @@ export function startMenuMusic(
     gameInProgress?: boolean;
   },
 ): void {
+  // Do not create gesture handlers or Howls for an unlicensed/absent theme.
+  const themePath = MENU_THEME_PATH;
+  if (themePath === null) return;
   let theme: Howl | null = null;
   // Whether the home page is the thing on screen, so the theme may start.
   let armed = false;
@@ -210,7 +214,7 @@ export function startMenuMusic(
       // browser's volume-lock state changes between two probes.
       const streaming = streamsMusic();
       theme = new Howl({
-        src: [assetUrl("sounds/music/menu-theme.mp3")],
+        src: [assetUrl(themePath)],
         loop: true,
         volume: 0,
         // Stream rather than decode 2.2 MB up front -- see the gameplay track

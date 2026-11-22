@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Licensed-track behavior remains covered with inert mock URLs.
+vi.mock("../../../src/client/sound/MusicAvailability", () => ({
+  GAMEPLAY_TRACKS: [
+    "sounds/music/gameplay.mp3",
+    "sounds/music/gameplay-2.mp3",
+    "sounds/music/gameplay-3.mp3",
+  ],
+  MENU_THEME_PATH: null,
+}));
+
 const howlInstances: any[] = [];
 let nextPlayId = 1;
 const originalMatches = Element.prototype.matches;
