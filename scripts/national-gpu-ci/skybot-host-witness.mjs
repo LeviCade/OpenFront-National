@@ -22,11 +22,10 @@ import {
   readFileSync,
   readdirSync,
   readlinkSync,
-  writeFileSync,
-  renameSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { publishHostRecordOnce, verifyRunGrant } from "./host-run-grant.mjs";
 import { verifyIndependentRelease } from "./verify-independent-release.mjs";
 
 export const HOST_ROOT = "/etc/skybot-ci/national-gpu-release";
@@ -114,7 +113,11 @@ export function verifyControllerRun({
       job.head_sha === expected.sourceSha &&
       same(job.runner_id, expected.runnerId) &&
       job.runner_name === expected.runnerName &&
-      ["queued", "in_progress", "completed"].includes(job.status) &&
+      ["in_progress", "completed"].includes(job.status) &&
+      job.name === "Four real game scenarios on one trusted GPU guest" &&
+      Array.isArray(job.labels) &&
+      job.labels.length === 1 &&
+      job.labels[0] === "skybot-ci-gpu" &&
       (job.status !== "completed" || job.conclusion === "success"),
     "GITHUB_JOB_RUN_RUNNER_MISMATCH",
   );
@@ -464,8 +467,31 @@ function liveHardwareSigner(message) {
  * preflights before an after-job release certificate can be published. A
  * one-mode HSM signature cannot certify three later unsigned browser runs. */
 export function verifyFourModeHostProofs(proofs, publicPem, expected, times) {
+  return verifyModeProofPrefix(
+    proofs,
+    publicPem,
+    expected,
+    times,
+    PROOF_MODES.length,
+    times.jobCompletedAtMs,
+  );
+}
+
+export function verifyModeProofPrefix(
+  proofs,
+  publicPem,
+  expected,
+  times,
+  count,
+  latest,
+) {
   requireTrue(
-    Array.isArray(proofs) && proofs.length === PROOF_MODES.length,
+    Number.isSafeInteger(count) &&
+      count >= 0 &&
+      count <= PROOF_MODES.length &&
+      Number.isSafeInteger(latest) &&
+      Array.isArray(proofs) &&
+      proofs.length === count,
     "FOUR_SIGNED_HOST_PREFLIGHTS_MISSING",
   );
   const key = createPublicKey(publicPem);
@@ -474,7 +500,7 @@ export function verifyFourModeHostProofs(proofs, publicPem, expected, times) {
     "HOST_ED25519_PUBLIC_KEY_INVALID",
   );
   let previousTime = times.runStartedAtMs - 30000;
-  for (let i = 0; i < PROOF_MODES.length; i++) {
+  for (let i = 0; i < count; i++) {
     const proof = proofs[i];
     const p = proof?.payload;
     requireTrue(
@@ -490,10 +516,12 @@ export function verifyFourModeHostProofs(proofs, publicPem, expected, times) {
         p.runnerName === expected.runnerName &&
         same(p.runnerId, expected.runnerId) &&
         p.challenge === expected.challenge &&
+        HEX64.test(expected.runGrantSha256 ?? "") &&
+        p.runGrantSha256 === expected.runGrantSha256 &&
         Number.isSafeInteger(p.issuedAtMs) &&
         Number.isSafeInteger(p.expiresAtMs) &&
-        p.issuedAtMs >= previousTime &&
-        p.issuedAtMs <= times.jobCompletedAtMs &&
+        p.issuedAtMs > previousTime &&
+        p.issuedAtMs <= latest &&
         p.expiresAtMs - p.issuedAtMs <= 120000 &&
         p.expiresAtMs > p.issuedAtMs &&
         typeof proof.signature === "string" &&
@@ -576,6 +604,7 @@ async function githubGet(token, path) {
       "X-GitHub-Api-Version": "2022-11-28",
       "User-Agent": "Skybot-Host-GPU-Witness",
     },
+    redirect: "error",
     signal: AbortSignal.timeout(10000),
   });
   requireTrue(response.status === 200, "GITHUB_CONTROL_PLANE_UNAVAILABLE");
@@ -635,17 +664,7 @@ async function controllerContext(token, expected) {
   });
   return { times, prefix };
 }
-const safeWrite = (name, obj) => {
-  const dest = join(HOST_ROOT, name);
-  requireTrue(!existsSync(dest), "HOST_PROOF_OVERWRITE_FORBIDDEN");
-  const temporary = join(HOST_ROOT, "." + name + "." + process.pid);
-  requireTrue(!existsSync(temporary), "HOST_PROOF_TEMPFILE_COLLISION");
-  writeFileSync(temporary, JSON.stringify(obj, null, 2) + "\n", {
-    mode: 0o600,
-    flag: "wx",
-  });
-  renameSync(temporary, dest);
-};
+const safeWrite = (name, obj) => publishHostRecordOnce(HOST_ROOT, name, obj);
 const assertHostOnly = () => {
   requireTrue(
     process.getuid?.() === 0 && process.env.GITHUB_ACTIONS !== "true",
@@ -672,6 +691,19 @@ async function main() {
     "GITHUB_HOST_READ_TOKEN_NOT_PROVISIONED",
   );
   const { times, prefix } = await controllerContext(token, expected);
+  // The candidate approval stages live identity; a separate operator grant
+  // authorizes this exact attempt, assigned runner, modes and bounded window.
+  const checkGrant = () =>
+    verifyRunGrant(
+      readRootJson("approved-physical-run.json"),
+      expected,
+      times,
+      phase,
+      mode,
+      Date.now(),
+    );
+  const grantSha = checkGrant();
+  const grantedExpected = { ...expected, runGrantSha256: grantSha };
   const pem = readRoot("host-public-key.pem").toString("utf8");
   const pinned = JSON.parse(
     readFileSync(
@@ -684,16 +716,48 @@ async function main() {
   const policy = readRootJson("host-trust-policy.json");
   const enrolled = pinned.trustedEd25519PublicKeySha256;
   const hostTrust = policy.trustedEd25519PublicKeySha256;
-  const hostSign = (payload) =>
-    signHostWithExternalKey(
-      payload,
+  const hostSign = (payload) => {
+    requireTrue(checkGrant() === grantSha, "HOST_RUN_GRANT_CHANGED");
+    const name = phase === "postflight" ? "postflight" : mode;
+    const existing =
+      phase === "postflight"
+        ? "controller-postflight.json"
+        : "controller-preflight-" + mode + ".json";
+    requireTrue(
+      !existsSync(join(HOST_ROOT, existing)),
+      "HOST_PROOF_OVERWRITE_FORBIDDEN",
+    );
+    // Reserve once before HSM use. A crash or partial signing remains in
+    // quarantine; never issue a replacement signature from this same slot.
+    safeWrite("signing-reserved-" + name + ".json", {
+      challenge: expected.challenge,
+      jobId: expected.jobId,
+      sourceSha: expected.sourceSha,
+      runGrantSha256: grantSha,
+      mode: name,
+    });
+    return signHostWithExternalKey(
+      { ...payload, runGrantSha256: grantSha },
       pem,
       enrolled,
       hostTrust,
       liveHardwareSigner,
     );
+  };
   let payload;
   if (phase === "preflight" || phase === "refresh-preflight") {
+    const modeIndex = PROOF_MODES.indexOf(mode);
+    const earlier = PROOF_MODES.slice(0, modeIndex).map((item) =>
+      readRootJson("controller-preflight-" + item + ".json"),
+    );
+    verifyModeProofPrefix(
+      earlier,
+      pem,
+      grantedExpected,
+      times,
+      modeIndex,
+      Date.now(),
+    );
     const physical = probePhysicalPreflight(expected);
     const observed = readRootJson("controller-gpu-observation.json");
     requireTrue(
@@ -763,7 +827,7 @@ async function main() {
     const allSignedModes = PROOF_MODES.map((mode) =>
       readRootJson("controller-preflight-" + mode + ".json"),
     );
-    verifyFourModeHostProofs(allSignedModes, pem, expected, times);
+    verifyFourModeHostProofs(allSignedModes, pem, grantedExpected, times);
     const signedPostflight = hostSign(payload);
     const verdict = verifyIndependentRelease({
       summaryBytes,
@@ -775,7 +839,7 @@ async function main() {
       enrolledFingerprints: enrolled,
       hostTrustedFingerprints: hostTrust,
       expected: {
-        ...expected,
+        ...grantedExpected,
         runStartedAtMs: times.runStartedAtMs,
         jobCompletedAtMs: times.jobCompletedAtMs,
       },
