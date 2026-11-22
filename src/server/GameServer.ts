@@ -664,6 +664,16 @@ export class GameServer {
     ) {
       return "not_trusted";
     }
+    // A separately signed login may still refer to the same provider-linked
+    // account row. Reject the alias before it can sabotage the starting roster.
+    if (this.gameConfig.nationalMode === true) {
+      const occupiedByAnotherPrincipal = this.clients.players().some(
+        (seated) =>
+          seated.publicId === client.publicId &&
+          seated.persistentID !== client.persistentID,
+      );
+      if (occupiedByAnotherPrincipal) return "not_trusted";
+    }
 
     // OFM: if an allowlist is set, only those publicIds may join. Re-checked on
     // every join attempt. Admins/root bypass it so moderation can reach any
@@ -927,6 +937,11 @@ export class GameServer {
           return false;
         }
         this.markClientDisconnected(client.clientID, false);
+        this.log.info("NATIONAL authenticated socket resumed", {
+          gameID: this.id,
+          seat: client.clientID,
+          tick: this.nationalMatch.currentTick(),
+        });
       }
       this.sendStartGameMsg(client.ws, lastTurn);
     }
@@ -1489,6 +1504,15 @@ export class GameServer {
       this._startTime = Date.now();
       this.lastPingUpdate = Date.now();
       this.stopLobbyInfoBroadcast();
+      // Sanctioned host-only proof: counts and ticks, no user subjects,
+      // bearer tokens, public IDs or recipient-private state.
+      this.log.info("NATIONAL authoritative host ready", {
+        gameID: this.id,
+        authenticatedSeats: seated.length,
+        distinctAccounts: accounts.size,
+        authoritativeRunners: 1,
+        initialTick: match.currentTick(),
+      });
 
       // No spectators in the first trusted-host slice. They cannot join an
       // authoritative Game seat, nor obtain a privileged projection.
@@ -1588,7 +1612,15 @@ export class GameServer {
   private commitTrustedNationalTick(): void {
     if (this.paused || this.ended || this.nationalMatch === null) return;
     try {
-      this.nationalMatch.tick();
+      const receipt = this.nationalMatch.tick();
+      if (receipt.committedIntents > 0 || receipt.tick % 100 === 0) {
+        this.log.info("NATIONAL authoritative tick", {
+          gameID: this.id,
+          tick: receipt.tick,
+          queuedIntents: receipt.committedIntents,
+          replayDigestPrefix: receipt.replayDigest.slice(0, 12),
+        });
+      }
     } catch (error) {
       this.log.error("NATIONAL authoritative tick failed", {
         gameID: this.id,

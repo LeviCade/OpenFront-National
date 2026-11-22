@@ -472,7 +472,7 @@ export async function startWorker() {
           .status(account.status === 401 || account.status === 403 ? 401 : 503)
           .json({ error: "national_account_verification_failed" });
       }
-      if (!account.response.player.publicId || Boolean(account.response.ban)) {
+      if (!account.response.player.publicId || account.response.ban) {
         return res.status(403).json({ error: "national_account_unavailable" });
       }
     }
@@ -742,7 +742,7 @@ export async function startWorker() {
             ws.close(close.code, close.reason);
             return;
           }
-          if (Boolean(account.response.ban)) {
+          if (account.response.ban) {
             ws.close(CloseCode.Unauthorized, CloseReason.LoginRequired);
             return;
           }
@@ -946,7 +946,7 @@ export async function startWorker() {
           }
           if (
             game?.gameConfig.nationalMode === true &&
-            Boolean(result.response.ban)
+            result.response.ban
           ) {
             admissionGuard.rollback();
             ws.close(CloseCode.Unauthorized, CloseReason.LoginRequired);

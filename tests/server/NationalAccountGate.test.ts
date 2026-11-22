@@ -6,7 +6,12 @@ import {
 } from "@openfront/shared/WorkerSchemas";
 import { describe, expect, it } from "vitest";
 import { isNationalSignedInAccount } from "../../src/server/national/NationalAccountGate";
-import { cid, makeClient, makeGame } from "../util/GameServerHarness";
+import {
+  cid,
+  makeClient,
+  makeGame,
+  makeMockWs,
+} from "../util/GameServerHarness";
 
 const claims = (sub: string, provider?: string, role?: string) =>
   ({ sub, provider, role }) as TokenPayload;
@@ -93,6 +98,16 @@ describe("NATIONAL signed-account browser boundary", () => {
         }),
       ),
     ).toBe("joined");
+    expect(
+      game.joinClient(
+        makeClient({
+          clientID: cid("aliased"),
+          persistentID: "subject-C",
+          publicId: "api-verified-public",
+          claims: claims("subject-C", "google"),
+        }),
+      ),
+    ).toBe("not_trusted");
   });
 
   it("allows mode opt-in with valid creator but rejects invalid subsequent mode", () => {
@@ -130,5 +145,36 @@ describe("NATIONAL signed-account browser boundary", () => {
         actor,
       ).status,
     ).toBe(403);
+  });
+  it("does not restore superseded account roles on valid reconnect", () => {
+    const client = makeClient({
+      clientID: cid("roleOne"),
+      persistentID: "role-sub",
+      publicId: "real-role-public",
+      role: "admin",
+      claims: claims("role-sub", "google", "admin"),
+    });
+    const game = makeGame({
+      config: {
+        nationalMode: true,
+        gameType: GameType.Private,
+        gameMode: GameMode.FFA,
+      },
+    });
+    expect(game.joinClient(client)).toBe("joined");
+    const changed = game.rejoinClient(
+      makeMockWs() as any,
+      "role-sub",
+      0,
+      undefined,
+      {
+        subject: "role-sub",
+        publicId: "real-role-public",
+        claims: claims("role-sub", "google", "mod"),
+      },
+    );
+    expect(changed).toBe(true);
+    expect(client.role).toBe("mod");
+    expect(client.claims?.role).toBe("mod");
   });
 });

@@ -16,6 +16,10 @@ C2 `TrustedNationalRealWebSocket.test.ts` verifies three separately signed Ed255
 6. B/C join exactly A's lobby, then A starts. The trusted GameServer must show one game ID, one `TrustedNationalMatch` and one server-owned GameRunner, three distinct JWT subjects and API publicIds, per-account `national_start` and advancing `national_projection` ticks. All three perform normal map spawn, lawful political commands and observe authorized per-recipient receipts. E1 owns WAR/Attack outcomes; E3 owns observer fog; E4 owns real visible controls.
 7. Reconnect B with its supported login; verify same authoritative seat, new socket-bound recipient registration, revoked pending commands and uninterrupted A/C tick progression. Negative cases: B token reused for D seat, expired/revoked JWT, superseded socket intents, spectator commands, command replay, forged actor ID and private projection delivery to nonrecipients. A crashed host loses its current in-memory game: do NOT report restart continuity PASS or pretend a newly created game is the same runner.
 
+## Host-side source evidence (no principal secrets)
+
+The actual GameServer writes `NATIONAL authoritative host ready` exactly once per successful match creation with `authenticatedSeats`, `distinctAccounts`, `authoritativeRunners: 1`, and `initialTick`. It also writes `NATIONAL authoritative tick` for every hundredth server tick and on queued intents, with tick, queued intent count, and a truncated deterministic replay commitment. `NATIONAL authenticated socket resumed` marks a successful account-verified replacement. E5 must compare these host-side lines to browser frame types and monotonic ticks on the same game ID. **Queued intents do NOT establish lawful acceptance**: only E1's authenticated recipient-bound engine receipt does.
+
 ## E5 decision
 
 **PASS:** independent three real-account browser sign-ins, same Worker/game ID, legal spawns/actions, authoritative advancing ticks, recipient-safe private projections, lawful reconnect and negative abuse tests on an exact pinned HEAD.
