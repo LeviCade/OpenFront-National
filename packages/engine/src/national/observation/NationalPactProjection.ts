@@ -12,7 +12,7 @@ type PactGame = Game & {
 };
 
 export function projectNationalPublicPacts(game: Game): NationalPublicPactView[] | undefined {
-  const view = game.nationalPublicPoliticalView() as
+  const view = game.nationalPublicPoliticalView?.() as
     ({pacts?: readonly NationalPublicPactView[]} | null);
   if (view?.pacts === undefined) return undefined;
   const selected = view.pacts.map(p => ({id:p.id,name:p.name,kind:p.kind,
@@ -26,7 +26,9 @@ export function projectNationalPactDisclosure(game: Game, observerId: string | n
   if (!roster || !observerId || !game.config().nationalMode() || !game.hasPlayer(observerId)) return undefined;
   const actor = game.player(observerId);
   if (actor.type() !== PlayerType.Human || !actor.hasSpawned() || !actor.isAlive()) return undefined;
-  if (game.nationalPoliticalAuthority()?.empireOf(observerId)) return {version:1,recipientId:observerId,pacts:[]};
+  const authority = game.nationalPoliticalAuthority();
+  if (!authority || !authority.alive(observerId)) return undefined;
+  if (authority.empireOf(observerId)) return {version:1,recipientId:observerId,pacts:[]};
   const source = (game as PactGame).nationalPactDisclosure?.(actor);
   if (source == null) return undefined;
   // Strictly reject foreign recipients and unexpected private nested data.

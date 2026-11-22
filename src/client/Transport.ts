@@ -1,3 +1,4 @@
+import type { PactIntent } from "./NationalPactState";
 import { TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   AllPlayers,
@@ -117,6 +118,10 @@ export class SendSpawnIntentEvent implements GameEvent {
 }
 
 /** User-originated NATIONAL founding, stamped by the normal transport. */
+export class SendNationalPactIntentEvent implements GameEvent {
+  constructor(public readonly intent: PactIntent) {}
+}
+
 export class SendNationalFoundEmpireIntentEvent implements GameEvent {
   constructor(
     public readonly empireId: string,
@@ -408,6 +413,9 @@ export class Transport {
       this.rejectNationalStream();
     });
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
+    this.subscribe(SendNationalPactIntentEvent, (e) => {
+      if (this.nationalDiplomacyWireEnabled()) this.sendIntent(e.intent);
+    });
     this.subscribe(SendNationalFoundEmpireIntentEvent, (e) =>
       this.onSendNationalFoundEmpireIntent(e),
     );

@@ -1,3 +1,4 @@
+import { readPactReceipts, retainPactReceipts, type PactReceipt } from "../NationalPactState";
 import { readNationalPactDisclosure, type NationalPactDisclosureViewData } from "@openfront/engine-api/game/NationalPactView";
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
 import {
@@ -95,6 +96,7 @@ export class GameView implements GameLike {
   private lastUpdate: GameUpdateViewData | null;
   // Authoritative, viewer-filtered worker values only. Never reconstruct
   // sovereignty from local intents or speculative client player data.
+  private _nationalPactReceipts: PactReceipt[] = [];
   private _nationalPactDisclosure: NationalPactDisclosureViewData | null = null;
   private _nationalPolitics: NationalPublicPolitics | null = null;
   private _nationalFoundingOutcome: NationalFoundingResult | null = null;
@@ -110,7 +112,10 @@ export class GameView implements GameLike {
   private trustedSight: NationalObserverMapContinuity | null = null;
 
   public setTrustedPrincipal(principal: string | null): void {
-    if (this.trustedPrincipal !== principal) this._nationalPactDisclosure = null;
+    if (this.trustedPrincipal !== principal) {
+      this._nationalPactDisclosure = null;
+      this._nationalPactReceipts = [];
+    }
     this.trustedPrincipal = principal;
   }
   private readonly trustedUnitMarkers = new Map<
@@ -207,6 +212,7 @@ export class GameView implements GameLike {
   public setTrustedProjectionReady(ready: boolean): void {
     if (!this._trustedNationalProjection) return;
     this._trustedProjectionReady = ready;
+    if (!ready) { this._nationalPactDisclosure = null; this._nationalPactReceipts = []; }
   }
 
   /**
@@ -459,6 +465,8 @@ export class GameView implements GameLike {
     return owner.isPlayer() && owner.id() === player.id();
   }
 
+  public nationalPactReceipts(): readonly PactReceipt[] { return this._nationalPactReceipts; }
+
   public nationalPactDisclosure(): NationalPactDisclosureViewData | null {
     return this._nationalPactDisclosure;
   }
@@ -507,6 +515,7 @@ export class GameView implements GameLike {
   /** Invalidate an old roster on disconnect; await a new GameRunner packet. */
   public invalidateNationalPoliticalView(): void {
     this._nationalPactDisclosure = null;
+    this._nationalPactReceipts = [];
     this._nationalPolitics = null;
     this._nationalPoliticsTick = null;
     this._nationalFoundingResults = [];
@@ -734,6 +743,8 @@ export class GameView implements GameLike {
         gu.nationalPactDisclosure, currentActorId, this._nationalPolitics?.pacts ?? null,
         this._nationalPolitics?.empires.some(e => e.memberIds.includes(currentActorId ?? "")) ?? false,
       );
+      this._nationalPactReceipts = gu.tick < previousTick || this._nationalPactDisclosure === null ? [] : retainPactReceipts(
+        this._nationalPactReceipts, readPactReceipts(gu.nationalCommandResults,currentActorId,gu.tick),gu.tick);
       this._nationalAccessionOffers = readNationalAccessionOffers(
         nationalPacket.nationalAccessionOffers,
         currentActorId,

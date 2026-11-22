@@ -1,3 +1,5 @@
+import type { NationalPactTerms } from "@openfront/engine-api/game/NationalPactView";
+import { pactActionAllowed, pactConsentKey, reconcilePactReceipt, type PactAction, type PactContext, type PactIntent } from "./NationalPactState";
 import { GameType } from "@openfront/engine-api/game/GameTypes";
 import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
@@ -24,6 +26,7 @@ import {
 import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
 import { GoToPlayerEvent } from "./TransformHandler";
 import {
+  SendNationalPactIntentEvent,
   SendNationalAcceptPeaceIntentEvent,
   SendNationalAcceptEmpireIntentEvent,
   SendNationalOfferEmpireIntentEvent,
@@ -103,6 +106,7 @@ export class NationalDiplomacyPanel extends LitElement {
    * confirm this button click; a restored roster by itself proves membership.
    */
   public refresh(): void {
+    this.refreshPact();
     const game = this.game;
     const player = game?.myPlayer();
     const politics = game?.nationalPolitics() ?? null;
@@ -411,6 +415,7 @@ export class NationalDiplomacyPanel extends LitElement {
 
   /** A dropped or replaced session must never retain optimistic success. */
   public connectionInterrupted(): void {
+    this.pactAttempt=null; this.pactStatus="Connection interrupted; outcome unconfirmed.";
     this.selectWarTarget("");
     if (this.confirmedDiplomacy !== null) {
       this.confirmedDiplomacy = null;
@@ -1019,6 +1024,145 @@ export class NationalDiplomacyPanel extends LitElement {
     }
   }
 
+  @state() private pactStatus = "";
+  private pactAttempt: {requestId:string; actorId:string; gameId:string; pactId:string; type:PactIntent["type"]; tick:number} | null = null;
+
+  private pactContext(): PactContext | null {
+    const game=this.game;
+    const actor=game?.myPlayer();
+    const politics=game?.nationalPolitics();
+    const disclosure=game?.nationalPactDisclosure?.();
+    if (!game || !actor || !politics?.pacts || !disclosure ||
+        this.warUnavailableReason!==null || this.memberEmpire ||
+        game.nationalPoliticsTick?.()!==game.ticks() || disclosure.recipientId!==actor.id()) return null;
+    return {actor:actor.id(),roster:politics.pacts,disclosure,
+      independentCandidates:game.players().filter(p=>p.id()!==actor.id() && p.isAlive() && p.numTilesOwned()>0 &&
+        !politics.empires.some(e=>e.memberIds.includes(p.id()))).map(p=>p.id())};
+  }
+  private refreshPact(): void {
+    const a=this.pactAttempt;
+    if(!a) return;
+    const game=this.game;
+    if(!game || game.gameID()!==a.gameId || game.myPlayer()?.id()!==a.actorId ||
+      !this.pactContext() || game.ticks()<a.tick) {
+      this.pactAttempt=null; this.pactStatus="No longer authorized; outcome unconfirmed."; return;
+    }
+    const result=reconcilePactReceipt(game.nationalPactReceipts?.()??[],a,game.ticks());
+    if(result==="pending") return;
+    this.pactAttempt=null;
+    this.pactStatus=result==="accepted"?"Game accepted command. Current roster and terms below are authoritative.":
+      result==="rejected"?"Game rejected command under current political rules.":
+      result==="conflict"?"Conflicting receipts; outcome unconfirmed.":"No matching receipt; outcome unknown.";
+  }
+  private sendPact(action:PactAction, displayedKey:string): void {
+    const context=this.pactContext();
+    const game=this.game;
+    if(!context || !game || !this.eventBus || this.pactAttempt ||
+        !pactActionAllowed(action,context) || pactConsentKey(context,action.pactId)!==displayedKey) {
+      this.pactStatus="No longer authorized or terms changed. Review current pact."; return;
+    }
+    let requestId:string;
+    try { requestId=createNationalPoliticalRequestId(); } catch {
+      this.pactStatus="Secure request identity unavailable."; return;
+    }
+    this.pactAttempt={requestId,actorId:context.actor,gameId:game.gameID(),pactId:action.pactId,type:action.type,tick:game.ticks()};
+    this.pactStatus="Pending authoritative receipt.";
+    try { this.eventBus.emit(new SendNationalPactIntentEvent({...action,requestId})); }
+    catch {this.pactAttempt=null;this.pactStatus="Command transport failed; outcome unconfirmed.";}
+  }
+  private pactTermsControls(t:NationalPactTerms) {
+    return html`<label>Admission <select class="bg-slate-800" name="admission">
+      <option value="leader" ?selected=${t.admission==="leader"}>Administrator</option>
+      <option value="unanimous" ?selected=${t.admission==="unanimous"}>Unanimous</option>
+    </select></label>
+    <label>Expulsion <select class="bg-slate-800" name="expulsion">
+      <option value="leader" ?selected=${t.expulsion==="leader"}>Administrator</option>
+      <option value="unanimous" ?selected=${t.expulsion==="unanimous"}>Unanimous (voting unavailable)</option>
+      <option value="forbidden" ?selected=${t.expulsion==="forbidden"}>Forbidden</option>
+    </select></label>`;
+  }
+  private readPactTerms(data:FormData):NationalPactTerms | null {
+    const admission=data.get("admission"),expulsion=data.get("expulsion");
+    return (admission==="leader"||admission==="unanimous") &&
+      (expulsion==="leader"||expulsion==="unanimous"||expulsion==="forbidden")?{admission,expulsion}:null;
+  }
+  private renderPacts() {
+    const roster=this.game?.nationalPolitics()?.pacts;
+    const c=this.pactContext();
+    const enabled=c!==null && !this.pactAttempt;
+    const button="rounded border border-amber-400/50 px-3 py-2 min-h-10 disabled:opacity-50 focus-visible:outline focus-visible:outline-2";
+    const formClass="flex flex-col gap-2";
+    const submit=(event:SubmitEvent,callback:(data:FormData)=>void)=>{
+      event.preventDefault(); if(event.currentTarget instanceof HTMLFormElement)callback(new FormData(event.currentTarget));
+    };
+    return html`<section data-national-pacts aria-label="Ordinary pacts" class="space-y-3">
+      <h2 class="font-semibold text-amber-200">Non-aggression and mutual defense pacts</h2>
+      <p role="status" aria-live="polite" data-national-pact-status>${this.pactStatus || (c?"Available":"Private constitutional controls unavailable")}</p>
+      ${roster===undefined?html`<p>Public pact roster not available.</p>`:roster.length===0?html`<p>No ordinary pacts.</p>`:roster.map(p=>{
+        const d=c?.disclosure.pacts.find(x=>x.pactId===p.id);
+        const key=c?pactConsentKey(c,p.id):"";
+        const allowed=(action:PactAction)=>enabled && c!==null && pactActionAllowed(action,c);
+        const send=(action:PactAction)=>this.sendPact(action,key);
+        const candidates=c?.independentCandidates.filter(id=>!p.memberIds.includes(id))??[];
+        const pending=d?.pendingAmendment;
+        const accept={type:"national_accept_pact",pactId:p.id} as const;
+        const betray={type:"national_betray_pact",pactId:p.id} as const;
+        const approve={type:"national_approve_pact_amendment",pactId:p.id} as const;
+        return html`<article data-national-pact-id=${p.id} class="rounded border border-white/20 p-3 space-y-2">
+          <h3 class="font-bold break-words">${p.name} (${p.kind}) · ${p.id}</h3>
+          <p>Administrator: ${p.administratorId?this.playerName(p.administratorId):"None"}</p>
+          <p>Members: ${p.memberIds.map(id=>this.playerName(id)).join(", ")}</p>
+          ${d?html`<p data-national-pact-terms>Constitution: admission ${d.terms.admission}; expulsion ${d.terms.expulsion}.</p>`:nothing}
+          ${d?.relationship==="invited"?html`<p>Accepting binds your nation to the displayed terms. ${p.kind==="MDA"?"Defense levies may commit your troops.":"You cannot attack fellow members without betraying first."}</p>
+            <button class=${button} data-national-pact-action="accept" ?disabled=${!allowed(accept)} @click=${()=>send(accept)}>Accept displayed constitution</button>`:nothing}
+          ${d?.relationship==="member"?html`
+            <form class=${formClass} @submit=${(e:SubmitEvent)=>submit(e,data=>send({type:"national_invite_pact",pactId:p.id,candidateId:String(data.get("candidate"))}))}>
+              <label>Invite independent nation <select name="candidate" required class="bg-slate-800"><option value="">Choose nation</option>${candidates.map(id=>html`<option value=${id}>${this.playerName(id)}</option>`)}</select></label>
+              <button class=${button} data-national-pact-action="invite" ?disabled=${!enabled || !candidates.some(candidateId=>allowed({type:"national_invite_pact",pactId:p.id,candidateId}))}>Submit invitation</button>
+              ${d.terms.admission==="unanimous"?html`<p>Unanimous admission requires all members' consent; additional admission ballot controls are not available.</p>`:nothing}
+            </form>
+            <form class=${formClass} @submit=${(e:SubmitEvent)=>submit(e,data=>{if(data.get("confirm")==="on")send(betray);})}>
+              <p>Betrayal immediately leaves this coalition and removes its treaty protection and defense obligations.</p>
+              <label><input type="checkbox" required name="confirm"> I understand and choose to leave</label>
+              <button class=${button} data-national-pact-action="betray" ?disabled=${!allowed(betray)}>Betray and leave</button>
+            </form>
+            ${pending?html`<div data-national-pact-amendment>
+              <p>Proposed constitution: admission ${pending.terms.admission}; expulsion ${pending.terms.expulsion}; administrator ${pending.administratorId?this.playerName(pending.administratorId):"None"}.</p>
+              <p>Approved: ${pending.approvedBy.length} of ${p.memberIds.length} members. All current members must consent.</p>
+              <button class=${button} data-national-pact-action="approve" ?disabled=${!allowed(approve)} @click=${()=>send(approve)}>Approve displayed amendment</button>
+            </div>`:html`<form class=${formClass} @submit=${(e:SubmitEvent)=>submit(e,data=>{
+              const terms=this.readPactTerms(data); const admin=String(data.get("administrator")??"");
+              if(terms)send({type:"national_propose_pact_amendment",pactId:p.id,terms,administratorId:admin||null});
+            })}>
+              <h4>Propose constitutional amendment</h4>
+              ${this.pactTermsControls(d.terms)}
+              <label>Administrator <select class="bg-slate-800" name="administrator"><option value="" ?selected=${p.administratorId===null}>None</option>${p.memberIds.map(id=>html`<option value=${id} ?selected=${id===p.administratorId}>${this.playerName(id)}</option>`)}</select></label>
+              <button class=${button} data-national-pact-action="propose" ?disabled=${!enabled}>Propose amendment (casts your approval)</button>
+            </form>`}
+            ${d.terms.expulsion==="leader" && p.administratorId===c?.actor?html`<form class=${formClass} @submit=${(e:SubmitEvent)=>submit(e,data=>{
+                if(data.get("confirm")==="on")send({type:"national_expel_pact",pactId:p.id,memberId:String(data.get("member"))});
+              })}>
+              <label>Expel member <select name="member" required class="bg-slate-800"><option value="">Choose member</option>${p.memberIds.filter(id=>id!==c?.actor).map(id=>html`<option value=${id}>${this.playerName(id)}</option>`)}</select></label>
+              <label><input type="checkbox" required name="confirm"> Confirm discretionary expulsion</label>
+              <button class=${button} data-national-pact-action="expel" ?disabled=${!enabled || p.memberIds.length<2}>Expel member</button>
+              </form>`:html`<p>Expulsion: ${d.terms.expulsion==="forbidden"?"Forbidden by constitution":d.terms.expulsion==="unanimous"?"Requires unanimous consent; voting unavailable":"Administrator only"}.</p>`}
+          `:nothing}
+        </article>`;
+      })}
+      ${c?html`<form class=${formClass} data-national-pact-found @submit=${(e:SubmitEvent)=>submit(e,data=>{
+        const terms=this.readPactTerms(data),kind=data.get("kind"),pactId=String(data.get("id")??"").trim();
+        if(terms&&(kind==="NAP"||kind==="MDA"))this.sendPact({type:"national_found_pact",pactId,name:String(data.get("name")??"").trim(),pactKind:kind,terms},pactConsentKey(c,pactId));
+      })}>
+        <h3>Found a pact</h3>
+        <label>Pact ID <input class="bg-slate-800" name="id" required maxlength="64" pattern="[A-Za-z0-9_\\-]{1,64}"></label>
+        <label>Public name <input class="bg-slate-800" name="name" required maxlength="64"></label>
+        <label>Category <select class="bg-slate-800" name="kind"><option value="NAP">Non-aggression pact</option><option value="MDA">Mutual defense alliance</option></select></label>
+        ${this.pactTermsControls({admission:"leader",expulsion:"forbidden"})}
+        <button class=${button} data-national-pact-action="found" ?disabled=${!enabled}>Found pact with displayed terms</button>
+      </form>`:nothing}
+    </section>`;
+  }
+
   render() {
     const game = this.game;
     const mode = game?.config().gameConfig().gameType;
@@ -1125,6 +1269,7 @@ export class NationalDiplomacyPanel extends LitElement {
                       : "Battle: right-click opposing territory on desktop, or tap it on mobile, then choose the enabled Attack action."
                   }
                 </p>
+                ${this.renderPacts()}
                 ${
                   politics
                     ? html`<div class="space-y-2">
