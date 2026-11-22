@@ -267,7 +267,7 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(view(2)).toEqual([]);
     act(0, issue("embargo", IDS[1], "original_issue", 2));
     const id = view(1)[0].id;
-    act(0, issue("embargo", IDS[2], "original_issue"));
+    expect(host.submit(sockets[0], issue("embargo", IDS[2], "original_issue"))).toBe(false);
     expect(view(2)).toEqual([]);
     host.tick(); // already past the two-tick deadline
     act(1, respond(id, "accept", "late_accept"));
