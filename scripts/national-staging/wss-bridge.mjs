@@ -4,9 +4,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { request as httpsRequest } from "node:https";
 import { connect } from "node:net";
 import { join } from "node:path";
-import { request as httpsRequest } from "node:https";
 import { createServer } from "node:tls";
 
 export async function startNationalWssBridge(privateDir) {
@@ -80,7 +80,9 @@ export async function nationalHttpsJson(edge, pathname, options = {}) {
         rejectUnauthorized: true,
         timeout: 5000,
         headers: {
-          ...(options.token ? { authorization: "Bearer " + options.token } : {}),
+          ...(options.token
+            ? { authorization: "Bearer " + options.token }
+            : {}),
           ...(body === null
             ? {}
             : {

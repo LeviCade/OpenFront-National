@@ -37,10 +37,7 @@ import {
   startIdentity,
   until,
 } from "./operator-harness.mjs";
-import {
-  nationalHttpsJson,
-  startNationalWssBridge,
-} from "./wss-bridge.mjs";
+import { nationalHttpsJson, startNationalWssBridge } from "./wss-bridge.mjs";
 
 const fixture = makeEnvironment();
 const durable = process.env.NATIONAL_TEST_DURABLE_RECOVERY === "1";
@@ -457,10 +454,7 @@ async function create(token) {
   return res.body;
 }
 async function exists(id) {
-  const res = await nationalHttpsJson(
-    wssBridge,
-    "/api/game/" + id + "/exists",
-  );
+  const res = await nationalHttpsJson(wssBridge, "/api/game/" + id + "/exists");
   assert.equal(res.status, 200, "Private NATIONAL HTTPS lookup");
   return res.body.exists;
 }
