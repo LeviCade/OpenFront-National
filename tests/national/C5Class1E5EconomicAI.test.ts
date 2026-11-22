@@ -5,6 +5,9 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import { NationalSanctionExecution } from "@openfront/engine/execution/NationalSanctionExecution";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
+import { TrainExecution } from "@openfront/engine/execution/TrainExecution";
+import { Railroad } from "@openfront/engine/game/Railroad";
+import { TrainStation } from "@openfront/engine/game/TrainStation";
 import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import {
   initialNationalEconomicMemory,
@@ -367,6 +370,52 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     ), 50);
     expect(b.canTrade(c)).toBe(true);
     witness(game, "seed-221-backdown-changes-next-ai-choice", before);
+  });
+
+  it("ECON-02/07: AI-authored demand stops a live train after a paid railroad control", async () => {
+    const { game, a, b, c, ca, bb } = await live(313);
+    // Real city stations and a physical railroad, not simulated gold.
+    const tiles = Array.from({ length: 12 }, (_, i) => game.ref(3, i + 1));
+    b.conquer(tiles[0]);
+    c.conquer(tiles[tiles.length - 1]);
+    const from = new TrainStation(game, b.buildUnit(UnitType.City, tiles[0], {}));
+    const to = new TrainStation(game, c.buildUnit(UnitType.City, tiles[tiles.length - 1], {}));
+    const network = game.railNetwork();
+    network.stationManager().addStation(from);
+    network.stationManager().addStation(to);
+    const rail = new Railroad(from, to, tiles, 1);
+    from.addRailroad(rail);
+    to.addRailroad(rail);
+    const initial = ledger(game);
+    const control = new TrainExecution(network, b, from, to, 1);
+    game.addExecution(control);
+    until(game, () => !control.isActive(), 90);
+    expect(b.trainGold()).toBeGreaterThan(0n);
+    expect(b.trainGold()).toBe(c.trainGold());
+    expect(b.gold() - BigInt(initial[1].gold)).toBe(b.trainGold());
+    expect(c.gold() - BigInt(initial[2].gold)).toBe(c.trainGold());
+    witness(game, "seed-313-pre-sanction-paid-rail", initial);
+    const route = voyage(game, a, ca, bb);
+    expect(route.isActive()).toBe(true);
+    game.convertHumanToNation(a, "c5-e5-issuer-313");
+    until(game, () => NationalSanctionExecution.viewFor(game, a).length > 0, 70);
+    const demand = NationalSanctionExecution.viewFor(game, a)[0];
+    expect(demand.issuer).toBe(A);
+    game.addExecution(new NationalSanctionExecution(b, {
+      type: "national_respond_sanction",
+      sanctionId: demand.id,
+      decision: "comply",
+      requestId: "c5-e5-rail-compliance",
+    }));
+    tick(game, 2);
+    expect(b.canTrade(c)).toBe(false);
+    const blockedBefore = ledger(game);
+    const blocked = new TrainExecution(network, b, from, to, 1);
+    game.addExecution(blocked);
+    until(game, () => !blocked.isActive(), 90);
+    expect(b.trainGold()).toBe(BigInt(blockedBefore[1].train));
+    expect(c.trainGold()).toBe(BigInt(blockedBefore[2].train));
+    witness(game, "seed-313-post-sanction-blocked-rail", blockedBefore);
   });
 
   it("ECON-04: actual imperial subordinate command is rejected", async () => {
