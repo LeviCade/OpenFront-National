@@ -424,7 +424,11 @@ export class Transport {
     this.subscribe(SendNationalImperialPolicyIntentEvent, (e) => {
       if (!this.nationalDiplomacyWireEnabled()) return;
       const parsed = IntentSchema.safeParse(e.intent);
-      if (parsed.success && String(parsed.data.type) === "national_imperial_administration") this.sendIntent(parsed.data);
+      if (
+        parsed.success &&
+        String(parsed.data.type) === "national_imperial_administration"
+      )
+        this.sendIntent(parsed.data);
     });
     this.subscribe(SendNationalFoundEmpireIntentEvent, (e) =>
       this.onSendNationalFoundEmpireIntent(e),

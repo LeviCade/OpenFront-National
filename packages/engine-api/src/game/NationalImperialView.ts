@@ -86,20 +86,38 @@ export function readNationalImperialAdministration(
       new Set(allowed).size !== allowed.length)
   )
     return null;
-  const military = [value.armyMode, value.hybridThresholdBps, value.imperialTroops, value.imperialTroopCapacity];
-  const hasMilitary = military.some(v => v !== undefined);
-  if (hasMilitary && ((value.armyMode !== "decentralized" && value.armyMode !== "hybrid") ||
-    typeof value.hybridThresholdBps !== "number" || !Number.isInteger(value.hybridThresholdBps) || value.hybridThresholdBps < 0 || value.hybridThresholdBps > 10000 ||
-    typeof value.imperialTroops !== "string" || !/^(0|[1-9][0-9]{0,127})$/.test(value.imperialTroops) ||
-    typeof value.imperialTroopCapacity !== "string" || !/^(0|[1-9][0-9]{0,127})$/.test(value.imperialTroopCapacity) ||
-    (value.armyMode === "decentralized" && (value.imperialTroops !== "0" || value.imperialTroopCapacity !== "0")))) return null;
+  const military = [
+    value.armyMode,
+    value.hybridThresholdBps,
+    value.imperialTroops,
+    value.imperialTroopCapacity,
+  ];
+  const hasMilitary = military.some((v) => v !== undefined);
+  if (
+    hasMilitary &&
+    ((value.armyMode !== "decentralized" && value.armyMode !== "hybrid") ||
+      typeof value.hybridThresholdBps !== "number" ||
+      !Number.isInteger(value.hybridThresholdBps) ||
+      value.hybridThresholdBps < 0 ||
+      value.hybridThresholdBps > 10000 ||
+      typeof value.imperialTroops !== "string" ||
+      !/^(0|[1-9][0-9]{0,127})$/.test(value.imperialTroops) ||
+      typeof value.imperialTroopCapacity !== "string" ||
+      !/^(0|[1-9][0-9]{0,127})$/.test(value.imperialTroopCapacity) ||
+      (value.armyMode === "decentralized" &&
+        (value.imperialTroops !== "0" || value.imperialTroopCapacity !== "0")))
+  )
+    return null;
   return {
-    ...(hasMilitary ? {
-      armyMode: value.armyMode as NationalImperialAdministrationView["armyMode"],
-      hybridThresholdBps: value.hybridThresholdBps as number,
-      imperialTroops: value.imperialTroops as string,
-      imperialTroopCapacity: value.imperialTroopCapacity as string,
-    } : {}),
+    ...(hasMilitary
+      ? {
+          armyMode:
+            value.armyMode as NationalImperialAdministrationView["armyMode"],
+          hybridThresholdBps: value.hybridThresholdBps as number,
+          imperialTroops: value.imperialTroops as string,
+          imperialTroopCapacity: value.imperialTroopCapacity as string,
+        }
+      : {}),
     empireId: value.empireId,
     workerIncomeBps: value.workerIncomeBps,
     treasury: value.treasury,

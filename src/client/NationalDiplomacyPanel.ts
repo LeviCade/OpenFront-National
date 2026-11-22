@@ -26,6 +26,13 @@ import {
   type NationalPoliticalAction,
 } from "./NationalDiplomacyState";
 import {
+  imperialConstructionCategories,
+  imperialPolicyIntentAvailable,
+  imperialPolicyKey,
+  parseImperialCommand,
+  type ImperialPolicyCommand,
+} from "./NationalImperialState";
+import {
   pactActionAllowed,
   pactConsentKey,
   reconcilePactReceipt,
@@ -33,7 +40,6 @@ import {
   type PactContext,
   type PactIntent,
 } from "./NationalPactState";
-import { imperialConstructionCategories, imperialPolicyIntentAvailable, imperialPolicyKey, parseImperialCommand, type ImperialPolicyCommand } from "./NationalImperialState";
 import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
 import { GoToPlayerEvent } from "./TransformHandler";
 import {
@@ -1223,83 +1229,286 @@ export class NationalDiplomacyPanel extends LitElement {
       : null;
   }
   @state() private imperialStatus = "";
-  private imperialAttempt: { gameId: string; actorId: string; pactId: string; type: "national_imperial_administration"; tick: number; requestId: string } | null = null;
+  private imperialAttempt: {
+    gameId: string;
+    actorId: string;
+    pactId: string;
+    type: "national_imperial_administration";
+    tick: number;
+    requestId: string;
+  } | null = null;
   private currentImperialView(): NationalImperialAdministrationView | null {
-    const game = this.game, view = game?.nationalImperialAdministration?.();
-    return view && !this.warUnavailableReason && game?.nationalPoliticsTick?.() === game?.ticks() &&
-      this.memberEmpire?.id === view.empireId ? view : null;
+    const game = this.game,
+      view = game?.nationalImperialAdministration?.();
+    return view &&
+      !this.warUnavailableReason &&
+      game?.nationalPoliticsTick?.() === game?.ticks() &&
+      this.memberEmpire?.id === view.empireId
+      ? view
+      : null;
   }
   private refreshImperialPolicy(): void {
     const attempt = this.imperialAttempt;
     if (!attempt) return;
-    const game = this.game, view = this.currentImperialView();
-    if (!game || game.gameID() !== attempt.gameId || game.myPlayer()?.id() !== attempt.actorId || !view?.canAmend || view.empireId !== attempt.pactId) {
+    const game = this.game,
+      view = this.currentImperialView();
+    if (
+      !game ||
+      game.gameID() !== attempt.gameId ||
+      game.myPlayer()?.id() !== attempt.actorId ||
+      !view?.canAmend ||
+      view.empireId !== attempt.pactId
+    ) {
       this.imperialAttempt = null;
       this.imperialStatus = "No longer authorized; policy outcome unconfirmed.";
       return;
     }
-    const result = reconcilePactReceipt(game.nationalPactReceipts(), attempt, game.ticks());
+    const result = reconcilePactReceipt(
+      game.nationalPactReceipts(),
+      attempt,
+      game.ticks(),
+    );
     if (result === "pending") return;
     this.imperialAttempt = null;
-    this.imperialStatus = result === "accepted" ? "Game accepted imperial policy command; current policy is shown above." : result === "rejected" ? "Game rejected imperial policy command." : "Imperial policy outcome unconfirmed.";
+    this.imperialStatus =
+      result === "accepted"
+        ? "Game accepted imperial policy command; current policy is shown above."
+        : result === "rejected"
+          ? "Game rejected imperial policy command."
+          : "Imperial policy outcome unconfirmed.";
   }
-  private sendImperialPolicy(command: ImperialPolicyCommand, displayedKey: string): void {
+  private sendImperialPolicy(
+    command: ImperialPolicyCommand,
+    displayedKey: string,
+  ): void {
     if (this.imperialAttempt) return;
-    const game = this.game, view = this.currentImperialView(), actor = game?.myPlayer();
-    if (!game || !view || !view.canAmend || !actor || !this.eventBus ||
-      imperialPolicyKey(view) !== displayedKey || command.empireId !== view.empireId ||
-      !imperialPolicyIntentAvailable(view, command.kind)) {
-      this.imperialStatus = "Policy or authority changed; review the current decree.";
+    const game = this.game,
+      view = this.currentImperialView(),
+      actor = game?.myPlayer();
+    if (
+      !game ||
+      !view ||
+      !view.canAmend ||
+      !actor ||
+      !this.eventBus ||
+      imperialPolicyKey(view) !== displayedKey ||
+      command.empireId !== view.empireId ||
+      !imperialPolicyIntentAvailable(view, command.kind)
+    ) {
+      this.imperialStatus =
+        "Policy or authority changed; review the current decree.";
       return;
     }
     let requestId: string;
-    try { requestId = createNationalPoliticalRequestId(); } catch { this.imperialStatus = "Cannot generate a secure command identifier."; return; }
+    try {
+      requestId = createNationalPoliticalRequestId();
+    } catch {
+      this.imperialStatus = "Cannot generate a secure command identifier.";
+      return;
+    }
     const intent = parseImperialCommand(command, requestId);
-    if (!intent) { this.imperialStatus = "Invalid policy or command schema unavailable."; return; }
-    this.imperialAttempt = { gameId: game.gameID(), actorId: actor.id(), pactId: view.empireId, type: "national_imperial_administration", tick: game.ticks(), requestId };
+    if (!intent) {
+      this.imperialStatus = "Invalid policy or command schema unavailable.";
+      return;
+    }
+    this.imperialAttempt = {
+      gameId: game.gameID(),
+      actorId: actor.id(),
+      pactId: view.empireId,
+      type: "national_imperial_administration",
+      tick: game.ticks(),
+      requestId,
+    };
     this.imperialStatus = "Pending authoritative policy receipt.";
-    try { this.eventBus.emit(new SendNationalImperialPolicyIntentEvent(intent)); } catch { this.imperialAttempt = null; this.imperialStatus = "Command transport failed; outcome unconfirmed."; }
+    try {
+      this.eventBus.emit(new SendNationalImperialPolicyIntentEvent(intent));
+    } catch {
+      this.imperialAttempt = null;
+      this.imperialStatus = "Command transport failed; outcome unconfirmed.";
+    }
   }
-  private renderImperialPolicyControls(view: NationalImperialAdministrationView) {
-    if (!view.canAmend || !imperialPolicyIntentAvailable(view, "set-policy")) return nothing;
-    const key = imperialPolicyKey(view), pending = this.imperialAttempt !== null;
-    const button = "rounded border border-amber-400/50 px-3 py-2 min-h-10 disabled:opacity-50 focus-visible:outline focus-visible:outline-2";
-    const submit = (event: SubmitEvent, kind: ImperialPolicyCommand["kind"]) => {
+  private renderImperialPolicyControls(
+    view: NationalImperialAdministrationView,
+  ) {
+    if (!view.canAmend || !imperialPolicyIntentAvailable(view, "set-policy"))
+      return nothing;
+    const key = imperialPolicyKey(view),
+      pending = this.imperialAttempt !== null;
+    const button =
+      "rounded border border-amber-400/50 px-3 py-2 min-h-10 disabled:opacity-50 focus-visible:outline focus-visible:outline-2";
+    const submit = (
+      event: SubmitEvent,
+      kind: ImperialPolicyCommand["kind"],
+    ) => {
       event.preventDefault();
       if (!(event.currentTarget instanceof HTMLFormElement)) return;
       const data = new FormData(event.currentTarget);
       if (!data.has("confirm")) return;
       const raw = data.get("basisPoints");
-      if (typeof raw !== "string" || !/^\\d{1,5}$/.test(raw) || Number(raw) > 10000) return;
+      if (
+        typeof raw !== "string" ||
+        !/^\\d{1,5}$/.test(raw) ||
+        Number(raw) > 10000
+      )
+        return;
       const bps = Number(raw);
       if (kind === "set-policy") {
         const categories = data.getAll("categories");
-        if (!categories.every(c => imperialConstructionCategories.includes(c as UnitType))) return;
-        this.sendImperialPolicy({ kind, empireId: view.empireId, policy: { workerIncomeBps: bps, allowedConstruction: data.get("constructionMode") === "all" ? null : categories as UnitType[] } }, key);
+        if (
+          !categories.every((c) =>
+            imperialConstructionCategories.includes(c as UnitType),
+          )
+        )
+          return;
+        this.sendImperialPolicy(
+          {
+            kind,
+            empireId: view.empireId,
+            policy: {
+              workerIncomeBps: bps,
+              allowedConstruction:
+                data.get("constructionMode") === "all"
+                  ? null
+                  : (categories as UnitType[]),
+            },
+          },
+          key,
+        );
       } else {
         const mode = data.get("armyMode");
         if (mode !== "decentralized" && mode !== "hybrid") return;
-        this.sendImperialPolicy({ kind, empireId: view.empireId, mode, thresholdBps: bps }, key);
+        this.sendImperialPolicy(
+          { kind, empireId: view.empireId, mode, thresholdBps: bps },
+          key,
+        );
       }
       event.currentTarget.reset();
     };
-    return keyed(key, html`<div class="space-y-3">
-      <p role="status" aria-live="polite" data-national-imperial-status>${this.imperialStatus || "Available"}</p>
-      <form class="flex flex-col gap-2" @submit=${(e: SubmitEvent) => submit(e, "set-policy")}>
-        <label>Worker allocation basis points (100 = 1%) <input name="basisPoints" type="number" min="0" max="10000" step="1" required .value=${String(view.workerIncomeBps)} class="w-full rounded bg-slate-900 px-2 py-2"/></label>
-        <label>Construction policy <select name="constructionMode" class="w-full rounded bg-slate-900 px-2 py-2"><option value="all" ?selected=${view.allowedConstruction === null}>All regulated categories</option><option value="restricted" ?selected=${view.allowedConstruction !== null}>Only selected categories</option></select></label>
-        <label>Allowed categories (restricted policy) <select multiple name="categories" size="4" class="w-full rounded bg-slate-900 px-2 py-2">${imperialConstructionCategories.map(category => html`<option .value=${category} ?selected=${view.allowedConstruction?.includes(category) ?? false}>${category}</option>`)}</select></label>
-        <label><input type="checkbox" name="confirm" required/> Confirm empire-wide worker and construction decree</label>
-        <button type="submit" data-national-imperial-action="set-policy" class=${button} ?disabled=${pending}>Submit imperial policy</button>
-      </form>
-      ${imperialPolicyIntentAvailable(view, "set-army-mode") ? html`<form class="flex flex-col gap-2" @submit=${(e: SubmitEvent) => submit(e, "set-army-mode")}>
-        <label>Army administration <select name="armyMode" class="w-full rounded bg-slate-900 px-2 py-2"><option value="decentralized" ?selected=${view.armyMode === "decentralized"}>Decentralized</option><option value="hybrid" ?selected=${view.armyMode === "hybrid"}>Hybrid</option></select></label>
-        <label>Hybrid threshold basis points (100 = 1%) <input name="basisPoints" type="number" min="0" max="10000" step="1" required .value=${String(view.hybridThresholdBps ?? 0)} class="w-full rounded bg-slate-900 px-2 py-2"/></label>
-        <label><input type="checkbox" name="confirm" required/> Confirm military administration change</label>
-        <button type="submit" data-national-imperial-action="set-army-mode" class=${button} ?disabled=${pending}>Submit military policy</button>
-      </form>` : nothing}
-      <p>Troop transfers, imperial-funded construction and dissolution have no controls here yet.</p>
-    </div>`);
+    return keyed(
+      key,
+      html`<div class="space-y-3">
+        <p role="status" aria-live="polite" data-national-imperial-status>
+          ${this.imperialStatus || "Available"}
+        </p>
+        <form
+          class="flex flex-col gap-2"
+          @submit=${(e: SubmitEvent) => submit(e, "set-policy")}
+        >
+          <label
+            >Worker allocation basis points (100 = 1%)
+            <input
+              name="basisPoints"
+              type="number"
+              min="0"
+              max="10000"
+              step="1"
+              required
+              .value=${String(view.workerIncomeBps)}
+              class="w-full rounded bg-slate-900 px-2 py-2"
+          /></label>
+          <label
+            >Construction policy
+            <select
+              name="constructionMode"
+              class="w-full rounded bg-slate-900 px-2 py-2"
+            >
+              <option
+                value="all"
+                ?selected=${view.allowedConstruction === null}
+              >
+                All regulated categories
+              </option>
+              <option
+                value="restricted"
+                ?selected=${view.allowedConstruction !== null}
+              >
+                Only selected categories
+              </option>
+            </select></label
+          >
+          <label
+            >Allowed categories (restricted policy)
+            <select
+              multiple
+              name="categories"
+              size="4"
+              class="w-full rounded bg-slate-900 px-2 py-2"
+            >
+              ${imperialConstructionCategories.map((category) => html`<option .value=${category} ?selected=${view.allowedConstruction?.includes(category) ?? false}>${category}</option>`)}
+            </select></label
+          >
+          <label
+            ><input type="checkbox" name="confirm" required /> Confirm
+            empire-wide worker and construction decree</label
+          >
+          <button
+            type="submit"
+            data-national-imperial-action="set-policy"
+            class=${button}
+            ?disabled=${pending}
+          >
+            Submit imperial policy
+          </button>
+        </form>
+        ${
+          imperialPolicyIntentAvailable(view, "set-army-mode")
+            ? html`<form
+                class="flex flex-col gap-2"
+                @submit=${(e: SubmitEvent) => submit(e, "set-army-mode")}
+              >
+                <label
+                  >Army administration
+                  <select
+                    name="armyMode"
+                    class="w-full rounded bg-slate-900 px-2 py-2"
+                  >
+                    <option
+                      value="decentralized"
+                      ?selected=${view.armyMode === "decentralized"}
+                    >
+                      Decentralized
+                    </option>
+                    <option
+                      value="hybrid"
+                      ?selected=${view.armyMode === "hybrid"}
+                    >
+                      Hybrid
+                    </option>
+                  </select></label
+                >
+                <label
+                  >Hybrid threshold basis points (100 = 1%)
+                  <input
+                    name="basisPoints"
+                    type="number"
+                    min="0"
+                    max="10000"
+                    step="1"
+                    required
+                    .value=${String(view.hybridThresholdBps ?? 0)}
+                    class="w-full rounded bg-slate-900 px-2 py-2"
+                /></label>
+                <label
+                  ><input type="checkbox" name="confirm" required /> Confirm
+                  military administration change</label
+                >
+                <button
+                  type="submit"
+                  data-national-imperial-action="set-army-mode"
+                  class=${button}
+                  ?disabled=${pending}
+                >
+                  Submit military policy
+                </button>
+              </form>`
+            : nothing
+        }
+        <p>
+          Troop transfers, imperial-funded construction and dissolution have no
+          controls here yet.
+        </p>
+      </div>`,
+    );
   }
   private renderImperialAdministration() {
     const game = this.game;
@@ -1328,11 +1537,19 @@ export class NationalDiplomacyPanel extends LitElement {
         Member construction authority:
         ${view.allowedConstruction === null ? "All regulated construction categories permitted" : view.allowedConstruction.length ? view.allowedConstruction.join(", ") : "No regulated construction categories permitted"}
       </p>
-      ${view.armyMode === undefined ? nothing : html`<p>Military administration: ${view.armyMode === "hybrid" ? "Hybrid imperial reserve" : "Decentralized national forces"}.</p>
-        ${view.armyMode === "hybrid" ? html`<p>Hybrid reserve threshold: ${((view.hybridThresholdBps ?? 0) / 100).toFixed(2)}%; imperial troops: ${view.imperialTroops} / ${view.imperialTroopCapacity} capacity.</p>` : nothing}`}
+      ${
+        view.armyMode === undefined
+          ? nothing
+          : html`<p>
+                Military administration:
+                ${view.armyMode === "hybrid" ? "Hybrid imperial reserve" : "Decentralized national forces"}.
+              </p>
+              ${view.armyMode === "hybrid" ? html`<p>Hybrid reserve threshold: ${((view.hybridThresholdBps ?? 0) / 100).toFixed(2)}%; imperial troops: ${view.imperialTroops} / ${view.imperialTroopCapacity} capacity.</p>` : nothing}`
+      }
       <p>
         ${view.canAmend ? "Current emperor holds policy and military administration authority." : "The current emperor holds policy and military administration authority."}
-        ${view.canAmend && !imperialPolicyIntentAvailable(view, "set-policy") ? "Administration command schema unavailable; this is a read-only policy." : ""} No unilateral secession control.
+        ${view.canAmend && !imperialPolicyIntentAvailable(view, "set-policy") ? "Administration command schema unavailable; this is a read-only policy." : ""}
+        No unilateral secession control.
       </p>
       ${this.renderImperialPolicyControls(view)}
     </section>`;

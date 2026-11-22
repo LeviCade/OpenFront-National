@@ -119,12 +119,14 @@ export function projectNationalImperialAdministration(
         : [...source.allowedConstruction],
     treasury: source.treasury,
     canAmend: source.canAmend,
-    ...(source.armyMode === undefined ? {} : {
-      armyMode: source.armyMode,
-      hybridThresholdBps: source.hybridThresholdBps,
-      imperialTroops: source.imperialTroops,
-      imperialTroopCapacity: source.imperialTroopCapacity,
-    }),
+    ...(source.armyMode === undefined
+      ? {}
+      : {
+          armyMode: source.armyMode,
+          hybridThresholdBps: source.hybridThresholdBps,
+          imperialTroops: source.imperialTroops,
+          imperialTroopCapacity: source.imperialTroopCapacity,
+        }),
   };
   if (
     tick !== game.ticks() ||
