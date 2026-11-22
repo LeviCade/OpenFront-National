@@ -85,6 +85,16 @@ function copyMotion(m: Motion): Motion {
   return { ...m };
 }
 
+/** Prevalidated against the same canonical ledger before a single real debit. */
+export interface StandingDefenseWarPlan {
+  readonly warId: string;
+  readonly empireId: string;
+  readonly attackerId: string;
+  readonly defenderId: string;
+  readonly emperorId: string;
+  readonly target: ConflictParty;
+}
+
 export class WarLedger {
   private layers = new Map<string, Layer>();
   private motions = new Map<string, Motion>();
@@ -330,6 +340,73 @@ export class WarLedger {
       opened.push(warId);
     }
     return opened;
+  }
+
+  /**
+   * A real attack has already passed the ordinary national WAR gate.
+   * Preview by exercising the SAME canonical declaration rules on a detached
+   * snapshot. No levy is charged if an imperial declaration is unlawful.
+   * Even a settled layer blocks automatic re-declaration: accepting imperial
+   * peace must not be defeated by the next click of an ongoing national WAR.
+   */
+  prepareStandingDefenseWar(
+    empireId: string,
+    attackerId: string,
+    defenderId: string,
+    tick: number,
+  ): StandingDefenseWarPlan | null {
+    this.validateClock(tick);
+    requireId(empireId);
+    requireId(attackerId);
+    requireId(defenderId);
+    if (
+      !this.politics.nationAlive(attackerId) ||
+      !this.politics.nationAlive(defenderId) ||
+      this.politics.empireOf(defenderId) !== empireId ||
+      !this.authorizeOffensiveAction(attackerId, defenderId)
+    )
+      throw new Error("NATIONAL WAR: invalid standing-defense invasion");
+    const foreignEmpire = this.politics.empireOf(attackerId);
+    if (foreignEmpire === empireId)
+      throw new Error("NATIONAL WAR: no internal imperial defense");
+    const target: ConflictParty = foreignEmpire === null
+      ? { kind: "nation", id: attackerId }
+      : { kind: "empire", id: foreignEmpire };
+    const first: ConflictParty = { kind: "empire", id: empireId };
+    const pair = this.pairKey("imperial", first, target);
+    if ([...this.layers.values()].some((layer) =>
+      this.pairKey(layer.scope, layer.first, layer.second) === pair
+    )) return null;
+    const emperorId = this.politics.emperorOf(empireId);
+    if (emperorId === null) throw new Error("NATIONAL WAR: no incumbent emperor");
+    let ordinal = 0;
+    let warId = `standing-defense-${tick}-${ordinal}`;
+    while (this.layers.has(warId)) {
+      ordinal++;
+      warId = `standing-defense-${tick}-${ordinal}`;
+    }
+    const probe = new WarLedger(this.politics);
+    probe.restoreState(this.exportState());
+    probe.declareImperial(warId, emperorId, first, target, tick);
+    return { warId, empireId, attackerId, defenderId, emperorId, target };
+  }
+
+  /** Commit only the exact previously validated plan under the engine tick lock. */
+  enactStandingDefenseWar(plan: StandingDefenseWarPlan, tick: number): void {
+    const fresh = this.prepareStandingDefenseWar(
+      plan.empireId, plan.attackerId, plan.defenderId, tick,
+    );
+    if (
+      fresh === null ||
+      fresh.warId !== plan.warId ||
+      fresh.emperorId !== plan.emperorId ||
+      fresh.target.kind !== plan.target.kind ||
+      fresh.target.id !== plan.target.id
+    ) throw new Error("NATIONAL WAR: stale standing-defense plan");
+    this.declareImperial(
+      plan.warId, plan.emperorId,
+      { kind: "empire", id: plan.empireId }, plan.target, tick,
+    );
   }
 
   /** WAR-01/02: a nation may declare only its own scoped national war. */

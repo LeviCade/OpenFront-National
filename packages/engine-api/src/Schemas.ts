@@ -861,6 +861,13 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       declarationDelegates: z.array(MappedID).max(64),
       peaceDelegates: z.array(MappedID).max(64),
     }),
+    // Append only: preserve existing z.discriminatedUnion / binary variant IDs.
+    z.object({
+      kind: z.literal("set-standing-defense-policy"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      response: z.enum(["none", "assist", "imperial", "both"]),
+    }),
   ],
 );
 

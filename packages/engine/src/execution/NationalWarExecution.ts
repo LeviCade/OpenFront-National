@@ -121,6 +121,10 @@ interface WarGamePort {
     authenticatedClientID?: ClientID,
   ): unknown;
   nationalWarCommandResults?(observer: Player): readonly unknown[];
+  /** Real GameImpl attack-time defense entry; supersedes the legacy MDA adapter. */
+  interceptNationalIncomingAttack?(
+    attackId: string, attackerId: string, defenderId: string, troops: number,
+  ): DefenseResult;
   nationalLevySource(nationId: string): TroopSource | null;
   applyNationalDefenseLevy(
     attacks: readonly IncomingDefense[],
@@ -169,6 +173,12 @@ export function interceptNationalAttack(
     typeof port.applyNationalDefenseLevy !== "function"
   )
     throw new Error("NATIONAL: missing authorized canonical war/levy service");
+
+  if (typeof port.interceptNationalIncomingAttack === "function") {
+    return port.interceptNationalIncomingAttack(
+      attackId, attackerId, defenderId, Math.floor(troops),
+    );
+  }
 
   // A canonical war cannot silently bypass the defender's MDA obligations.
   // Until E1 installs its authenticated donor roster, fail CLOSED.

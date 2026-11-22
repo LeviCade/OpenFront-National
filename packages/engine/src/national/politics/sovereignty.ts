@@ -74,6 +74,8 @@ export interface PoliticsEmpire {
   delegatedNationalDeclarations?: string[];
   /** Default is none; never invent intervention for a v1 empire. */
   accessionWarResponse?: "none" | "imperial";
+  /** Current crown's standing response to an authorized invasion of a member. */
+  standingDefenseResponse?: "none" | "assist" | "imperial" | "both";
   /** Mandatory compare-and-swap epoch for imperial WAR policy mutations. */
   warPolicyVersion?: number;
 }
@@ -234,6 +236,11 @@ export function validatePolitics(world: PoliticsProjection): void {
         e.accessionWarResponse === "none" ||
         e.accessionWarResponse === "imperial",
       "invalid imperial accession WAR response",
+    );
+    requireRule(
+      e.standingDefenseResponse === undefined ||
+        ["none", "assist", "imperial", "both"].includes(e.standingDefenseResponse),
+      "invalid imperial standing DEFENSE response",
     );
     requireRule(
       e.warPolicyVersion === undefined ||
@@ -912,6 +919,41 @@ export function setImperialWarPolicy(
   if (peaceDelegates.length)
     target.delegatedNationalPeace = sorted([...peaceDelegates]);
   else delete target.delegatedNationalPeace;
+  target.warPolicyVersion = expectedVersion + 1;
+  validatePolitics(next);
+  return next;
+}
+
+/**
+ * D-011: separate incoming-attack doctrine from accession-time WAR policy.
+ * Shares the existing WAR epoch so either amendment revokes queued grants.
+ * The active crown is the only writer; the policy survives crown transfer,
+ * but the outgoing crown and its old CAS epoch do not.
+ */
+export function setImperialStandingDefensePolicy(
+  world: PoliticsProjection,
+  empireId: string,
+  actorId: string,
+  expectedVersion: number,
+  response: "none" | "assist" | "imperial" | "both",
+): PoliticsProjection {
+  validatePolitics(world);
+  const current = empire(world, empireId);
+  requireRule(current.leaderId === actorId, "only incumbent emperor may change DEFENSE policy");
+  requireRule(
+    Number.isSafeInteger(expectedVersion) &&
+      expectedVersion >= 0 &&
+      expectedVersion === (current.warPolicyVersion ?? 0),
+    "stale imperial DEFENSE policy version",
+  );
+  requireRule(
+    response === "none" || response === "assist" ||
+      response === "imperial" || response === "both",
+    "invalid imperial DEFENSE response",
+  );
+  const next = copy(world);
+  const target = empire(next, empireId);
+  target.standingDefenseResponse = response;
   target.warPolicyVersion = expectedVersion + 1;
   validatePolitics(next);
   return next;
