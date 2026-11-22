@@ -10,6 +10,7 @@ import {
   renderHtmlContent,
   setAppShellCacheHeaders,
 } from "../../src/server/RenderHtml";
+import { getRuntimeAssetManifest } from "../../src/server/RuntimeAssetManifest";
 import { ServerEnv } from "../../src/server/ServerEnv";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -346,13 +347,16 @@ describe("RenderHtml environment-only render", () => {
   // to leave it byte-for-byte identical — same order, same eight-space
   // indentation, same trailing commas.
   it("still emits every guarded line, in place, when the locals are supplied", async () => {
+    // The test must also run after a production build populates static/.
+    const manifest = await getRuntimeAssetManifest();
     const html = await renderHtmlContent(REAL_TEMPLATE);
+    expect(bootstrapConfig(html).assetManifest).toEqual(manifest);
 
     expect(html).toContain(
       [
         "      window.BOOTSTRAP_CONFIG = {",
         '        gitCommit: "abc",',
-        "        assetManifest: {},",
+        `        assetManifest: ${JSON.stringify(manifest)},`,
         '        cdnBase: "",',
         `        gameEnv: ${JSON.stringify(ServerEnv.gameEnvName())},`,
         `        cluster: ${JSON.stringify(ServerEnv.cluster())},`,

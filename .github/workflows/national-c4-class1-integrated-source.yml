@@ -58,7 +58,8 @@ jobs:
             tests/server/NationalAccountLease.test.ts \
             tests/national/TrustedNationalServerAuthority.test.ts \
             tests/national/ClassFivePrincipalWireFanout.test.ts \
-            tests/server/ServerEnv.test.ts
+            tests/server/ServerEnv.test.ts \
+            tests/server/RenderHtml.test.ts
       - name: Independent witness regressions
         run: |
           npx --no-install vitest run --project node \
@@ -124,6 +125,9 @@ jobs:
       - name: Production compile
         if: success() || failure()
         run: npm run build-prod
+      - name: Render real app shell after production build
+        if: success() || failure()
+        run: npx --no-install vitest run --project node tests/server/RenderHtml.test.ts
       - name: Complete format check
         if: success() || failure()
         run: npm run format:check
