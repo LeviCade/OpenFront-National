@@ -159,6 +159,16 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     expect(building.owner()).toBe(member);
     expect(treasury(game)).toBe(funding - firstCost);
     expect([leader.gold(), member.gold()]).toEqual(personal);
+    console.info("C5_E2_LEDGER_BUILD", JSON.stringify({
+      grossWorkerProduction: funding.toString(),
+      actualConstructionCost: firstCost.toString(),
+      treasuryBefore: funding.toString(),
+      treasuryAfter: treasury(game).toString(),
+      memberWalletBefore: personal[1].toString(),
+      memberWalletAfter: member.gold().toString(),
+      unitId: building.id(),
+      unitActive: building.isActive(),
+    }));
 
     const duration = game.unitInfo(UnitType.City).constructionDuration ?? 0;
     for (let i = 0; i < duration + 3 && building.isUnderConstruction(); i++)
@@ -178,6 +188,15 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     expect(building.level()).toBe(level + 1);
     expect(treasury(game)).toBe(before - nextCost);
     expect([leader.gold(), member.gold()]).toEqual(personalAfterConstruction);
+    console.info("C5_E2_LEDGER_UPGRADE", JSON.stringify({
+      treasuryBefore: before.toString(),
+      actualUpgradeCost: nextCost.toString(),
+      treasuryAfter: treasury(game).toString(),
+      levelBefore: level,
+      levelAfter: building.level(),
+      memberWalletBefore: personalAfterConstruction[1].toString(),
+      memberWalletAfter: member.gold().toString(),
+    }));
 
     const { restored } = await roundTrip(game, "plains");
     expect(restored.player(S).units(UnitType.City)[0].level()).toBe(level + 1);
@@ -197,6 +216,12 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     expect(member.units(UnitType.City)).toHaveLength(0);
     expect(treasury(game)).toBe(beforeDemolition);
     expect([leader.gold(), member.gold()]).toEqual(personalAfterConstruction);
+    console.info("C5_E2_LEDGER_DEMOLITION", JSON.stringify({
+      treasuryBefore: beforeDemolition.toString(),
+      treasuryAfter: treasury(game).toString(),
+      physicalUnitRemoved: game.unit(building.id()) === undefined,
+      memberUnitCountAfter: member.units(UnitType.City).length,
+    }));
   });
 
   it("stamped demolition produces one accepted receipt and removes a real unit without treasury debit", async () => {
@@ -223,6 +248,9 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
         reason: "accepted",
         recipientId: N,
       });
+      if (g === game) console.info("C5_E2_RECEIPT_DEMOLITION", JSON.stringify(
+        political(g, "c5-demolish-receipt"),
+      ));
       queue(g, "c5-demolish-receipt", {
         kind: "demolish-structure",
         empireId,
@@ -435,6 +463,15 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     const imperial = (gross * 2500n) / 10_000n;
     expect(member.gold() - original).toBe(gross - imperial);
     expect(treasury(game) - treasuryBefore).toBe(imperial);
+    console.info("C5_E2_LEDGER_TRAIN", JSON.stringify({
+      actualTrainStopGross: gross.toString(),
+      personalBefore: original.toString(),
+      personalAfter: member.gold().toString(),
+      treasuryBefore: treasuryBefore.toString(),
+      treasuryAfter: treasury(game).toString(),
+      imperialShare: imperial.toString(),
+      trainTelemetryGross: gross.toString(),
+    }));
     expect(member.gold() - original + treasury(game) - treasuryBefore).toBe(
       gross,
     );
