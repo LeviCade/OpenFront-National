@@ -78,6 +78,14 @@ export class Executor {
           intent.clientID,
         );
       }
+      case "national_imperial_administration":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          { kind: "imperial-administration", command: intent.command },
+          intent.requestId,
+          intent.clientID,
+        );
       case "national_propose_pact_amendment":
         return new NationalFoundEmpireExecution(
           player,

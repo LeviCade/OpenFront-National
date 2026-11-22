@@ -70,6 +70,11 @@ export class DeleteUnitExecution implements Execution {
       return;
     }
 
+    if (!mg.nationalAllowsConstruction(this.player, unit.type())) {
+      this.active = false;
+      return;
+    }
+
     if (!this.player.canDeleteUnit()) {
       console.warn(`SECURITY: delete unit cooldown not expired`);
       this.active = false;
