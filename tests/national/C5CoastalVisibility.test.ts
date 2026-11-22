@@ -453,4 +453,42 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
       privateRead.mockRestore();
     }
   });
+
+  it("FOG-04/07 discloses an isolated owned offshore warship in the actual native map", async () => {
+    const game = await setup("world", { nationalMode: true }, [
+      VIEWER,
+      OUTSIDER,
+    ]);
+    game.addExecution(
+      new SpawnExecution("c5-isolated-ship", VIEWER, game.ref(375, 272)),
+      new SpawnExecution("c5-isolated-ship", OUTSIDER, game.ref(1004, 250)),
+    );
+    game.executeNextTick();
+    game.executeNextTick();
+    const offshore = game.ref(1, 1);
+    expect(game.isLand(offshore)).toBe(false);
+    const owned = game.player(VIEWER.id).buildUnit(
+      UnitType.Warship,
+      offshore,
+      { patrolTile: offshore },
+    );
+    const verified = collectLiveNationalObservation(game, VIEWER.id);
+    const ownId = String(owned.id());
+    expect(verified.observation.visibleAssets.find(
+      (asset) => asset.id === ownId,
+    )?.source).toBe("own");
+    // Founding-source witness: the producer had a legitimate observing
+    // warship anchor but failed to authorize its very own tile; the native
+    // map pager consequently dropped its otherwise approved marker.
+    expect(verified.visibleTiles.has(offshore)).toBe(true);
+    const page = new NationalObserverMapPager(
+      game,
+      VIEWER.id,
+      "c5-e6-isolated-offshore",
+    ).page(verified);
+    expect(page.units.some(
+      (unit) => unit.id === owned.id() && unit.tile === offshore,
+    )).toBe(true);
+    console.info("[C5 FOG-04 own-sea] warshipId=" + ownId + " tile=" + offshore);
+  });
 });
