@@ -5,6 +5,7 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import type { MapFiles } from "@openfront/engine-api/game/MapFiles";
 import type { GameRunner } from "@openfront/engine/WinnerReplay";
+import { decodeSnapshotValue } from "@openfront/engine/snapshot/SnapshotCodec";
 import {
   WireGameStartInfoSchema,
   type WireGameStartInfo,
@@ -16,6 +17,29 @@ import {
   DurableNationalStore,
   type DurableNationalRecord,
 } from "./DurableNationalStore";
+
+// Field names are fixed schema labels only; never emit decoded values or
+// dynamic dictionary keys (which may contain identities or hidden state).
+const snapshotLabels = new Set("magic format gitCommit gameID tick gameConfig game map miniMap players units attacks alliances allianceRequests stations railroads clusters execs t v d ticks startTick unInitExecs national nationalWar nationalGovernance wars levy layers motions receipts results memories tiles borderTiles border borderSize toConquer pri capacity random info gold troops tradeGold trainGold piracyGold goldEarned stats water rail sharedWaterCache owner target targetID authenticatedClientID active initialized attack sourceTile startTroops removeTroops retreating retreated isActive outgoingAttacks incomingAttacks outgoingLandAttacks lastTileChange tileChangeVersion shipStaggers unitGrid _unitsVersion _territoryVersion territoryVersion unitsVersion".split(" "));
+function firstSnapshotDifference(a: unknown, b: unknown, path = "$", depth = 0): string | null {
+  if (Object.is(a, b)) return null;
+  if (depth > 64 || !a || !b || typeof a !== "object" || typeof b !== "object") return path;
+  if (ArrayBuffer.isView(a) || ArrayBuffer.isView(b)) {
+    if (!ArrayBuffer.isView(a) || !ArrayBuffer.isView(b) || a.constructor !== b.constructor) return path + ".view";
+    return Buffer.from(a.buffer, a.byteOffset, a.byteLength).equals(Buffer.from(b.buffer, b.byteOffset, b.byteLength)) ? null : path + ".bytes";
+  }
+  if (Array.isArray(a) !== Array.isArray(b)) return path;
+  const aa = a as Record<string, unknown>, bb = b as Record<string, unknown>;
+  const ka = Object.keys(aa), kb = Object.keys(bb);
+  if (ka.length !== kb.length || ka.some((key, i) => key !== kb[i])) return path + ".keys";
+  for (let i = 0; i < ka.length; i++) {
+    const key = ka[i];
+    const name = snapshotLabels.has(key) ? key : String(i);
+    const diff = firstSnapshotDifference(aa[key], bb[key], path + "." + name, depth + 1);
+    if (diff) return diff;
+  }
+  return null;
+}
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const sourceRevision = z.string().regex(/^[a-f0-9]{40}$/);
@@ -212,12 +236,13 @@ export class DurableNationalCheckpoint {
       })
     )
       throw new Error("NATIONAL durable engine seat or tick mismatch");
-    if (
-      !Buffer.from(runner.snapshot(this.source)).equals(
-        Buffer.from(this.snapshot),
-      )
-    ) {
-      throw new Error("NATIONAL durable engine roundtrip mismatch");
+    const restored = runner.snapshot(this.source);
+    const saved = this.snapshot;
+    if (!Buffer.from(restored).equals(Buffer.from(saved))) {
+      const error = new Error("NATIONAL durable engine roundtrip mismatch");
+      const path = firstSnapshotDifference(decodeSnapshotValue(saved), decodeSnapshotValue(restored));
+      error.name = "SnapshotRoundtripMismatch:" + (path ?? "encoding");
+      throw error;
     }
   }
 
