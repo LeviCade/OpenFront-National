@@ -56,6 +56,11 @@ import type {
   NationalCommand,
   NationalAccessionOfferView,
   NationalPublicPoliticalView,
+  NationalPactDisclosureViewData,
+  NationalPublicPactView,
+  NationalRecipientPactView,
+  NationalImperialAdministrationCommand,
+  NationalImperialAdministrationView,
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
@@ -611,6 +616,20 @@ export interface Game extends GameLike {
   > | null;
   /** Enumerates public empire leaders/members and warning/victory facts only. */
   nationalPublicPoliticalView(): NationalPublicPoliticalView | null;
+  nationalPactDisclosure(observer: Player): NationalPactDisclosureViewData | null;
+  nationalPublicPactRoster(): readonly NationalPublicPactView[];
+  nationalPactViewsFor(observer: Player): readonly NationalRecipientPactView[];
+  nationalImperialAdministrationFor(observer: Player): NationalImperialAdministrationView | null;
+  performNationalImperialAdministration(
+    actor: Player,
+    command: NationalImperialAdministrationCommand,
+    authenticatedClientID?: ClientID,
+  ): void;
+  nationalDeferredTroopsFor(observer: Player): string | null;
+  releaseNationalDeferredTroops(player: Player): void;
+  creditNationalTroopGrowth(player: Player, gross: number): void;
+  creditNationalWorkerIncome(player: Player, gross: Gold): void;
+  nationalAllowsConstruction(player: Player, type: UnitType): boolean;
   /** Private pending invitations addressed only to this authenticated human. */
   nationalAccessionOffers(
     observer: Player,

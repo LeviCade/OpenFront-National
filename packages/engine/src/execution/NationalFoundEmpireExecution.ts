@@ -1,4 +1,4 @@
-import type { ClientID } from "@openfront/engine-api/Schemas";
+import { NationalImperialAdministrationCommandSchema, type ClientID } from "@openfront/engine-api/Schemas";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import type { Execution, Game, Player } from "../game/Game";
@@ -126,6 +126,10 @@ const NationalFoundEmpireStateSchema = z.object({
   politicalCommand: z
     .discriminatedUnion("kind", [
       z.object({ kind: z.literal("found-empire"), empireId: z.string() }),
+      z.object({
+        kind: z.literal("imperial-administration"),
+        command: NationalImperialAdministrationCommandSchema,
+      }),
       z.object({
         kind: z.literal("offer-empire"),
         empireId: z.string(),

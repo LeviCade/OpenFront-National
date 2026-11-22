@@ -107,6 +107,7 @@ const resultTypes = new Set([
   "national_approve_pact_amendment",
   "national_betray_pact",
   "national_expel_pact",
+  "national_imperial_administration",
 ]);
 const politicalReason = new Set([
   "accepted",

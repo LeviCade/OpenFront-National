@@ -62,6 +62,8 @@ import {
 import { simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { EngineConfig } from "../configuration/EngineConfig";
+import { AttackExecution } from "../execution/AttackExecution";
+import { ConstructionExecution } from "../execution/ConstructionExecution";
 import {
   SharedWaterCache,
   SharedWaterCacheSnapshot,
@@ -82,7 +84,12 @@ import {
   type NationalCommand,
   type NationalAccessionOfferView,
   type NationalPublicPoliticalView,
+  type NationalPactDisclosureViewData,
   type NationalUngovernableWarning,
+  type NationalPublicPactView,
+  type NationalRecipientPactView,
+  type NationalImperialAdministrationCommand,
+  type NationalImperialAdministrationView,
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import {
@@ -583,7 +590,7 @@ export class GameImpl implements Game {
   }
 
   /** Sync the identity/territory picture after executions have changed it. */
-  private synchronizeNationalState(): void {
+  private synchronizeNationalState(tick = this._ticks): void {
     if (this._national === null) return;
     // Read the eight live facts from real engine players after each tick.
     const standingCount = (player: Player, type: UnitType): number =>
@@ -607,8 +614,11 @@ export class GameImpl implements Game {
           warships: standingCount(p, UnitType.Warship),
         },
       })),
-      this._ticks,
+      tick,
       !this.inSpawnPhase(),
+      "preserve-pending",
+      (credits, empireIds, troops) =>
+        this.commitImperialDisposition(credits, empireIds, troops, tick),
     );
     this.revokeNationalObserverMemory();
   }
@@ -1022,6 +1032,327 @@ export class GameImpl implements Game {
     });
   }
 
+  nationalPublicPactRoster(): readonly NationalPublicPactView[] {
+    this.synchronizeNationalState();
+    return this._national?.publicPactRoster() ?? [];
+  }
+
+  nationalPactViewsFor(observer: Player): readonly NationalRecipientPactView[] {
+    if (
+      this._players.get(observer.id()) !== observer ||
+      !observer.hasSpawned() ||
+      !observer.isAlive()
+    )
+      return [];
+    this.synchronizeNationalState();
+    return this._national?.pactViewsFor(observer.id()) ?? [];
+  }
+
+  nationalPactDisclosure(
+    observer: Player,
+  ): NationalPactDisclosureViewData | null {
+    if (
+      !this._national ||
+      this._players.get(observer.id()) !== observer ||
+      !observer.hasSpawned() ||
+      !observer.isAlive()
+    )
+      return null;
+    this.synchronizeNationalState();
+    return this._national.pactDisclosure(observer.id());
+  }
+
+  private commitImperialDisposition(
+    credits: ReadonlyMap<PlayerID, bigint>,
+    empireIds: readonly string[],
+    troopCredits: ReadonlyMap<PlayerID, bigint>,
+    tick = this._ticks,
+  ): void {
+    const staged = PlayerImpl.prepareNationalGoldCredits(
+      [...credits].map(([id, amount]) => {
+        const player = this._players.get(id);
+        if (!player || !player.hasSpawned() || !player.isAlive())
+          throw new Error("NATIONAL: invalid treasury disposition recipient");
+        return { player, amount };
+      }),
+    );
+    const stagedTroops = PlayerImpl.prepareNationalTroopCredits(
+      [...troopCredits].map(([id, amount]) => {
+        const player = this._players.get(id);
+        if (!player || !player.hasSpawned() || !player.isAlive())
+          throw new Error("NATIONAL: invalid troop disposition recipient");
+        return {
+          player,
+          amount,
+          capacity: Math.floor(this._config.maxTroops(player)),
+        };
+      }),
+    );
+    // Retirement validates the engine tick before changing any layer.
+    // Publishing staged credits thereafter cannot invoke external code.
+    this._nationalWar?.retireEmpireWars(empireIds, tick);
+    staged();
+    stagedTroops();
+  }
+
+  nationalImperialAdministrationFor(
+    observer: Player,
+  ): NationalImperialAdministrationView | null {
+    if (
+      this._players.get(observer.id()) !== observer ||
+      !observer.hasSpawned() ||
+      !observer.isAlive()
+    )
+      return null;
+    this.synchronizeNationalState();
+    return this._national?.imperialAdministrationFor(observer.id()) ?? null;
+  }
+
+  /** Trusted engine entry shared by stamped commands and in-engine principals. */
+  performNationalImperialAdministration(
+    actor: Player,
+    command: NationalImperialAdministrationCommand,
+    authenticatedClientID?: ClientID,
+  ): void {
+    if (!this._national) throw new Error("NATIONAL is not enabled");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
+    if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
+      throw new Error("NATIONAL: inactive administration actor");
+    this.synchronizeNationalState();
+    this._national.assertEmperor(actor.id(), command.empireId);
+    switch (command.kind) {
+      case "set-policy":
+        this._national.setImperialPolicy(
+          actor.id(),
+          command.empireId,
+          command.policy,
+        );
+        break;
+      case "transfer-troops": {
+        const source = this._players.get(command.sourceId);
+        const destination = this._players.get(command.destinationId);
+        const authority = this._national.authority();
+        if (
+          !source ||
+          !destination ||
+          source === destination ||
+          !source.hasSpawned() ||
+          !source.isAlive() ||
+          !destination.hasSpawned() ||
+          !destination.isAlive() ||
+          authority.empireOf(source.id()) !== command.empireId ||
+          authority.empireOf(destination.id()) !== command.empireId
+        )
+          throw new Error(
+            "NATIONAL: transfer requires two live constituent nations",
+          );
+        PlayerImpl.transferNationalActiveTroops(
+          source,
+          destination,
+          Math.floor(this._config.maxTroops(destination)),
+          command.amount,
+        );
+        break;
+      }
+      case "build-structure": {
+        const member = this._players.get(command.memberId);
+        const runtime = this._national;
+        if (
+          !member ||
+          !member.hasSpawned() ||
+          !member.isAlive() ||
+          runtime.authority().empireOf(member.id()) !== command.empireId
+        )
+          throw new Error(
+            "NATIONAL: imperial construction requires a live constituent",
+          );
+        const structure = member.buildImperialStructure(
+          command.type,
+          command.tile,
+          (cost) =>
+            runtime.debitImperialConstruction(
+              actor.id(),
+              command.empireId,
+              cost,
+            ),
+        );
+        this.addExecution(
+          ConstructionExecution.forImperialPurchase(this, structure),
+        );
+        break;
+      }
+      case "set-army-mode":
+        if (command.mode === "centralized") {
+          const ids = this._national.authority().membersOf(command.empireId);
+          const balances = ids.map((memberId) => {
+            const member = this._players.get(memberId);
+            if (!member || !member.hasSpawned() || !member.isAlive())
+              throw new Error(
+                "NATIONAL: inactive constituent cannot contribute troops",
+              );
+            return { memberId, member, balance: member.troops() };
+          });
+          this._national.centralizeImperialArmy(
+            actor.id(),
+            command.empireId,
+            command.thresholdBps,
+            balances,
+            () =>
+              PlayerImpl.commitNationalTroopDebits(
+                balances
+                  .filter((b) => b.balance > 0)
+                  .map((b) => ({
+                    player: b.member,
+                    expectedBalance: b.balance,
+                    debit: b.balance,
+                    resultingBalance: 0,
+                  })),
+              ),
+          );
+        } else {
+          this._national.setArmyMode(
+            actor.id(),
+            command.empireId,
+            command.mode,
+            command.thresholdBps,
+            (credits, empireIds, troops) =>
+              this.commitImperialDisposition(credits, empireIds, troops),
+          );
+        }
+        break;
+      case "release-imperial-troops":
+        this._national.releaseImperialTroops(
+          actor.id(),
+          command.empireId,
+          command.memberId,
+          command.amount,
+          (credits, empireIds, troops) =>
+            this.commitImperialDisposition(credits, empireIds, troops),
+        );
+        break;
+      case "imperial-attack": {
+        // No virtual attackers: transfer this empire-owned reserve to the
+        // actual constituent, then use ordinary AttackExecution and WAR/LEVY.
+        const member = this._players.get(command.memberId);
+        const target = this._players.get(command.targetId);
+        if (
+          !member ||
+          !target ||
+          member === target ||
+          !member.hasSpawned() ||
+          !member.isAlive() ||
+          !target.hasSpawned() ||
+          !target.isAlive() ||
+          this._national.authority().empireOf(member.id()) !==
+            command.empireId ||
+          this._national.authority().empireOf(target.id()) ===
+            command.empireId ||
+          !member.sharesBorderWith(target) ||
+          member.isFriendly(target) ||
+          !member.canAttackPlayer(target) ||
+          this._nationalWar?.authority.authorizeOffensiveAction(
+            member.id(),
+            target.id(),
+          ) !== true
+        )
+          throw new Error(
+            "NATIONAL: imperial attack requires a live lawful bordered WAR target",
+          );
+        this._national.releaseImperialTroops(
+          actor.id(),
+          command.empireId,
+          member.id(),
+          command.amount,
+          (credits, empireIds, troops) =>
+            this.commitImperialDisposition(credits, empireIds, troops),
+        );
+        // A later peace or crown change can abort the queued attack, but
+        // it cannot cause reserve troops to be credited twice.
+        this.addExecution(
+          AttackExecution.forImperialOrder(command.amount, member, target.id()),
+        );
+        break;
+      }
+      case "dissolve":
+        this._national.voluntarilyDissolve(
+          actor.id(),
+          command.empireId,
+          (credits, empireIds, troops) =>
+            this.commitImperialDisposition(credits, empireIds, troops),
+        );
+        this.revokeNationalObserverMemory();
+        break;
+      default:
+        throw new Error("NATIONAL: unsupported administration command");
+    }
+  }
+
+  nationalDeferredTroopsFor(observer: Player): string | null {
+    if (
+      !this._national ||
+      this._players.get(observer.id()) !== observer ||
+      !observer.hasSpawned() ||
+      !observer.isAlive()
+    )
+      return null;
+    return this._national.deferredTroopsFor(observer.id());
+  }
+
+  releaseNationalDeferredTroops(player: Player): void {
+    if (
+      !this._national ||
+      this._players.get(player.id()) !== player ||
+      !player.hasSpawned() ||
+      !player.isAlive()
+    )
+      return;
+    const capacity = Math.floor(this._config.maxTroops(player));
+    const headroom = BigInt(Math.max(0, capacity - player.troops()));
+    const amount = this._national.redeemDeferredTroops(player.id(), headroom);
+    if (amount > 0n) player.addTroops(Number(amount));
+  }
+
+  creditNationalTroopGrowth(player: Player, gross: number): void {
+    if (!this._national || gross <= 0) {
+      player.addTroops(gross);
+      return;
+    }
+    if (this._players.get(player.id()) !== player)
+      throw new Error("NATIONAL: invalid troop growth owner");
+    const personal = this._national.routeHybridGrowth(
+      player.id(),
+      BigInt(Math.floor(gross)),
+      (ids) =>
+        ids.flatMap((id) => {
+          const member = this._players.get(id);
+          return member && member.hasSpawned() && member.isAlive()
+            ? [
+                {
+                  id,
+                  capacity: BigInt(Math.floor(this._config.maxTroops(member))),
+                  active: BigInt(member.troops()),
+                },
+              ]
+            : [];
+        }),
+    );
+    player.addTroops(Number(personal));
+  }
+
+  creditNationalWorkerIncome(player: Player, gross: bigint): void {
+    if (this._national && this._players.get(player.id()) !== player)
+      throw new Error("NATIONAL: invalid worker income owner");
+    player.addGold(
+      this._national?.routeWorkerIncome(player.id(), gross) ?? gross,
+    );
+  }
+
+  nationalAllowsConstruction(player: Player, type: UnitType): boolean {
+    if (!this._national) return true;
+    if (this._players.get(player.id()) !== player) return false;
+    return this._national.allowsConstruction(player.id(), type);
+  }
+
   /** Complete NATIONAL victor roster; old game Winner schema stays unchanged. */
   nationalVictoryRoster(): LastSovereignResult | null {
     this.synchronizeNationalState();
@@ -1056,6 +1387,14 @@ export class GameImpl implements Game {
       throw new Error("NATIONAL: unauthenticated or inactive actor");
     }
     this.synchronizeNationalState();
+    if (command.kind === "imperial-administration") {
+      this.performNationalImperialAdministration(
+        actor,
+        command.command,
+        authenticatedClientID,
+      );
+      return;
+    }
     this._national.perform(actor.id(), command);
     this.revokeNationalObserverMemory();
   }
@@ -1136,6 +1475,8 @@ export class GameImpl implements Game {
   ): boolean {
     const authority = this.nationalPoliticalAuthority();
     if (!authority?.alive(actorId)) return false;
+    if (command.kind === "imperial-administration")
+      return authority.emperorOf(command.command.empireId) === actorId;
     if (
       command.kind === "transfer-crown" ||
       command.kind === "set-national-peace-delegation"
@@ -1167,7 +1508,12 @@ export class GameImpl implements Game {
     if (this._national === null || this._nationalGovernance === null)
       throw new Error("NATIONAL command journal: mode not enabled");
     this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
-    const targetId = "pactId" in command ? command.pactId : command.empireId;
+    const targetId =
+      command.kind === "imperial-administration"
+        ? command.command.empireId
+        : "pactId" in command
+          ? command.pactId
+          : command.empireId;
     const recordedTargetId =
       typeof targetId === "string" &&
       targetId.length > 0 &&
@@ -1383,7 +1729,9 @@ export class GameImpl implements Game {
     }
 
     this.removeInactiveExecutions();
-    this.synchronizeNationalState();
+    // Reconcile at the completed tick's clock; observer reads cannot advance
+    // a crisis or distribute assets simply by requesting a view.
+    this.synchronizeNationalState(this._ticks + 1);
 
     for (const player of this._playersBySmallID) {
       // Sampled before toUpdate so the reading is of the tick that just ran.
