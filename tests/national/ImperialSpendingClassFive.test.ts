@@ -552,7 +552,9 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     const member = game.player(S);
     const unit = city(game);
     policy(game, 0, 3333);
-    expect(game.nationalImperialAdministrationFor(leader)?.nonWorkerIncomeBps).toBe(3333);
+    expect(
+      game.nationalImperialAdministrationFor(leader)?.nonWorkerIncomeBps,
+    ).toBe(3333);
 
     game.performNationalImperialAdministration(leader, {
       kind: "set-army-mode",
@@ -560,7 +562,9 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
       mode: "hybrid",
       thresholdBps: 7000,
     });
-    expect(game.nationalImperialAdministrationFor(leader)?.nonWorkerIncomeBps).toBe(3333);
+    expect(
+      game.nationalImperialAdministrationFor(leader)?.nonWorkerIncomeBps,
+    ).toBe(3333);
 
     const station = new TrainStation(game, unit);
     const train = new TrainExecution(
@@ -591,9 +595,14 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
       empireId,
       policy: { workerIncomeBps: 1000, allowedConstruction: null },
     });
-    expect(game.nationalImperialAdministrationFor(leader)?.nonWorkerIncomeBps).toBe(3333);
+    expect(
+      game.nationalImperialAdministrationFor(leader)?.nonWorkerIncomeBps,
+    ).toBe(3333);
     const { restored } = await roundTrip(game, "plains");
-    expect(restored.nationalImperialAdministrationFor(restored.player(N))?.nonWorkerIncomeBps).toBe(3333);
+    expect(
+      restored.nationalImperialAdministrationFor(restored.player(N))
+        ?.nonWorkerIncomeBps,
+    ).toBe(3333);
     expect(treasury(restored)).toBe(treasury(game));
     expect(national(restored)).toEqual(national(game));
   });
