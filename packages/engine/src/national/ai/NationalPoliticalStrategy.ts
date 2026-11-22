@@ -326,7 +326,11 @@ export function planAIPoliticalInterest(
     .sort((a, b) => compare(a.id, b.id))) {
     if (
       !pact.terms ||
-      pact.members.some((id) => warSides.enemies.has(id)) ||
+      pact.members.some(
+        (id) =>
+          warSides.enemies.has(id) ||
+          (reputationById.get(id) ?? 0) <= -3,
+      ) ||
       pact.members.every((id) => !frontiers.includes(id))
     ) continue;
     const command: AIPoliticalCommand = { kind: "accept-pact", pactId: pact.id };
