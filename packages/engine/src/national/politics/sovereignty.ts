@@ -152,7 +152,9 @@ function copy(world: PoliticsProjection): PoliticsProjection {
         : { delegatedNationalPeace: [...e.delegatedNationalPeace] }),
       ...(e.delegatedNationalDeclarations === undefined
         ? {}
-        : { delegatedNationalDeclarations: [...e.delegatedNationalDeclarations] }),
+        : {
+            delegatedNationalDeclarations: [...e.delegatedNationalDeclarations],
+          }),
     })),
     accessionOffers: world.accessionOffers.map((o) => ({ ...o })),
     simulationMs: world.simulationMs,
@@ -217,9 +219,14 @@ export function validatePolitics(world: PoliticsProjection): void {
     );
     const declarers = e.delegatedNationalDeclarations ?? [];
     requireRule(
-      Array.isArray(declarers) && unique(declarers) &&
-        declarers.every((id) => typeof id === "string" &&
-          id !== e.leaderId && e.memberIds.includes(id)),
+      Array.isArray(declarers) &&
+        unique(declarers) &&
+        declarers.every(
+          (id) =>
+            typeof id === "string" &&
+            id !== e.leaderId &&
+            e.memberIds.includes(id),
+        ),
       "invalid imperial national-declaration delegation",
     );
     requireRule(
@@ -231,7 +238,8 @@ export function validatePolitics(world: PoliticsProjection): void {
     requireRule(
       e.warPolicyVersion === undefined ||
         (Number.isSafeInteger(e.warPolicyVersion) &&
-          e.warPolicyVersion >= 0 && e.warPolicyVersion < Number.MAX_SAFE_INTEGER),
+          e.warPolicyVersion >= 0 &&
+          e.warPolicyVersion < Number.MAX_SAFE_INTEGER),
       "invalid imperial WAR policy version",
     );
     for (const id of e.memberIds) {
@@ -868,20 +876,33 @@ export function setImperialWarPolicy(
 ): PoliticsProjection {
   validatePolitics(world);
   const current = empire(world, empireId);
-  requireRule(current.leaderId === actorId, "only incumbent emperor may change WAR policy");
+  requireRule(
+    current.leaderId === actorId,
+    "only incumbent emperor may change WAR policy",
+  );
   requireRule(
     Number.isSafeInteger(expectedVersion) &&
       expectedVersion >= 0 &&
       expectedVersion === (current.warPolicyVersion ?? 0),
     "stale imperial WAR policy version",
   );
-  requireRule(response === "none" || response === "imperial", "invalid imperial WAR response");
+  requireRule(
+    response === "none" || response === "imperial",
+    "invalid imperial WAR response",
+  );
   const validDelegates = (ids: readonly string[]) =>
-    Array.isArray(ids) && new Set(ids).size === ids.length &&
-    ids.every((id) => typeof id === "string" && id !== current.leaderId &&
-      current.memberIds.includes(id));
-  requireRule(validDelegates(declarationDelegates) && validDelegates(peaceDelegates),
-    "invalid imperial WAR delegates");
+    Array.isArray(ids) &&
+    new Set(ids).size === ids.length &&
+    ids.every(
+      (id) =>
+        typeof id === "string" &&
+        id !== current.leaderId &&
+        current.memberIds.includes(id),
+    );
+  requireRule(
+    validDelegates(declarationDelegates) && validDelegates(peaceDelegates),
+    "invalid imperial WAR delegates",
+  );
   const next = copy(world);
   const target = empire(next, empireId);
   target.accessionWarResponse = response;
@@ -980,9 +1001,8 @@ export function eliminatePoliticalNation(
           (id) => id !== nationId,
         );
       if (e.delegatedNationalDeclarations !== undefined)
-        e.delegatedNationalDeclarations = e.delegatedNationalDeclarations.filter(
-          (id) => id !== nationId,
-        );
+        e.delegatedNationalDeclarations =
+          e.delegatedNationalDeclarations.filter((id) => id !== nationId);
       e.warPolicyVersion = (e.warPolicyVersion ?? 0) + 1;
     }
   }

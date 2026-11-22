@@ -780,44 +780,55 @@ export const NationalExpelPactIntentSchema = z.object({
 });
 
 /** Class Two M5: append only; client identity is never an action field. */
-export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("set-policy"),
-    empireId: NationalPoliticalId,
-    policy: z.object({
-      workerIncomeBps: zb.uint({ min: 0, max: 10_000 }),
-      allowedConstruction: z.array(z.enum(UnitType)).max(16).nullable(),
+export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
+  "kind",
+  [
+    z.object({
+      kind: z.literal("set-policy"),
+      empireId: NationalPoliticalId,
+      policy: z.object({
+        workerIncomeBps: zb.uint({ min: 0, max: 10_000 }),
+        allowedConstruction: z.array(z.enum(UnitType)).max(16).nullable(),
+      }),
     }),
-  }),
-  z.object({
-    kind: z.literal("transfer-troops"),
-    empireId: NationalPoliticalId,
-    sourceId: MappedID,
-    destinationId: MappedID,
-    amount: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }),
-  }),
-  z.object({
-    kind: z.literal("build-structure"),
-    empireId: NationalPoliticalId,
-    memberId: MappedID,
-    type: z.enum(UnitType),
-    tile: zb.uint(),
-  }),
-  z.object({ kind: z.literal("dissolve"), empireId: NationalPoliticalId }),
-  z.object({ kind: z.literal("set-army-mode"), empireId: NationalPoliticalId,
-    mode: z.enum(["decentralized", "hybrid"]), thresholdBps: zb.uint({ min: 0, max: 10_000 }) }),
-  z.object({ kind: z.literal("release-imperial-troops"), empireId: NationalPoliticalId,
-    memberId: MappedID, amount: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }) }),
-  // Append only: no existing intent or administration command index moves.
-  z.object({
-    kind: z.literal("set-war-policy"),
-    empireId: NationalPoliticalId,
-    expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
-    response: z.enum(["none", "imperial"]),
-    declarationDelegates: z.array(MappedID).max(64),
-    peaceDelegates: z.array(MappedID).max(64),
-  }),
-]);
+    z.object({
+      kind: z.literal("transfer-troops"),
+      empireId: NationalPoliticalId,
+      sourceId: MappedID,
+      destinationId: MappedID,
+      amount: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }),
+    }),
+    z.object({
+      kind: z.literal("build-structure"),
+      empireId: NationalPoliticalId,
+      memberId: MappedID,
+      type: z.enum(UnitType),
+      tile: zb.uint(),
+    }),
+    z.object({ kind: z.literal("dissolve"), empireId: NationalPoliticalId }),
+    z.object({
+      kind: z.literal("set-army-mode"),
+      empireId: NationalPoliticalId,
+      mode: z.enum(["decentralized", "hybrid"]),
+      thresholdBps: zb.uint({ min: 0, max: 10_000 }),
+    }),
+    z.object({
+      kind: z.literal("release-imperial-troops"),
+      empireId: NationalPoliticalId,
+      memberId: MappedID,
+      amount: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }),
+    }),
+    // Append only: no existing intent or administration command index moves.
+    z.object({
+      kind: z.literal("set-war-policy"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      response: z.enum(["none", "imperial"]),
+      declarationDelegates: z.array(MappedID).max(64),
+      peaceDelegates: z.array(MappedID).max(64),
+    }),
+  ],
+);
 
 export const NationalImperialAdministrationIntentSchema = z.object({
   type: z.literal("national_imperial_administration"),

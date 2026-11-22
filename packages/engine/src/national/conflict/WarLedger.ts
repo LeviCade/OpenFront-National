@@ -111,13 +111,17 @@ export class WarLedger {
    */
   retireEmpireWars(empireIds: readonly string[], tick: number): void {
     requireTick(tick);
-    if (tick < this.lastTick) throw new Error("nonmonotonic imperial extinction");
+    if (tick < this.lastTick)
+      throw new Error("nonmonotonic imperial extinction");
     const extinct = new Set(empireIds);
     let changed = false;
     for (const layer of this.layers.values()) {
-      if (layer.endedTick === null && [layer.first, layer.second].some(
-        (party) => party.kind === "empire" && extinct.has(party.id),
-      )) {
+      if (
+        layer.endedTick === null &&
+        [layer.first, layer.second].some(
+          (party) => party.kind === "empire" && extinct.has(party.id),
+        )
+      ) {
         layer.endedTick = tick;
         changed = true;
       }
@@ -126,8 +130,10 @@ export class WarLedger {
       // An extinct empire cannot have a pending negotiable peace motion.
       // Preserve accepted historical motions and all independent WAR layers.
       for (const [id, motion] of this.motions) {
-        if (motion.acceptedTick === null &&
-            this.layers.get(motion.layerId)?.endedTick !== null)
+        if (
+          motion.acceptedTick === null &&
+          this.layers.get(motion.layerId)?.endedTick !== null
+        )
           this.motions.delete(id);
       }
       this.lastTick = tick;
@@ -265,9 +271,13 @@ export class WarLedger {
     for (const layer of this.layers.values()) {
       if (layer.endedTick !== null || layer.scope !== "national") continue;
       const [a, b] = [layer.first.id, layer.second.id];
-      if ((a === candidateId && members.has(b)) ||
-          (b === candidateId && members.has(a)))
-        throw new Error("NATIONAL WAR: accession requires peace with current member");
+      if (
+        (a === candidateId && members.has(b)) ||
+        (b === candidateId && members.has(a))
+      )
+        throw new Error(
+          "NATIONAL WAR: accession requires peace with current member",
+        );
     }
   }
 
@@ -281,7 +291,11 @@ export class WarLedger {
    * A foreign empire requires a separate policy decision (not automatic
    * forced intervention); no war is invented in that case.
    */
-  escalateAccessionWars(empireId: string, candidateId: string, tick: number): string[] {
+  escalateAccessionWars(
+    empireId: string,
+    candidateId: string,
+    tick: number,
+  ): string[] {
     this.validateClock(tick);
     if (this.politics.empireOf(candidateId) !== empireId)
       throw new Error("NATIONAL WAR: accession not committed");
@@ -291,24 +305,36 @@ export class WarLedger {
     const outsiders = new Set<string>();
     for (const layer of this.layers.values()) {
       if (layer.endedTick !== null || layer.scope !== "national") continue;
-      const other = layer.first.id === candidateId
-        ? layer.second.id : layer.second.id === candidateId
-          ? layer.first.id : null;
-      if (other !== null && this.politics.nationAlive(other) &&
-          this.politics.empireOf(other) === null)
+      const other =
+        layer.first.id === candidateId
+          ? layer.second.id
+          : layer.second.id === candidateId
+            ? layer.first.id
+            : null;
+      if (
+        other !== null &&
+        this.politics.nationAlive(other) &&
+        this.politics.empireOf(other) === null
+      )
         outsiders.add(other);
     }
     const opened: string[] = [];
     for (const target of [...outsiders].sort(idCompare)) {
       // Treaty protection is NOT silently betrayed by accession.
-      if (members.some((member) => this.politics.treatyProtects(member, target)))
+      if (
+        members.some((member) => this.politics.treatyProtects(member, target))
+      )
         continue;
-      const aggressor = {kind: "empire" as const, id: empireId};
-      const opponent = {kind: "nation" as const, id: target};
+      const aggressor = { kind: "empire" as const, id: empireId };
+      const opponent = { kind: "nation" as const, id: target };
       const pair = this.pairKey("imperial", aggressor, opponent);
-      if ([...this.layers.values()].some((layer) =>
-        layer.endedTick === null &&
-        this.pairKey(layer.scope, layer.first, layer.second) === pair))
+      if (
+        [...this.layers.values()].some(
+          (layer) =>
+            layer.endedTick === null &&
+            this.pairKey(layer.scope, layer.first, layer.second) === pair,
+        )
+      )
         continue;
       let index = 0;
       let warId = `accession-${tick}-${index}`;

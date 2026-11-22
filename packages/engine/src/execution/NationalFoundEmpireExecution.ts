@@ -1,4 +1,7 @@
-import { NationalImperialAdministrationCommandSchema, type ClientID } from "@openfront/engine-api/Schemas";
+import {
+  NationalImperialAdministrationCommandSchema,
+  type ClientID,
+} from "@openfront/engine-api/Schemas";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import type { Execution, Game, Player } from "../game/Game";
@@ -103,9 +106,10 @@ export class NationalFoundEmpireExecution implements Execution {
       empireId: this.empireId,
       // Zod projects runtime readonly structures into independently owned,
       // schema-validated mutable snapshot data without widening wire types.
-      politicalCommand: NationalFoundEmpireStateSchema.shape.politicalCommand.parse(
-        this.politicalCommand,
-      ),
+      politicalCommand:
+        NationalFoundEmpireStateSchema.shape.politicalCommand.parse(
+          this.politicalCommand,
+        ),
       requestId: this.requestId,
       authenticatedClientID: this.authenticatedClientID,
     });

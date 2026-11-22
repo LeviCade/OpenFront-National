@@ -161,7 +161,11 @@ export class NationalWarStateService {
   }
 
   /** Apply the policy after actual consent, without replacing original WAR. */
-  escalateAccessionWars(empireId: string, candidateId: string, tick: number): string[] {
+  escalateAccessionWars(
+    empireId: string,
+    candidateId: string,
+    tick: number,
+  ): string[] {
     return this.wars.escalateAccessionWars(empireId, candidateId, tick);
   }
 
