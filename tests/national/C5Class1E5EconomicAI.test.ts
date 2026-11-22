@@ -15,6 +15,7 @@ import {
   projectNationalObservation,
   type NationalWorld,
 } from "@openfront/engine/national/observation/NationalObservation";
+import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
@@ -280,7 +281,93 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     const after = ledger(game);
     expect(voyage(game, a, ca, bb).isActive()).toBe(false);
     expect(ledger(game)).toEqual(after);
-    witness(game, "seed-113-refusal-enforcement", before);
+    // A *second*, canonical demand is deliberately issued by a real actor,
+    // while recipient B's autonomous controller has observed A's enforcement.
+    // Without that observed reputation the recipient would refuse: no A trade
+    // is presently permitted, and C trade remains nominally permitted.
+    tick(game, 5);
+    game.addExecution(new NationalSanctionExecution(a, {
+      type: "national_issue_sanction", scope: "national",
+      targetId: C, recipientIds: [B], durationTicks: 30,
+      requestId: "c5-e5-second-after-enforcement",
+    }));
+    tick(game, 2);
+    const fresh = NationalSanctionExecution.viewFor(game, b).find(
+      (row) => row.id !== "sanction-8-1-3",
+    );
+    expect(fresh?.phase).toBe("pending");
+    const naive = planNationalEconomicDecision(
+      collectLiveNationalObservation(game, B).observation,
+      [fresh!],
+      [
+        { partnerId: A, tradePermitted: b.canTrade(a), activeOwnVoyages: 0 },
+        { partnerId: C, tradePermitted: b.canTrade(c), activeOwnVoyages: 0 },
+      ],
+      initialNationalEconomicMemory(B),
+    );
+    expect(naive).toMatchObject({ kind: "respond", decision: "refuse" });
+    until(game, () => NationalSanctionExecution.viewFor(game, b).some(
+      (row) => row.id === fresh?.id && row.response === "comply",
+    ), 50);
+    expect(b.canTrade(c)).toBe(false);
+    witness(game, "seed-113-enforcement-changes-next-ai-choice", after);
+  });
+
+  it("ECON-03/06: AI issuer backs down after losing observed reach and recipient learns the bluff", async () => {
+    const { game, a, b, c, ca, bb } = await live(221);
+    const before = ledger(game);
+    const leverage = voyage(game, a, ca, bb);
+    expect(leverage.isActive()).toBe(true);
+    game.convertHumanToNation(a, "c5-e5-issuer-221");
+    until(game, () => NationalSanctionExecution.viewFor(game, a).length > 0, 60);
+    const original = NationalSanctionExecution.viewFor(game, a)[0];
+    game.addExecution(new NationalSanctionExecution(b, {
+      type: "national_respond_sanction", sanctionId: original.id,
+      decision: "refuse", requestId: "c5-e5-human-refuses",
+    }));
+    tick(game, 2);
+    expect(NationalSanctionExecution.viewFor(game, b)[0].response).toBe("refuse");
+    // Genuine map ownership no longer supplies the issuer a discovered
+    // land frontier to the declared target. No synthetic planner flags.
+    c.conquer(game.ref(3, 2));
+    a.setTroops(10);
+    game.convertHumanToNation(b, "c5-e5-learns-bluff");
+    until(game, () =>
+      NationalSanctionExecution.viewFor(game, a)[0].phase === "backed-down",
+    100);
+    expect(a.canTrade(b)).toBe(true);
+    expect(b.canTrade(c)).toBe(true);
+    tick(game, 6); // Recipient's own AI observes the terminal outcome.
+    const tile = game.ref(7, 4);
+    a.conquer(tile);
+    const distant = a.buildUnit(UnitType.Port, tile, {});
+    tick(game);
+    const dependency = voyage(game, b, bb, distant);
+    expect(dependency.isActive()).toBe(true);
+    game.addExecution(new NationalSanctionExecution(a, {
+      type: "national_issue_sanction", scope: "national",
+      targetId: C, recipientIds: [B], durationTicks: 30,
+      requestId: "c5-e5-second-after-bluff",
+    }));
+    tick(game, 2);
+    const next = NationalSanctionExecution.viewFor(game, b).find(
+      (row) => row.id !== original.id,
+    );
+    expect(next?.phase).toBe("pending");
+    expect(planNationalEconomicDecision(
+      collectLiveNationalObservation(game, B).observation,
+      [next!],
+      [
+        { partnerId: A, tradePermitted: b.canTrade(a), activeOwnVoyages: 1 },
+        { partnerId: C, tradePermitted: b.canTrade(c), activeOwnVoyages: 0 },
+      ],
+      initialNationalEconomicMemory(B),
+    )).toMatchObject({ kind: "respond", decision: "comply" });
+    until(game, () => NationalSanctionExecution.viewFor(game, b).some(
+      (row) => row.id === next?.id && row.response === "refuse",
+    ), 50);
+    expect(b.canTrade(c)).toBe(true);
+    witness(game, "seed-221-backdown-changes-next-ai-choice", before);
   });
 
   it("ECON-04: actual imperial subordinate command is rejected", async () => {
