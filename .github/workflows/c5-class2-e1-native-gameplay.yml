@@ -50,18 +50,27 @@ jobs:
             tests/national/ImperialSpendingClassFive.test.ts \
             tests/national/C5ImperialCentralCombat.test.ts \
             tests/national/LiveWarExecutionRound5.test.ts
-      - name: Changed-file formatting
+      - name: Changed-file formatting (diagnostic patch on failure)
+        if: success() || failure()
         run: |
-          npx --no-install oxfmt --check \
-            src/client/NationalDiplomacyPanel.ts \
-            src/client/NationalImperialState.ts \
-            src/client/NationalImperialWorks.ts \
-            src/client/view/GameView.ts \
-            src/client/controllers/NationalMapTargetController.ts \
-            tests/ui/national/NationalDiplomacyPanel.test.ts \
-            tests/ui/national/NationalHumanMapInputR11.test.ts \
-            tests/ui/national/NationalWarWire.test.ts \
+          FILES=(
+            src/client/NationalDiplomacyPanel.ts
+            src/client/NationalImperialState.ts
+            src/client/NationalImperialWorks.ts
+            src/client/view/GameView.ts
+            src/client/controllers/NationalMapTargetController.ts
+            tests/ui/national/NationalDiplomacyPanel.test.ts
+            tests/ui/national/NationalHumanMapInputR11.test.ts
+            tests/ui/national/NationalWarWire.test.ts
             .github/workflows/c5-class2-e1-native-gameplay.yml
+          )
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            echo C5_C2_E1_FORMAT_DIFF_BEGIN
+            git -c color.ui=false diff -- "${FILES[@]}"
+            echo C5_C2_E1_FORMAT_DIFF_END
+            exit 1
+          fi
   source-regression:
     name: Full source, lint and build (non-GPU)
     runs-on: ubuntu-latest
