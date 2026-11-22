@@ -1,5 +1,5 @@
-import { CloseCode, CloseReason } from "@openfront/shared/CloseCodes";
 import type { TokenPayload } from "@openfront/shared/ApiSchemas";
+import { CloseCode, CloseReason } from "@openfront/shared/CloseCodes";
 import { getUserMe } from "../jwt";
 
 export const NATIONAL_ACCOUNT_POLL_MS = 10_000;
@@ -37,7 +37,8 @@ export function watchNationalAccount(
   const disconnect = (code: CloseCode, reason: CloseReason) => {
     if (stopped) return;
     stop();
-    if (options.current() && options.national()) options.disconnect(code, reason);
+    if (options.current() && options.national())
+      options.disconnect(code, reason);
   };
   const expired = () => {
     if (!Number.isFinite(cutoff) || Date.now() >= cutoff) {

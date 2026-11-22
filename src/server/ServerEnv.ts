@@ -44,7 +44,9 @@ export class ServerEnv {
       process.env.FARO_COLLECTOR_URL ||
       process.env.SUBDOMAIN
     ) {
-      throw new Error("Local NATIONAL staging requires isolated localhost development");
+      throw new Error(
+        "Local NATIONAL staging requires isolated localhost development",
+      );
     }
     return true;
   }

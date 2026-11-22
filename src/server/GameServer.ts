@@ -542,7 +542,8 @@ export class GameServer {
           const players = this.clients.players();
           if (
             new Set(players.map((c) => c.publicId)).size !== players.length ||
-            new Set(players.map((c) => c.persistentID)).size !== players.length ||
+            new Set(players.map((c) => c.persistentID)).size !==
+              players.length ||
             this.isPublic() ||
             this.isListed() ||
             mode !== GameMode.FFA ||
@@ -661,7 +662,7 @@ export class GameServer {
       client.ws === ws &&
       this.clients.isConnected(client) &&
       ws.readyState === WebSocket.OPEN
-      ? client.publicId ?? null
+      ? (client.publicId ?? null)
       : null;
   }
 
@@ -674,7 +675,8 @@ export class GameServer {
     if (
       this.gameConfig.nationalMode !== true ||
       this.nationalAccountSocket(persistentID, ws) === null
-    ) return;
+    )
+      return;
     const clientID = this.getClientIdForPersistentId(persistentID);
     const client = clientID ? this.clients.get(clientID) : undefined;
     if (!client) return;
@@ -711,17 +713,22 @@ export class GameServer {
       const existingID = this.getClientIdForPersistentId(client.persistentID);
       if (existingID !== null) {
         const existing = this.clients.get(existingID);
-        if (!existing || existing.spectator || client.spectator ||
-            existing.publicId !== client.publicId || !client.claims) {
+        if (
+          !existing ||
+          existing.spectator ||
+          client.spectator ||
+          existing.publicId !== client.publicId ||
+          !client.claims
+        ) {
           return "not_trusted";
         }
-        return this.rejoinClient(
-          client.ws,
-          client.persistentID,
-          0,
-          undefined,
-          { subject: client.claims.sub, publicId: client.publicId!, claims: client.claims },
-        ) ? "joined" : "not_trusted";
+        return this.rejoinClient(client.ws, client.persistentID, 0, undefined, {
+          subject: client.claims.sub,
+          publicId: client.publicId!,
+          claims: client.claims,
+        })
+          ? "joined"
+          : "not_trusted";
       }
       const occupiedByAnotherPrincipal = this.clients
         .players()

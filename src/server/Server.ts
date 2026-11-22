@@ -1,8 +1,8 @@
 import cluster from "cluster";
 import * as dotenv from "dotenv";
 import { startMaster } from "./Master";
-import { startWorker } from "./Worker";
 import { ServerEnv } from "./ServerEnv";
+import { startWorker } from "./Worker";
 
 // Load environment variables before we read configuration values derived from them.
 dotenv.config();

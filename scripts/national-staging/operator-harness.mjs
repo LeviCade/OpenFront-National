@@ -22,8 +22,14 @@ export async function until(predicate, label, ms = 20_000) {
 }
 
 export function makeEnvironment() {
-  for (const name of [".env", ".env.local", ".env.development", ".env.development.local"]) {
-    if (existsSync(name)) throw new Error("Use a disposable checkout without dotenv overrides");
+  for (const name of [
+    ".env",
+    ".env.local",
+    ".env.development",
+    ".env.development.local",
+  ]) {
+    if (existsSync(name))
+      throw new Error("Use a disposable checkout without dotenv overrides");
   }
   const dir = mkdtempSync(join(tmpdir(), "national-account-"));
   // Do not inherit production API configuration or secret variables.
@@ -44,26 +50,37 @@ export function makeEnvironment() {
       encoding: "utf8",
     }).trim(),
   };
-  return { dir, env, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  return {
+    dir,
+    env,
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
 }
 
 export function accountCommand(env, command, email) {
   execFileSync(process.execPath, [identityScript, command, email], {
-    env, stdio: ["ignore", "pipe", "pipe"],
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
   });
 }
 
 export function launch(args, env) {
   const child = spawn(process.execPath, args, {
-    env, detached: true, stdio: ["ignore", "pipe", "pipe"],
+    env,
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
   });
   const messages = [];
   let identityReady = false;
   let ended = false;
   let pending = "";
   let processError = false;
-  child.on("error", () => { processError = true; });
-  child.on("exit", () => { ended = true; });
+  child.on("error", () => {
+    processError = true;
+  });
+  child.on("exit", () => {
+    ended = true;
+  });
   child.stderr.resume();
   child.stdout.setEncoding("utf8");
   child.stdout.on("data", (chunk) => {
@@ -71,23 +88,37 @@ export function launch(args, env) {
     const lines = pending.split("\n");
     pending = lines.pop() ?? "";
     for (const line of lines) {
-      if (line === "LOCAL STAGING AUTH listening on localhost:8787") identityReady = true;
+      if (line === "LOCAL STAGING AUTH listening on localhost:8787")
+        identityReady = true;
       try {
         const log = JSON.parse(line);
-        if (["NATIONAL authoritative host ready", "NATIONAL authoritative tick",
-          "NATIONAL authenticated socket resumed", "NATIONAL account lease ended",
-          "NATIONAL authoritative tick failed", "NATIONAL trusted host start failed"].includes(log.message)) {
+        if (
+          [
+            "NATIONAL authoritative host ready",
+            "NATIONAL authoritative tick",
+            "NATIONAL authenticated socket resumed",
+            "NATIONAL account lease ended",
+            "NATIONAL authoritative tick failed",
+            "NATIONAL trusted host start failed",
+          ].includes(log.message)
+        ) {
           // Retain ONLY fields needed for anonymized test assertions.
           messages.push({
-            message: log.message, gameID: log.gameID,
-            authenticatedSeats: log.authenticatedSeats, distinctAccounts: log.distinctAccounts,
-            authoritativeRunners: log.authoritativeRunners, tick: log.tick,
-            code: log.code, queuedIntents: log.queuedIntents,
+            message: log.message,
+            gameID: log.gameID,
+            authenticatedSeats: log.authenticatedSeats,
+            distinctAccounts: log.distinctAccounts,
+            authoritativeRunners: log.authoritativeRunners,
+            tick: log.tick,
+            code: log.code,
+            queuedIntents: log.queuedIntents,
           });
         }
-        if (typeof log.message === "string" &&
-            (log.message.startsWith("Master HTTP server listening") ||
-             log.message.startsWith("running on http://localhost:"))) {
+        if (
+          typeof log.message === "string" &&
+          (log.message.startsWith("Master HTTP server listening") ||
+            log.message.startsWith("running on http://localhost:"))
+        ) {
           messages.push({ message: log.message });
         }
       } catch {
@@ -99,13 +130,19 @@ export function launch(args, env) {
     if (child.pid === undefined) return;
     // The spawned process group is exclusively this disposable test, including
     // Node cluster children. Do not leave an old Worker listening after restart.
-    try { process.kill(-child.pid, "SIGTERM"); } catch {}
+    try {
+      process.kill(-child.pid, "SIGTERM");
+    } catch {}
     await delay(300);
-    try { process.kill(-child.pid, "SIGKILL"); } catch {}
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch {}
     await until(() => ended || processError, "owned process exit", 5000);
   }
   return {
-    child, messages, identityReady: () => identityReady,
+    child,
+    messages,
+    identityReady: () => identityReady,
     alive: () => !processError && !ended,
     stop,
   };
@@ -125,7 +162,10 @@ export async function startIdentity(env) {
   }
 }
 
-export function request(path, { method = "GET", body, cookie, jwt, browserOrigin = origin } = {}) {
+export function request(
+  path,
+  { method = "GET", body, cookie, jwt, browserOrigin = origin } = {},
+) {
   return fetch(issuer + path, {
     method,
     headers: {
@@ -135,14 +175,20 @@ export function request(path, { method = "GET", body, cookie, jwt, browserOrigin
       ...(jwt ? { authorization: "Bearer " + jwt } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
-    redirect: "error", signal: AbortSignal.timeout(5000),
+    redirect: "error",
+    signal: AbortSignal.timeout(5000),
   });
 }
 
 function issuedCookie(response) {
   const raw = response.headers.get("set-cookie");
-  assert(raw && /;\s*HttpOnly/i.test(raw) && /;\s*Secure/i.test(raw) &&
-    /;\s*SameSite=Strict/i.test(raw), "secure refresh cookie missing");
+  assert(
+    raw &&
+      /;\s*HttpOnly/i.test(raw) &&
+      /;\s*Secure/i.test(raw) &&
+      /;\s*SameSite=Strict/i.test(raw),
+    "secure refresh cookie missing",
+  );
   return raw.split(";")[0];
 }
 
@@ -150,7 +196,10 @@ export async function refresh(cookie) {
   const res = await request("/auth/refresh", { method: "POST", cookie });
   assert.equal(res.status, 200, "refresh exchange");
   const value = await res.json();
-  assert(typeof value.jwt === "string" && value.jwt.split(".").length === 3, "JWT not issued");
+  assert(
+    typeof value.jwt === "string" && value.jwt.split(".").length === 3,
+    "JWT not issued",
+  );
   assert(value.expiresIn > 0 && value.expiresIn <= 900, "incorrect TTL");
   const nextCookie = issuedCookie(res);
   assert(nextCookie !== cookie, "refresh cookie was not rotated");
@@ -162,22 +211,36 @@ export async function refresh(cookie) {
 // No token or browser cookie is set before a successful HTTP login exchange.
 export async function login(dir, email) {
   const requested = await request("/auth/magic-link", {
-    method: "POST", body: { email, redirectDomain: origin },
+    method: "POST",
+    body: { email, redirectDomain: origin },
   });
   assert.equal(requested.status, 200, "magic-link request");
   const digest = createHash("sha256").update(email).digest("hex");
-  const url = new URL(readFileSync(join(dir, "mail", digest + ".txt"), "utf8").trim());
+  const url = new URL(
+    readFileSync(join(dir, "mail", digest + ".txt"), "utf8").trim(),
+  );
   assert.equal(url.origin, origin);
   const token = new URLSearchParams(url.hash.split("?")[1]).get("token-login");
-  assert(typeof token === "string" && token.length === 43, "missing login credential");
-  const exchange = await request("/auth/login/token?login-token=" + encodeURIComponent(token));
+  assert(
+    typeof token === "string" && token.length === 43,
+    "missing login credential",
+  );
+  const exchange = await request(
+    "/auth/login/token?login-token=" + encodeURIComponent(token),
+  );
   assert.equal(exchange.status, 200, "magic-link exchange");
-  assert.equal((await exchange.json()).email, email, "incorrect registered principal");
+  assert.equal(
+    (await exchange.json()).email,
+    email,
+    "incorrect registered principal",
+  );
   const cookie = issuedCookie(exchange);
-  const reused = await request("/auth/login/token?login-token=" + encodeURIComponent(token));
+  const reused = await request(
+    "/auth/login/token?login-token=" + encodeURIComponent(token),
+  );
   assert.equal(reused.status, 400, "replayed magic link");
   assert.equal((await reused.json()).code, "consumed");
-  return { ...await refresh(cookie), firstCookie: cookie };
+  return { ...(await refresh(cookie)), firstCookie: cookie };
 }
 
 export async function profile(jwt) {

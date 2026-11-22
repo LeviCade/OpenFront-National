@@ -712,17 +712,24 @@ export async function startWorker() {
         const leaseToken = clientMsg.token;
         const attachAccountLease = () => {
           const game = gm.game(leaseGameID);
-          if (!game || game.gameConfig.gameType !== GameType.Private ||
-              !claims || !isNationalSignedInAccount(claims)) return;
+          if (
+            !game ||
+            game.gameConfig.gameType !== GameType.Private ||
+            !claims ||
+            !isNationalSignedInAccount(claims)
+          )
+            return;
           const publicId = game.nationalAccountSocket(persistentId, ws);
           if (!publicId) return;
           const stop = watchNationalAccount({
             token: leaseToken,
             claims,
             publicId,
-            current: () => game.nationalAccountSocket(persistentId, ws) === publicId,
+            current: () =>
+              game.nationalAccountSocket(persistentId, ws) === publicId,
             national: () => game.gameConfig.nationalMode === true,
-            disconnect: (code, reason) => game.revokeNationalAccountSocket(persistentId, ws, code, reason),
+            disconnect: (code, reason) =>
+              game.revokeNationalAccountSocket(persistentId, ws, code, reason),
           });
           ws.once("close", stop);
         };
@@ -866,9 +873,15 @@ export async function startWorker() {
               clientMsg.clanTag ?? null,
               persistentId,
             );
-            if (game?.gameConfig.nationalMode === true && verdict.status === "error") {
+            if (
+              game?.gameConfig.nationalMode === true &&
+              verdict.status === "error"
+            ) {
               admissionGuard.rollback();
-              ws.close(CloseCode.TryAgainLater, CloseReason.AccountLookupFailed);
+              ws.close(
+                CloseCode.TryAgainLater,
+                CloseReason.AccountLookupFailed,
+              );
               return;
             }
             if (verdict.status === "approved" || verdict.status === "error") {
@@ -1158,13 +1171,17 @@ export async function startWorker() {
 
   // The load balancer will handle routing to this server based on path
   const PORT = ServerEnv.workerPortByIndex(workerId);
-  server.listen(PORT, ServerEnv.localNationalStaging() ? "localhost" : undefined, () => {
-    log.info(`running on http://localhost:${PORT}`);
-    log.info(`Handling requests with path prefix /w${workerId}/`);
-    // Signal to the master process that this worker is ready
-    lobbyService.sendReady(workerId);
-    log.info(`signaled ready state to master`);
-  });
+  server.listen(
+    PORT,
+    ServerEnv.localNationalStaging() ? "localhost" : undefined,
+    () => {
+      log.info(`running on http://localhost:${PORT}`);
+      log.info(`Handling requests with path prefix /w${workerId}/`);
+      // Signal to the master process that this worker is ready
+      lobbyService.sendReady(workerId);
+      log.info(`signaled ready state to master`);
+    },
+  );
 
   // Global error handler
   app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
@@ -1194,7 +1211,11 @@ export function getListingEligibilityError(
   game: GameServer,
   maxPlayers?: number,
 ): string | null {
-  if (game.gameConfig.nationalMode === true || game.isPublic() || game.hasStarted()) {
+  if (
+    game.gameConfig.nationalMode === true ||
+    game.isPublic() ||
+    game.hasStarted()
+  ) {
     return "Game cannot be listed";
   }
   if (game.hasJoinWhitelist()) {
