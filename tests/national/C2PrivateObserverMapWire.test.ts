@@ -806,7 +806,9 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     );
     const allyRef = b.spawnTile()!;
     const foreignTile = game.ref(90, 105);
-    const foreignCity = game.player(C.id).buildUnit(UnitType.City, foreignTile, {});
+    const c = game.player(C.id);
+    c.conquer(foreignTile);
+    const foreignCity = c.buildUnit(UnitType.City, foreignTile, {});
     expect(
       collectLiveNationalObservation(game, A.id).observation.visibleAssets
         .some((asset) => asset.id === String(foreignCity.id())),
@@ -816,6 +818,11 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     ).toBe(true);
     host.tick();
     const allied = view(sockets[0].socket);
+    expect(game.unit(foreignCity.id())).toBeDefined();
+    expect(
+      collectLiveNationalObservation(game, A.id).observation.visibleAssets
+        .some((asset) => asset.id === String(foreignCity.id())),
+    ).toBe(true);
     const reader = new NationalObserverMapContinuity(A.id);
     reader.acceptProjection(
       parseTrustedNationalProjection(allied.msg.payload, allied.msg.tick),

@@ -66,6 +66,8 @@ export interface NationalObserverMapV1 {
   readonly nextCursor: number | null;
   /** Consumed membership slots, including IDs revoked before emission. */
   readonly tilePageSlots: number;
+  /** Aggregate authorized membership at sweep start; no undisclosed IDs. */
+  readonly tileSweepSlots: number;
   /** Previously disclosed refs only; clear ownership and border overlays first. */
   readonly tileRemovedRefs: readonly number[];
   /** True if some presently authorized tuples are not represented in the cache. */
@@ -78,6 +80,8 @@ export interface NationalObserverMapV1 {
   readonly unitNextCursor: number | null;
   readonly unitSweepId: number;
   readonly unitPageSlots: number;
+  /** Aggregate bounded authorized membership at unit sweep start. */
+  readonly unitSweepSlots: number;
   /** True if some presently authorized markers are not represented in the cache. */
   readonly unitPartial: boolean;
   /** Discard all prior unit markers before adding this page. */
@@ -138,10 +142,12 @@ export function validNationalObserverPageProgress(
     | "cursor"
     | "nextCursor"
     | "tilePageSlots"
+    | "tileSweepSlots"
     | "tiles"
     | "unitCursor"
     | "unitNextCursor"
     | "unitPageSlots"
+    | "unitSweepSlots"
     | "units"
     | "width"
     | "height"
@@ -157,7 +163,11 @@ export function validNationalObserverPageProgress(
     emitted: number,
     limit: number,
     total: number,
+    ceiling: number,
   ): boolean =>
+    Number.isSafeInteger(total) &&
+    total >= 0 &&
+    total <= ceiling &&
     Number.isSafeInteger(cursor) &&
     cursor >= 0 &&
     cursor <= total &&
@@ -166,8 +176,9 @@ export function validNationalObserverPageProgress(
     slots <= limit &&
     cursor + slots <= total &&
     (cursor === 0 || slots > 0) &&
-    (next === null ||
-      (slots === limit && next === cursor + slots && next < total));
+    (next === null
+      ? cursor + slots === total
+      : slots === limit && next === cursor + slots && next < total);
   return (
     typeof page.tilePartial === "boolean" &&
     typeof page.unitPartial === "boolean" &&
@@ -178,6 +189,7 @@ export function validNationalObserverPageProgress(
       page.tilePageSlots,
       page.tiles.length,
       NATIONAL_OBSERVER_MAX_TILES,
+      page.tileSweepSlots,
       page.width * page.height,
     ) &&
     valid(
@@ -186,6 +198,7 @@ export function validNationalObserverPageProgress(
       page.unitPageSlots,
       page.units.length,
       NATIONAL_OBSERVER_MAX_UNITS,
+      page.unitSweepSlots,
       NATIONAL_OBSERVER_MAX_TRACKED_UNITS,
     )
   );

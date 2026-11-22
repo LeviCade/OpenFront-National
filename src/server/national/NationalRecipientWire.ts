@@ -176,6 +176,7 @@ export function encodeNationalRecipientProjection(
             cursor: map.cursor,
             nextCursor: map.nextCursor,
             tilePageSlots: map.tilePageSlots,
+            tileSweepSlots: map.tileSweepSlots,
             tileRemovedRefs: [...map.tileRemovedRefs],
             tilePartial: map.tilePartial,
             tiles: map.tiles.map(([tile, state, terrain, borderMask]) => [
@@ -197,6 +198,7 @@ export function encodeNationalRecipientProjection(
             unitNextCursor: map.unitNextCursor,
             unitSweepId: map.unitSweepId,
             unitPageSlots: map.unitPageSlots,
+            unitSweepSlots: map.unitSweepSlots,
             unitPartial: map.unitPartial,
             unitReset: map.unitReset,
             unitRemovedIds: [...map.unitRemovedIds],
