@@ -9,6 +9,7 @@ import {
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
+import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { NationExecution } from "@openfront/engine/execution/NationExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
@@ -257,6 +258,10 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
       game.performNationalCommand(player, command);
     }
     expect(game.nationalPoliticalAuthority()?.protectedByTreaty(A, B)).toBe(true);
+    const blocked = new AttackExecution(2_000, actor, B);
+    blocked.init(game, game.ticks());
+    expect(blocked.isActive()).toBe(false);
+    const troopsBefore = actor.troops();
     const politics = vi.spyOn(game, "performNationalPoliticalCommandWithOutcome");
     const wars = vi.spyOn(game, "performNationalWarCommandWithOutcome");
     let betrayalTick: number | null = null;
@@ -283,6 +288,11 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
     expect(warTick).not.toBeNull();
     expect(warTick!).toBeGreaterThan(betrayalTick!);
     expect(game.nationalWarAuthority()?.atWar(A, B)).toBe(true);
+    // Betray removed treaty protection; a Game-authorized offensive action
+    // must now spend real troops or create an actual outgoing attack.
+    expect(
+      actor.troops() < troopsBefore || actor.outgoingAttacks().length > 0,
+    ).toBe(true);
     const { restored } = await roundTrip(game, "plains");
     expect(restored.nationalWarAuthority()?.atWar(A, B)).toBe(true);
   });
