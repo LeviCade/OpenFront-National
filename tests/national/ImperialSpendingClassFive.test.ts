@@ -199,6 +199,76 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     expect([leader.gold(), member.gold()]).toEqual(personalAfterConstruction);
   });
 
+  it("stamped demolition produces one accepted receipt and removes a real unit without treasury debit", async () => {
+    const game = await liveGame();
+    join(game);
+    const unit = city(game);
+    policy(game, 0);
+    const before = treasury(game);
+    const memberGold = game.player(S).gold();
+    queue(game, "c5-demolish-receipt", {
+      kind: "demolish-structure",
+      empireId,
+      memberId: S,
+      unitId: unit.id(),
+    });
+    const { restored } = await roundTrip(game, "plains");
+    for (const g of [game, restored]) {
+      g.executeNextTick();
+      g.executeNextTick();
+      expect(g.unit(unit.id())).toBeUndefined();
+      expect(g.player(S).units(UnitType.City)).toHaveLength(0);
+      expect(BigInt(g.nationalImperialAdministrationFor(g.player(N))!.treasury)).toBe(before);
+      expect(political(g, "c5-demolish-receipt")).toMatchObject({
+        accepted: true,
+        reason: "accepted",
+        recipientId: N,
+      });
+      queue(g, "c5-demolish-receipt", {
+        kind: "demolish-structure",
+        empireId,
+        memberId: S,
+        unitId: unit.id(),
+      });
+      g.executeNextTick();
+      g.executeNextTick();
+      expect(g.player(S).units(UnitType.City)).toHaveLength(0);
+      expect(g.nationalPoliticalCommandResults(g.player(N)).filter(
+        (receipt) => receipt.requestId === "c5-demolish-receipt",
+      )).toHaveLength(1);
+      expect(BigInt(g.nationalImperialAdministrationFor(g.player(N))!.treasury)).toBe(before);
+    }
+    expect(national(restored)).toEqual(national(game));
+  });
+
+  it("pending imperial upgrades reject physically destroyed structures after snapshot restoration", async () => {
+    const game = await liveGame();
+    join(game);
+    const unit = city(game);
+    policy(game, 0);
+    queue(game, "c5-deleted-target", {
+      kind: "upgrade-structure",
+      empireId,
+      memberId: S,
+      unitId: unit.id(),
+    });
+    unit.delete(false); // actual world change occurs BEFORE the queued order runs
+    expect(game.unit(unit.id())).toBeUndefined();
+    const { restored } = await roundTrip(game, "plains");
+    for (const g of [game, restored]) {
+      g.executeNextTick();
+      g.executeNextTick();
+      expect(g.unit(unit.id())).toBeUndefined();
+      expect(BigInt(g.nationalImperialAdministrationFor(g.player(N))!.treasury)).toBe(0n);
+      expect(political(g, "c5-deleted-target")).toMatchObject({
+        accepted: false,
+        reason: "political-rule",
+        recipientId: N,
+      });
+    }
+    expect(national(restored)).toEqual(national(game));
+  });
+
   it("rejects insufficient funds, outsiders, other members, inactive units and former crown without mutations", async () => {
     const game = await liveGame();
     join(game);
