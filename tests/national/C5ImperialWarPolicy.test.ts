@@ -23,7 +23,9 @@ import { TestConfig } from "../util/TestConfig";
 
 const MATCH = "C5E3WAR1";
 const IMP = "C5E3_EMPIRE";
-const [A, B, C, D, E] = ["C5E3_A", "C5E3_B", "C5E3_C", "C5E3_D", "C5E3_E"];
+const [A, B, C, D, E] = [
+  "C5E3RUL01", "C5E3MEM02", "C5E3MEM03", "C5E3FRN04", "C5E3FRN05",
+];
 const clients = ["C5E3CLI1", "C5E3CLI2", "C5E3CLI3", "C5E3CLI4", "C5E3CLI5"];
 const roster = [
   new PlayerInfo("Emperor", PlayerType.Human, clients[0], A),
