@@ -316,6 +316,7 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
   it("refuses to grant spectators any private NATIONAL projection", async () => {
     const spectator = makeClient({
       clientID: cid("watch5"),
+      persistentID: "watch5-account",
       spectator: true,
       claims: { sub: "watch5-account", provider: "google" } as NonNullable<
         Client["claims"]
