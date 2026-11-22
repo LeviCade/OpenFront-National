@@ -155,6 +155,7 @@ async function fetchJoinVerify(
     // First sighting of a novel flagged name adds an LLM round-trip of
     // up to ~3s server-side, so the timeout must stay at 5s or above.
     signal: AbortSignal.timeout(5000),
+    redirect: "error",
     headers: {
       "Content-Type": "application/json",
       "x-api-key": ServerEnv.apiKey(),

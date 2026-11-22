@@ -1,4 +1,4 @@
-import { GameMode } from "@openfront/engine-api/game/GameTypes";
+import { GameMode, GameType } from "@openfront/engine-api/game/GameTypes";
 import {
   ID,
   isValidGameID,
@@ -63,6 +63,7 @@ import { resolveVerifiedJoin } from "./Privilege";
 import { loadGatekeeper } from "./Gatekeeper";
 import { MapPlaylist } from "./MapPlaylist";
 import { isNationalSignedInAccount } from "./national/NationalAccountGate";
+import { watchNationalAccount } from "./national/NationalAccountLease";
 import { setNoStoreHeaders } from "./NoStoreHeaders";
 import { PrivilegeRefresher } from "./PrivilegeRefresher";
 import { startRankedCheckinLoops } from "./RankedCheckin";
@@ -707,6 +708,22 @@ export async function startWorker() {
           return;
         }
         const { persistentId, claims } = result;
+        const attachAccountLease = () => {
+          const game = gm.game(clientMsg.gameID);
+          if (!game || game.gameConfig.gameType !== GameType.Private ||
+              !claims || !isNationalSignedInAccount(claims)) return;
+          const publicId = game.nationalAccountSocket(persistentId, ws);
+          if (!publicId) return;
+          const stop = watchNationalAccount({
+            token: clientMsg.token,
+            claims,
+            publicId,
+            current: () => game.nationalAccountSocket(persistentId, ws) === publicId,
+            national: () => game.gameConfig.nationalMode === true,
+            disconnect: (code, reason) => game.revokeNationalAccountSocket(persistentId, ws, code, reason),
+          });
+          ws.once("close", stop);
+        };
 
         if (claims?.role === "banned") {
           ws.close(CloseCode.Banned, CloseReason.Banned);
@@ -768,6 +785,7 @@ export async function startWorker() {
             clientMsg.lastTurn,
             nationalPrincipal,
           );
+          attachAccountLease();
           return;
         }
 
@@ -842,6 +860,11 @@ export async function startWorker() {
               clientMsg.clanTag ?? null,
               persistentId,
             );
+            if (game?.gameConfig.nationalMode === true && verdict.status === "error") {
+              admissionGuard.rollback();
+              ws.close(CloseCode.TryAgainLater, CloseReason.AccountLookupFailed);
+              return;
+            }
             if (verdict.status === "approved" || verdict.status === "error") {
               admissionGuard.markAdmittedIfNeeded();
             }
@@ -902,6 +925,7 @@ export async function startWorker() {
             nationalPrincipal,
           )
         ) {
+          attachAccountLease();
           return;
         }
 
@@ -1049,6 +1073,7 @@ export async function startWorker() {
         );
 
         const joinResult = gm.joinClient(client, clientMsg.gameID);
+        if (joinResult === "joined") attachAccountLease();
         if (joinResult !== "joined" && joinResult !== "redirected") {
           admissionGuard.rollback();
         }
@@ -1127,7 +1152,7 @@ export async function startWorker() {
 
   // The load balancer will handle routing to this server based on path
   const PORT = ServerEnv.workerPortByIndex(workerId);
-  server.listen(PORT, () => {
+  server.listen(PORT, ServerEnv.localNationalStaging() ? "localhost" : undefined, () => {
     log.info(`running on http://localhost:${PORT}`);
     log.info(`Handling requests with path prefix /w${workerId}/`);
     // Signal to the master process that this worker is ready

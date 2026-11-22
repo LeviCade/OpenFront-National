@@ -2,12 +2,15 @@ import cluster from "cluster";
 import * as dotenv from "dotenv";
 import { startMaster } from "./Master";
 import { startWorker } from "./Worker";
+import { ServerEnv } from "./ServerEnv";
 
 // Load environment variables before we read configuration values derived from them.
 dotenv.config();
 
 // Main entry point of the application
 async function main() {
+  // Validate before starting the master, forking a worker or calling an API.
+  ServerEnv.localNationalStaging();
   // Check if this is the primary (master) process
   if (cluster.isPrimary) {
     console.log("Starting master process...");
