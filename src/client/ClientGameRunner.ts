@@ -56,6 +56,7 @@ import {
 } from "./InputHandler";
 import { rememberLobbyPublicGameType } from "./LobbyPublicGameType";
 import { rememberLobbyRoster } from "./LobbyRosterLevels";
+import { NationalObserverMapContinuity } from "./NationalObserverMapContinuity";
 import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
 import { pagePin } from "./PagePin";
 import { groupTokenOf, loggableStartMessage } from "./PresenceGroup";
@@ -99,13 +100,13 @@ import {
   Transport,
 } from "./Transport";
 import {
-  completedTrustedObserverMap,
   materializeTrustedNationalUpdate,
   parseTrustedNationalProjection,
   readTrustedNationalObserverMap,
   TrustedNationalProjectionEvent,
   TrustedNationalProjectionRejectedEvent,
   TrustedNationalStartedEvent,
+  trustedNationalPrincipal,
 } from "./TrustedNationalSession";
 import {
   GRAPHICS_KEY,
@@ -176,6 +177,7 @@ export function joinLobby(
   // It cannot be repaired by later packets on the same socket: only a fresh
   // E2 national_start may admit a new trusted projection stream.
   let rejectedTrustedProjection = false;
+  let trustedAdmission: TrustedNationalStartedEvent | null = null;
 
   const onconnect = async () => {
     // Drop the tag if the ownership check failed; the server re-checks anyway.
@@ -300,7 +302,10 @@ export function joinLobby(
       resolvePrestart();
     }
     if (message.type === "national_start") {
+      if (!hasTrustedNationalPrivateCapability(eventBus, lobbyConfig.gameID)) return;
       rejectedTrustedProjection = false;
+      bufferedTrustedProjections = [];
+      trustedAdmission = new TrustedNationalStartedEvent(message);
       // E2 is the ONLY simulator. Create the existing WebGL map, real input
       // handler and UI, but do not initialize a WorkerClient or GameRunner.
       resolvePrestart();
@@ -308,7 +313,7 @@ export function joinLobby(
       rememberAdmitted(lobbyConfig.gameID);
       lobbyConfig.gameStartInfo = message.gameStartInfo;
       resolveJoin();
-      eventBus.emit(new TrustedNationalStartedEvent(message));
+      eventBus.emit(trustedAdmission);
       if (currentGameRunner !== null) {
         // E2 must supply a fresh recipient resync on rejoin. Until then the
         // existing view is intentionally blocked by Transport's revoked gate.
@@ -333,6 +338,7 @@ export function joinLobby(
           }
           currentGameRunner = runner;
           runner.start();
+          if (trustedAdmission !== null) runner.admitTrustedNational(trustedAdmission);
           if (rejectedTrustedProjection) {
             eventBus.emit(
               new TrustedNationalProjectionRejectedEvent(lobbyConfig.gameID),
@@ -391,6 +397,10 @@ export function joinLobby(
         bufferedTrustedProjections.length < 12
       ) {
         bufferedTrustedProjections.push(projection);
+      } else if (creatingTrustedGame) {
+        // A missing buffered page invalidates the epoch; never silently skip it.
+        rejectedTrustedProjection = true;
+        bufferedTrustedProjections = [];
       }
       return;
     }
@@ -1138,7 +1148,8 @@ export class ClientGameRunner {
   private healthIndicators: GameHealthIndicators | null = null;
   private trustedLastTick = -1;
   private trustedProjectionActive = false;
-  private trustedExpectedCursor = 0;
+  private trustedContinuity: NationalObserverMapContinuity | null = null;
+  private trustedPrincipal: string | null = null;
   /** Drop pointer-transparent enemy markers in the same event turn as sight loss. */
   private revokeTrustedSight(): void {
     this.gameView.resetTrustedProjectionSight();
@@ -1160,7 +1171,8 @@ export class ClientGameRunner {
       return;
     this.trustedProjectionActive = false;
     this.trustedLastTick = -1;
-    this.trustedExpectedCursor = 0;
+    this.trustedContinuity = null;
+    this.trustedPrincipal = null;
     this.revokeTrustedSight();
     if (this.trustedStatus) {
       this.trustedStatus.dataset.trustedNationalMap = "blocked";
@@ -1183,87 +1195,65 @@ export class ClientGameRunner {
         event.projection.nationalObserverMap,
         event.projection.tick,
       );
-      if (observerMap !== null) {
-        if (
-          observerMap.width !== this.gameView.width() ||
-          observerMap.height !== this.gameView.height() ||
-          (!observerMap.reset &&
-            observerMap.cursor !== this.trustedExpectedCursor)
-        )
-          throw new Error(
-            "NATIONAL observer-map dimensions or page cursor mismatch",
-          );
-        if (observerMap.reset) {
-          this.revokeTrustedSight();
-          this.webglBuilder?.clearCaches();
-          this.trustedExpectedCursor = 0;
-        }
-        if (observerMap.cursor !== this.trustedExpectedCursor) {
-          throw new Error("NATIONAL observer-map paging interrupted");
-        }
-      }
+      if (
+        observerMap === null ||
+        this.trustedContinuity === null ||
+        observerMap.width !== this.gameView.width() ||
+        observerMap.height !== this.gameView.height()
+      ) throw new Error("NATIONAL missing receiver or incompatible map");
+      // Validate the recipient, epoch and both cursors BEFORE any view write.
+      const delta = this.trustedContinuity.accept(
+        event.projection.nationalObserverMap,
+        event.projection.tick,
+      );
       const update = materializeTrustedNationalUpdate(
         event.projection,
         this.trustedLastTick,
       );
+      // Even current-sight packed changes may precede their authorized page.
+      // Keep a conservative partial view until the pager has disclosed them.
+      const pairs: number[] = [];
+      for (let i = 0; i < update.packedTileUpdates.length; i += 2) {
+        const ref = update.packedTileUpdates[i];
+        if (!this.gameView.isValidRef(ref)) throw new Error("NATIONAL invalid packed tile");
+        if (this.trustedContinuity.tileStatus(ref) === "observed") {
+          pairs.push(ref, update.packedTileUpdates[i + 1]);
+        }
+      }
+      update.packedTileUpdates = Uint32Array.from(pairs);
+      // Do not derive the authenticated principal from a mutable PlayerView.
+      const actorUpdates = update.updates[GameUpdateType.Player];
+      for (const actor of actorUpdates) {
+        if ((actor.clientID === this.clientID && actor.id !== this.trustedPrincipal) ||
+            (actor.id === this.trustedPrincipal && actor.clientID !== undefined && actor.clientID !== this.clientID))
+          throw new Error("NATIONAL projected seat identity mismatch");
+      }
+      if (delta.clearAllTiles) {
+        this.revokeTrustedSight();
+        this.webglBuilder?.clearCaches();
+      }
+      this.gameView.reconcileTrustedUnitVisibility(delta.clearAllUnits, delta.removedUnitIds);
+      // Strip stale or not-yet-paged packed markers, including old-position
+      // death tombstones: revocation is not an animated unit death.
+      this.gameView.applyTrustedUnitPage(update, delta, this.trustedContinuity);
       this.gameView.update(update);
       this.myPlayer = this.clientID
         ? this.gameView.playerByClientID(this.clientID)
         : null;
-      if (
-        observerMap !== null &&
-        this.myPlayer !== null &&
-        observerMap.observerId !== this.myPlayer.id()
-      )
-        throw new Error(
-          "NATIONAL observer-map principal is not the authenticated seat",
-        );
-      if (observerMap !== null) {
-        this.trustedExpectedCursor = observerMap.nextCursor ?? 0;
-        const pageComplete = completedTrustedObserverMap(
-          observerMap,
-          this.myPlayer?.id() ?? null,
-        );
-        if (this.trustedStatus) {
-          this.trustedStatus.dataset.trustedNationalMap = pageComplete
-            ? "visible"
-            : observerMap.nextCursor === null
-              ? "loading"
-              : "paging";
-          const publicAlive = observerMap.countries.filter(
-            (c) => c.alive,
-          ).length;
-          this.trustedStatus.textContent =
-            "👑 NATIONAL · TICK " +
-            update.tick +
-            " · " +
-            (pageComplete
-              ? "Visible terrain synchronized"
-              : observerMap.nextCursor === null
-                ? "Waiting for authorized player identity…"
-                : "Loading visible terrain…") +
-            " · " +
-            publicAlive +
-            " nations" +
-            " · " +
-            observerMap.units.length +
-            " visible units" +
-            " · Your troops " +
-            Math.floor(observerMap.ownResources.troops).toLocaleString();
-        }
-      } else if (this.trustedStatus) {
-        this.trustedStatus.textContent =
-          "NATIONAL · Tick " + update.tick + " · Awaiting E3 visible-map pages";
-      }
+      const pageComplete = delta.sweepComplete &&
+        this.myPlayer?.id() === this.trustedPrincipal;
+      this.gameView.setTrustedProjectionReady(pageComplete);
       this.trustedLastTick = update.tick;
-      // Only the real E3 current-sight map and a matching human seat can
-      // enable a recipient's political and radial controls.
-      if (
-        completedTrustedObserverMap(observerMap, this.myPlayer?.id() ?? null)
-      ) {
-        // A partial E3 page cannot authorize a map-wide military action.
-        // Enemy ownership not yet paged in remains unknown, never guessed.
-        this.gameView.markTrustedProjectionReady();
+      if (this.trustedStatus) {
+        this.trustedStatus.dataset.trustedNationalMap = pageComplete ? "visible" : "paging";
+        this.trustedStatus.dataset.trustedNationalUnits =
+          delta.unitOverflow || !delta.unitSweepComplete ? "partial" : "synchronized";
+        this.trustedStatus.textContent =
+          "NATIONAL · Tick " + update.tick +
+          (pageComplete ? " · Visible terrain synchronized" : " · Loading visible terrain…") +
+          (delta.unitOverflow || !delta.unitSweepComplete ? " · Partial unit intelligence" : "") +
+          " · " + this.trustedContinuity.observedUnitCount + " observed units" +
+          " · Your troops " + Math.floor(observerMap.ownResources.troops).toLocaleString();
       }
       this.webglBuilder?.update(this.gameView);
       this.renderer.tick();
@@ -1273,6 +1263,8 @@ export class ClientGameRunner {
       // A malformed or out-of-order packet may never re-enable controls by
       // accident. Fail closed; E2 must resync and provide a fresh trusted start.
       this.trustedProjectionActive = false;
+      this.trustedContinuity = null;
+      this.trustedPrincipal = null;
       this.revokeTrustedSight();
       if (this.trustedStatus) {
         this.trustedStatus.dataset.trustedNationalMap = "blocked";
@@ -1282,35 +1274,46 @@ export class ClientGameRunner {
       console.error("NATIONAL projected view rejected", error);
     }
   };
+  /** A new decoded and admitted national_start is the only recovery boundary. */
+  public admitTrustedNational(event: TrustedNationalStartedEvent): void {
+    if (!this.trustedNationalProjection ||
+        event.start.gameStartInfo.gameID !== this.lobby.gameID ||
+        event.start.myClientID !== this.clientID ||
+        !hasTrustedNationalPrivateCapability(this.eventBus, this.lobby.gameID)) return;
+    this.trustedProjectionActive = false;
+    this.trustedContinuity = null;
+    this.trustedPrincipal = null;
+    this.revokeTrustedSight();
+    try {
+      this.trustedPrincipal = trustedNationalPrincipal(event.start);
+      this.trustedContinuity = new NationalObserverMapContinuity(this.trustedPrincipal);
+      this.trustedLastTick = -1;
+      this.trustedProjectionActive = true;
+    } catch {
+      this.onTrustedProjectionRejected(new TrustedNationalProjectionRejectedEvent(this.lobby.gameID));
+      return;
+    }
+    if (this.trustedStatus) {
+      this.trustedStatus.dataset.trustedNationalMap = "loading";
+      this.trustedStatus.textContent = "NATIONAL · Reauthenticated — awaiting fresh visible terrain";
+    }
+  }
+
+  private readonly onTrustedStart = (event: TrustedNationalStartedEvent): void => {
+    this.admitTrustedNational(event);
+  };
+
   private readonly onTrustedTransportStatus = (
     event: NationalTransportStatusEvent,
   ): void => {
-    if (event.gameID !== this.lobby.gameID) return;
-    if (event.ready) {
-      // A new E2 national_start admitted the original authenticated account.
-      // E3 must begin a fresh currently-visible page sweep, never resume an
-      // old cached territory map/receipt after a disconnected socket.
-      if (
-        !hasTrustedNationalPrivateCapability(this.eventBus, this.lobby.gameID)
-      )
-        return;
-      this.trustedProjectionActive = true;
-      this.trustedLastTick = -1;
-      this.trustedExpectedCursor = 0;
-      this.revokeTrustedSight();
-      if (this.trustedStatus) {
-        this.trustedStatus.dataset.trustedNationalMap = "loading";
-        this.trustedStatus.textContent =
-          "NATIONAL · Reauthenticated — awaiting fresh visible terrain";
-      }
-      return;
-    }
+    if (event.gameID !== this.lobby.gameID || event.ready) return;
     this.trustedProjectionActive = false;
+    this.trustedContinuity = null;
+    this.trustedPrincipal = null;
     this.revokeTrustedSight();
     if (this.trustedStatus) {
       this.trustedStatus.dataset.trustedNationalMap = "disconnected";
-      this.trustedStatus.textContent =
-        "NATIONAL · Connection lost — map and commands disabled";
+      this.trustedStatus.textContent = "NATIONAL · Connection lost — map and commands disabled";
     }
   };
 
@@ -1427,10 +1430,7 @@ export class ClientGameRunner {
       // The existing GPU/terrain renderer and all native input/HUD layers are
       // live. Their data source is E3's signed-by-server recipient stream,
       // NOT WorkerClient/turns or a locally constructed authoritative Game.
-      this.trustedProjectionActive = hasTrustedNationalPrivateCapability(
-        this.eventBus,
-        this.lobby.gameID,
-      );
+      this.eventBus.on(TrustedNationalStartedEvent, this.onTrustedStart);
       this.eventBus.on(
         TrustedNationalProjectionEvent,
         this.onTrustedNationalProjection,
@@ -1641,6 +1641,7 @@ export class ClientGameRunner {
 
   public stop() {
     if (this.trustedNationalProjection) {
+      this.eventBus.off(TrustedNationalStartedEvent, this.onTrustedStart);
       this.eventBus.off(
         TrustedNationalProjectionEvent,
         this.onTrustedNationalProjection,
@@ -1654,6 +1655,8 @@ export class ClientGameRunner {
         this.onTrustedTransportStatus,
       );
       this.trustedProjectionActive = false;
+      this.trustedContinuity = null;
+      this.trustedPrincipal = null;
     }
     if (this.healthTimer !== null) clearInterval(this.healthTimer);
     this.healthTimer = null;
@@ -1723,9 +1726,11 @@ export class ClientGameRunner {
       if (myPlayer === null) return;
       this.myPlayer = myPlayer;
     }
+    const clickedOwner = this.gameView.owner(tile).id();
     this.myPlayer
       .actions(tile, [UnitType.TransportShip])
       .then((actions) => {
+        if (this.trustedNationalProjection && (!this.myPlayer || !this.gameView.trustedVisibleAttack(this.myPlayer.id(), tile) || this.gameView.owner(tile).id() !== clickedOwner)) return;
         if (actions.canAttack) {
           this.eventBus.emit(
             new SendAttackIntentEvent(
@@ -1899,9 +1904,11 @@ export class ClientGameRunner {
       this.myPlayer = myPlayer;
     }
 
+    const clickedOwner = this.gameView.owner(tile).id();
     this.myPlayer
       .actions(tile, null)
       .then((actions) => {
+        if (this.trustedNationalProjection && (!this.myPlayer || !this.gameView.trustedVisibleAttack(this.myPlayer.id(), tile) || this.gameView.owner(tile).id() !== clickedOwner)) return;
         if (actions.canAttack) {
           this.eventBus.emit(
             new SendAttackIntentEvent(

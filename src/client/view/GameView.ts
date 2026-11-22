@@ -35,6 +35,7 @@ import { TerrainMapData } from "@openfront/engine-lib/game/TerrainMapLoader";
 import { TerraNulliusImpl } from "@openfront/engine-lib/game/TerraNulliusImpl";
 import { UnitGrid } from "@openfront/engine-lib/game/UnitGrid";
 import { PlayerCosmetics, WirePlayer } from "@openfront/shared/WireSchemas";
+import type { NationalObserverMapContinuity, NationalObserverMapDelta } from "../NationalObserverMapContinuity";
 import {
   readNationalAccessionOffers,
   readNationalConflicts,
@@ -98,6 +99,8 @@ export class GameView implements GameLike {
   private _nationalAccessionOffers: NationalAccessionView | null = null;
   private _nationalPoliticalResults: readonly NationalPoliticalResult[] = [];
   private _trustedProjectionReady = false;
+  private readonly trustedUnitIds = new Set<number>();
+  private readonly trustedOriginalTerrain = new Map<TileRef, number>();
 
   /** Strictly a view of the E3 recipient packet, NEVER a browser GameRunner. */
   public isTrustedNationalProjection(): boolean {
@@ -110,7 +113,12 @@ export class GameView implements GameLike {
   }
 
   public markTrustedProjectionReady(): void {
-    if (this._trustedNationalProjection) this._trustedProjectionReady = true;
+    this.setTrustedProjectionReady(true);
+  }
+
+  public setTrustedProjectionReady(ready: boolean): void {
+    if (!this._trustedNationalProjection) return;
+    this._trustedProjectionReady = ready;
   }
 
   /**
@@ -121,7 +129,28 @@ export class GameView implements GameLike {
   public resetTrustedProjectionSight(): void {
     if (!this._trustedNationalProjection) return;
     this._trustedProjectionReady = false;
+    this.updatedTerrainTiles = [];
+    for (const [tile, terrain] of this.trustedOriginalTerrain) {
+      if (this._map.updateTile(tile, terrain << 16)) this.updatedTerrainTiles.push(tile);
+    }
+    this.trustedOriginalTerrain.clear();
     this._map.tileStateBuffer().fill(0);
+    this.updatedTiles = [];
+    this.nukeImpactTiles = [];
+    this.trustedUnitIds.clear();
+    this.trailManager.reset();
+    this.spiralTrails.reset();
+    this.railroadCache.reset();
+    for (const player of this._players.values()) player.nameData = undefined;
+    const frame = this._frame as { -readonly [K in keyof FrameData]: FrameData[K] };
+    frame.changedTiles = null;
+    frame.structuresDirty = true;
+    frame.events.deadUnits.length = 0;
+    frame.events.conquestEvents.length = 0;
+    frame.events.bonusEvents.length = 0;
+    frame.attackRings = [];
+    frame.nukeTelegraphs = [];
+    this._firstPopulate = true;
     this._units.clear();
     this._unitStates.clear();
     this._unitsByOwner.clear();
@@ -133,6 +162,46 @@ export class GameView implements GameLike {
     this._namesDirty = true;
     this.unitGrid = new UnitGrid<UnitView>(this._map);
     this.invalidateNationalPoliticalView();
+  }
+
+  /** Unit visibility revocation is not a battle death. Remove from native indices before applying the next frame. */
+  public reconcileTrustedUnitVisibility(clear: boolean, removed: readonly number[]): void {
+    if (!this._trustedNationalProjection) return;
+    const ids = clear ? [...this._units.keys()] : removed;
+    if (clear) this.trustedUnitIds.clear();
+    for (const id of ids) {
+      this.trustedUnitIds.delete(id);
+      const unit = this._units.get(id);
+      if (unit) this.unitGrid.removeUnit(unit);
+      this._units.delete(id);
+      this._unitStates.delete(id);
+      this.toDelete.delete(id);
+      this.motion.unitRemoved(id);
+    }
+    if (ids.length) {
+      this._structuresDirty = true;
+      this._unitsByOwnerStale = true;
+    }
+  }
+
+  /** Keep exact native unit DTOs only after the independently accepted marker authorizes their ID. */
+  public applyTrustedUnitPage(update: GameUpdateViewData, delta: NationalObserverMapDelta, receiver: NationalObserverMapContinuity): void {
+    for (const marker of delta.units) this.trustedUnitIds.add(marker.id);
+    if (!update.packedUnitUpdates) return;
+    const kept: number[] = [];
+    const buffer = update.packedUnitUpdates;
+    for (let offset = 0; offset < buffer.length; offset += UNIT_UPDATE_STRIDE) {
+      const decoded = new PackedUnitUpdateDecoder(buffer, offset);
+      if (!this.trustedUnitIds.has(decoded.id)) continue;
+      if (!decoded.isActive || receiver.tileStatus(decoded.pos) !== "observed") {
+        this.reconcileTrustedUnitVisibility(false, [decoded.id]);
+        continue;
+      }
+      for (let i = 0; i < UNIT_UPDATE_STRIDE; i++) kept.push(buffer[offset + i]);
+    }
+    update.packedUnitUpdates = Float64Array.from(kept);
+    // No trails/missile queue can be reconstructed from observer markers.
+    update.packedMissileTimers = undefined;
   }
 
   /**
@@ -172,7 +241,7 @@ export class GameView implements GameLike {
    */
   public trustedNameVisible(player: PlayerView): boolean {
     if (!this._trustedNationalProjection) return true;
-    if (!this._trustedProjectionReady || !player.nameData) return false;
+    if (!player.nameData) return false;
     const { x, y } = player.nameData;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     const tileX = Math.floor(x);
@@ -526,6 +595,9 @@ export class GameView implements GameLike {
     for (let i = 0; i + 1 < packed.length; i += 2) {
       const tile = packed[i];
       const state = packed[i + 1];
+      if (this._trustedNationalProjection && !this.trustedOriginalTerrain.has(tile)) {
+        this.trustedOriginalTerrain.set(tile, this._map.terrainByte(tile));
+      }
       const terrainChanged = this.updateTile(tile, state);
       this.updatedTiles.push(tile);
       if (terrainChanged) {

@@ -1,4 +1,6 @@
 import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
+import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
+import { simpleHash } from "@openfront/engine-lib/Util";
 /**
  * Reader for E3's authenticated per-recipient NATIONAL view ONLY.
  * This module never runs a GameRunner, simulates turns or loads private state.
@@ -287,7 +289,13 @@ export function materializeTrustedNationalUpdate(
   // E3's paged current-sight map gives late joiners real visible territory.
   // All added states belong to the authenticated observer's current sight.
   const visibleTilePairs = [...tiles, ...observerMapTilePairs(observerMap)];
-  const units = numericArray(packet.packedUnitUpdates, 210_000);
+  // JSON serializes the engine packer's optional NaN lanes as null. Restore
+  // only those documented sentinel positions, never required IDs or coordinates.
+  const rawUnits = packet.packedUnitUpdates;
+  const nanOffsets = new Set([4, 5, 6, 7, 9, 10, 12, 13, 14, 15]);
+  const units = rawUnits === undefined ? undefined : Array.isArray(rawUnits) && rawUnits.length <= 210_000 && rawUnits.every((v, i) => (typeof v === "number" && Number.isFinite(v)) || (v === null && nanOffsets.has(i % 21)))
+    ? rawUnits.map((v) => v === null ? NaN : v as number)
+    : (() => { throw new Error("NATIONAL invalid projected unit lanes"); })();
   if (units !== undefined && units.length % 21 !== 0)
     throw new Error("NATIONAL invalid projected unit stride");
   const players = numericArray(packet.packedPlayerUpdates, 25_000);
@@ -324,6 +332,20 @@ export function materializeTrustedNationalUpdate(
       ? {}
       : { nationalAccessionOffers: packet.nationalAccessionOffers }),
   } as GameUpdateViewData;
+}
+
+/** Same deterministic human ID derivation as createGameRunnerInternal. Never read the observerId from a projection to select a principal. */
+export function trustedNationalPrincipal(start: ServerNationalStartMessage): string {
+  const random = new PseudoRandom(simpleHash(start.gameStartInfo.gameID));
+  let principal: string | null = null;
+  for (const player of start.gameStartInfo.players) {
+    const id = random.nextID();
+    if (player.clientID !== start.myClientID) continue;
+    if (principal !== null) throw new Error("NATIONAL duplicate admitted seat");
+    principal = id;
+  }
+  if (principal === null) throw new Error("NATIONAL missing admitted seat");
+  return principal;
 }
 
 export class TrustedNationalStartedEvent implements GameEvent {

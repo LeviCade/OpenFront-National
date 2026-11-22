@@ -591,6 +591,7 @@ export class Transport {
     );
     this.socket = socket;
     let openedAt: number | null = null;
+    let nationalStartSeen = false;
     // Every frame is a zbin payload; without this they would arrive as Blobs.
     this.socket.binaryType = "arraybuffer";
     this.onconnect = onconnect;
@@ -605,6 +606,7 @@ export class Transport {
       onconnect();
     };
     this.socket.onmessage = (event: MessageEvent) => {
+      if (this.socket !== socket) return;
       // A frame from the server is the proof the connection is real; onopen
       // is not (a proxy can accept and drop us in a loop). It resets the
       // budget and settles any retry the watchdog scheduled while this
@@ -620,6 +622,11 @@ export class Transport {
         if (msg.type === "redirect") {
           this.handlePoolRedirect(msg.gameID);
           return;
+        }
+        if (msg.type === "national_start") {
+          // A second start on one physical socket is not a fresh admission.
+          if (nationalStartSeen) return;
+          nationalStartSeen = true;
         }
         if (msg.type === "start" || msg.type === "national_start") {
           this.trustedNationalStart = {
@@ -723,6 +730,7 @@ export class Transport {
       this.socket.close();
     };
     this.socket.onclose = (event: CloseEvent) => {
+      if (this.socket !== socket) return;
       this.isSessionReady = false;
       this.trustedNationalStart = null;
       revokeTrustedNationalPrivateCapability(
