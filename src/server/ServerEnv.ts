@@ -39,6 +39,9 @@ export class ServerEnv {
       ServerEnv.gameEnv !== GameEnv.Dev ||
       process.env.DOMAIN !== "localhost" ||
       process.env.API_DOMAIN ||
+      process.env.GAME_DOMAIN ||
+      process.env.CDN_BASE ||
+      process.env.FARO_COLLECTOR_URL ||
       process.env.SUBDOMAIN
     ) {
       throw new Error("Local NATIONAL staging requires isolated localhost development");

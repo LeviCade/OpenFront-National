@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -22,6 +22,9 @@ export async function until(predicate, label, ms = 20_000) {
 }
 
 export function makeEnvironment() {
+  for (const name of [".env", ".env.local", ".env.development", ".env.development.local"]) {
+    if (existsSync(name)) throw new Error("Use a disposable checkout without dotenv overrides");
+  }
   const dir = mkdtempSync(join(tmpdir(), "national-account-"));
   // Do not inherit production API configuration or secret variables.
   const env = {
@@ -29,6 +32,7 @@ export function makeEnvironment() {
     HOME: process.env.HOME,
     LANG: process.env.LANG ?? "C.UTF-8",
     GAME_ENV: "dev",
+    SKIP_BROWSER_OPEN: "true",
     DOMAIN: "localhost",
     NATIONAL_LOCAL_STAGING: "1",
     NATIONAL_STAGING_STATE: dir,

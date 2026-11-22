@@ -246,6 +246,10 @@ function randomWorkerCreateProxy(numWorkers: number): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const isProduction = mode === "production";
+  const nationalLocalStaging = env.NATIONAL_LOCAL_STAGING === "1";
+  if (nationalLocalStaging && (isProduction || env.GAME_ENV !== "dev" || env.DOMAIN !== "localhost" || env.API_DOMAIN || env.GAME_DOMAIN || env.SUBDOMAIN || env.VITE_HOST === "lan" || !/^[a-f0-9]{40}$/.test(env.GIT_COMMIT ?? ""))) {
+    throw new Error("Local NATIONAL staging requires loopback and an exact source commit");
+  }
   // Dev identity: the same INSTANCE_LETTER / NUM_WORKERS defaults the dev
   // server boots with (ServerEnv), so the dev-served index.html carries the
   // one-entry map production RenderHtml injects. The proxy below needs the
@@ -504,7 +508,7 @@ export default defineConfig(({ mode }) => {
               template: "index.html",
               inject: {
                 data: {
-                  gitCommit: JSON.stringify("DEV"),
+                  gitCommit: JSON.stringify(nationalLocalStaging ? env.GIT_COMMIT : "DEV"),
                   ...htmlAssetData,
                 },
               },
@@ -564,7 +568,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 9000,
       strictPort: true,
-      host: process.env.VITE_HOST === "lan",
+      host: nationalLocalStaging ? "localhost" : process.env.VITE_HOST === "lan",
       // Automatically open the browser when the server starts
       open: process.env.SKIP_BROWSER_OPEN !== "true",
       proxy: {

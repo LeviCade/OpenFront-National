@@ -21,7 +21,7 @@ const validEmail = (email) =>
 
 if (process.env.NATIONAL_LOCAL_STAGING !== "1" ||
     process.env.GAME_ENV !== "dev" || process.env.DOMAIN !== "localhost" ||
-    process.env.API_DOMAIN || process.env.SUBDOMAIN) {
+    process.env.API_DOMAIN || process.env.GAME_DOMAIN || process.env.SUBDOMAIN) {
   throw new Error("Refusing to run outside explicitly isolated localhost development");
 }
 const directory = process.env.NATIONAL_STAGING_STATE;
