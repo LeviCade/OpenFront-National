@@ -114,9 +114,11 @@ const administrationSchema = z.object({
   allowedConstruction: z.array(z.enum(UnitType)).nullable(),
   treasury: exactGold,
   military: z.object({
-    mode: z.enum(["decentralized", "hybrid"]),
+    mode: z.enum(["decentralized", "hybrid", "centralized"]),
     thresholdBps: z.number().int().min(0).max(10_000),
     pool: exactGold,
+    /** Cumulative contribution origins, not a second spendable reserve. */
+    contributions: z.array(z.object({ memberId: z.string(), total: exactGold })).optional(),
   }).optional(),
 });
 type AdministrationRow = z.infer<typeof administrationSchema>;
@@ -131,17 +133,19 @@ export type NationalImperialAdministrationCommand =
   | { kind: "transfer-troops"; empireId: string; sourceId: PlayerID; destinationId: PlayerID; amount: number }
   | { kind: "build-structure"; empireId: string; memberId: PlayerID; type: UnitType; tile: number }
   | { kind: "dissolve"; empireId: string }
-  | { kind: "set-army-mode"; empireId: string; mode: "decentralized" | "hybrid"; thresholdBps: number }
-  | { kind: "release-imperial-troops"; empireId: string; memberId: PlayerID; amount: number };
+  | { kind: "set-army-mode"; empireId: string; mode: "decentralized" | "hybrid" | "centralized"; thresholdBps: number }
+  | { kind: "release-imperial-troops"; empireId: string; memberId: PlayerID; amount: number }
+  | { kind: "imperial-attack"; empireId: string; memberId: PlayerID; targetId: PlayerID; amount: number };
 
 export interface NationalImperialAdministrationView extends ImperialPolicy {
   readonly empireId: string;
   readonly treasury: string;
   readonly canAmend: boolean;
-  readonly armyMode: "decentralized" | "hybrid";
+  readonly armyMode: "decentralized" | "hybrid" | "centralized";
   readonly hybridThresholdBps: number;
   readonly imperialTroops: string;
   readonly imperialTroopCapacity: string;
+  readonly troopContributions: readonly { memberId: string; total: string }[];
 }
 
 type ImperialDisposition = (
@@ -361,7 +365,12 @@ export class NationalRuntime {
       hybridThresholdBps: row?.military?.thresholdBps ?? 6000,
       imperialTroops: row?.military?.pool ?? "0",
       imperialTroopCapacity: row?.military?.mode === "hybrid"
-        ? hybridPoolCapacity(this.armySlots(this.politics, empire.memberIds), row.military.thresholdBps).toString() : "0",
+        ? hybridPoolCapacity(this.armySlots(this.politics, empire.memberIds), row.military.thresholdBps).toString()
+        : row?.military?.mode === "centralized"
+          ? this.armySlots(this.politics, empire.memberIds).reduce((s, v) =>
+              s + (v.capacity > v.active ? v.capacity - v.active : 0n), 0n).toString()
+          : "0",
+      troopContributions: Object.freeze((row?.military?.contributions ?? []).map(c => Object.freeze({ ...c }))),
     });
   }
 
@@ -393,7 +402,8 @@ export class NationalRuntime {
       empireId, workerIncomeBps: previous?.workerIncomeBps ?? 0,
       allowedConstruction: previous?.allowedConstruction ?? null,
       treasury: previous?.treasury ?? "0",
-      military: { mode, thresholdBps, pool: mode === "hybrid" ? pool.toString() : "0" },
+      military: { mode, thresholdBps, pool: mode === "hybrid" ? pool.toString() : "0",
+        contributions: previous?.military?.contributions ?? [] },
     });
     const slots = this.armySlots(this.politics, empire.memberIds);
     if (mode === "hybrid") {
@@ -416,21 +426,87 @@ export class NationalRuntime {
     this.politics = next;
   }
 
+  /** Converts standing troop balances only; existing attacks are already paid
+   * by their sovereigns and are not withdrawn a second time. */
+  centralizeImperialArmy(
+    actorId: PlayerID, empireId: string, thresholdBps: number,
+    balances: readonly { memberId: PlayerID; balance: number }[],
+    commitActualDebits: () => void,
+  ): void {
+    this.assertEmperor(actorId, empireId);
+    const empire = this.politics.empires.find(e => e.id === empireId)!;
+    const previous = this.administration.get(empireId);
+    if (previous?.military?.mode === "centralized")
+      throw new Error("NATIONAL: army already centralized");
+    if (!Number.isSafeInteger(thresholdBps) || thresholdBps < 0 || thresholdBps > 10_000)
+      throw new Error("NATIONAL: invalid army threshold");
+    const slots = this.armySlots(this.politics, empire.memberIds);
+    const supplied = new Map(balances.map(b => [b.memberId, b.balance]));
+    if (supplied.size !== slots.length || balances.length !== slots.length ||
+        slots.some(s => !supplied.has(s.id) || !Number.isSafeInteger(supplied.get(s.id)) ||
+          BigInt(supplied.get(s.id)!) !== s.active))
+      throw new Error("NATIONAL: incomplete or stale constituent army balances");
+    const total = slots.reduce((s, slot) => s + slot.active, 0n);
+    const next = clonePoliticalProjection(this.politics);
+    const memberSet = new Set(slots.map(s => s.id));
+    for (const nation of next.nations)
+      if (memberSet.has(nation.id)) nation.metrics.activePopulation = 0;
+    validatePolitics(next);
+    const contributions = new Map((previous?.military?.contributions ?? [])
+      .map(c => [c.memberId, BigInt(c.total)] as const));
+    for (const slot of slots)
+      contributions.set(slot.id, (contributions.get(slot.id) ?? 0n) + slot.active);
+    const row = administrationSchema.parse({
+      empireId, workerIncomeBps: previous?.workerIncomeBps ?? 0,
+      allowedConstruction: previous?.allowedConstruction ?? null,
+      treasury: previous?.treasury ?? "0",
+      military: {
+        mode: "centralized", thresholdBps,
+        pool: (BigInt(previous?.military?.pool ?? "0") + total).toString(),
+        contributions: [...contributions].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+          .map(([memberId, value]) => ({ memberId, total: value.toString() })),
+      },
+    });
+    validateAdministration(row);
+    // The PlayerImpl CAS preflights *every* actual debit before mutation;
+    // only then can canonical political accounts receive the corresponding sum.
+    commitActualDebits();
+    this.administration.set(empireId, row);
+    this.politics = next;
+  }
+
   /** A pooled reserve is a real separately owned balance, never a sum of wallets. */
   routeHybridGrowth(memberId: PlayerID, gross: bigint,
     liveSlots: (ids: readonly PlayerID[]) => readonly ArmyCapacity[]): bigint {
     const empire = this.politics.empires.find(e => e.memberIds.includes(memberId));
     const row = empire && this.administration.get(empire.id);
     const military = row?.military;
-    if (!empire || !military || military.mode !== "hybrid" || gross <= 0n)
+    if (!empire || !military || military.mode === "decentralized" || gross <= 0n)
       return gross;
     const slots = liveSlots(empire.memberIds);
     const member = slots.find(s => s.id === memberId);
     if (!member) return gross;
-    const split = splitHybridGrowth(gross, member.active, member.capacity,
-      military.thresholdBps, BigInt(military.pool),
-      hybridPoolCapacity(slots, military.thresholdBps));
-    military.pool = (BigInt(military.pool) + split.imperial).toString();
+    const pool = BigInt(military.pool);
+    const split = military.mode === "centralized"
+      ? (() => {
+          const capacity = slots.reduce((s, v) =>
+            s + (v.capacity > v.active ? v.capacity - v.active : 0n), 0n);
+          const room = capacity > pool ? capacity - pool : 0n;
+          const imperial = gross < room ? gross : room;
+          return { personal: gross - imperial, imperial };
+        })()
+      : splitHybridGrowth(gross, member.active, member.capacity,
+          military.thresholdBps, pool,
+          hybridPoolCapacity(slots, military.thresholdBps));
+    military.pool = (pool + split.imperial).toString();
+    if (split.imperial > 0n) {
+      const contributions = new Map((military.contributions ?? [])
+        .map(c => [c.memberId, BigInt(c.total)] as const));
+      contributions.set(memberId, (contributions.get(memberId) ?? 0n) + split.imperial);
+      military.contributions = [...contributions].sort(([a], [b]) =>
+        a < b ? -1 : a > b ? 1 : 0).map(([id, total]) =>
+        ({ memberId: id, total: total.toString() }));
+    }
     return split.personal;
   }
 
@@ -439,7 +515,7 @@ export class NationalRuntime {
     this.assertEmperor(actorId, empireId);
     const empire = this.politics.empires.find(e => e.id === empireId)!;
     const military = this.administration.get(empireId)?.military;
-    if (!military || military.mode !== "hybrid" ||
+    if (!military || military.mode === "decentralized" ||
         !empire.memberIds.includes(memberId) || !Number.isSafeInteger(amount) ||
         amount <= 0 || BigInt(amount) > BigInt(military.pool))
       throw new Error("NATIONAL: invalid or unaffordable imperial reserve release");
