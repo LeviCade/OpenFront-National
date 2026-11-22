@@ -102,6 +102,7 @@ import {
   parseTrustedNationalProjection,
   readTrustedNationalObserverMap,
   TrustedNationalProjectionEvent,
+  TrustedNationalProjectionRejectedEvent,
   TrustedNationalStartedEvent,
 } from "./TrustedNationalSession";
 import {
@@ -169,6 +170,10 @@ export function joinLobby(
   // Map+WebGL setup is asynchronous. Hold real E3 packets only while loading;
   // never manufacture a fake update or fork a canonical browser GameRunner.
   let bufferedTrustedProjections: TrustedNationalProjectionEvent[] = [];
+  // A malformed authenticated frame invalidates the entire local sight lease.
+  // It cannot be repaired by later packets on the same socket: only a fresh
+  // E2 national_start may admit a new trusted projection stream.
+  let rejectedTrustedProjection = false;
 
   const onconnect = async () => {
     // Drop the tag if the ownership check failed; the server re-checks anyway.
@@ -293,6 +298,7 @@ export function joinLobby(
       resolvePrestart();
     }
     if (message.type === "national_start") {
+      rejectedTrustedProjection = false;
       // E2 is the ONLY simulator. Create the existing WebGL map, real input
       // handler and UI, but do not initialize a WorkerClient or GameRunner.
       resolvePrestart();
@@ -325,8 +331,12 @@ export function joinLobby(
           }
           currentGameRunner = runner;
           runner.start();
-          for (const buffered of bufferedTrustedProjections) {
-            eventBus.emit(buffered);
+          if (rejectedTrustedProjection) {
+            eventBus.emit(new TrustedNationalProjectionRejectedEvent(lobbyConfig.gameID));
+          } else {
+            for (const buffered of bufferedTrustedProjections) {
+              eventBus.emit(buffered);
+            }
           }
           bufferedTrustedProjections = [];
         })
@@ -350,9 +360,22 @@ export function joinLobby(
       return;
     }
     if (message.type === "national_projection") {
-      const projection = new TrustedNationalProjectionEvent(
-        parseTrustedNationalProjection(message.payload, message.tick),
-      );
+      if (rejectedTrustedProjection) return;
+      let projection: TrustedNationalProjectionEvent;
+      try {
+        projection = new TrustedNationalProjectionEvent(
+          parseTrustedNationalProjection(message.payload, message.tick),
+        );
+      } catch {
+        // Transport catches exceptions thrown by its message callback. Letting
+        // parsing throw here would silently preserve stale enemy sight and
+        // clickable political controls. Never log the recipient's payload.
+        rejectedTrustedProjection = true;
+        bufferedTrustedProjections = [];
+        eventBus.emit(new TrustedNationalProjectionRejectedEvent(lobbyConfig.gameID));
+        console.warn("NATIONAL rejected malformed projection; new host admission required");
+        return;
+      }
       if (currentGameRunner) {
         eventBus.emit(projection);
       } else if (
@@ -1108,6 +1131,22 @@ export class ClientGameRunner {
   private trustedLastTick = -1;
   private trustedProjectionActive = false;
   private trustedExpectedCursor = 0;
+  private readonly onTrustedProjectionRejected = (
+    event: TrustedNationalProjectionRejectedEvent,
+  ): void => {
+    if (!this.trustedNationalProjection || event.gameID !== this.lobby.gameID)
+      return;
+    this.trustedProjectionActive = false;
+    this.trustedLastTick = -1;
+    this.trustedExpectedCursor = 0;
+    this.gameView.resetTrustedProjectionSight();
+    this.trustedMapResetUpload?.();
+    if (this.trustedStatus) {
+      this.trustedStatus.dataset.trustedNationalMap = "blocked";
+      this.trustedStatus.textContent =
+        "NATIONAL · Invalid authenticated projection — map and commands disabled";
+    }
+  };
   private readonly onTrustedNationalProjection = (
     event: TrustedNationalProjectionEvent,
   ): void => {
@@ -1190,7 +1229,13 @@ export class ClientGameRunner {
       this.trustedLastTick = update.tick;
       // Only the real E3 current-sight map and a matching human seat can
       // enable a recipient's political and radial controls.
-      if (observerMap !== null && this.myPlayer !== null) {
+      if (
+        observerMap !== null &&
+        this.myPlayer !== null &&
+        observerMap.nextCursor === null
+      ) {
+        // A partial E3 page cannot authorize a map-wide military action.
+        // Enemy ownership not yet paged in remains unknown, never guessed.
         this.gameView.markTrustedProjectionReady();
       }
       this.webglBuilder?.update(this.gameView);
@@ -1365,6 +1410,10 @@ export class ClientGameRunner {
       this.eventBus.on(
         TrustedNationalProjectionEvent,
         this.onTrustedNationalProjection,
+      );
+      this.eventBus.on(
+        TrustedNationalProjectionRejectedEvent,
+        this.onTrustedProjectionRejected,
       );
       this.eventBus.on(
         NationalTransportStatusEvent,
@@ -1571,6 +1620,10 @@ export class ClientGameRunner {
       this.eventBus.off(
         TrustedNationalProjectionEvent,
         this.onTrustedNationalProjection,
+      );
+      this.eventBus.off(
+        TrustedNationalProjectionRejectedEvent,
+        this.onTrustedProjectionRejected,
       );
       this.eventBus.off(
         NationalTransportStatusEvent,
