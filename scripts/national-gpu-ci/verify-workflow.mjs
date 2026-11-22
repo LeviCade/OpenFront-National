@@ -46,6 +46,8 @@ void test("strict exact staging dispatch and independent root admission", () => 
     "NATIONAL_GPU_PUBLIC_KEY_FILE",
     "NATIONAL_GPU_ATTESTATION_CHALLENGE",
     'NATIONAL_REQUIRE_HARDWARE_GPU: "1"',
+    'test "$(git rev-parse HEAD)" = "$NATIONAL_GPU_CANDIDATE_SHA"',
+    "git diff --exit-code HEAD --",
     "run-four-modes.sh release",
     "path: national-qa-artifacts/gpu/public/release/",
   ])

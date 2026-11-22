@@ -151,7 +151,11 @@ jobs:
       - name: Run four independent E5 scenarios / release-signed lane
         id: scenarios
         shell: bash
-        run: bash scripts/national-gpu-ci/run-four-modes.sh release
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$NATIONAL_GPU_CANDIDATE_SHA"
+          git diff --exit-code HEAD --
+          bash scripts/national-gpu-ci/run-four-modes.sh release
 
       - name: Upload bounded GPU evidence even on failure
         if: always()

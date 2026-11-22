@@ -23,11 +23,13 @@ import {
   readdirSync,
   readlinkSync,
   writeFileSync,
-  renameSync,
+  linkSync,
+  unlinkSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyIndependentRelease } from "./verify-independent-release.mjs";
+import { verifyRunGrant } from "./host-run-grant.mjs";
 
 export const HOST_ROOT = "/etc/skybot-ci/national-gpu-release";
 export const REPOSITORY = "LeviCade/OpenFront-National";
@@ -576,6 +578,7 @@ async function githubGet(token, path) {
       "X-GitHub-Api-Version": "2022-11-28",
       "User-Agent": "Skybot-Host-GPU-Witness",
     },
+    redirect: "error",
     signal: AbortSignal.timeout(10000),
   });
   requireTrue(response.status === 200, "GITHUB_CONTROL_PLANE_UNAVAILABLE");
@@ -644,7 +647,12 @@ const safeWrite = (name, obj) => {
     mode: 0o600,
     flag: "wx",
   });
-  renameSync(temporary, dest);
+  // link is atomic and refuses to replace an existing destination.
+  try {
+    linkSync(temporary, dest);
+  } finally {
+    unlinkSync(temporary);
+  }
 };
 const assertHostOnly = () => {
   requireTrue(
@@ -672,6 +680,18 @@ async function main() {
     "GITHUB_HOST_READ_TOKEN_NOT_PROVISIONED",
   );
   const { times, prefix } = await controllerContext(token, expected);
+  // The candidate approval stages live identity; a separate operator grant
+  // authorizes this exact attempt, assigned runner, modes and bounded window.
+  const checkGrant = () =>
+    verifyRunGrant(
+      readRootJson("approved-physical-run.json"),
+      expected,
+      times,
+      phase,
+      mode,
+      Date.now(),
+    );
+  checkGrant();
   const pem = readRoot("host-public-key.pem").toString("utf8");
   const pinned = JSON.parse(
     readFileSync(
@@ -684,14 +704,25 @@ async function main() {
   const policy = readRootJson("host-trust-policy.json");
   const enrolled = pinned.trustedEd25519PublicKeySha256;
   const hostTrust = policy.trustedEd25519PublicKeySha256;
-  const hostSign = (payload) =>
-    signHostWithExternalKey(
+  const hostSign = (payload) => {
+    checkGrant();
+    const name = phase === "postflight" ? "postflight" : mode;
+    // Reserve once before HSM use. A crash or partial signing remains in
+    // quarantine; never issue a replacement signature from this same slot.
+    safeWrite("signing-reserved-" + name + ".json", {
+      challenge: expected.challenge,
+      jobId: expected.jobId,
+      sourceSha: expected.sourceSha,
+      mode: name,
+    });
+    return signHostWithExternalKey(
       payload,
       pem,
       enrolled,
       hostTrust,
       liveHardwareSigner,
     );
+  };
   let payload;
   if (phase === "preflight" || phase === "refresh-preflight") {
     const physical = probePhysicalPreflight(expected);

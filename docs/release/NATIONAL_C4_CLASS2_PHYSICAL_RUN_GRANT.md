@@ -1,0 +1,15 @@
+# C4 Class 2 – physical run approval (not a certificate)
+
+Only the independently reviewed final tip of `stage3/conductor4-class2-integration-20261122` is eligible in this class. Neither a founding SHA nor an engineer branch is approval. No key has been enrolled or host modified by this PR.
+
+## Two distinct operator approvals
+
+1. Independent operator reviews collective source, installs reviewed host scripts (including host-run-grant.mjs, root-owned and not guest-controlled), verifies host isolation and signer enrollment, and sets root-only approved-candidate.json to the reviewed exact SHA/ref.
+2. Authorized owner dispatches the approved stage with candidate_sha equal to its tip. The controller's live API verification stages exact run, attempt, assigned job, runner and random challenge in trusted-github-run-context.json. This is not acceptance.
+3. Before the first HSM call, an independent operator reviews that context and live job, then creates **approved-physical-run.json** in the existing root-only release directory, root:root 0600, outside the repository and guest. No automatic generation. Set kind to skybot-physical-run-grant-v1; workflow to .github/workflows/national-hardware-acceptance.yml; physicalMode to four-mode-release; modes to the ordered array national-desktop, national-mobile, legacy-desktop, legacy-mobile. Pin repository, repositoryId, sourceSha, approvedStagingRef, approvedStagingSha, runId, runAttempt, jobId, runnerId, runnerName, challenge as exact strings from independently verified context. Set integer issuedAtMs and expiresAtMs from trusted UTC host clock; issuance cannot predate job start, expiry must be within two hours of job start.
+4. Sign only observed modes; first preflight requires national-desktop, subsequent refreshes require a later mode. The signer rechecks grant validity immediately before HSM use and reserves each signing slot once. Missing/expired/mismatched grant, a duplicate reservation, or a interrupted partial write is fail-closed; quarantine and independently reconcile the session, do not retry by deleting a reservation. Independent observation must prove the actual checkout SHA, renderer and WebGL. Postflight requires completed exact successful job, four distinct valid proofs, authenticated custody and observed teardown as before.
+5. Archive signed records and independent evidence privately. No automatic rotation, trust provisioning or deployment. An operator-owned physical browser functional witness may be useful separately; never label it as a signed formal release. A source-only check is not physical execution.
+
+This is an additional control, not a replacement for live control-plane and physical verification. The reviewable grant is issued after the job is assigned because ephemeral runner ID and job ID are unknown before scheduling. Do not publish grant/challenge or host credentials in GitHub comments.
+
+Local source checks: node --test scripts/national-gpu-ci/host-run-grant.check.mjs scripts/national-gpu-ci/verify-workflow.mjs. The private operator preflight is a separate reviewed infrastructure change.
