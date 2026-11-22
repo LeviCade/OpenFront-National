@@ -1135,9 +1135,18 @@ export class PlayerExecution implements Execution {
           continue;
         }
         const owner = this.mg.playerBySmallID(ownerId) as Player;
-        if (!owner.isFriendly(this.player) && this.mayCaptureTerritory(owner)) {
+        if (!owner.isFriendly(this.player)) {
           neighbors.set(owner, (neighbors.get(owner) ?? 0) + 1);
         }
+      }
+    }
+
+    // Resolve political authority once per distinct neighbor, not once
+    // for every shared border tile. The gate reads canonical politics;
+    // large borders must not trigger thousands of repeated projections.
+    if (this.mg.nationalPoliticalAuthority() !== null) {
+      for (const owner of neighbors.keys()) {
+        if (!this.mayCaptureTerritory(owner)) neighbors.delete(owner);
       }
     }
 

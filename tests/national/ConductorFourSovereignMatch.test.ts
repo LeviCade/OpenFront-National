@@ -1,4 +1,9 @@
-import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
+import {
+  Cell,
+  Nation,
+  PlayerInfo,
+  PlayerType,
+} from "@openfront/engine-api/game/GameTypes";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { NationalFoundEmpireExecution } from "@openfront/engine/execution/NationalFoundEmpireExecution";
@@ -6,6 +11,7 @@ import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import type { NationalCommand } from "@openfront/engine/national/NationalRuntime";
+import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import { snapshotGame } from "@openfront/engine/snapshot/GameSnapshot";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
@@ -261,7 +267,6 @@ describe("C4 E1 actual last-sovereign engine", () => {
     );
   });
 
-
   it("WAR-01: peaceful enclosure preserves NATIONAL land but permits legacy FFA capture", async () => {
     for (const nationalMode of [true, false]) {
       const m = await spawned(
@@ -355,6 +360,180 @@ describe("C4 E1 actual last-sovereign engine", () => {
           ticks: game.ticks(),
           after: balances(game),
           digest: digest(game),
+        }),
+    );
+  });
+
+  it("LEVY-06/07, WAR-09: repeated stamped assaults spend one bounded campaign allowance and return only surviving paid troops", async () => {
+    const m = await spawned(TestConfig, [
+      [20, 20],
+      [28, 20],
+      [75, 75],
+      [75, 20],
+    ]);
+    const { game } = m;
+    const a = game.player(A);
+    const b = game.player(B);
+    const c = game.player(C);
+    pactCommand(
+      m,
+      B,
+      {
+        kind: "found-pact",
+        pactId: PACT,
+        name: "Frontier defense",
+        pactKind: "MDA",
+        terms: { admission: "leader", expulsion: "forbidden" },
+      },
+      "levy-pact",
+    );
+    pactCommand(
+      m,
+      B,
+      { kind: "invite-pact", pactId: PACT, candidateId: C },
+      "levy-invite",
+    );
+    pactCommand(m, C, { kind: "accept-pact", pactId: PACT }, "levy-accept");
+    for (
+      let i = 0;
+      i < 500 && c.troops() < game.config().maxTroops(c) * 0.4;
+      i++
+    ) {
+      tick(m);
+    }
+    const war = declare(m, A, A, B, "national", "levy-war");
+    clicks(m, attack(A, B, 10_000));
+    const initial = game.nationalWarState()!.levy;
+    expect(initial.allowances).toHaveLength(1);
+    expect(initial.processed).toHaveLength(1);
+    expect(initial.processed[0].result.intercepted).toBeGreaterThan(0);
+    for (let i = 0; i < 3; i++) clicks(m, attack(A, B, 1_000));
+    const final = game.nationalWarState()!.levy;
+    expect(final.processed).toHaveLength(4);
+    expect(final.allowances).toHaveLength(1);
+    expect(final.allowances[0].key).toBe(initial.allowances[0].key);
+    expect(final.allowances[0].limit).toBe(initial.allowances[0].limit);
+    expect(final.allowances[0].spent).toBeLessThanOrEqual(
+      final.allowances[0].limit,
+    );
+    expect(
+      final.processed.every(
+        (row) => row.campaignId === initial.processed[0].campaignId,
+      ),
+    ).toBe(true);
+    clicks(
+      m,
+      stamped(B, {
+        type: "national_propose_peace",
+        warId: war,
+        requestId: "levy-peace-proposal",
+      }),
+    );
+    const peace = military(m, B, "levy-peace-proposal");
+    clicks(
+      m,
+      stamped(A, {
+        type: "national_accept_peace",
+        motionId: peace.motionId!,
+        requestId: "levy-peace-accept",
+      }),
+    );
+    expect(military(m, A, "levy-peace-accept").accepted).toBe(true);
+    const armies = a.outgoingAttacks();
+    expect(armies).toHaveLength(1);
+    const remaining = Math.floor(armies[0].troops());
+    expect(remaining).toBeGreaterThan(0);
+    const beforeReturn = a.troops();
+    const donorBeforeReturn = c.troops();
+    const attackerRegen = Math.trunc(game.config().troopIncreaseRate(a));
+    const donorRegen = Math.trunc(game.config().troopIncreaseRate(c));
+    const tilesBeforeReturn = b.numTilesOwned();
+    tick(m);
+    expect(a.outgoingAttacks()).toHaveLength(0);
+    expect(a.troops()).toBe(beforeReturn + attackerRegen + remaining);
+    expect(c.troops()).toBe(donorBeforeReturn + donorRegen);
+    expect(b.numTilesOwned()).toBe(tilesBeforeReturn);
+    expect(m.errors).toEqual([]);
+    console.info(
+      "C4_E1_CAMPAIGN_RETURN_JSON=" +
+        JSON.stringify({
+          receipts: final.processed.map((row) => row.result),
+          allowance: final.allowances[0],
+          returnedSurvivors: remaining,
+          attackerBefore: beforeReturn,
+          attackerAfter: a.troops(),
+          attackerRegen,
+          donorBefore: donorBeforeReturn,
+          donorAfter: c.troops(),
+          donorRegen,
+          defenderTiles: tilesBeforeReturn,
+        }),
+    );
+  });
+
+  it("AI-01/02: naturally spawned autonomous nation fights only its canonically declared adjacent enemy", async () => {
+    const aiInfo = new PlayerInfo("Echo", PlayerType.Nation, null, "C4AIBOT01");
+    const aiNation = new Nation(new Cell(28, 20), aiInfo);
+    const game = await setup(
+      "plains",
+      { nationalMode: true },
+      infos.slice(0, 3),
+      undefined,
+      UseRealAttackLogic,
+      true,
+      [aiNation],
+    );
+    const m = { game, ...runner(game) };
+    m.engine.init();
+    game.addExecution(
+      new SpawnExecution(MATCH, infos[0], game.ref(20, 20)),
+      new SpawnExecution(MATCH, infos[1], game.ref(36, 20)),
+      new SpawnExecution(MATCH, infos[2], game.ref(80, 80)),
+      new SpawnExecution(MATCH, aiInfo, game.ref(28, 20)),
+    );
+    wait(m, 3);
+    const ai = game.player(aiInfo.id);
+    const enemy = game.player(A);
+    const neutral = game.player(B);
+    const remote = game.player(C);
+    expect(ai.hasSpawned()).toBe(true);
+    expect(ai.sharesBorderWith(enemy)).toBe(true);
+    expect(ai.sharesBorderWith(neutral)).toBe(true);
+    expect(game.nationalWarAuthority()?.atWar(aiInfo.id, A)).toBe(false);
+    const neutralTiles = neutral.numTilesOwned();
+    const remoteTiles = remote.numTilesOwned();
+    const enemyTiles = enemy.numTilesOwned();
+    const war = declare(m, A, A, aiInfo.id, "national", "ai-frontier-war");
+    expect(layer(m, war).endedTick).toBeNull();
+    const obs = collectLiveNationalObservation(game, aiInfo.id).observation;
+    expect(obs.frontiers.some((row) => row.targetId === A)).toBe(true);
+    expect(obs.frontiers.some((row) => row.targetId === C)).toBe(false);
+    for (let i = 0; i < 90 && enemy.numTilesOwned() === enemyTiles; i++) {
+      tick(m);
+    }
+    expect(enemy.numTilesOwned()).toBeLessThan(enemyTiles);
+    expect(neutral.numTilesOwned()).toBe(neutralTiles);
+    expect(remote.numTilesOwned()).toBe(remoteTiles);
+    const receipts = game
+      .nationalWarState()!
+      .levy.processed.filter((row) => row.attackerId === aiInfo.id);
+    expect(receipts.length).toBeGreaterThan(0);
+    expect(receipts.every((row) => row.defenderId === A)).toBe(true);
+    expect(receipts.every((row) => row.attackTroopsBefore > 0)).toBe(true);
+    expect(game.nationalWarAuthority()?.atWar(aiInfo.id, B)).toBe(false);
+    expect(game.nationalWarAuthority()?.atWar(aiInfo.id, C)).toBe(false);
+    expect(m.errors).toEqual([]);
+    console.info(
+      "C4_E1_AUTONOMOUS_AI_JSON=" +
+        JSON.stringify({
+          tick: game.ticks(),
+          aiTiles: ai.numTilesOwned(),
+          aiReserves: ai.troops(),
+          enemyTilesBefore: enemyTiles,
+          enemyTilesAfter: enemy.numTilesOwned(),
+          neutralTiles,
+          remoteTiles,
+          receipts,
         }),
     );
   });
