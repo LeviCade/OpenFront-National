@@ -1,4 +1,3 @@
-import type { PactIntent } from "./NationalPactState";
 import { TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   AllPlayers,
@@ -59,6 +58,7 @@ import {
   SendUpdateGameConfigIntentEvent,
 } from "./LobbyEvents";
 import { LocalServer } from "./LocalServer";
+import type { PactIntent } from "./NationalPactState";
 import {
   acceptTrustedNationalPrivateCapability,
   hasTrustedNationalPrivateCapability,

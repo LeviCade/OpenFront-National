@@ -1,5 +1,4 @@
 import { AllPlayersStats, ClientID, Winner } from "../Schemas";
-import type { NationalPublicPactView, NationalPactDisclosureWireData } from "./NationalPactView";
 import { TileRef } from "./GameMap";
 import {
   EmojiMessage,
@@ -18,6 +17,10 @@ import {
   UnitType,
   WarshipState,
 } from "./GameTypes";
+import type {
+  NationalPublicPactView,
+  NationalPactDisclosureWireData,
+} from "./NationalPactView";
 
 /**
  * PUBLIC NATIONAL politics that may cross the worker boundary. This mirrors

@@ -11,6 +11,7 @@ import {
   GameUpdateType,
   type GameUpdateViewData,
 } from "@openfront/engine-api/game/GameUpdates";
+import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import {
   NATIONAL_OBSERVER_MAX_TILES,
   NATIONAL_OBSERVER_MAX_UNITS,
@@ -19,7 +20,6 @@ import {
   type NationalObserverMapV1,
   type NationalPublicConflictView,
 } from "@openfront/engine-api/game/NationalRecipientView";
-import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import { validateNationalObserverNativeLanes } from "@openfront/shared/NationalObserverNativeWire";
 import { replacer } from "@openfront/shared/SharedUtil";
 
@@ -40,7 +40,13 @@ export function encodeNationalRecipientProjection(
   };
   const map = politics.nationalObserverMap;
   const conflicts = politics.nationalConflicts;
-  validateNationalPactPacket(filtered.nationalPolitics, filtered.nationalPactDisclosure, map?.observerId ?? null, filtered.tick, map?.streamId);
+  validateNationalPactPacket(
+    filtered.nationalPolitics,
+    filtered.nationalPactDisclosure,
+    map?.observerId ?? null,
+    filtered.tick,
+    map?.streamId,
+  );
   if (map !== undefined) {
     if (
       map.version !== NATIONAL_OBSERVER_MAP_VERSION ||
@@ -133,7 +139,8 @@ export function encodeNationalRecipientProjection(
       ? {}
       : { nationalCommandResults: filtered.nationalCommandResults }),
     ...(filtered.nationalPactDisclosure === undefined
-      ? {} : { nationalPactDisclosure: filtered.nationalPactDisclosure }),
+      ? {}
+      : { nationalPactDisclosure: filtered.nationalPactDisclosure }),
     ...(filtered.nationalAccessionOffers === undefined
       ? {}
       : { nationalAccessionOffers: filtered.nationalAccessionOffers }),

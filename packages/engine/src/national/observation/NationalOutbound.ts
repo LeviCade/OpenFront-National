@@ -35,7 +35,10 @@ import {
   advanceLastKnown,
   type NationalSightMemory,
 } from "./NationalObservation";
-import { projectNationalPublicPacts, projectNationalPactDisclosure } from "./NationalPactProjection";
+import {
+  projectNationalPublicPacts,
+  projectNationalPactDisclosure,
+} from "./NationalPactProjection";
 import type { OutboundNationalResult } from "./NationalPoliticalPacket";
 
 export type { NationalPublicConflictView } from "@openfront/engine-api/game/NationalRecipientView";
@@ -686,7 +689,13 @@ export class NationalOutboundFilter {
 
     const publicPoliticalView = publicPolitics(data);
     const publicPacts = projectNationalPublicPacts(game);
-    const privatePacts = projectNationalPactDisclosure(game, this.observerId, publicPacts, data.tick, page?.streamId);
+    const privatePacts = projectNationalPactDisclosure(
+      game,
+      this.observerId,
+      publicPacts,
+      data.tick,
+      page?.streamId,
+    );
     const publicConflictView = projectNationalPublicConflict(
       game,
       this.observerId,
@@ -707,8 +716,15 @@ export class NationalOutboundFilter {
       // outbound private PlayerUpdate fields.
       ...(publicPoliticalView === undefined
         ? {}
-        : { nationalPolitics: { ...publicPoliticalView, ...(publicPacts === undefined ? {} : { pacts: publicPacts }) } }),
-      ...(privatePacts === undefined ? {} : { nationalPactDisclosure: privatePacts }),
+        : {
+            nationalPolitics: {
+              ...publicPoliticalView,
+              ...(publicPacts === undefined ? {} : { pacts: publicPacts }),
+            },
+          }),
+      ...(privatePacts === undefined
+        ? {}
+        : { nationalPactDisclosure: privatePacts }),
       ...(publicConflictView === undefined
         ? {}
         : { nationalConflicts: publicConflictView }),

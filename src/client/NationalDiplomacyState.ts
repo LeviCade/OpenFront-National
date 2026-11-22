@@ -9,7 +9,10 @@
  * PUBLIC projection every NATIONAL tick; nationalCommandResults contains the
  * current viewer's accepted/rejected commands. It must be filtered upstream.
  */
-import { readNationalPublicPacts, type NationalPublicPactView } from "@openfront/engine-api/game/NationalPactView";
+import {
+  readNationalPublicPacts,
+  type NationalPublicPactView,
+} from "@openfront/engine-api/game/NationalPactView";
 
 export interface NationalPublicEmpire {
   id: string;
@@ -188,9 +191,16 @@ export function readNationalPolitics(
       });
     }
   }
-  const pacts = source.pacts === undefined ? undefined : readNationalPublicPacts(source.pacts);
-  if (pacts === null || pacts?.some(pact=>pact.memberIds.some(id=>members.has(id)))) return null;
-  return { empires, warnings, ...(pacts === undefined ? {} : {pacts}) };
+  const pacts =
+    source.pacts === undefined
+      ? undefined
+      : readNationalPublicPacts(source.pacts);
+  if (
+    pacts === null ||
+    pacts?.some((pact) => pact.memberIds.some((id) => members.has(id)))
+  )
+    return null;
+  return { empires, warnings, ...(pacts === undefined ? {} : { pacts }) };
 }
 
 /** Reject the WHOLE invitation projection if it is missing, foreign,

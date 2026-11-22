@@ -1,3 +1,4 @@
+import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 /**
  * Shared native companion-lane validator for the public recipient DTO.
  * Private geometry derives only from the authorized page. The binary native
@@ -5,7 +6,6 @@
  * No simulation imports; used on both trusted host and browser.
  */
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
-import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import {
   NATIONAL_OBSERVER_MAX_UNITS,
   type NationalObserverMapV1,
@@ -166,7 +166,13 @@ export function validateNationalObserverNativeLanes(
     sequence(packet.packedTileUpdates).length !== 0
   )
     invalid();
-  validateNationalPactPacket(packet.nationalPolitics, packet.nationalPactDisclosure, page.observerId, page.tick, page.streamId);
+  validateNationalPactPacket(
+    packet.nationalPolitics,
+    packet.nationalPactDisclosure,
+    page.observerId,
+    page.tick,
+    page.streamId,
+  );
   const native = decodeNationalObserverNativeUnits(packet.packedUnitUpdates);
   if ((native?.length ?? 0) !== page.units.length * UNIT_UPDATE_STRIDE)
     invalid();

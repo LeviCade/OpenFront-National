@@ -17,12 +17,15 @@ import {
   restoreNationalHumanSight,
 } from "./HumanSightPersistence";
 import { collectLiveNationalObservation } from "./LiveObservation";
-import { projectNationalPublicPacts, projectNationalPactDisclosure } from "./NationalPactProjection";
 import { NationalObserverMapPager } from "./NationalObserverMap";
 import {
   NationalOutboundFilter,
   projectNationalAccessionOffers,
 } from "./NationalOutbound";
+import {
+  projectNationalPublicPacts,
+  projectNationalPactDisclosure,
+} from "./NationalPactProjection";
 import {
   actorNationalResults,
   emptyNationalResultDeliveryState,
@@ -210,7 +213,11 @@ export class NationalServerRecipientSession {
     // and must be present to invalidate stale UI action state.
     if (actor === null) return political;
     const offers = projectNationalAccessionOffers(this.game, actor.id());
-    const pactDisclosure = projectNationalPactDisclosure(this.game, actor.id(), publicPacts);
+    const pactDisclosure = projectNationalPactDisclosure(
+      this.game,
+      actor.id(),
+      publicPacts,
+    );
     const results = actorNationalResults(
       this.game,
       actor,
@@ -218,7 +225,9 @@ export class NationalServerRecipientSession {
     );
     return {
       ...political,
-      ...(pactDisclosure === undefined ? {} : { nationalPactDisclosure: pactDisclosure }),
+      ...(pactDisclosure === undefined
+        ? {}
+        : { nationalPactDisclosure: pactDisclosure }),
       ...(offers === undefined ? {} : { nationalAccessionOffers: offers }),
       ...(results.length === 0 ? {} : { nationalCommandResults: results }),
     };

@@ -1,5 +1,3 @@
-import { readPactReceipts, retainPactReceipts, type PactReceipt } from "../NationalPactState";
-import { readNationalPactWireDisclosure, type NationalPactDisclosureViewData } from "@openfront/engine-api/game/NationalPactView";
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   Cell,
@@ -21,6 +19,10 @@ import {
   SpawnPhaseEndUpdate,
   UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
+import {
+  readNationalPactWireDisclosure,
+  type NationalPactDisclosureViewData,
+} from "@openfront/engine-api/game/NationalPactView";
 import {
   GameLike,
   ReadonlyTileSet,
@@ -59,6 +61,11 @@ import type {
   NationalObserverMapContinuity,
   NationalObserverMapDelta,
 } from "../NationalObserverMapContinuity";
+import {
+  readPactReceipts,
+  retainPactReceipts,
+  type PactReceipt,
+} from "../NationalPactState";
 import { computeAllianceClusters } from "../render/frame/derive/AllianceClusters";
 import { extractAttackRings } from "../render/frame/derive/AttackRings";
 import { extractNukeTelegraphs } from "../render/frame/derive/NukeTelegraphs";
@@ -427,7 +434,12 @@ export class GameView implements GameLike {
       return undefined;
     const empireOf = (id: PlayerID) =>
       politics.empires.find((empire) => empire.memberIds.includes(id))?.id;
-    if (politics.pacts?.some(p => p.memberIds.includes(playerID) && p.memberIds.includes(targetID))) return undefined;
+    if (
+      politics.pacts?.some(
+        (p) => p.memberIds.includes(playerID) && p.memberIds.includes(targetID),
+      )
+    )
+      return undefined;
     const actorEmpire = empireOf(playerID);
     const targetEmpire = empireOf(targetID);
     if (actorEmpire !== undefined && actorEmpire === targetEmpire)
@@ -466,7 +478,9 @@ export class GameView implements GameLike {
     return owner.isPlayer() && owner.id() === player.id();
   }
 
-  public nationalPactReceipts(): readonly PactReceipt[] { return this._nationalPactReceipts; }
+  public nationalPactReceipts(): readonly PactReceipt[] {
+    return this._nationalPactReceipts;
+  }
 
   public nationalPactDisclosure(): NationalPactDisclosureViewData | null {
     return this._nationalPactDisclosure;
@@ -717,7 +731,7 @@ export class GameView implements GameLike {
 
     const previousTick = this.lastUpdate?.tick ?? -1;
     // Never keep an unvalidated or revoked constitutional snapshot in the raw renderer cache.
-    this.lastUpdate = gu.nationalPactDisclosure === undefined ? gu : {...gu};
+    this.lastUpdate = gu.nationalPactDisclosure === undefined ? gu : { ...gu };
     delete this.lastUpdate.nationalPactDisclosure;
 
     // Legacy/replay test adapters can provide a partial Config without
@@ -742,13 +756,33 @@ export class GameView implements GameLike {
 
       const currentActorId =
         this.trustedPrincipal ?? this._myPlayer?.id() ?? null;
-      this._nationalPactDisclosure = gu.tick < previousTick ? null : readNationalPactWireDisclosure(
-        gu.nationalPactDisclosure, currentActorId, this._nationalPolitics?.pacts ?? null,
-        this._nationalPolitics?.empires.some(e => e.memberIds.includes(currentActorId ?? "")) ?? false,
-        gu.tick, this._trustedNationalProjection ? this.trustedSight?.lastAcceptedStreamId ?? null : undefined,
-      );
-      this._nationalPactReceipts = gu.tick < previousTick || this._nationalPactDisclosure === null ? [] : retainPactReceipts(
-        this._nationalPactReceipts, readPactReceipts(gu.nationalCommandResults,currentActorId,gu.tick),gu.tick);
+      this._nationalPactDisclosure =
+        gu.tick < previousTick
+          ? null
+          : readNationalPactWireDisclosure(
+              gu.nationalPactDisclosure,
+              currentActorId,
+              this._nationalPolitics?.pacts ?? null,
+              this._nationalPolitics?.empires.some((e) =>
+                e.memberIds.includes(currentActorId ?? ""),
+              ) ?? false,
+              gu.tick,
+              this._trustedNationalProjection
+                ? (this.trustedSight?.lastAcceptedStreamId ?? null)
+                : undefined,
+            );
+      this._nationalPactReceipts =
+        gu.tick < previousTick || this._nationalPactDisclosure === null
+          ? []
+          : retainPactReceipts(
+              this._nationalPactReceipts,
+              readPactReceipts(
+                gu.nationalCommandResults,
+                currentActorId,
+                gu.tick,
+              ),
+              gu.tick,
+            );
       this._nationalAccessionOffers = readNationalAccessionOffers(
         nationalPacket.nationalAccessionOffers,
         currentActorId,
