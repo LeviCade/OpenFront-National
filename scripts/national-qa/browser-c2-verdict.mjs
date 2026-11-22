@@ -178,8 +178,18 @@ export function classifySoloOrLegacy({
   const firstFailure = events(report).find((e) => e?.name === "stage-failed");
   add(!firstFailure, "REAL_BROWSER_STAGE_FAILED", "E5");
   add(
-    !Array.isArray(report?.errors) || report.errors.length === 0,
+    Array.isArray(report?.errors) && report.errors.length === 0,
     "BROWSER_REPORTED_ERRORS",
+    "E5",
+  );
+  // A mobile viewport is not proof that the user journey used native touch.
+  // Require a real CDP Input.dispatchTouchEvent path recorded by hit().
+  const actualInput = config.viewport.includes("mobile")
+    ? "actual-touch-input"
+    : "actual-mouse-input";
+  add(
+    events(report).some((event) => event?.name === actualInput),
+    "ACTUAL_POINTER_OR_TOUCH_DISPATCH_MISSING",
     "E5",
   );
   if (config.kind === "national-solo") {
@@ -309,7 +319,8 @@ export function classifySoloOrLegacy({
   const safeCode =
     typeof code === "string" &&
     (/^[A-Z][A-Z0-9_]{4,90}$/.test(code) ||
-      code === "REAL_CHROMIUM_GPU_REQUIRED: WebGL gate")
+      code === "REAL_CHROMIUM_GPU_REQUIRED: WebGL gate" ||
+      code === "TIMED_OUT: authoritative evidence")
       ? code
       : null;
   const stageOwner = safeCode?.startsWith("REAL_CHROMIUM_GPU_REQUIRED")
@@ -322,15 +333,26 @@ export function classifySoloOrLegacy({
           ? "E2/E3/E4"
           : "E5";
   const gameplay = failures.length === 0 ? "PASS" : "FAIL";
+  const browserProduct =
+    typeof webgl?.browser?.product === "string" &&
+    /^(?:HeadlessChrome|Chrome)\/[0-9.]{1,24}$/.test(webgl.browser.product)
+      ? webgl.browser.product
+      : null;
+  const renderer =
+    typeof webgl?.webgl?.unmaskedRenderer === "string"
+      ? webgl.webgl.unmaskedRenderer.slice(0, 140)
+      : null;
   return {
     mode,
     source: sourceOkay ? expectedSha : null,
     gameplay,
     hardware: "BLOCKED",
     hardwareReason: "E6_INDEPENDENT_PHYSICAL_HOST_WITNESS_REQUIRED",
-    firstFailure: safeCode
-      ? error(safeCode, stageOwner)
-      : (failures[0] ?? null),
+    firstFailure: !sourceOkay
+      ? error("SOURCE_SHA_MISMATCH_OR_MISSING", "E5/E6")
+      : safeCode
+        ? error(safeCode, stageOwner)
+        : (failures[0] ?? null),
     checksFailed: failures,
     completedStages: completed.slice(0, 24),
     firstFailedStage: firstFailure?.stage ?? report?.errors?.[0]?.stage ?? null,
@@ -343,6 +365,9 @@ export function classifySoloOrLegacy({
       : 0,
     screenshotCount: actualFiles.size,
     webglShaderPassed: shaderOkay,
+    browserProduct,
+    renderer,
+    viewport: config.viewport,
     // Untrusted WebGL/browser claims never set hardware=PASS.
     certifiedRelease: false,
   };
