@@ -410,7 +410,8 @@ export function planObservedImperialCoercion(
           v.targetId === target.id &&
           (v.phase === "pending" ||
             v.phase === "consented" ||
-            v.phase === "decision-required"),
+            v.phase === "decision-required" ||
+            observation.tick < v.deadlineTick + 180),
       )
     )
       return { kind: "issue", candidateId: target.id, empireId: empire.id };
@@ -465,7 +466,8 @@ export function proposeCanonicalImperialUltimatumIntent(
     const candidate=observation.nations.find((n)=>n.id===choice.candidateId && n.alive && n.status==="independent");
     if (!crown || !candidate || !observation.frontiers.some((f)=>f.targetId===candidate.id && f.access==="land"))
       return null;
-    if (views.some((v)=>v.role==="issuer" && v.issuerId===self && v.empireId===crown.id && v.targetId===candidate.id && ["pending","consented","decision-required"].includes(v.phase)))
+    if (views.some((v)=>v.role==="issuer" && v.issuerId===self && v.empireId===crown.id && v.targetId===candidate.id && (["pending","consented","decision-required"].includes(v.phase) ||
+      observation.tick < v.deadlineTick + 180)))
       return null;
     return {type:"national_issue_ultimatum",empireId:crown.id,targetId:candidate.id,threat:"imperial-war",durationTicks:30,requestId};
   }
