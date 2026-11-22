@@ -76,9 +76,7 @@ async function openProfile(executable, index, email) {
     {
       ...fixture.env,
       ...(process.env.DISPLAY ? { DISPLAY: process.env.DISPLAY } : {}),
-      ...(process.env.XAUTHORITY
-        ? { XAUTHORITY: process.env.XAUTHORITY }
-        : {}),
+      ...(process.env.XAUTHORITY ? { XAUTHORITY: process.env.XAUTHORITY } : {}),
       ...(process.env.XDG_RUNTIME_DIR
         ? { XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR }
         : {}),
@@ -433,12 +431,18 @@ try {
     );
     stage = "native NATIONAL configuration";
     await until(
-      () => a.click('input[aria-label="Private NATIONAL authoritative multiplayer"]'),
+      () =>
+        a.click(
+          'input[aria-label="Private NATIONAL authoritative multiplayer"]',
+        ),
       stage,
       45_000,
     );
     await until(
-      () => a.evaluate('document.querySelector(\'input[aria-label="Private NATIONAL authoritative multiplayer"]\')?.checked === true'),
+      () =>
+        a.evaluate(
+          "document.querySelector('input[aria-label=\"Private NATIONAL authoritative multiplayer\"]')?.checked === true",
+        ),
       stage,
     );
     let url;
@@ -452,7 +456,10 @@ try {
     stage = "independent native invite navigation";
     await Promise.all([b, c].map((p) => p.send("Page.navigate", { url })));
     await until(
-      () => a.evaluate('[...document.querySelectorAll("#page-host-lobby .player-tag")].filter(e=>e.getBoundingClientRect().width>0).length === 3'),
+      () =>
+        a.evaluate(
+          '[...document.querySelectorAll("#page-host-lobby .player-tag")].filter(e=>e.getBoundingClientRect().width>0).length === 3',
+        ),
       "three visible lobby participants",
       60_000,
     );
@@ -464,14 +471,25 @@ try {
     );
     stage = "independent authoritative host admission";
     let admission;
-    await until(() => {
-      admission = host.messages.find((m) =>
-        m.message === "NATIONAL authoritative host ready" &&
-        m.authenticatedSeats === 3 && m.distinctAccounts === 3 &&
-        m.authoritativeRunners === 1 && typeof m.gameID === "string");
-      return Boolean(admission);
-    }, stage, 90_000);
-    const snapshots = () => Promise.all(profiles.map((p) => p.evaluate(`(() => {
+    await until(
+      () => {
+        admission = host.messages.find(
+          (m) =>
+            m.message === "NATIONAL authoritative host ready" &&
+            m.authenticatedSeats === 3 &&
+            m.distinctAccounts === 3 &&
+            m.authoritativeRunners === 1 &&
+            typeof m.gameID === "string",
+        );
+        return Boolean(admission);
+      },
+      stage,
+      90_000,
+    );
+    const snapshots = () =>
+      Promise.all(
+        profiles.map((p) =>
+          p.evaluate(`(() => {
       const node = document.querySelector("[data-national-trusted-session]");
       const tick = node?.getAttribute("data-national-projection-tick");
       return {
@@ -481,32 +499,91 @@ try {
         tick: tick && /^\\d+$/.test(tick) ? Number(tick) : -1,
         canvas: [...document.querySelectorAll("canvas")].some(e => e.getBoundingClientRect().width > 150 && e.getBoundingClientRect().height > 100),
       };
-    })()`)));
+    })()`),
+        ),
+      );
     stage = "three graphical seat projections";
     let first;
-    await until(async () => {
-      first = await snapshots();
-      return first.every((s) => s.admitted && s.canvas && s.tick >= 0 && s.match === admission.gameID && s.principal) && new Set(first.map((s) => s.principal)).size === 3;
-    }, stage, 90_000);
+    await until(
+      async () => {
+        first = await snapshots();
+        return (
+          first.every(
+            (s) =>
+              s.admitted &&
+              s.canvas &&
+              s.tick >= 0 &&
+              s.match === admission.gameID &&
+              s.principal,
+          ) && new Set(first.map((s) => s.principal)).size === 3
+        );
+      },
+      stage,
+      90_000,
+    );
     stage = "host and browser advancing tick correlation";
     let last;
-    await until(async () => {
-      last = await snapshots();
-      const ticks = host.messages.filter((m) => m.message === "NATIONAL authoritative tick" && m.gameID === admission.gameID && Number.isSafeInteger(m.tick)).map((m) => m.tick);
-      return new Set(ticks).size >= 2 && last.every((s, i) => s.admitted && s.match === first[i].match && s.principal === first[i].principal && s.canvas && s.tick > first[i].tick && s.tick <= Math.max(...ticks));
-    }, stage, 90_000);
+    await until(
+      async () => {
+        last = await snapshots();
+        const ticks = host.messages
+          .filter(
+            (m) =>
+              m.message === "NATIONAL authoritative tick" &&
+              m.gameID === admission.gameID &&
+              Number.isSafeInteger(m.tick),
+          )
+          .map((m) => m.tick);
+        return (
+          new Set(ticks).size >= 2 &&
+          last.every(
+            (s, i) =>
+              s.admitted &&
+              s.match === first[i].match &&
+              s.principal === first[i].principal &&
+              s.canvas &&
+              s.tick > first[i].tick &&
+              s.tick <= Math.max(...ticks),
+          )
+        );
+      },
+      stage,
+      90_000,
+    );
     stage = "distinct graphical artifacts";
     for (let i = 0; i < profiles.length; i++) {
-      const response = await profiles[i].send("Page.captureScreenshot", { format: "png" });
+      const response = await profiles[i].send("Page.captureScreenshot", {
+        format: "png",
+      });
       const bytes = Buffer.from(response.data, "base64");
-      assert(bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])));
+      assert(
+        bytes
+          .subarray(0, 8)
+          .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+      );
       const hash = createHash("sha256").update(bytes).digest("hex");
       assert(!screenshotHashes.has(hash));
       screenshotHashes.add(hash);
-      writeFileSync(join(screenshotDir, `participant-${i + 1}.png`), bytes, { mode: 0o600, flag: "wx" });
+      writeFileSync(join(screenshotDir, `participant-${i + 1}.png`), bytes, {
+        mode: 0o600,
+        flag: "wx",
+      });
     }
     assert(profiles.every((p) => p.observed.missingMusicRequests === 0));
-    console.log(JSON.stringify({ exactSource: head, browserProfiles: 3, hostAuthenticatedSeats: 3, independentHumanWitnesses: 0, screenshotSha256: [...screenshotHashes], browserTickDeltas: last.map((s, i) => s.tick - first[i].tick), privateJourney: "BLOCKED", firstUnverifiedStage: "native political and military controls followed by canonical victory", gpuAttested: false }));
+    console.log(
+      JSON.stringify({
+        exactSource: head,
+        browserProfiles: 3,
+        hostAuthenticatedSeats: 3,
+        independentHumanWitnesses: 0,
+        screenshotSha256: [...screenshotHashes],
+        browserTickDeltas: last.map((s, i) => s.tick - first[i].tick),
+        privateJourney: "BLOCKED",
+        firstUnverifiedStage:
+          "native political and military controls followed by canonical victory",
+        gpuAttested: false,
+      }),
+    );
     process.exitCode = 2;
   }
 } catch {
