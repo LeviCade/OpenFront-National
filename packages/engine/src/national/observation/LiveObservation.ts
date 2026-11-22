@@ -9,6 +9,7 @@ import type { TileRef } from "@openfront/engine-api/game/GameMap";
  */
 import { PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import type { Game, Player } from "../../game/Game";
+import type { NationalRecipientDiplomacy } from "../politics/PoliticalAuthorityAdapter";
 import {
   projectNationalObservation,
   type AssetKind,
@@ -21,6 +22,7 @@ interface PoliticalReadFacade {
   empireOf(id: string): string | null;
   emperorOf(id: string): string | null;
   membersOf(id: string): readonly string[];
+  recipientDiplomacy(observerId: string): NationalRecipientDiplomacy;
 }
 
 type GameWithReadFacade = Game & {
@@ -311,6 +313,26 @@ export function collectLiveNationalObservation(
       });
     }
 
+  // All diplomacy is whitelisted by the same Game authority for humans/bots.
+  const diplomacy = authority?.recipientDiplomacy(observerId);
+  const invitations: NationalWorld["invitations"][number][] = [];
+  for (const pact of diplomacy?.pacts ?? []) {
+    if (coalitionIds.has(pact.id)) continue;
+    coalitionIds.add(pact.id);
+    coalitions.push({
+      id: pact.id,
+      kind: pact.kind === "NAP" ? "nap" : "mda",
+      leaderId: pact.leaderId,
+      members: [...pact.members],
+      terms: pact.terms === undefined ? {} : { ...pact.terms },
+      ...(pact.pendingInvitees === undefined
+        ? {}
+        : { pendingInvitees: [...pact.pendingInvitees] }),
+    });
+    if (pact.invited)
+      invitations.push({ coalitionId: pact.id, recipientId: observerId });
+  }
+
   const assets: NationalWorld["assets"][number][] = [];
   const sightGrants: NationalWorld["sightGrants"][number][] = [];
   const tick = game.ticks();
@@ -470,7 +492,8 @@ export function collectLiveNationalObservation(
     nations,
     coalitions,
     wars,
-    invitations: [],
+    invitations,
+    imperialOffers: diplomacy?.empireOffers ?? [],
     assets,
     sightGrants,
     frontiers,
