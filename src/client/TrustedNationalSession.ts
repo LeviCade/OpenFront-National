@@ -440,6 +440,9 @@ export class TrustedNationalStartedEvent implements GameEvent {
 /** Close native menus holding coordinates and requests from an expired sight lease. */
 export class TrustedNationalSightRevokedEvent implements GameEvent {}
 
+/** Dismiss menu actions computed against superseded political facts. */
+export class NationalPoliticalAffordanceChangedEvent implements GameEvent {}
+
 export class TrustedNationalProjectionEvent implements GameEvent {
   constructor(public readonly projection: TrustedNationalProjection) {}
 }

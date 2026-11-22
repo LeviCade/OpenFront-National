@@ -4,7 +4,7 @@ import { assetUrl } from "@openfront/shared/AssetUrls";
 import { EventBus } from "@openfront/shared/EventBus";
 import { Controller } from "../../Controller";
 import { TransformHandler } from "../../TransformHandler";
-import { TrustedNationalSightRevokedEvent } from "../../TrustedNationalSession";
+import { NationalPoliticalAffordanceChangedEvent, TrustedNationalSightRevokedEvent } from "../../TrustedNationalSession";
 import { UIState } from "../../UIState";
 import { GameView, PlayerView } from "../../view";
 import { BuildMenu } from "./BuildMenu";
@@ -92,6 +92,7 @@ export class MainRadialMenu implements Controller {
   init() {
     this.radialMenu.init();
     this.eventBus.on(TrustedNationalSightRevokedEvent, () => this.closeMenu());
+    this.eventBus.on(NationalPoliticalAffordanceChangedEvent, () => this.closeMenu());
     this.eventBus.on(CloseViewEvent, () => {
       this.menuRequest = null;
       this.pendingDonations.clear();

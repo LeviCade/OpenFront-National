@@ -3,6 +3,8 @@ import type { NationalPactTerms } from "@openfront/engine-api/game/NationalPactV
 import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { keyed } from "lit/directives/keyed.js";
+import { repeat } from "lit/directives/repeat.js";
 import { NationalMapTargetSelectedEvent } from "./controllers/NationalMapTargetController";
 import {
   confirmedNationalDiplomacy,
@@ -1029,10 +1031,13 @@ export class NationalDiplomacyPanel extends LitElement {
     if (event.key === "Escape" && this.expanded) {
       event.preventDefault();
       this.expanded = false;
+      void this.updateComplete.then(() => this.querySelector<HTMLButtonElement>('[aria-controls="national-diplomacy-content"]')?.focus());
     }
   }
 
   @state() private pactStatus = "";
+  @state() private pactPhase = "available";
+  private pactSession: string | null = null;
   private pactAttempt: {
     requestId: string;
     actorId: string;
@@ -1075,9 +1080,22 @@ export class NationalDiplomacyPanel extends LitElement {
     };
   }
   private refreshPact(): void {
+    const game = this.game;
+    const context = this.pactContext();
+    const session = context && game ? JSON.stringify([game.gameID(), context.actor]) : null;
+    if (session !== this.pactSession) {
+      this.pactSession = session;
+      if (!session) {
+        this.pactAttempt = null;
+        this.pactPhase = "unauthorized";
+        this.pactStatus = "No longer authorized; outcome unconfirmed.";
+        return;
+      }
+      if (this.pactAttempt && this.pactAttempt.actorId !== context?.actor) this.pactAttempt = null;
+      if (!this.pactAttempt) { this.pactPhase = "available"; this.pactStatus = ""; }
+    }
     const a = this.pactAttempt;
     if (!a) return;
-    const game = this.game;
     if (
       !game ||
       game.gameID() !== a.gameId ||
@@ -1086,7 +1104,8 @@ export class NationalDiplomacyPanel extends LitElement {
       game.ticks() < a.tick
     ) {
       this.pactAttempt = null;
-      this.pactStatus = "No longer authorized; outcome unconfirmed.";
+      this.pactPhase = "unauthorized";
+      this.pactStatus = "No longer authorized; outcome unconfirmed."
       return;
     }
     const result = reconcilePactReceipt(
@@ -1096,6 +1115,7 @@ export class NationalDiplomacyPanel extends LitElement {
     );
     if (result === "pending") return;
     this.pactAttempt = null;
+    this.pactPhase = result;
     this.pactStatus =
       result === "accepted"
         ? "Game accepted command. Current roster and terms below are authoritative."
@@ -1135,6 +1155,7 @@ export class NationalDiplomacyPanel extends LitElement {
       type: action.type,
       tick: game.ticks(),
     };
+    this.pactPhase = "pending";
     this.pactStatus = "Pending authoritative receipt.";
     try {
       this.eventBus.emit(
@@ -1142,6 +1163,7 @@ export class NationalDiplomacyPanel extends LitElement {
       );
     } catch {
       this.pactAttempt = null;
+      this.pactPhase = "unknown";
       this.pactStatus = "Command transport failed; outcome unconfirmed.";
     }
   }
@@ -1191,8 +1213,12 @@ export class NationalDiplomacyPanel extends LitElement {
     const formClass = "flex flex-col gap-2";
     const submit = (event: SubmitEvent, callback: (data: FormData) => void) => {
       event.preventDefault();
-      if (event.currentTarget instanceof HTMLFormElement)
-        callback(new FormData(event.currentTarget));
+      if (event.currentTarget instanceof HTMLFormElement) {
+        const form = event.currentTarget;
+        const data = new FormData(form);
+        form.reset();
+        callback(data);
+      }
     };
     return html`<section
       data-national-pacts
@@ -1202,7 +1228,9 @@ export class NationalDiplomacyPanel extends LitElement {
       <h2 class="font-semibold text-amber-200">
         Non-aggression and mutual defense pacts
       </h2>
-      <p role="status" aria-live="polite" data-national-pact-status>
+      <p role="status" aria-live="polite" data-national-pact-status
+        data-national-pact-phase=${c ? this.pactPhase : "unauthorized"}
+        data-national-pact-request-id=${this.pactAttempt?.requestId ?? ""}>
         ${this.pactStatus || (c ? "Available" : "Private constitutional controls unavailable")}
       </p>
       ${
@@ -1210,7 +1238,7 @@ export class NationalDiplomacyPanel extends LitElement {
           ? html`<p>Public pact roster not available.</p>`
           : roster.length === 0
             ? html`<p>No ordinary pacts.</p>`
-            : roster.map((p) => {
+            : repeat(roster, (p) => p.id, (p) => {
                 const d = c?.disclosure.pacts.find((x) => x.pactId === p.id);
                 const key = c ? pactConsentKey(c, p.id) : "";
                 const allowed = (action: PactAction) =>
@@ -1233,7 +1261,7 @@ export class NationalDiplomacyPanel extends LitElement {
                   type: "national_approve_pact_amendment",
                   pactId: p.id,
                 } as const;
-                return html`<article
+                return keyed(key, html`<article
                   data-national-pact-id=${p.id}
                   class="rounded border border-white/20 p-3 space-y-2"
                 >
@@ -1257,6 +1285,7 @@ export class NationalDiplomacyPanel extends LitElement {
                           </p>
                           <button
                             class=${button}
+                            type="button"
                             data-national-pact-action="accept"
                             ?disabled=${!allowed(accept)}
                             @click=${() => send(accept)}
@@ -1332,6 +1361,7 @@ export class NationalDiplomacyPanel extends LitElement {
                                   </p>
                                   <button
                                     class=${button}
+                                    type="button"
                                     data-national-pact-action="approve"
                                     ?disabled=${!allowed(approve)}
                                     @click=${() => send(approve)}
@@ -1432,7 +1462,7 @@ export class NationalDiplomacyPanel extends LitElement {
                         `
                       : nothing
                   }
-                </article>`;
+                </article>`);
               })
       }
       ${

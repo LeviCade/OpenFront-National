@@ -218,12 +218,15 @@ export function validateNationalPactPacket(
   tick: number,
   streamId?: string,
 ): void {
+  if (politics !== undefined && !record(politics))
+    throw new Error("NATIONAL invalid public politics");
   if (record(politics)) {
     if (
       !keys(politics, ["empires", "warnings", "victory", "pacts"]) ||
       !Array.isArray(politics.empires) ||
       politics.empires.some(
-        (e) => !record(e) || !keys(e, ["id", "leaderId", "memberIds"]),
+        (e) => !record(e) || !keys(e, ["id", "leaderId", "memberIds"]) ||
+          !id(e.id) || !id(e.leaderId) || !ids(e.memberIds) || !e.memberIds.includes(e.leaderId),
       ) ||
       (politics.warnings !== undefined &&
         (!Array.isArray(politics.warnings) ||
@@ -235,7 +238,9 @@ export function validateNationalPactPacket(
                 "deadlineMs",
                 "remainingMs",
                 "blockedByAssetDisposition",
-              ]),
+              ]) || !id(w.empireId) || typeof w.deadlineMs !== "number" ||
+              !Number.isFinite(w.deadlineMs) || typeof w.remainingMs !== "number" ||
+              !Number.isFinite(w.remainingMs) || typeof w.blockedByAssetDisposition !== "boolean",
           ))) ||
       (politics.victory !== undefined &&
         politics.victory !== null &&
@@ -245,9 +250,14 @@ export function validateNationalPactPacket(
             "resolved",
             "prizes",
           ]) ||
+          !Number.isSafeInteger(politics.victory.sovereignPowerCount) ||
+          typeof politics.victory.resolved !== "boolean" ||
           !Array.isArray(politics.victory.prizes) ||
           politics.victory.prizes.some(
-            (p) => !record(p) || !keys(p, ["kind", "nationId", "empireId"]),
+            (p) => !record(p) || !id(p.nationId) ||
+              (p.kind === "SovereignVictor" ? !keys(p, ["kind", "nationId"]) :
+                (p.kind !== "ImperialVictor" && p.kind !== "EmpireVictor") ||
+                !keys(p, ["kind", "nationId", "empireId"]) || !id(p.empireId)),
           )))
     )
       throw new Error("NATIONAL invalid public politics fields");

@@ -486,6 +486,17 @@ export class GameView implements GameLike {
     return this._nationalPactDisclosure;
   }
 
+  /** A UI invalidation key, not an engine authorization decision. */
+  public nationalAttackEligibilityKey(): string | null {
+    if (this._config.gameConfig?.().nationalMode !== true) return null;
+    return JSON.stringify([
+      this.myPlayer()?.id(),
+      this._nationalPolitics?.empires,
+      this._nationalPolitics?.pacts?.map((p) => [p.id, p.memberIds]),
+      this._nationalConflicts?.layers.filter((l) => l.endedTick === null),
+    ]);
+  }
+
   public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
     return this._nationalPolitics;
   }
