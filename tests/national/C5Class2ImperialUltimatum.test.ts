@@ -9,13 +9,13 @@ import {
   type GameConfig,
 } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
-import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { NationalUltimatumExecution } from "@openfront/engine/execution/NationalUltimatumExecution";
+import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
-import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { projectNationalUltimatums } from "@openfront/engine/national/observation/NationalOutbound";
 import { NationalServerRecipientSession } from "@openfront/engine/national/observation/NationalServerOutbound";
+import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
 import { Client } from "../../src/server/Client";
 import { TrustedNationalMatch } from "../../src/server/national/TrustedNationalMatch";
@@ -27,8 +27,8 @@ const MATCH = "C5_C2_ULTIMATUM";
 const EMPIRE = "c5_c2_empire";
 const IDS = ["C5EMPEROR", "C5TARGET0", "C5OUTSIDE", "C5MEMBER0"];
 const CLIENTS = ["C5CLIENT1", "C5CLIENT2", "C5CLIENT3", "C5CLIENT4"];
-const roster = IDS.map((id, i) =>
-  new PlayerInfo(id, PlayerType.Human, CLIENTS[i], id),
+const roster = IDS.map(
+  (id, i) => new PlayerInfo(id, PlayerType.Human, CLIENTS[i], id),
 );
 
 class PrivateNationalConfig extends TestConfig {
@@ -38,11 +38,18 @@ class PrivateNationalConfig extends TestConfig {
 }
 function seat(id: string, i: number): Client {
   return new Client(
-    id, "imperial-" + id,
+    id,
+    "imperial-" + id,
     {} as NonNullable<Client["claims"]>,
-    null, undefined, "127.0.0.1", id, null,
+    null,
+    undefined,
+    "127.0.0.1",
+    id,
+    null,
     { readyState: WebSocket.OPEN } as Client["ws"],
-    undefined, "imperial-account-" + i, [],
+    undefined,
+    "imperial-account-" + i,
+    [],
   );
 }
 
@@ -50,9 +57,16 @@ async function fixture() {
   const game = await setup(
     "plains",
     { nationalMode: true, gameType: GameType.Private, gameMode: GameMode.FFA },
-    roster, undefined, PrivateNationalConfig,
+    roster,
+    undefined,
+    PrivateNationalConfig,
   );
-  const positions = [[20, 20], [75, 20], [20, 75], [75, 75]];
+  const positions = [
+    [20, 20],
+    [75, 20],
+    [20, 75],
+    [75, 75],
+  ];
   roster.forEach((info, i) => {
     const [x, y] = positions[i];
     game.addExecution(new SpawnExecution(MATCH, info, game.ref(x, y)));
@@ -60,7 +74,10 @@ async function fixture() {
   game.executeNextTick();
   game.executeNextTick();
   const runner = new GameRunner(
-    game, new Executor(game, MATCH, undefined), () => {}, undefined,
+    game,
+    new Executor(game, MATCH, undefined),
+    () => {},
+    undefined,
   );
   const sockets = CLIENTS.map(seat);
   const host = new TrustedNationalMatch(MATCH, runner, sockets, () => {});
@@ -77,18 +94,23 @@ async function fixture() {
 type Action = (index: number, intent: Record<string, unknown>) => void;
 function establish(act: Action) {
   act(0, {
-    type: "national_found_empire", empireId: EMPIRE,
+    type: "national_found_empire",
+    empireId: EMPIRE,
     requestId: "c5_c2_found_empire",
   });
 }
 function recruit(act: Action, index = 3) {
   act(0, {
-    type: "national_offer_empire", empireId: EMPIRE,
-    candidateId: IDS[index], requestId: "c5_c2_recruit_offer_" + index,
+    type: "national_offer_empire",
+    empireId: EMPIRE,
+    candidateId: IDS[index],
+    requestId: "c5_c2_recruit_offer_" + index,
   });
   act(index, {
-    type: "national_accept_empire", empireId: EMPIRE,
-    candidateId: IDS[index], requestId: "c5_c2_recruit_join_" + index,
+    type: "national_accept_empire",
+    empireId: EMPIRE,
+    candidateId: IDS[index],
+    requestId: "c5_c2_recruit_join_" + index,
   });
 }
 function issue(
@@ -98,26 +120,47 @@ function issue(
   durationTicks = 20,
 ) {
   return {
-    type: "national_issue_ultimatum", empireId: EMPIRE,
-    targetId, threat, durationTicks, requestId,
+    type: "national_issue_ultimatum",
+    empireId: EMPIRE,
+    targetId,
+    threat,
+    durationTicks,
+    requestId,
   };
 }
-function respond(ultimatumId: string, decision: "accept" | "refuse", requestId = "c5_c2_reply") {
-  return { type: "national_respond_ultimatum", ultimatumId, decision, requestId };
+function respond(
+  ultimatumId: string,
+  decision: "accept" | "refuse",
+  requestId = "c5_c2_reply",
+) {
+  return {
+    type: "national_respond_ultimatum",
+    ultimatumId,
+    decision,
+    requestId,
+  };
 }
 function resolve(
   ultimatumId: string,
   decision: "enforce" | "back-down" | "withdraw",
   requestId = "c5_c2_decide",
 ) {
-  return { type: "national_resolve_ultimatum", ultimatumId, decision, requestId };
+  return {
+    type: "national_resolve_ultimatum",
+    ultimatumId,
+    decision,
+    requestId,
+  };
 }
 function assets(game: Game) {
   return IDS.map((id) => {
     const p = game.player(id);
     return {
-      id, gold: p.gold().toString(), trade: p.tradeGold().toString(),
-      piracy: p.piracyGold().toString(), troops: p.troops(),
+      id,
+      gold: p.gold().toString(),
+      trade: p.tradeGold().toString(),
+      piracy: p.piracyGold().toString(),
+      troops: p.troops(),
     };
   });
 }
@@ -133,11 +176,16 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     act(0, { ...issue("embargo"), clientID: CLIENTS[1] });
     const [demand] = view(0);
     expect(demand).toMatchObject({
-      issuerId: IDS[0], targetId: IDS[1],
-      threat: "embargo", phase: "pending", version: 1,
+      issuerId: IDS[0],
+      targetId: IDS[1],
+      threat: "embargo",
+      phase: "pending",
+      version: 1,
     });
     expect(view(1)[0]).toMatchObject({
-      id: demand.id, role: "recipient", requestId: null,
+      id: demand.id,
+      role: "recipient",
+      requestId: null,
     });
     expect(view(2)).toEqual([]);
     expect(view(3)).toEqual([]);
@@ -154,14 +202,19 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
       isConnected: () => true,
       isSpectator: () => false,
     });
-    expect(serverRecipient.projectPolitics()?.nationalUltimatums?.items).toHaveLength(1);
-    expect(serverOutsider.projectPolitics()?.nationalUltimatums?.items).toEqual([]);
+    expect(
+      serverRecipient.projectPolitics()?.nationalUltimatums?.items,
+    ).toHaveLength(1);
+    expect(serverOutsider.projectPolitics()?.nationalUltimatums?.items).toEqual(
+      [],
+    );
     act(1, { ...respond(demand.id, "refuse"), clientID: CLIENTS[0] });
     expect(view(0)[0].phase).toBe("decision-required");
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
     act(0, resolve(demand.id, "enforce"));
     expect(view(0)[0]).toMatchObject({
-      phase: "enforced", credibility: "kept",
+      phase: "enforced",
+      credibility: "kept",
       imposedMembers: expect.arrayContaining([IDS[0], IDS[3]]),
     });
     expect(game.player(IDS[0]).canTrade(game.player(IDS[1]))).toBe(false);
@@ -173,12 +226,20 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
-    expect(NationalUltimatumExecution.viewFor(restored, restored.player(IDS[1]))[0].phase)
-      .toBe("enforced");
-    console.info("C5_C2_ULTIMATUM_EMBARGO_WITNESS=" + JSON.stringify({
-      source: "GameRunner/TrustedNationalMatch/Executor/Player.addEmbargo",
-      before, after: assets(game), war: false, imposed: view(0)[0].imposedMembers,
-    }));
+    expect(
+      NationalUltimatumExecution.viewFor(restored, restored.player(IDS[1]))[0]
+        .phase,
+    ).toBe("enforced");
+    console.info(
+      "C5_C2_ULTIMATUM_EMBARGO_WITNESS=" +
+        JSON.stringify({
+          source: "GameRunner/TrustedNationalMatch/Executor/Player.addEmbargo",
+          before,
+          after: assets(game),
+          war: false,
+          imposed: view(0)[0].imposedMembers,
+        }),
+    );
   });
 
   it("acceptance is only consent until the original emperor-offer + recipient-accept both execute", async () => {
@@ -188,17 +249,24 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     act(0, issue("imperial-war"));
     const id = view(1)[0].id;
     act(1, respond(id, "accept"));
-    expect(view(1)[0]).toMatchObject({ phase: "consented", response: "accept" });
+    expect(view(1)[0]).toMatchObject({
+      phase: "consented",
+      response: "accept",
+    });
     expect(game.nationalPoliticalAuthority()?.empireOf(IDS[1])).toBeNull();
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
     act(0, {
-      type: "national_offer_empire", empireId: EMPIRE,
-      candidateId: IDS[1], requestId: "c5_c2_offer",
+      type: "national_offer_empire",
+      empireId: EMPIRE,
+      candidateId: IDS[1],
+      requestId: "c5_c2_offer",
     });
     expect(game.nationalPoliticalAuthority()?.empireOf(IDS[1])).toBeNull();
     act(1, {
-      type: "national_accept_empire", empireId: EMPIRE,
-      candidateId: IDS[1], requestId: "c5_c2_join",
+      type: "national_accept_empire",
+      empireId: EMPIRE,
+      candidateId: IDS[1],
+      requestId: "c5_c2_join",
     });
     expect(game.nationalPoliticalAuthority()?.empireOf(IDS[1])).toBe(EMPIRE);
     expect(view(1)[0]).toMatchObject({ phase: "acceded", credibility: "kept" });
@@ -215,8 +283,11 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     establish(act);
     // A WAR threat is not permission to create duplicate legal conflict layers.
     act(0, {
-      type: "national_declare_war", scope: "imperial",
-      nationId: IDS[0], targetId: IDS[1], targetKind: "nation",
+      type: "national_declare_war",
+      scope: "imperial",
+      nationId: IDS[0],
+      targetId: IDS[1],
+      targetKind: "nation",
       requestId: "c5_c2_prior_war",
     });
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(true);
@@ -228,7 +299,9 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(true);
     act(0, resolve(protectedId, "enforce", "c5_c2_protected_enforce"));
     expect(view(0)[0]).toMatchObject({
-      phase: "backed-down", credibility: "broken", warId: null,
+      phase: "backed-down",
+      credibility: "broken",
+      warId: null,
     });
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
     expect(assets(game)).toEqual(before);
@@ -241,18 +314,24 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     const enforced = view(0).find((r) => r.id === lawfulId)!;
     expect(enforced.phase).toBe("enforced");
     expect(enforced.warId).toMatch(/^ultimatum-war-/);
-    expect(game.nationalWarState()?.wars.layers.some((l) => l.id === enforced.warId))
-      .toBe(true);
+    expect(
+      game.nationalWarState()?.wars.layers.some((l) => l.id === enforced.warId),
+    ).toBe(true);
     expect(assets(game)).toEqual(before);
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
-    console.info("C5_C2_ULTIMATUM_WAR_WITNESS=" + JSON.stringify({
-      before, after: assets(game),
-      duplicateWarDenied: game.nationalWarState()!.wars.layers.length === originalLayers + 1,
-      lawfulWar: game.nationalWarAuthority()?.atWar(IDS[0], IDS[2]),
-      warId: enforced.warId,
-    }));
+    console.info(
+      "C5_C2_ULTIMATUM_WAR_WITNESS=" +
+        JSON.stringify({
+          before,
+          after: assets(game),
+          duplicateWarDenied:
+            game.nationalWarState()!.wars.layers.length === originalLayers + 1,
+          lawfulWar: game.nationalWarAuthority()?.atWar(IDS[0], IDS[2]),
+          warId: enforced.warId,
+        }),
+    );
   });
 
   it("rejects subordinate issuer, impersonation, reused ID, stale deadline and crown succession", async () => {
@@ -263,20 +342,26 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     act(3, issue("embargo", IDS[1], "subordinate_issue"));
     expect(view(1)).toEqual([]);
     // Wrong browser clientID is ignored; the authenticated socket decides.
-    act(1, { ...issue("embargo", IDS[2], "impostor_issue"), clientID: CLIENTS[0] });
+    act(1, {
+      ...issue("embargo", IDS[2], "impostor_issue"),
+      clientID: CLIENTS[0],
+    });
     expect(view(2)).toEqual([]);
     act(0, issue("embargo", IDS[1], "original_issue", 2));
     const id = view(1)[0].id;
-    expect(host.submit(sockets[0], issue("embargo", IDS[2], "original_issue"))).toBe(false);
+    act(0, issue("embargo", IDS[2], "original_issue"));
     expect(view(2)).toEqual([]);
     host.tick(); // already past the two-tick deadline
     act(1, respond(id, "accept", "late_accept"));
     expect(view(1)[0]).toMatchObject({
-      phase: "decision-required", response: "none",
+      phase: "decision-required",
+      response: "none",
     });
     act(0, {
-      type: "national_transfer_crown", empireId: EMPIRE,
-      successorId: IDS[3], requestId: "c5_c2_transfer",
+      type: "national_transfer_crown",
+      empireId: EMPIRE,
+      successorId: IDS[3],
+      requestId: "c5_c2_transfer",
     });
     host.tick();
     expect(view(0)).toEqual([]);
@@ -286,11 +371,15 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(game.player(IDS[0]).canTrade(game.player(IDS[1]))).toBe(true);
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
     expect(assets(game)).toEqual(before);
-    expect(host.submit(sockets[1], {
-      type: "national_respond_ultimatum", ultimatumId: "missing",
-      decision: "accept", requestId: "foreign_not_a_credential",
-      clientID: CLIENTS[0],
-    })).toBe(true);
+    expect(
+      host.submit(sockets[1], {
+        type: "national_respond_ultimatum",
+        ultimatumId: "missing",
+        decision: "accept",
+        requestId: "foreign_not_a_credential",
+        clientID: CLIENTS[0],
+      }),
+    ).toBe(true);
     host.tick();
     host.tick();
     expect(view(1)[0].phase).toBe("expired");
@@ -305,20 +394,35 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(again).toEqual(bytes);
     for (const target of [game, restored]) {
       const executor = new Executor(target, MATCH, undefined);
-      target.addExecution(executor.createExec(StampedIntentSchema.parse({
-        ...respond(id, "refuse", "replay_refuse"), clientID: CLIENTS[1],
-      })));
+      target.addExecution(
+        executor.createExec(
+          StampedIntentSchema.parse({
+            ...respond(id, "refuse", "replay_refuse"),
+            clientID: CLIENTS[1],
+          }),
+        ),
+      );
       target.executeNextTick();
       target.executeNextTick();
-      target.addExecution(executor.createExec(StampedIntentSchema.parse({
-        ...resolve(id, "enforce", "replay_enforce"), clientID: CLIENTS[0],
-      })));
+      target.addExecution(
+        executor.createExec(
+          StampedIntentSchema.parse({
+            ...resolve(id, "enforce", "replay_enforce"),
+            clientID: CLIENTS[0],
+          }),
+        ),
+      );
       target.executeNextTick();
       target.executeNextTick();
       // Same request cannot produce another embargo, entry or ledger event.
-      target.addExecution(executor.createExec(StampedIntentSchema.parse({
-        ...resolve(id, "enforce", "replay_enforce"), clientID: CLIENTS[0],
-      })));
+      target.addExecution(
+        executor.createExec(
+          StampedIntentSchema.parse({
+            ...resolve(id, "enforce", "replay_enforce"),
+            clientID: CLIENTS[0],
+          }),
+        ),
+      );
       target.executeNextTick();
       target.executeNextTick();
       expect(target.player(IDS[0]).canTrade(target.player(IDS[1]))).toBe(false);
