@@ -60,7 +60,7 @@ jobs:
       - name: All project tests
         run: npm test
       - name: Independent E5 negative controls
-        run: node --test tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs
+        run: npx --no-install vitest run --project node tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs
       - name: E6 workflow safety contract
         run: |
           bash -n scripts/national-gpu-ci/run-four-modes.sh
