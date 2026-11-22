@@ -1108,6 +1108,31 @@ export class GameImpl implements Game {
     return this._national?.imperialAdministrationFor(observer.id()) ?? null;
   }
 
+  /**
+   * Resolve the CURRENT live constituent and physical structure at execution
+   * time. Pending orders carry identifiers, never borrowed unit objects.
+   */
+  private imperialStructureTarget(
+    empireId: string,
+    memberId: PlayerID,
+    unitId: number,
+  ): { member: PlayerImpl; structure: Unit } {
+    const member = this._players.get(memberId);
+    if (
+      !member ||
+      !member.hasSpawned() ||
+      !member.isAlive() ||
+      this._national?.authority().empireOf(member.id()) !== empireId
+    )
+      throw new Error("NATIONAL: structure target is not a live constituent");
+    if (!Number.isSafeInteger(unitId) || unitId < 0)
+      throw new Error("NATIONAL: invalid structure identifier");
+    const structure = this.unit(unitId);
+    if (!structure || structure.owner() !== member || !structure.isActive())
+      throw new Error("NATIONAL: structure is missing or not member-owned");
+    return { member, structure };
+  }
+
   /** Trusted engine entry shared by stamped commands and in-engine principals. */
   performNationalImperialAdministration(
     actor: Player,
@@ -1179,6 +1204,30 @@ export class GameImpl implements Game {
         this.addExecution(
           ConstructionExecution.forImperialPurchase(this, structure),
         );
+        break;
+      }
+      case "upgrade-structure": {
+        const { member, structure } = this.imperialStructureTarget(
+          command.empireId,
+          command.memberId,
+          command.unitId,
+        );
+        member.upgradeImperialStructure(structure, (cost) =>
+          this._national!.debitImperialConstruction(
+            actor.id(),
+            command.empireId,
+            cost,
+          ),
+        );
+        break;
+      }
+      case "demolish-structure": {
+        const { member, structure } = this.imperialStructureTarget(
+          command.empireId,
+          command.memberId,
+          command.unitId,
+        );
+        member.demolishImperialStructure(structure);
         break;
       }
       case "set-army-mode":
@@ -1344,6 +1393,23 @@ export class GameImpl implements Game {
       throw new Error("NATIONAL: invalid worker income owner");
     player.addGold(
       this._national?.routeWorkerIncome(player.id(), gross) ?? gross,
+    );
+  }
+
+  /**
+   * Production credits are split exactly once on commercial payout, not from
+   * addGold (which also handles donations, conquest and treasury restitution).
+   */
+  creditNationalCommercialIncome(
+    player: Player,
+    gross: bigint,
+    tile?: TileRef,
+  ): void {
+    if (this._national && this._players.get(player.id()) !== player)
+      throw new Error("NATIONAL: invalid commercial income owner");
+    player.addGold(
+      this._national?.routeNonWorkerIncome(player.id(), gross) ?? gross,
+      tile,
     );
   }
 

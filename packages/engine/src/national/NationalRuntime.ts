@@ -123,6 +123,7 @@ const exactGold = z.string().regex(/^(0|[1-9][0-9]*)$/);
 const administrationSchema = z.object({
   empireId: z.string(),
   workerIncomeBps: z.number().int().min(0).max(10_000),
+  nonWorkerIncomeBps: z.number().int().min(0).max(10_000).optional(),
   allowedConstruction: z.array(z.enum(UnitType)).nullable(),
   treasury: exactGold,
   military: z
@@ -141,6 +142,7 @@ type AdministrationRow = z.infer<typeof administrationSchema>;
 
 export type ImperialPolicy = {
   readonly workerIncomeBps: number;
+  readonly nonWorkerIncomeBps?: number;
   readonly allowedConstruction: UnitType[] | null;
 };
 
@@ -159,6 +161,18 @@ export type NationalImperialAdministrationCommand =
       memberId: PlayerID;
       type: UnitType;
       tile: number;
+    }
+  | {
+      kind: "upgrade-structure";
+      empireId: string;
+      memberId: PlayerID;
+      unitId: number;
+    }
+  | {
+      kind: "demolish-structure";
+      empireId: string;
+      memberId: PlayerID;
+      unitId: number;
     }
   | { kind: "dissolve"; empireId: string }
   | {
@@ -406,6 +420,7 @@ export class NationalRuntime {
     const row = administrationSchema.parse({
       empireId,
       workerIncomeBps: policy.workerIncomeBps,
+      nonWorkerIncomeBps: policy.nonWorkerIncomeBps ?? this.administration.get(empireId)?.nonWorkerIncomeBps ?? 0,
       allowedConstruction: policy.allowedConstruction,
       treasury: this.administration.get(empireId)?.treasury ?? "0",
       military: this.administration.get(empireId)?.military,
@@ -430,6 +445,7 @@ export class NationalRuntime {
     return Object.freeze({
       empireId: empire.id,
       workerIncomeBps: row?.workerIncomeBps ?? 0,
+      nonWorkerIncomeBps: row?.nonWorkerIncomeBps ?? 0,
       allowedConstruction:
         row?.allowedConstruction == null
           ? null
@@ -508,6 +524,7 @@ export class NationalRuntime {
     const row = administrationSchema.parse({
       empireId,
       workerIncomeBps: previous?.workerIncomeBps ?? 0,
+      nonWorkerIncomeBps: previous?.nonWorkerIncomeBps ?? 0,
       allowedConstruction: previous?.allowedConstruction ?? null,
       treasury: previous?.treasury ?? "0",
       military: {
@@ -594,6 +611,7 @@ export class NationalRuntime {
     const row = administrationSchema.parse({
       empireId,
       workerIncomeBps: previous?.workerIncomeBps ?? 0,
+      nonWorkerIncomeBps: previous?.nonWorkerIncomeBps ?? 0,
       allowedConstruction: previous?.allowedConstruction ?? null,
       treasury: previous?.treasury ?? "0",
       military: {
@@ -726,6 +744,24 @@ export class NationalRuntime {
     if (!row || row.workerIncomeBps === 0) return gross;
     const split = splitWorkerIncome(gross, row.workerIncomeBps);
     row.treasury = (BigInt(row.treasury) + split.imperial).toString();
+    return split.personal;
+  }
+
+  /**
+   * D-011 commercial revenue, explicitly only trade ships, trains and piracy
+   * at their physical payout boundaries. Donations, conquest, gifts and generic
+   * addGold never enter this path. Historical policy defaults to zero.
+   */
+  routeNonWorkerIncome(memberId: PlayerID, gross: bigint): bigint {
+    if (gross < 0n) throw new Error("NATIONAL: negative commercial income");
+    const empire = this.politics.empires.find((e) =>
+      e.memberIds.includes(memberId),
+    );
+    const row = empire && this.administration.get(empire.id);
+    const rate = row?.nonWorkerIncomeBps ?? 0;
+    if (rate === 0) return gross;
+    const split = splitWorkerIncome(gross, rate);
+    row!.treasury = (BigInt(row!.treasury) + split.imperial).toString();
     return split.personal;
   }
 

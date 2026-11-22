@@ -788,6 +788,7 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       empireId: NationalPoliticalId,
       policy: z.object({
         workerIncomeBps: zb.uint({ min: 0, max: 10_000 }),
+        nonWorkerIncomeBps: zb.uint({ min: 0, max: 10_000 }).optional(),
         allowedConstruction: z.array(z.enum(UnitType)).max(16).nullable(),
       }),
     }),
@@ -804,6 +805,19 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       memberId: MappedID,
       type: z.enum(UnitType),
       tile: zb.uint(),
+    }),
+    // Append new kinds; never renumber or reinterpret existing intents.
+    z.object({
+      kind: z.literal("upgrade-structure"),
+      empireId: NationalPoliticalId,
+      memberId: MappedID,
+      unitId: zb.uint(),
+    }),
+    z.object({
+      kind: z.literal("demolish-structure"),
+      empireId: NationalPoliticalId,
+      memberId: MappedID,
+      unitId: zb.uint(),
     }),
     z.object({ kind: z.literal("dissolve"), empireId: NationalPoliticalId }),
     z.object({
