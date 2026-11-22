@@ -135,7 +135,15 @@ export interface NationalUltimatumViewData {
     readonly threat: "embargo" | "imperial-war";
     readonly issuedTick: number;
     readonly deadlineTick: number;
-    readonly phase: "pending" | "consented" | "decision-required" | "acceded" | "enforced" | "backed-down" | "withdrawn" | "expired";
+    readonly phase:
+      | "pending"
+      | "consented"
+      | "decision-required"
+      | "acceded"
+      | "enforced"
+      | "backed-down"
+      | "withdrawn"
+      | "expired";
     readonly response: "none" | "accept" | "refuse";
     readonly credibility: "pending" | "kept" | "broken" | "void";
     readonly version: number;
