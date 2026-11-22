@@ -333,7 +333,9 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     expect(military(m, B, "c5_final_national_accept").accepted).toBe(true);
     expect(war(m, nationalId).endedTick).not.toBeNull();
     expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(false);
-    expect(m.game.nationalWarAuthority()?.authorizeOffensiveAction(B, D)).toBe(false);
+    expect(m.game.nationalWarAuthority()?.authorizeOffensiveAction(B, D)).toBe(
+      false,
+    );
   });
 
   it("denies stale delegated requests after revocation and old emperor after crown transfer, preserving identical queued replay", async () => {
@@ -456,9 +458,7 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
       candidateId: B,
       requestId: "c5_illegal_enemy_acceptance",
     });
-    expect(political(m, B, "c5_illegal_enemy_acceptance").accepted).toBe(
-      false,
-    );
+    expect(political(m, B, "c5_illegal_enemy_acceptance").accepted).toBe(false);
     expect(m.game.nationalPoliticalAuthority()?.empireOf(B)).toBeNull();
     expect(m.game.nationalPoliticalAuthority()?.empireOf(C)).toBe(IMP);
     expect(war(m, original.warId!)).toEqual(originalLayer);
@@ -489,10 +489,12 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     // A departed physical socket cannot leave a queued command to execute.
     m.host.revokeRecipient(m.hostClients[1]);
     m.host.recordServerDisconnect(clients[1], true);
-    expect(m.host.submit(m.hostClients[1], {
-      ...pending,
-      requestId: "c5_socket_revoked",
-    })).toBe(false);
+    expect(
+      m.host.submit(m.hostClients[1], {
+        ...pending,
+        requestId: "c5_socket_revoked",
+      }),
+    ).toBe(false);
     expect(m.host.tick().committedIntents).toBe(1);
     m.host.tick();
     expect(
@@ -513,12 +515,9 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
       ...pending,
       requestId: "c5_authorized_after_resume",
     });
-    expect(military(m, B, "c5_authorized_after_resume").accepted).toBe(
-      true,
-    );
+    expect(military(m, B, "c5_authorized_after_resume").accepted).toBe(true);
     expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(true);
     const { restored } = await roundTrip(m.game, "plains");
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(m.game));
   });
-
 });
