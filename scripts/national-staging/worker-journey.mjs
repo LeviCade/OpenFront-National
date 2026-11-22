@@ -78,7 +78,20 @@ function durableRow(id) {
           "accountId,clientID,playerID,subject",
       ),
     );
+    const snap = decodeSnapshotValue(Buffer.from(data.snapshot, "base64"));
+    assert.equal(snap.tick, row.tick);
+    const people = data.seats.map(seat => {
+      const player = snap.players.find(p => p.d.info.id === seat.playerID)?.d;
+      assert(player && typeof player.troops === "bigint" && typeof player.gold === "bigint");
+      return [seat.playerID, player.troops.toString(), player.gold.toString()];
+    });
+    const wars = snap.game.d.nationalWar.wars;
+    const activeWarScopes = wars.layers.filter(w => w.endedTick === null).map(w => w.scope).sort();
     return {
+      resourceCommitment: createHash("sha256").update(JSON.stringify(people)).digest("hex"),
+      activeWarScopes,
+      pendingMotionIds: wars.motions.filter(m => m.status === "pending").map(m => m.id),
+      activeAttacks: snap.execs.filter(e => e.t === "Attack" && e.d.active && e.d.initialized).length,
       tick: row.tick,
       commitment: digest,
       replayDigest: data.state.replayDigest,
@@ -290,6 +303,7 @@ async function peer() {
           if (state.actor && own.id !== state.actor)
             throw new Error("own engine identity changed");
           state.actor = own.id;
+          state.activeOwnAttack = own.outgoingAttacks?.some(a => !a.retreating && a.troops > 0) ?? false;
         }
         if (map && (!state.actor || map.observerId !== state.actor))
           throw new Error("wrong recipient");
@@ -755,7 +769,19 @@ try {
     assert(
       typeof pendingPeaceMotion === "string" && pendingPeaceMotion.length > 0,
     );
-    pass("durable-imperial-war-and-pending-peace");
+    await pactReceipt(
+      0,
+      {
+        type: "national_declare_war",
+        scope: "national",
+        nationId: players[0].actor,
+        targetId: players[2].actor,
+        targetKind: "nation",
+        requestId: "e2-durable-national-war",
+      },
+      true,
+    );
+    pass("durable-national-and-imperial-war-and-pending-peace");
   }
 
   const beforeModeAttempt = players[0].lastProjectionTick;
@@ -905,6 +931,10 @@ try {
       "LOCAL_STAGING_WORKER_PASS automated_protocol_accounts=3 humans=0 upstream_oauth=0 gpu=0 restart_recovery=0",
     );
   } else {
+    setStage("actual troop debit and in-flight execution before kill");
+    send(liveA, { type: "intent", intent: { type: "attack", targetID: null, troops: null } });
+    await until(() => liveA.activeOwnAttack, "real in-flight attack", 20_000);
+    pass("actual-in-flight-military-execution");
     setStage("SIGKILL actual Master and all authoritative Workers");
     const oldStreams = new Set([
       liveA.streamId,
@@ -943,6 +973,8 @@ try {
     assert.equal(restored[0].durableTick, disk.tick);
     assert.equal(restored[0].stateCommitment, disk.commitment);
     assert.equal(restored[0].replayDigest, disk.replayDigest);
+    assert.deepEqual(disk.activeWarScopes, ["imperial", "national"]);
+    assert(disk.activeAttacks > 0, "no in-flight attack in exact durable state");
     const restoreElapsedMs = Math.round(performance.now() - startedRecovery);
     pass("same-game-restored-exact-independent-disk-commitment");
 
@@ -1137,6 +1169,9 @@ try {
           stateCommitment: disk.commitment,
           replayDigest: disk.replayDigest,
           generation: disk.generation,
+        resourceCommitment: disk.resourceCommitment,
+        activeWarScopes: disk.activeWarScopes,
+        activeAttacks: disk.activeAttacks,
           restoreElapsedMs,
           recoveryElapsedMs: Math.round(performance.now() - startedRecovery),
           observedAcknowledgedLossTicks: Math.max(
