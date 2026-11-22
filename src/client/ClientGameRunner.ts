@@ -101,6 +101,8 @@ import {
   Transport,
 } from "./Transport";
 import {
+  assertTrustedPublicProjection,
+  readTrustedVictory,
   materializeTrustedNationalUpdate,
   parseTrustedNationalProjection,
   readTrustedNationalObserverMap,
@@ -1225,8 +1227,37 @@ export class ClientGameRunner {
         event.projection.nationalObserverMap,
         event.projection.tick,
       );
+      if (observerMap === null) {
+        // The authoritative host emits public-only frames before spawn and after
+        // elimination. Missing geography during an active life remains fatal.
+        assertTrustedPublicProjection(event.projection);
+        const update = materializeTrustedNationalUpdate(event.projection, this.trustedLastTick);
+        const actor = update.updates[GameUpdateType.Player].find((p) => p.id === this.trustedPrincipal);
+        const victory = readTrustedVictory(event.projection, this.trustedPrincipal!);
+        const eliminated = actor?.isAlive === false || this.myPlayer?.isAlive() === false;
+        if (this.myPlayer?.hasSpawned() && !eliminated && victory === "unresolved" && !this.gameView.inSpawnPhase())
+          throw new Error("NATIONAL active seat lost mandatory private map");
+        const hadPrivate = this.gameView.trustedProjectionReady();
+        if (hadPrivate) this.revokeTrustedSight();
+        this.gameView.update(update);
+        const spawn = this.gameView.inSpawnPhase() && victory === "unresolved";
+        this.gameView.setTrustedSpawnReady(spawn);
+        this.trustedLastTick = update.tick;
+        if (this.trustedStatus) {
+          this.trustedStatus.dataset.trustedNationalMap = spawn ? "spawn" : "public";
+          this.trustedStatus.dataset.trustedNationalLife = spawn ? "unspawned" : "inactive";
+          this.trustedStatus.dataset.trustedNationalVictory = victory;
+          this.trustedStatus.textContent = spawn ? "NATIONAL · Choose a spawn location" :
+            victory === "unresolved" ? "NATIONAL · No active nation — observing public state" :
+            victory === "victory" ? "NATIONAL · Victory confirmed" : "NATIONAL · Defeat confirmed";
+        }
+        this.webglBuilder?.update(this.gameView);
+        this.renderer.tick();
+        this.health.recordTurn(performance.now());
+        this.updateHealth();
+        return;
+      }
       if (
-        observerMap === null ||
         this.trustedContinuity === null ||
         observerMap.width !== this.gameView.width() ||
         observerMap.height !== this.gameView.height()
@@ -1255,6 +1286,7 @@ export class ClientGameRunner {
       this.gameView.reconcileTrustedTileVisibility(delta.removedTileRefs);
       if (delta.clearAllTiles || delta.removedTileRefs.length || delta.clearAllUnits || delta.removedUnitIds.length) {
         this.eventBus.emit(new TrustedNationalSightRevokedEvent());
+        this.eventBus.emit(new NationalMapTargetSelectedEvent(null));
       }
       this.gameView.reconcileTrustedUnitVisibility(
         delta.clearAllUnits,
@@ -1284,6 +1316,8 @@ export class ClientGameRunner {
         this.trustedStatus.dataset.trustedNationalUnits = delta.unitPartial || delta.unitOverflow ? "partial" : "synchronized";
         this.trustedStatus.dataset.trustedNationalTileSweep = delta.sweepComplete ? "complete" : "paging";
         this.trustedStatus.dataset.trustedNationalUnitSweep = delta.unitSweepComplete ? "complete" : "paging";
+        const victory = readTrustedVictory(event.projection, this.trustedPrincipal!);
+        this.trustedStatus.dataset.trustedNationalVictory = victory;
         const defeated = pageComplete && !this.gameView.inSpawnPhase() &&
           this.myPlayer?.isAlive() === false;
         this.trustedStatus.dataset.trustedNationalLife = defeated ? "inactive" : pageComplete ? "active" : "unverified";
@@ -1303,7 +1337,8 @@ export class ClientGameRunner {
           " · Your troops " +
           Math.floor(observerMap.ownResources.troops).toLocaleString() +
           (pageComplete ? " · Active outgoing attacks: " + observedAttacks : "") +
-          (defeated ? " · Nation inactive — no further commands" : "");
+          (defeated ? " · Nation inactive — no further commands" : "") +
+          (victory === "victory" ? " · Victory confirmed" : victory === "defeat" ? " · Defeat confirmed" : "");
       }
       this.webglBuilder?.update(this.gameView);
       this.renderer.tick();

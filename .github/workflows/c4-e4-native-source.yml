@@ -48,7 +48,7 @@ jobs:
       - name: Targeted E4 real-code regressions
         if: always()
         run: |
-          npx --no-install vitest run tests/ui/national/C4NativeObserverRevocation.test.ts             tests/ui/national/NationalHumanMapInputR11.test.ts             tests/ui/national/TrustedNationalProjectionMapC2.test.ts             tests/ui/national/NationalPrivateCapabilityClass5.test.ts             tests/ui/national/NationalPrivatePanelClass5.test.ts             tests/ui/national/NationalFoundingWire.test.ts             tests/ui/national/NationalWarWire.test.ts
+          npx --no-install vitest run tests/national/C2PrivateObserverMapWire.test.ts tests/national/C4ContinuousFogAlgorithm.test.ts tests/ui/national/C4NativeObserverRevocation.test.ts             tests/ui/national/NationalHumanMapInputR11.test.ts             tests/ui/national/TrustedNationalProjectionMapC2.test.ts             tests/ui/national/NationalPrivateCapabilityClass5.test.ts             tests/ui/national/NationalPrivatePanelClass5.test.ts             tests/ui/national/NationalFoundingWire.test.ts             tests/ui/national/NationalWarWire.test.ts
       - name: Full project typecheck
         if: always()
         run: npm run typecheck

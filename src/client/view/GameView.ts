@@ -835,6 +835,11 @@ export class GameView implements GameLike {
       // First-emission (new player) — must have all static fields populated.
       // Subsequent emissions for an existing player carry only changed fields.
       const existing = this._players.get(pu.id);
+      // Public-only pre-spawn self identity has no private/static client header.
+      // Wait for the first full authenticated own update, rather than creating
+      // a fake local player which cannot later be promoted by a partial diff.
+      if (this._trustedNationalProjection && !existing &&
+          pu.id === this.trustedPrincipal && pu.clientID !== this._myClientID) return;
       if (
         this._trustedNationalProjection &&
         pu.id !== this.trustedPrincipal &&

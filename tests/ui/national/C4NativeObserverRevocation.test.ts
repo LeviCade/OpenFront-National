@@ -13,6 +13,8 @@ import {
   type FrameUploadTarget,
 } from "../../../src/client/render/frame/Upload";
 import {
+  assertTrustedPublicProjection,
+  readTrustedVictory,
   materializeTrustedNationalUpdate,
   parseTrustedNationalProjection,
 } from "../../../src/client/TrustedNationalSession";
@@ -113,6 +115,26 @@ function setup() {
 }
 
 describe("C4 E4: native recipient view revocation", () => {
+  it("accepts public-only pre-spawn data, rejects private lanes, and requires explicit victory", () => {
+    const packet = { tick: 1, packedTileUpdates: [], updates: { [GameUpdateType.Player]: [] },
+      nationalPolitics: { empires: [], victory: null },
+      nationalConflicts: { recipientId: "", motions: [], layers: [] } };
+    expect(() => assertTrustedPublicProjection(packet)).not.toThrow();
+    expect(() => assertTrustedPublicProjection({ ...packet, packedPlayerUpdates: [1, 2, 3, 4, 5] })).toThrow();
+    expect(() => assertTrustedPublicProjection({ ...packet, nationalConflicts: { recipientId: self, motions: [], layers: [] } })).toThrow();
+    expect(readTrustedVictory(packet, self)).toBe("unresolved");
+    const resolved = { ...packet, nationalPolitics: { empires: [], victory: { resolved: true, sovereignPowerCount: 1, prizes: [{ kind: "SovereignVictor", nationId: self }] } } };
+    expect(readTrustedVictory(resolved, self)).toBe("victory");
+    expect(readTrustedVictory(resolved, enemy)).toBe("defeat");
+    const { view } = setup();
+    expect(view.trustedSpawnReady()).toBe(false);
+    view.setTrustedSpawnReady(true);
+    expect(view.trustedSpawnReady()).toBe(true);
+    expect(view.trustedProjectionReady()).toBe(false);
+    view.resetTrustedProjectionSight();
+    expect(view.trustedSpawnReady()).toBe(false);
+  });
+
   it("draws authorized ownership and packed native units, deletes a unit without fake death, and refuses stale attack dispatch", () => {
     const { view, update, receiver } = setup();
     const packed = packUnitUpdates([makeUnitUpdate({ id: marker.id, ownerID: 2, pos: enemyTile, lastPos: enemyTile, unitType: UnitType.Warship, targetable: false, level: 0 })]).packedUnitUpdates;

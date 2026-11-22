@@ -224,6 +224,39 @@ export function parseTrustedNationalProjection(
  *
  * Reject mismatched ticks, backward/replayed projections and invalid lanes.
  */
+/** E3 intentionally omits the private map for unspawned or eliminated seats.
+ * This restricted public frame MUST NOT authorize a private map or commands. */
+export function assertTrustedPublicProjection(packet: TrustedNationalProjection): void {
+  if (packet.nationalObserverMap !== undefined ||
+      !Array.isArray(packet.packedTileUpdates) || packet.packedTileUpdates.length !== 0 ||
+      ["packedUnitUpdates", "packedPlayerUpdates", "packedMissileTimers", "playerNameViewData",
+       "nationalCommandResults", "nationalAccessionOffers"].some((key) => packet[key] !== undefined) ||
+      !record(packet.updates))
+    throw new Error("NATIONAL unauthorized public-only projection");
+  const allowed = new Set(["type", "id", "name", "displayName", "nationFlag", "playerType", "smallID", "isAlive", "tilesOwned"]);
+  const players = packet.updates[GameUpdateType.Player];
+  if (!Array.isArray(players) || players.some((player) => !record(player) ||
+      player.type !== GameUpdateType.Player || typeof player.id !== "string" ||
+      Object.keys(player).some((key) => !allowed.has(key))))
+    throw new Error("NATIONAL public roster contains unauthorized player fields");
+  const conflict = packet.nationalConflicts;
+  if (conflict !== undefined && (!record(conflict) || conflict.recipientId !== "" ||
+      !Array.isArray(conflict.motions) || conflict.motions.length !== 0))
+    throw new Error("NATIONAL private conflict data without active sight");
+}
+
+/** Only the explicit E1 public terminal result may be displayed as victory. */
+export function readTrustedVictory(packet: TrustedNationalProjection, actor: string): "victory" | "defeat" | "unresolved" {
+  const politics = packet.nationalPolitics;
+  if (!record(politics) || !record(politics.victory)) return "unresolved";
+  const victory = politics.victory;
+  if (victory.resolved !== true || victory.sovereignPowerCount !== 1 ||
+      !Array.isArray(victory.prizes) || !victory.prizes.length ||
+      victory.prizes.some((p) => !record(p) || typeof p.nationId !== "string" ||
+        typeof p.kind !== "string")) return "unresolved";
+  return victory.prizes.some((p) => p.nationId === actor) ? "victory" : "defeat";
+}
+
 export function materializeTrustedNationalUpdate(
   packet: TrustedNationalProjection,
   previousTick: number,
