@@ -77,6 +77,7 @@ export class HostLobbyModal extends BaseModal {
   @state() private nations: number = 0;
   @state() private defaultNationCount: number = 0;
   @state() private gameMode: GameMode = GameMode.FFA;
+  @state() private nationalMode = false;
   @state() private teamCount: TeamCountConfig = 2;
 
   constructor() {
@@ -180,6 +181,10 @@ export class HostLobbyModal extends BaseModal {
   // loaded yet", so an unrelated setting change must not clear it.
   private winThresholdLoadedFor: string | null = null;
 
+  // Preserve verified NATIONAL setting when the host reopens an existing
+  // lobby. Ignore a stale first lobby_info after a local toggle.
+  private nationalModeLoadedFor: string | null = null;
+
   private readonly handleLobbyInfo = (event: LobbyInfoEvent) => {
     const lobby = event.lobby;
     if (!this.lobbyId || lobby.gameID !== this.lobbyId) {
@@ -205,6 +210,10 @@ export class HostLobbyModal extends BaseModal {
         this.winThreshold = true;
         this.winThresholdValue = tenths / 10;
       }
+    }
+    if (this.nationalModeLoadedFor !== this.lobbyId) {
+      this.nationalModeLoadedFor = this.lobbyId;
+      this.nationalMode = lobby.gameConfig?.nationalMode === true;
     }
     if ("serverTime" in lobby && typeof lobby.serverTime === "number") {
       this.serverTimeOffset = calculateServerTimeOffset(lobby.serverTime);
@@ -822,6 +831,36 @@ export class HostLobbyModal extends BaseModal {
             }
             @unit-toggle-changed=${this.handleConfigUnitToggleChanged}
           ></game-config-settings>
+
+          ${
+            ClientEnv.env() !== GameEnv.Prod &&
+            this.gameMode === GameMode.FFA &&
+            !this.publiclyListed
+              ? html`<label
+                  class="flex gap-3 items-center mt-5 p-4 rounded-lg border border-white/20 text-sm text-white"
+                >
+                  <input
+                    type="checkbox"
+                    aria-label="Private NATIONAL authoritative multiplayer"
+                    .checked=${this.nationalMode}
+                    @change=${(event: Event) => {
+                      this.nationalMode = (
+                        event.target as HTMLInputElement
+                      ).checked;
+                      if (this.nationalMode) {
+                        // The ordinary private-host defaults include 400 bots;
+                        // the three-human NATIONAL host must start unburdened.
+                        this.bots = 0;
+                        this.nations = 0;
+                      }
+                      this.nationalModeLoadedFor = this.lobbyId;
+                      void this.putGameConfig();
+                    }}
+                  />
+                  Private NATIONAL — signed-in accounts only (experimental)
+                </label>`
+              : nothing
+          }
 
           <lobby-player-view
             class="mt-10"
@@ -1658,6 +1697,7 @@ export class HostLobbyModal extends BaseModal {
   private async handleGameModeSelection(value: GameMode) {
     this.gameMode = value;
     if (this.gameMode === GameMode.Team) {
+      this.nationalMode = false;
       this.donateGold = true;
       this.donateTroops = true;
     } else {
@@ -1944,6 +1984,7 @@ export class HostLobbyModal extends BaseModal {
             instantBuild: this.instantBuild,
             randomSpawn: this.randomSpawn,
             gameMode: this.gameMode,
+            nationalMode: this.nationalMode,
             disabledUnits: this.disabledUnits,
             spawnImmunityDuration: this.spawnImmunity
               ? spawnImmunityTicks

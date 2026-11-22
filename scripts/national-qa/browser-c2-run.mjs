@@ -17,7 +17,6 @@
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
-  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -30,6 +29,7 @@ import {
   classifyPrivateNational,
   verifyPrivateBrowserTopology,
 } from "./browser-c2-verdict.mjs";
+import { inspectScreenshotFile } from "./png-evidence.mjs";
 
 const argv = process.argv;
 const mode = argv[argv.indexOf("--mode") + 1] ?? "";
@@ -63,26 +63,20 @@ const folders = {
   "legacy-desktop": "browser-legacy-ffa-desktop",
   "legacy-mobile": "browser-legacy-ffa-mobile",
 };
-const magic = Buffer.from("89504e470d0a1a0a", "hex");
-const iend = Buffer.from("0000000049454e44ae426082", "hex");
-/** This checks actual PNG bytes, not a report's screenshot label. */
-function genuinePng(file) {
-  if (!existsSync(file) || !lstatSync(file).isFile()) return false;
-  const data = readFileSync(file);
-  return (
-    data.length > 1000 &&
-    data.subarray(0, 8).equals(magic) &&
-    data.subarray(-12).equals(iend) &&
-    data.readUInt32BE(16) >= 320 &&
-    data.readUInt32BE(20) >= 240
-  );
-}
 function screenshots(folder) {
-  if (!existsSync(folder)) return [];
-  return readdirSync(folder)
+  if (!existsSync(folder)) return { labels: [], manifest: [] };
+  const manifest = readdirSync(folder)
     .filter((name) => name.endsWith(".png"))
-    .filter((name) => genuinePng(join(folder, name)))
-    .map((name) => name.slice(0, -4));
+    .map((name) => ({
+      name: name.slice(0, -4),
+      proof: inspectScreenshotFile(join(folder, name)),
+    }))
+    .filter((entry) => entry.proof !== null)
+    .map(({ name, proof }) => ({
+      label: name,
+      ...proof,
+    }));
+  return { labels: manifest.map((entry) => entry.label), manifest };
 }
 function save(modeName, verdict) {
   const path = join(root, modeName + ".json");
@@ -151,16 +145,26 @@ function runLocal(modeName) {
   } catch {
     // A failed boot often cannot write a report. Never invent one.
   }
+  const imageEvidence = screenshots(folder);
   const verdict = classifySoloOrLegacy({
     mode: modeName,
     report,
     exitCode: processResult.status,
     expectedSha: head,
-    screenshotLabels: screenshots(folder),
+    screenshotLabels: imageEvidence.labels,
   });
+  verdict.screenshotEvidence = imageEvidence.manifest;
   if (processResult.error) {
     verdict.gameplay = "FAIL";
-    verdict.firstFailure = { code: "CHROMIUM_PROCESS_FAILED", owner: "E5" };
+    if (!verdict.firstFailedStage) {
+      verdict.firstFailure = {
+        code:
+          processResult.error.code === "ETIMEDOUT"
+            ? "CHROMIUM_PROCESS_TIMEOUT"
+            : "CHROMIUM_PROCESS_FAILED",
+        owner: "E5",
+      };
+    }
   }
   save(modeName, verdict);
   return verdict;

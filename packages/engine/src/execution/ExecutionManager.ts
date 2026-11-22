@@ -74,6 +74,8 @@ export class Executor {
           player,
           intent.targetID,
           null,
+          true,
+          intent.clientID,
         );
       }
       case "national_found_empire":

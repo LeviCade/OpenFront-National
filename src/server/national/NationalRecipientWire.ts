@@ -45,13 +45,39 @@ export function encodeNationalRecipientProjection(
       map.width <= 0 ||
       !Number.isSafeInteger(map.height) ||
       map.height <= 0 ||
+      typeof map.streamId !== "string" ||
+      map.streamId.length < 1 ||
+      map.streamId.length > 128 ||
+      !Number.isSafeInteger(map.sweepId) ||
+      map.sweepId < 1 ||
+      !Number.isSafeInteger(map.sweepTick) ||
+      map.sweepTick < 0 ||
+      map.sweepTick > filtered.tick ||
+      typeof map.reset !== "boolean" ||
       !Number.isSafeInteger(map.cursor) ||
       map.cursor < 0 ||
+      (map.reset && map.cursor !== 0) ||
+      !Number.isSafeInteger(map.unitCursor) ||
+      map.unitCursor < 0 ||
+      !Number.isSafeInteger(map.unitSweepId) ||
+      map.unitSweepId < 1 ||
+      typeof map.unitReset !== "boolean" ||
+      typeof map.unitOverflow !== "boolean" ||
+      (map.unitReset && map.unitCursor !== 0) ||
+      !Array.isArray(map.unitRemovedIds) ||
+      map.unitRemovedIds.length > NATIONAL_OBSERVER_MAX_UNITS ||
+      map.unitRemovedIds.some(
+        (id) => !Number.isSafeInteger(id) || id < 0 || id > 0xffffffff,
+      ) ||
       (map.nextCursor !== null &&
         (!Number.isSafeInteger(map.nextCursor) ||
           map.nextCursor < map.cursor)) ||
       map.tiles.length > NATIONAL_OBSERVER_MAX_TILES ||
       map.units.length > NATIONAL_OBSERVER_MAX_UNITS ||
+      (map.unitNextCursor !== null &&
+        (!Number.isSafeInteger(map.unitNextCursor) ||
+          map.unitNextCursor <= map.unitCursor)) ||
+      (map.unitReset && map.unitRemovedIds.length !== 0) ||
       map.units.some(
         (unit) => unit.ownerId !== map.observerId && unit.troops !== undefined,
       ) ||
@@ -128,6 +154,9 @@ export function encodeNationalRecipientProjection(
             version: NATIONAL_OBSERVER_MAP_VERSION,
             tick: map.tick,
             observerId: map.observerId,
+            streamId: map.streamId,
+            sweepId: map.sweepId,
+            sweepTick: map.sweepTick,
             width: map.width,
             height: map.height,
             reset: map.reset,
@@ -146,7 +175,13 @@ export function encodeNationalRecipientProjection(
               tile: unit.tile,
               ...(unit.troops === undefined ? {} : { troops: unit.troops }),
             })),
+            unitCursor: map.unitCursor,
+            unitNextCursor: map.unitNextCursor,
+            unitSweepId: map.unitSweepId,
+            unitReset: map.unitReset,
+            unitRemovedIds: [...map.unitRemovedIds],
             unitsTruncated: map.unitsTruncated,
+            unitOverflow: map.unitOverflow,
             visibleBorders: map.visibleBorders.map((frontier) => ({
               targetId: frontier.targetId,
               access: frontier.access,
