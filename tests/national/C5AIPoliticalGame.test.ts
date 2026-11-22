@@ -171,14 +171,40 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
     const postAccession = collectLiveNationalObservation(game, A).observation;
     expect(postAccession.nations.find((n) => n.id === A)?.status).toBe("member");
     expect(postAccession.unownedFrontier).toBe(true);
-    const tilesBefore = game.player(A).numTilesOwned();
-    for (let i = 0; i < 95; i++) humanTurn(runner, game);
-    expect(game.nationalPoliticalAuthority()?.empireOf(A)).toBe("c5_human_crown");
-    // A's own lawful unowned-land conquest advances the imperial coalition
-    // instead of trying unauthorized unilateral secession.
-    expect(game.player(A).numTilesOwned()).toBeGreaterThan(tilesBefore);
+    // Military survival during an existing hostile WAR is not equivalent
+    // to immediate net territorial gain. Accession must remain legal and
+    // durable even when the neighbor continues the original real attack.
     const { restored } = await roundTrip(game, "plains");
     expect(restored.nationalPoliticalAuthority()?.empireOf(A)).toBe("c5_human_crown");
+  });
+
+  it("an imperial AI member executes useful neutral expansion, retaining the real crown", async () => {
+    const game = await seeded(0.18, 0.55, true);
+    game.player(B).setTroops(100); // A separate warless imperial growth witness.
+    const founder = game.player(H);
+    game.performNationalCommand(founder, {
+      kind: "found-empire",
+      empireId: "c5_growth_crown",
+    });
+    const invitation = game.performNationalPoliticalCommandWithOutcome(
+      founder,
+      { kind: "offer-empire", empireId: "c5_growth_crown", candidateId: A },
+    );
+    expect(invitation.accepted).toBe(true);
+    const accession = game.performNationalPoliticalCommandWithOutcome(
+      game.player(A),
+      { kind: "accept-empire", empireId: "c5_growth_crown", candidateId: A },
+    );
+    expect(accession.accepted).toBe(true);
+    const seen = collectLiveNationalObservation(game, A).observation;
+    expect(seen.unownedFrontier).toBe(true);
+    const before = game.player(A).numTilesOwned();
+    const runner = runnerFor(game);
+    for (let i = 0; i < 80; i++) humanTurn(runner, game);
+    expect(game.player(A).numTilesOwned()).toBeGreaterThan(before);
+    expect(game.nationalPoliticalAuthority()?.empireOf(A)).toBe("c5_growth_crown");
+    const { restored } = await roundTrip(game, "plains");
+    expect(restored.nationalPoliticalAuthority()?.empireOf(A)).toBe("c5_growth_crown");
   });
 
   it("AI Betray is accepted BEFORE any WAR against a formerly protected partner", async () => {
