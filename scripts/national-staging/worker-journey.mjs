@@ -90,7 +90,7 @@ function durableRow(id) {
     return {
       resourceCommitment: createHash("sha256").update(JSON.stringify(people)).digest("hex"),
       activeWarScopes,
-      pendingMotionIds: wars.motions.filter(m => m.status === "pending").map(m => m.id),
+      pendingMotionIds: wars.motions.filter(m => m.acceptedTick === null).map(m => m.id),
       activeAttacks: snap.execs.filter(e => e.t === "Attack" && e.d.active && e.d.initialized).length,
       tick: row.tick,
       commitment: digest,
@@ -974,6 +974,7 @@ try {
     assert.equal(restored[0].stateCommitment, disk.commitment);
     assert.equal(restored[0].replayDigest, disk.replayDigest);
     assert.deepEqual(disk.activeWarScopes, ["imperial", "national"]);
+    assert(disk.pendingMotionIds.includes(pendingPeaceMotion));
     assert(disk.activeAttacks > 0, "no in-flight attack in exact durable state");
     const restoreElapsedMs = Math.round(performance.now() - startedRecovery);
     pass("same-game-restored-exact-independent-disk-commitment");
