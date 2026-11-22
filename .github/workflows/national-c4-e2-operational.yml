@@ -8,6 +8,7 @@ on:
       - scripts/national-staging/**
       - src/server/**
       - tests/server/NationalAccountLease.test.ts
+      - tests/national/TrustedNationalServerAuthority.test.ts
       - vite.config.ts
       - .github/workflows/national-c4-e2-operational.yml
   workflow_dispatch:
@@ -58,7 +59,7 @@ jobs:
       - run: npm install --global --ignore-scripts npm@12.1.0
       - run: npm run inst
       - name: Bound account lease unit regressions
-        run: npx --no-install vitest run --project node tests/server/NationalAccountLease.test.ts
+        run: npx --no-install vitest run --project node tests/server/NationalAccountLease.test.ts tests/national/TrustedNationalServerAuthority.test.ts
       - name: Verify exact source and execute actual Master/Worker process journey
         env:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -71,7 +72,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          FILES=(src/server/Worker.ts src/server/GameServer.ts src/server/ServerEnv.ts src/server/Server.ts src/server/Master.ts src/server/JoinVerify.ts src/server/national/NationalAccountLease.ts scripts/national-staging/*.mjs tests/server/NationalAccountLease.test.ts vite.config.ts)
+          FILES=(src/server/Worker.ts src/server/GameServer.ts src/server/ServerEnv.ts src/server/Server.ts src/server/Master.ts src/server/JoinVerify.ts src/server/national/NationalAccountLease.ts src/server/national/TrustedNationalMatch.ts scripts/national-staging/*.mjs tests/server/NationalAccountLease.test.ts tests/national/TrustedNationalServerAuthority.test.ts vite.config.ts)
           if ! npx --no-install oxfmt --check "${FILES[@]}"; then
             npx --no-install oxfmt --write "${FILES[@]}"
             echo E2_FORMAT_REPAIR_BEGIN

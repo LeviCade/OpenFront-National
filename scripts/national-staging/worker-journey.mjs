@@ -114,8 +114,11 @@ async function peer() {
         // engine principal. The actual browser resolves the same mapping
         // through GameView.playerByClientID, not by equating the two IDs.
         const updates = packet.updates[String(GameUpdateType.Player)] ?? [];
-        if (updates.some((player) => player.clientID &&
-            player.clientID !== state.seat))
+        if (
+          updates.some(
+            (player) => player.clientID && player.clientID !== state.seat,
+          )
+        )
           throw new Error("foreign seat metadata");
         const own = updates.find((player) => player.clientID === state.seat);
         if (own) {
@@ -322,6 +325,12 @@ try {
   pass("three-worker-seats-unlisted");
 
   setStage("ordinary host config and start commands");
+  // Another seated account cannot turn off NATIONAL or become a spectator.
+  send(players[1], {
+    type: "intent",
+    intent: { type: "update_game_config", config: { nationalMode: false } },
+  });
+  send(players[1], { type: "spectate", spectator: true });
   send(players[0], {
     type: "intent",
     intent: {
@@ -337,6 +346,7 @@ try {
     () =>
       players.every(
         (p) =>
+          p.lobby?.lobby.gameConfig?.nationalMode === true &&
           p.lobby?.lobby.gameConfig?.gameMap === GameMapType.Onion &&
           p.lobby?.lobby.gameConfig?.gameMapSize === GameMapSize.Compact,
       ),
@@ -448,6 +458,18 @@ try {
   }
   pass("three-authoritative-spawns-three-private-lawful-receipts");
 
+  const beforeModeAttempt = players[0].lastProjectionTick;
+  send(players[0], {
+    type: "intent",
+    intent: { type: "update_game_config", config: { nationalMode: false } },
+  });
+  await until(
+    () => players[0].lastProjectionTick > beforeModeAttempt + 2,
+    "started NATIONAL cannot switch to legacy authority",
+  );
+  assert(allHealthy(players));
+  pass("nonhost-mode-and-spectator-attempts-and-started-mode-switch-denied");
+
   setStage("refresh rotation and same-seat socket replacement");
   const renewed = await refresh(auth[1].cookie);
   const replacement = await peer();
@@ -512,20 +534,63 @@ try {
   assert(!players[0].decodeFailed && !recovered.decodeFailed);
   pass("revocation-and-ban-stop-authority-legitimate-relogin-recovers-seat");
 
+  setStage("actual identity service outage and account recovery");
+  const beforeOutage = players[0].lastProjectionTick;
+  await identity.stop();
+  identity = undefined;
+  await until(
+    () => players[0].closeCode !== null && recovered.closeCode !== null,
+    "bounded outage disconnect",
+    22_000,
+  );
+  assert.equal(players[0].closeCode, 1013);
+  assert.equal(recovered.closeCode, 1013);
+  // Same DB, real secure refresh sessions, new legitimate physical sockets.
+  identity = await startIdentity(fixture.env);
+  const renewedA = await refresh(auth[0].cookie);
+  const renewedB = await refresh(recoveredAuth.cookie);
+  const liveA = await peer();
+  const liveB = await peer();
+  rejoin(liveA, id, renewedA.jwt);
+  rejoin(liveB, id, renewedB.jwt);
+  await until(
+    () =>
+      liveA.lastProjectionTick > beforeOutage &&
+      liveB.lastProjectionTick > beforeOutage &&
+      liveA.streamId &&
+      liveB.streamId,
+    "recovered accounts continue original authority",
+    30_000,
+  );
+  assert(allHealthy([liveA, liveB]));
+  assert.equal(liveA.seat, seatIds[0]);
+  assert.equal(liveB.seat, seatIds[1]);
+  assert.equal(liveA.actor, players[0].actor);
+  assert.equal(liveB.actor, players[1].actor);
+  assert.notEqual(liveA.streamId, players[0].streamId);
+  assert.notEqual(liveB.streamId, recovered.streamId);
+  assert.equal(
+    server.messages.filter(
+      (m) => m.message === "NATIONAL authoritative host ready" && m.gameID === id,
+    ).length,
+    1,
+  );
+  pass("live-identity-outage-fails-closed-same-session-seats-resume-one-runner");
+
   setStage("host loss and terminal old match");
   await server.stop();
   await until(
-    () => players[0].closeCode !== null && recovered.closeCode !== null,
+    () => liveA.closeCode !== null && liveB.closeCode !== null,
     "old Worker sockets died",
   );
   server = await startHost();
   assert.equal(await exists(id), false, "dead match reappeared after restart");
   const stale = await peer();
-  rejoin(stale, id, auth[0].jwt);
+  rejoin(stale, id, renewedA.jwt);
   await until(() => stale.closeCode !== null, "stale match reconnect denial");
   assert.equal(stale.closeCode, 4004);
   assert(!stale.starts);
-  const next = await create(auth[0].jwt);
+  const next = await create(renewedA.jwt);
   assert.notEqual(next.gameID ?? next.id, id);
   pass("host-restart-ends-old-match-new-game-has-new-id");
   console.log(
