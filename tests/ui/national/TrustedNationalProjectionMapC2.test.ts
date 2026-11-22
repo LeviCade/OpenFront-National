@@ -2,6 +2,7 @@
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import { describe, expect, it } from "vitest";
 import {
+  completedTrustedObserverMap,
   materializeTrustedNationalUpdate,
   parseTrustedNationalProjection,
   readTrustedNationalObserverMap,
@@ -140,6 +141,32 @@ describe("Second Conductor Class One E4: E3-authoritative graphical map feed", (
       }),
     });
     expect(view.trustedVisibleAttack("nation-a", 42)).toBe(false);
+  });
+
+  it("keeps private gameplay locked during page fetch, mismatched actor and revocation", () => {
+    const complete = {
+      version: 1 as const,
+      tick: 12,
+      observerId: "nation-a",
+      width: 10,
+      height: 10,
+      reset: false,
+      cursor: 90,
+      nextCursor: null,
+      tiles: [],
+      units: [],
+      unitsTruncated: false,
+      visibleBorders: [],
+      ownResources: { troops: 20, treasury: 50 },
+      countries: [],
+    };
+    expect(completedTrustedObserverMap(null, "nation-a")).toBe(false);
+    expect(completedTrustedObserverMap(complete, null)).toBe(false);
+    expect(completedTrustedObserverMap(complete, "nation-b")).toBe(false);
+    expect(
+      completedTrustedObserverMap({ ...complete, nextCursor: 95 }, "nation-a"),
+    ).toBe(false);
+    expect(completedTrustedObserverMap(complete, "nation-a")).toBe(true);
   });
 
   it("merges only E3 current visible terrain pages into actual WebGL tile lanes", () => {
