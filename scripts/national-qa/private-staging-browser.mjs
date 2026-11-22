@@ -489,45 +489,65 @@ try {
       60_000,
     );
     stage = "same three authoritative server lobby seats";
-    await until(() => {
-      const packets = profiles.map((p) => p.observed.lobby);
-      if (!packets.every((p) => p?.lobby?.gameConfig?.nationalMode === true && p.lobby.clients?.length === 3)) return false;
-      const seats = packets.map((p) => p.myClientID);
-      return new Set(seats).size === 3 && seats.every((seat) => typeof seat === "string") && packets.every((p) => {
-        const roster = p.lobby.clients.map((client) => client.clientID);
-        return new Set(roster).size === 3 && seats.every((seat) => roster.includes(seat));
-      });
-    }, stage, 60_000);
-    assert(profiles.every((p) => p.observed.missingMusicRequests === 0));
-    console.log("LOCAL_STAGING_BROWSER_LOBBY_PASS browser_profiles=3 authoritative_roster=3 distinct_seats=3 national=true gameplay=0 gpu_attestation=0 human_witnesses=0 missing_music_requests=0");
-    if (!lobbyOnly) {
-    stage = "native start control";
-    await until(
-      () => a.click('#page-host-lobby o-button[width="block"][size="lg"]'),
-      stage,
-      30_000,
-    );
-    stage = "independent authoritative host admission";
-    let admission;
     await until(
       () => {
-        admission = host.messages.find(
-          (m) =>
-            m.message === "NATIONAL authoritative host ready" &&
-            m.authenticatedSeats === 3 &&
-            m.distinctAccounts === 3 &&
-            m.authoritativeRunners === 1 &&
-            typeof m.gameID === "string",
+        const packets = profiles.map((p) => p.observed.lobby);
+        if (
+          !packets.every(
+            (p) =>
+              p?.lobby?.gameConfig?.nationalMode === true &&
+              p.lobby.clients?.length === 3,
+          )
+        )
+          return false;
+        const seats = packets.map((p) => p.myClientID);
+        return (
+          new Set(seats).size === 3 &&
+          seats.every((seat) => typeof seat === "string") &&
+          packets.every((p) => {
+            const roster = p.lobby.clients.map((client) => client.clientID);
+            return (
+              new Set(roster).size === 3 &&
+              seats.every((seat) => roster.includes(seat))
+            );
+          })
         );
-        return Boolean(admission);
       },
       stage,
-      90_000,
+      60_000,
     );
-    const snapshots = () =>
-      Promise.all(
-        profiles.map((p) =>
-          p.evaluate(`(() => {
+    assert(profiles.every((p) => p.observed.missingMusicRequests === 0));
+    console.log(
+      "LOCAL_STAGING_BROWSER_LOBBY_PASS browser_profiles=3 authoritative_roster=3 distinct_seats=3 national=true gameplay=0 gpu_attestation=0 human_witnesses=0 missing_music_requests=0",
+    );
+    if (!lobbyOnly) {
+      stage = "native start control";
+      await until(
+        () => a.click('#page-host-lobby o-button[width="block"][size="lg"]'),
+        stage,
+        30_000,
+      );
+      stage = "independent authoritative host admission";
+      let admission;
+      await until(
+        () => {
+          admission = host.messages.find(
+            (m) =>
+              m.message === "NATIONAL authoritative host ready" &&
+              m.authenticatedSeats === 3 &&
+              m.distinctAccounts === 3 &&
+              m.authoritativeRunners === 1 &&
+              typeof m.gameID === "string",
+          );
+          return Boolean(admission);
+        },
+        stage,
+        90_000,
+      );
+      const snapshots = () =>
+        Promise.all(
+          profiles.map((p) =>
+            p.evaluate(`(() => {
       const node = document.querySelector("[data-national-trusted-session]");
       const tick = node?.getAttribute("data-national-projection-tick");
       return {
@@ -538,91 +558,91 @@ try {
         canvas: [...document.querySelectorAll("canvas")].some(e => e.getBoundingClientRect().width > 150 && e.getBoundingClientRect().height > 100),
       };
     })()`),
-        ),
-      );
-    stage = "three graphical seat projections";
-    let first;
-    await until(
-      async () => {
-        first = await snapshots();
-        return (
-          first.every(
-            (s) =>
-              s.admitted &&
-              s.canvas &&
-              s.tick >= 0 &&
-              s.match === admission.gameID &&
-              s.principal,
-          ) && new Set(first.map((s) => s.principal)).size === 3
+          ),
         );
-      },
-      stage,
-      90_000,
-    );
-    stage = "host and browser advancing tick correlation";
-    let last;
-    await until(
-      async () => {
-        last = await snapshots();
-        const ticks = host.messages
-          .filter(
-            (m) =>
-              m.message === "NATIONAL authoritative tick" &&
-              m.gameID === admission.gameID &&
-              Number.isSafeInteger(m.tick),
-          )
-          .map((m) => m.tick);
-        return (
-          new Set(ticks).size >= 2 &&
-          last.every(
-            (s, i) =>
-              s.admitted &&
-              s.match === first[i].match &&
-              s.principal === first[i].principal &&
-              s.canvas &&
-              s.tick > first[i].tick &&
-              s.tick <= Math.max(...ticks),
-          )
-        );
-      },
-      stage,
-      90_000,
-    );
-    stage = "distinct graphical artifacts";
-    for (let i = 0; i < profiles.length; i++) {
-      const response = await profiles[i].send("Page.captureScreenshot", {
-        format: "png",
-      });
-      const bytes = Buffer.from(response.data, "base64");
-      assert(
-        bytes
-          .subarray(0, 8)
-          .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+      stage = "three graphical seat projections";
+      let first;
+      await until(
+        async () => {
+          first = await snapshots();
+          return (
+            first.every(
+              (s) =>
+                s.admitted &&
+                s.canvas &&
+                s.tick >= 0 &&
+                s.match === admission.gameID &&
+                s.principal,
+            ) && new Set(first.map((s) => s.principal)).size === 3
+          );
+        },
+        stage,
+        90_000,
       );
-      const hash = createHash("sha256").update(bytes).digest("hex");
-      assert(!screenshotHashes.has(hash));
-      screenshotHashes.add(hash);
-      writeFileSync(join(screenshotDir, `participant-${i + 1}.png`), bytes, {
-        mode: 0o600,
-        flag: "wx",
-      });
-    }
-    assert(profiles.every((p) => p.observed.missingMusicRequests === 0));
-    console.log(
-      JSON.stringify({
-        exactSource: head,
-        browserProfiles: 3,
-        hostAuthenticatedSeats: 3,
-        independentHumanWitnesses: 0,
-        screenshotSha256: [...screenshotHashes],
-        browserTickDeltas: last.map((s, i) => s.tick - first[i].tick),
-        privateJourney: "BLOCKED",
-        firstUnverifiedStage:
-          "native political and military controls followed by canonical victory",
-        gpuAttested: false,
-      }),
-    );
-    process.exitCode = 2;
+      stage = "host and browser advancing tick correlation";
+      let last;
+      await until(
+        async () => {
+          last = await snapshots();
+          const ticks = host.messages
+            .filter(
+              (m) =>
+                m.message === "NATIONAL authoritative tick" &&
+                m.gameID === admission.gameID &&
+                Number.isSafeInteger(m.tick),
+            )
+            .map((m) => m.tick);
+          return (
+            new Set(ticks).size >= 2 &&
+            last.every(
+              (s, i) =>
+                s.admitted &&
+                s.match === first[i].match &&
+                s.principal === first[i].principal &&
+                s.canvas &&
+                s.tick > first[i].tick &&
+                s.tick <= Math.max(...ticks),
+            )
+          );
+        },
+        stage,
+        90_000,
+      );
+      stage = "distinct graphical artifacts";
+      for (let i = 0; i < profiles.length; i++) {
+        const response = await profiles[i].send("Page.captureScreenshot", {
+          format: "png",
+        });
+        const bytes = Buffer.from(response.data, "base64");
+        assert(
+          bytes
+            .subarray(0, 8)
+            .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+        );
+        const hash = createHash("sha256").update(bytes).digest("hex");
+        assert(!screenshotHashes.has(hash));
+        screenshotHashes.add(hash);
+        writeFileSync(join(screenshotDir, `participant-${i + 1}.png`), bytes, {
+          mode: 0o600,
+          flag: "wx",
+        });
+      }
+      assert(profiles.every((p) => p.observed.missingMusicRequests === 0));
+      console.log(
+        JSON.stringify({
+          exactSource: head,
+          browserProfiles: 3,
+          hostAuthenticatedSeats: 3,
+          independentHumanWitnesses: 0,
+          screenshotSha256: [...screenshotHashes],
+          browserTickDeltas: last.map((s, i) => s.tick - first[i].tick),
+          privateJourney: "BLOCKED",
+          firstUnverifiedStage:
+            "native political and military controls followed by canonical victory",
+          gpuAttested: false,
+        }),
+      );
+      process.exitCode = 2;
     }
   }
 } catch {
