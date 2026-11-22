@@ -55,6 +55,7 @@ import {
   within,
 } from "@openfront/engine-lib/Util";
 import { z } from "zod";
+import { transferActiveTroops } from "../national/politics/ImperialAccounting";
 import {
   newPlayerInfo,
   playerInfoData,
@@ -65,7 +66,6 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
-import { transferActiveTroops } from "../national/politics/ImperialAccounting";
 import { AttackImpl } from "./AttackImpl";
 import {
   Alliance,
@@ -1391,19 +1391,30 @@ export class PlayerImpl implements Player {
   }
 
   static prepareNationalTroopCredits(
-    credits: readonly { player: PlayerImpl; amount: bigint; capacity: number }[],
+    credits: readonly {
+      player: PlayerImpl;
+      amount: bigint;
+      capacity: number;
+    }[],
   ): () => void {
     const seen = new Set<PlayerImpl>();
     const next: { player: PlayerImpl; troops: bigint }[] = [];
     for (const { player, amount, capacity } of credits) {
-      if (!(player instanceof PlayerImpl) || seen.has(player) || amount <= 0n ||
-          !Number.isSafeInteger(capacity) || capacity < 0 ||
-          player._troops + amount > BigInt(capacity))
+      if (
+        !(player instanceof PlayerImpl) ||
+        seen.has(player) ||
+        amount <= 0n ||
+        !Number.isSafeInteger(capacity) ||
+        capacity < 0 ||
+        player._troops + amount > BigInt(capacity)
+      )
         throw new Error("NATIONAL: invalid pooled troop credit");
       seen.add(player);
       next.push({ player, troops: player._troops + amount });
     }
-    return () => { for (const row of next) row.player._troops = row.troops; };
+    return () => {
+      for (const row of next) row.player._troops = row.troops;
+    };
   }
 
   static transferNationalActiveTroops(
@@ -1412,11 +1423,17 @@ export class PlayerImpl implements Player {
     capacity: number,
     amount: number,
   ): void {
-    if (source === destination || !Number.isSafeInteger(capacity) ||
-        !Number.isSafeInteger(amount))
+    if (
+      source === destination ||
+      !Number.isSafeInteger(capacity) ||
+      !Number.isSafeInteger(amount)
+    )
       throw new Error("NATIONAL: invalid active troop transfer");
     const [sourceAfter, destinationAfter] = transferActiveTroops(
-      source._troops, destination._troops, BigInt(capacity), BigInt(amount),
+      source._troops,
+      destination._troops,
+      BigInt(capacity),
+      BigInt(amount),
     );
     source._troops = sourceAfter;
     destination._troops = destinationAfter;
@@ -1507,7 +1524,9 @@ export class PlayerImpl implements Player {
     }
 
     const cost = this.mg.unitInfo(type).cost(this.mg, this);
-    return this.placePaidUnit(type, spawnTile, params, () => this.removeGold(cost));
+    return this.placePaidUnit(type, spawnTile, params, () =>
+      this.removeGold(cost),
+    );
   }
 
   /** Engine-only imperial building: same placement and cost, different payer. */
@@ -1516,8 +1535,12 @@ export class PlayerImpl implements Player {
     targetTile: TileRef,
     debit: (cost: Gold) => void,
   ): Unit {
-    if (!Structures.has(type) || !this.isAlive() ||
-        !this.mg.isValidRef(targetTile) || this.mg.config().isUnitDisabled(type))
+    if (
+      !Structures.has(type) ||
+      !this.isAlive() ||
+      !this.mg.isValidRef(targetTile) ||
+      this.mg.config().isUnitDisabled(type)
+    )
       throw new Error("NATIONAL: invalid imperial structure request");
     const spawnTile = this.canSpawnUnitType(type, targetTile, null);
     if (spawnTile === false)
@@ -1634,6 +1657,47 @@ export class PlayerImpl implements Player {
     this.removeGold(cost);
     unit.increaseLevel();
     this.recordUnitConstructed(unit.type());
+  }
+
+  /**
+   * D-011 imperial upgrade: same dynamic price and physical level-change as
+   * ordinary upgrade, but a validated treasury debit replaces personal gold.
+   * The emperor may order work even when the subordinate build decree forbids
+   * the subordinate initiating it.
+   */
+  upgradeImperialStructure(unit: Unit, debit: (cost: Gold) => void): void {
+    if (
+      !this.isAlive() ||
+      !unit.isActive() ||
+      !Structures.has(unit.type()) ||
+      this.mg.config().isUnitDisabled(unit.type()) ||
+      !this.canUpgradeUnitType(unit.type()) ||
+      !this.isUnitValidToUpgrade(unit) ||
+      this.mg.owner(unit.tile()) !== this ||
+      !this.mg.isLand(unit.tile())
+    )
+      throw new Error("NATIONAL: invalid member structure upgrade");
+    const cost = this.mg.unitInfo(unit.type()).cost(this.mg, this);
+    debit(cost); // Insufficient treasury throws BEFORE the physical mutation.
+    unit.increaseLevel();
+    this.recordUnitConstructed(unit.type());
+  }
+
+  /** Direct imperial demolition has no fictional fee, refund or cooldown. */
+  demolishImperialStructure(unit: Unit): void {
+    if (
+      !this.isAlive() ||
+      !unit.isActive() ||
+      !Structures.has(unit.type()) ||
+      unit.owner() !== this ||
+      unit.isMarkedForDeletion() ||
+      this.mg.owner(unit.tile()) !== this ||
+      !this.mg.isLand(unit.tile())
+    )
+      throw new Error("NATIONAL: invalid member structure demolition");
+    // Existing UnitImpl.delete already performs the physical grid/owner removal,
+    // produces a client unit update, and retires registered unit execution state.
+    unit.delete(false);
   }
 
   public buildableUnits(

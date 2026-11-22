@@ -616,10 +616,14 @@ export interface Game extends GameLike {
   > | null;
   /** Enumerates public empire leaders/members and warning/victory facts only. */
   nationalPublicPoliticalView(): NationalPublicPoliticalView | null;
-  nationalPactDisclosure(observer: Player): NationalPactDisclosureViewData | null;
+  nationalPactDisclosure(
+    observer: Player,
+  ): NationalPactDisclosureViewData | null;
   nationalPublicPactRoster(): readonly NationalPublicPactView[];
   nationalPactViewsFor(observer: Player): readonly NationalRecipientPactView[];
-  nationalImperialAdministrationFor(observer: Player): NationalImperialAdministrationView | null;
+  nationalImperialAdministrationFor(
+    observer: Player,
+  ): NationalImperialAdministrationView | null;
   performNationalImperialAdministration(
     actor: Player,
     command: NationalImperialAdministrationCommand,
@@ -629,6 +633,11 @@ export interface Game extends GameLike {
   releaseNationalDeferredTroops(player: Player): void;
   creditNationalTroopGrowth(player: Player, gross: number): void;
   creditNationalWorkerIncome(player: Player, gross: Gold): void;
+  creditNationalCommercialIncome(
+    player: Player,
+    gross: Gold,
+    tile?: TileRef,
+  ): void;
   nationalAllowsConstruction(player: Player, type: UnitType): boolean;
   /** Private pending invitations addressed only to this authenticated human. */
   nationalAccessionOffers(
