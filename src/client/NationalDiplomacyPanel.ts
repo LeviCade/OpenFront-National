@@ -1240,9 +1240,11 @@ export class NationalDiplomacyPanel extends LitElement {
         ${(view.workerIncomeBps / 100).toFixed(2)}%
       </p>
       <p>
-        Construction authority:
+        Member construction authority:
         ${view.allowedConstruction === null ? "All regulated construction categories permitted" : view.allowedConstruction.length ? view.allowedConstruction.join(", ") : "No regulated construction categories permitted"}
       </p>
+      ${view.armyMode === undefined ? nothing : html`<p>Military administration: ${view.armyMode === "hybrid" ? "Hybrid imperial reserve" : "Decentralized national forces"}.</p>
+        ${view.armyMode === "hybrid" ? html`<p>Hybrid reserve threshold: ${((view.hybridThresholdBps ?? 0) / 100).toFixed(2)}%; imperial troops: ${view.imperialTroops} / ${view.imperialTroopCapacity} capacity.</p>` : nothing}`}
       <p>
         ${view.canAmend ? "Current emperor holds policy and military administration authority." : "The current emperor holds policy and military administration authority."}
         Administrative commands are not yet exposed on this client. No
@@ -1252,7 +1254,7 @@ export class NationalDiplomacyPanel extends LitElement {
   }
 
   private renderPacts(includePrivate = true) {
-    const roster = this.game?.nationalPolitics()?.pacts;
+    const roster = this.game?.nationalPolitics?.()?.pacts;
     const c = includePrivate ? this.pactContext() : null;
     const enabled = c !== null && !this.pactAttempt;
     const button =

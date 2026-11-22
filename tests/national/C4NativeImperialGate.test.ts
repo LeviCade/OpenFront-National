@@ -44,6 +44,12 @@ describe("C4 E4 imperial administration recipient boundary", () => {
       validateNationalImperialPacket(undefined, politics, null, 8),
     ).not.toThrow();
   });
+  it("readies the exact E1 hybrid reserve fields without numeric coercion", () => {
+    const military = { armyMode: "hybrid", hybridThresholdBps: 6000, imperialTroops: "900719925474099399", imperialTroopCapacity: "900719925474099400" };
+    expect(readNationalImperialAdministration({ ...source, ...military }, politics, "a", 8, "epoch")).toMatchObject(military);
+    for (const bad of [{ armyMode: "hybrid" }, { ...military, armyMode: "centralized" }, { ...military, armyMode: "decentralized" }, { ...military, imperialTroops: -1 }, { ...military, hybridThresholdBps: 10001 }])
+      expect(readNationalImperialAdministration({ ...source, ...bad }, politics, "a", 8, "epoch")).toBeNull();
+  });
   it("rejects stale epochs, outsiders, superseded leaders and hostile values", () => {
     for (const bad of [
       { ...source, recipientId: "b" },

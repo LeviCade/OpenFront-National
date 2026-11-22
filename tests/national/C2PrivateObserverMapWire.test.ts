@@ -714,6 +714,23 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
         one.msg.tick,
       ),
     ).toThrow();
+    // The actual native decoder must reject pact-lane forgery BEFORE advancing
+    // its sight cursor, not merely hide terms in the panel.
+    const fakePact = { id: "recipient_canary", name: "Public", kind: "NAP", memberIds: [A.id], administratorId: A.id };
+    const fakePolitics = { ...(packet.nationalPolitics as object), pacts: [fakePact] };
+    const fakeDisclosure = { version: 1, recipientId: A.id, tick: one.msg.tick, streamId: one.map.streamId, pacts: [{ pactId: fakePact.id, relationship: "member", terms: { admission: "leader", expulsion: "leader" } }] };
+    const valid = { ...packet, nationalPolitics: fakePolitics, nationalPactDisclosure: fakeDisclosure };
+    expect(new NationalObserverMapContinuity(A.id, one.map.streamId).acceptProjection(valid).usable).toBe(true);
+    for (const forged of [
+      { ...valid, nationalPactDisclosure: { ...fakeDisclosure, recipientId: B.id } },
+      { ...valid, nationalPactDisclosure: { ...fakeDisclosure, streamId: "superseded-epoch" } },
+      { ...valid, nationalPactDisclosure: { ...fakeDisclosure, tick: one.msg.tick - 1 } },
+      { ...valid, nationalPolitics: { ...fakePolitics, pacts: [{ ...fakePact, terms: { private: "canary" } }] } },
+      { ...valid, nationalPactDisclosure: { ...fakeDisclosure, pacts: [{ ...fakeDisclosure.pacts[0], terms: { ...fakeDisclosure.pacts[0].terms, private: "canary" } }] } },
+    ]) {
+      expect(() => fresh.acceptProjection(forged)).toThrow();
+      expect(fresh.lastAcceptedTick).toBe(-1);
+    }
     expect(fresh.lastAcceptedTick).toBe(-1);
     const u1 = reader.acceptProjection(packet);
     expect(Number.isNaN(u1.nativeUnits![OFFSET_TARGET_TILE])).toBe(true);
