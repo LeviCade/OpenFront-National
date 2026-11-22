@@ -868,9 +868,16 @@ export class GameImpl implements Game {
           return "war-rule";
         }
       },
-      () =>
-        this._nationalWar?.mayReplayAsCurrentSovereign(actor.id(), command) ===
-        true,
+      () => {
+        // A historical accepted receipt is not permission to replay a stale
+        // grant after revocation + regrant under the same sovereign identity.
+        try {
+          this.assertWarPolicyAdmission(actor.id(), command);
+          return this._nationalWar?.mayReplayAsCurrentSovereign(actor.id(), command) === true;
+        } catch {
+          return false;
+        }
+      },
     );
   }
 
