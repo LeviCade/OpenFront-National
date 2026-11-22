@@ -60,6 +60,7 @@ jobs:
             src/client/controllers/NationalMapTargetController.ts \
             tests/ui/national/NationalDiplomacyPanel.test.ts \
             tests/ui/national/NationalHumanMapInputR11.test.ts \
+            tests/ui/national/NationalWarWire.test.ts \
             .github/workflows/c5-class2-e1-native-gameplay.yml
   source-regression:
     name: Full source, lint and build (non-GPU)
