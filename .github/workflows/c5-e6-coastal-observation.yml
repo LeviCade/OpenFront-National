@@ -48,6 +48,12 @@ jobs:
             tests/national/NationalLiveObservation.test.ts \
             tests/national/NationalObservation.test.ts \
             tests/national/C4ContinuousFogAlgorithm.test.ts
+      - name: Native-client revocation and private-map guard regressions
+        run: |
+          npx --no-install vitest run \
+            tests/ui/national/C4NativeObserverRevocation.test.ts \
+            tests/ui/national/TrustedNationalProjectionMapC2.test.ts \
+            tests/ui/national/NationalHumanMapInputR11.test.ts
       - name: Focused lint and formatting
         run: |
           npx --no-install oxlint packages/engine/src/national/observation/LiveObservation.ts tests/national/C5CoastalVisibility.test.ts
