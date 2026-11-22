@@ -12,7 +12,10 @@ import type {
   SovereignStatus,
 } from "@openfront/engine-api/game/NationalRecipientView";
 
-export type { AssetKind, SovereignStatus } from "@openfront/engine-api/game/NationalRecipientView";
+export type {
+  AssetKind,
+  SovereignStatus,
+} from "@openfront/engine-api/game/NationalRecipientView";
 
 export type NationId = string;
 export type CoalitionKind = "nap" | "mda" | "empire";

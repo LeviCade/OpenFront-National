@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
-import { describe, it } from "vitest";
 import { deflateSync } from "node:zlib";
+import { describe, it } from "vitest";
 import { validateScreenshotPng } from "../../../scripts/national-qa/png-evidence.mjs";
 
 const signature = Buffer.from("89504e470d0a1a0a", "hex");
