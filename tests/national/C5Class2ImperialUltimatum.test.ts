@@ -220,8 +220,8 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(game.player(IDS[0]).canTrade(game.player(IDS[1]))).toBe(false);
     expect(game.player(IDS[3]).canTrade(game.player(IDS[1]))).toBe(false);
     expect(game.player(IDS[2]).canTrade(game.player(IDS[1]))).toBe(true);
-    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(true);
-    expect(game.nationalWarState()!.wars.layers.length).toBe(originalLayers);
+    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
+    expect(game.nationalWarState()!.wars.layers.length).toBe(0);
     expect(assets(game)).toEqual(before);
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
@@ -269,6 +269,8 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
       requestId: "c5_c2_join",
     });
     expect(game.nationalPoliticalAuthority()?.empireOf(IDS[1])).toBe(EMPIRE);
+    // The dedicated diplomacy execution settles the political transition on the next tick.
+    game.executeNextTick();
     expect(view(1)[0]).toMatchObject({ phase: "acceded", credibility: "kept" });
     act(0, resolve(id, "enforce", "c5_c2_no_war_after_accession"));
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
@@ -303,7 +305,8 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
       credibility: "broken",
       warId: null,
     });
-    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
+    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(true);
+    expect(game.nationalWarState()!.wars.layers.length).toBe(originalLayers);
     expect(assets(game)).toEqual(before);
 
     act(0, issue("imperial-war", IDS[2], "c5_c2_lawful_war"));
@@ -349,7 +352,7 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(view(2)).toEqual([]);
     act(0, issue("embargo", IDS[1], "original_issue", 2));
     const id = view(1)[0].id;
-    act(0, issue("embargo", IDS[2], "original_issue"));
+    expect(host.submit(sockets[0], issue("embargo", IDS[2], "original_issue"))).toBe(false);
     expect(view(2)).toEqual([]);
     host.tick(); // already past the two-tick deadline
     act(1, respond(id, "accept", "late_accept"));
