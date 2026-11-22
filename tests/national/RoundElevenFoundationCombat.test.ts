@@ -300,8 +300,9 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
       deliberatelyRejected,
     );
     expect(
-      witnessedCooldown.rejectedWarTargets?.find((entry) => entry.targetId === BOT_B)
-        ?.retryAfterTick,
+      witnessedCooldown.rejectedWarTargets?.find(
+        (entry) => entry.targetId === BOT_B,
+      )?.retryAfterTick,
     ).toBe(deliberatelyRejected.tick + 180);
     const beforeTroops = game.player(BOT_A).troops();
     const human = authenticatedRunner(game, humanInfo.clientID!);
