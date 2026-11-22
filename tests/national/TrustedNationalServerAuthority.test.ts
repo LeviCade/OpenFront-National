@@ -206,7 +206,7 @@ describe("Fourth Class / E2 trusted Private NATIONAL host", () => {
       playerId: string,
     ) => {
       const updates = packet.updates[GameUpdateType.Player] as PlayerUpdate[];
-      const mapped = updates.filter((update) => typeof update.clientID === "string");
+      const mapped = updates.filter((u) => typeof u.clientID === "string");
       expect(mapped).toHaveLength(1);
       expect(mapped[0]).toMatchObject({
         id: playerId,
