@@ -50,6 +50,13 @@ type Motion = {
 };
 
 /** Standalone portable state only. It is not the canonical engine snapshot. */
+/** A replay cannot revive authority merely because its first receipt succeeded. */
+export type ReplaySovereignWarCommand =
+  | { kind: "declare-national"; aggressorId: string }
+  | { kind: "declare-imperial"; aggressor: ConflictParty }
+  | { kind: "propose-peace"; warId: string }
+  | { kind: "accept-peace"; motionId: string };
+
 export interface ConflictLedgerState {
   readonly version: 1;
   readonly layers: readonly Readonly<Layer>[];
@@ -175,6 +182,49 @@ export class WarLedger {
     this.layers = layers;
     this.motions = motions;
     this.lastTick = state.lastTick;
+  }
+
+  /**
+   * Read ONLY canonical WAR and live political policy on an accepted request
+   * retry. An immutable receipt is not a permanent sovereign credential:
+   * after a crown transfer the old emperor must not obtain an accepted
+   * response for a now-forbidden imperial or subordinate-national action.
+   *
+   * Deliberately does NOT require the war to remain active: an unchanged
+   * sovereign may harmlessly replay an already settled peace receipt.
+   */
+  mayReplayAsCurrentSovereign(
+    actorId: string,
+    command: ReplaySovereignWarCommand,
+  ): boolean {
+    if (!this.politics.nationAlive(actorId)) return false;
+    if (command.kind === "declare-imperial")
+      return this.mayActImperially(actorId, command.aggressor);
+    if (command.kind === "declare-national") {
+      try {
+        this.requireNationalAuthority(actorId, command.aggressorId, "declare");
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    const motion =
+      command.kind === "accept-peace"
+        ? this.motions.get(command.motionId)
+        : undefined;
+    const conflict =
+      command.kind === "propose-peace"
+        ? this.layers.get(command.warId)
+        : motion === undefined
+          ? undefined
+          : this.layers.get(motion.layerId);
+    if (conflict === undefined) return false;
+    const side = this.authorizedSide(conflict, actorId, "peace");
+    return (
+      side !== null &&
+      (command.kind === "propose-peace" ||
+        (motion !== undefined && side !== motion.proposingSide))
+    );
   }
 
   /** WAR-01/02: a nation may declare only its own scoped national war. */

@@ -27,7 +27,7 @@ const runner = readFileSync(
   "utf8",
 );
 
-void test("strict default-main dispatch, owner admission and immutable Class Four staging", () => {
+void test("strict default-main dispatch, owner admission and immutable Second Conductor first-class staging", () => {
   assert.ok(source.includes("  workflow_dispatch:"));
   assert.match(source, /^    runs-on: skybot-ci-gpu$/m);
   assert.doesNotMatch(source, /pull_request:|matrix:/);
@@ -36,10 +36,10 @@ void test("strict default-main dispatch, owner admission and immutable Class Fou
     "github.event_name == 'workflow_dispatch'",
     "github.ref == 'refs/heads/main'",
     'test "$GITHUB_REF" = refs/heads/main',
-    "03463cb2ee6fb508e0ae83ce87aedbc6ee996d29",
+    "2cfe3d4f91f28df61c7ebd7c429c9fdca674daf0",
     'git merge-base --is-ancestor "$BASE_SHA" "$NATIONAL_GPU_CANDIDATE_SHA"',
     'test "$(git rev-parse "$staging")" = "$NATIONAL_GPU_CANDIDATE_SHA"',
-    "stage3/class4-six-owner-reciprocal-20261121",
+    "stage3/conductor2-class1-engineering-20261121",
     "persist-credentials: false",
     "NATIONAL_GPU_ATTESTATION_FILE",
     "NATIONAL_GPU_PUBLIC_KEY_FILE",
@@ -92,6 +92,9 @@ void test("one pinned installation, one real GPU runner and four serial browser 
     runner,
     /for mode in national-desktop national-mobile legacy-desktop legacy-mobile/,
   );
+  assert.ok(runner.includes('wait-host-proof.mjs "$mode"'));
+  assert.ok(runner.includes("NATIONAL_GPU_ATTESTATION_FILE"));
+  assert.ok(runner.includes("NATIONAL_GPU_ATTESTATION_CHALLENGE"));
   assert.ok(runner.includes("node scripts/national-qa/browser-gameplay.mjs"));
   assert.match(runner, /sanitize-browser-evidence[.]mjs --kind/);
   assert.doesNotMatch(runner, /cat .*log|tail -n|grep .*log/);

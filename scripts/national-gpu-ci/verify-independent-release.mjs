@@ -69,7 +69,9 @@ export function verifyIndependentRelease({
     !DECIMAL.test(String(expected.runId ?? "")) ||
     !DECIMAL.test(String(expected.runAttempt ?? "")) ||
     !DECIMAL.test(String(expected.jobId ?? "")) ||
-    !/^skybot-ci-gpu-[a-zA-Z0-9-]{4,80}$/.test(expected.runnerName ?? "") ||
+    !/^(?:skybot-gpu-openfront-national-[0-9a-f]{8}|skybot-ci-gpu-[a-zA-Z0-9-]{4,80})$/.test(
+      expected.runnerName ?? "",
+    ) ||
     !DECIMAL.test(String(expected.runnerId ?? "")) ||
     !HEX64.test(expected.challenge ?? "") ||
     !Number.isSafeInteger(expected.runStartedAtMs) ||

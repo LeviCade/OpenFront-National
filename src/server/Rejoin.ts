@@ -3,6 +3,7 @@ import { CloseCode, CloseReason } from "@openfront/shared/CloseCodes";
 import { Logger } from "winston";
 import WebSocket from "ws";
 import { GameManager } from "./GameManager";
+import type { NationalReconnectPrincipal } from "./GameServer";
 
 // Hands a "rejoin" message's socket to the client's game, or closes it with
 // GameNotFound. A miss is routine — most are a tab rejoining after its game
@@ -16,8 +17,19 @@ export function rejoinOrClose(
   persistentID: string,
   gameID: GameID,
   lastTurn: number,
+  nationalPrincipal?: NationalReconnectPrincipal,
 ): void {
-  if (gm.rejoinClient(ws, persistentID, gameID, lastTurn)) return;
+  if (
+    gm.rejoinClient(
+      ws,
+      persistentID,
+      gameID,
+      lastTurn,
+      undefined,
+      nationalPrincipal,
+    )
+  )
+    return;
   // An ended game stays in GameManager until its next tick prunes it; to
   // the rejoining client it is already gone.
   const game = gm.game(gameID);

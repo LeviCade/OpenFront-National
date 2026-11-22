@@ -14,6 +14,7 @@ import {
   createPrivateKey,
   createPublicKey,
   sign,
+  verify,
 } from "node:crypto";
 import {
   existsSync,
@@ -31,14 +32,23 @@ import { verifyIndependentRelease } from "./verify-independent-release.mjs";
 export const HOST_ROOT = "/etc/skybot-ci/national-gpu-release";
 export const REPOSITORY = "LeviCade/OpenFront-National";
 export const REPOSITORY_ID = "1459234894";
-export const APPROVED_STAGING = "stage3/class4-six-owner-reciprocal-20261121";
+export const APPROVED_STAGING = "stage3/conductor2-class1-engineering-20261121";
 export const OVERLAY_DIR = "/var/lib/libvirt/images/ci-disposable/overlays";
 const SHA = /^[a-f0-9]{40}$/;
 const HEX64 = /^[a-f0-9]{64}$/;
 const NUM = /^[1-9][0-9]*$/;
-const RUNNER = /^skybot-ci-gpu-[a-zA-Z0-9-]{4,80}$/;
+const RUNNER =
+  /^(?:skybot-gpu-openfront-national-[0-9a-f]{8}|skybot-ci-gpu-[a-zA-Z0-9-]{4,80})$/;
 const RENDER = "/dev/dri/renderD128";
 const LEASE = "/run/skybot-ci/intel-virgl-acl.lease";
+// Production requires an operator-installed nonexportable Ed25519 key bridge.
+const HOST_HSM_SIGNER = "/usr/local/libexec/skybot-ci/host-ed25519-hsm-sign";
+const PROOF_MODES = [
+  "national-desktop",
+  "national-mobile",
+  "legacy-desktop",
+  "legacy-mobile",
+];
 const PIXEL = [51, 102, 153, 255];
 const digest = (b) => createHash("sha256").update(b).digest("hex");
 const requireTrue = (condition, code) => {
@@ -314,6 +324,8 @@ export function verifyControllerTeardown(teardown, expected, jobCompletedAtMs) {
   requireTrue(
     teardown?.kind === "skybot-host-teardown-v1" &&
       same(teardown.jobId, expected.jobId) &&
+      teardown.sourceSha === expected.sourceSha &&
+      same(teardown.runAttempt, expected.runAttempt) &&
       same(teardown.runId, expected.runId) &&
       same(teardown.runnerId, expected.runnerId) &&
       teardown.runnerName === expected.runnerName &&
@@ -343,6 +355,7 @@ export function verifyControllerTeardown(teardown, expected, jobCompletedAtMs) {
   };
 }
 
+// Synthetic-only test helper; never used by the production host entrypoint.
 export function signedHostRecord(payload, privateKeyPem, enrolled, hostTrust) {
   const key = createPrivateKey(privateKeyPem);
   requireTrue(key.asymmetricKeyType === "ed25519", "HOST_SIGNER_KEY_INVALID");
@@ -362,6 +375,108 @@ export function signedHostRecord(payload, privateKeyPem, enrolled, hostTrust) {
       key,
     ).toString("base64"),
   };
+}
+/** Production signing returns a detached signature from a nonexportable HSM.
+ * The host script sees only the public key and signature, never key bytes. */
+export function signHostWithExternalKey(
+  payload,
+  publicPem,
+  enrolled,
+  hostTrust,
+  signMessage,
+) {
+  const fingerprint = digest(Buffer.from(publicPem, "utf8"));
+  requireTrue(
+    enrolled?.includes(fingerprint) && hostTrust?.includes(fingerprint),
+    "HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED",
+  );
+  const key = createPublicKey(publicPem);
+  requireTrue(
+    key.asymmetricKeyType === "ed25519",
+    "HOST_ED25519_PUBLIC_KEY_INVALID",
+  );
+  const bytes = Buffer.from(JSON.stringify(payload), "utf8");
+  const response = signMessage(bytes);
+  requireTrue(
+    typeof response === "string" &&
+      /^(?:[A-Za-z0-9+/]{4}){21}(?:[A-Za-z0-9+/]{2}==)$/.test(response),
+    "HOST_HSM_SIGNATURE_FORMAT_INVALID",
+  );
+  const signature = Buffer.from(response, "base64");
+  requireTrue(
+    signature.length === 64 && verify(null, bytes, key, signature),
+    "HOST_HSM_SIGNATURE_UNVERIFIED",
+  );
+  return { payload, signature: response };
+}
+function liveHardwareSigner(message) {
+  const file = lstatSync(HOST_HSM_SIGNER);
+  requireTrue(
+    file.isFile() &&
+      !file.isSymbolicLink() &&
+      file.uid === 0 &&
+      file.gid === 0 &&
+      (file.mode & 0o777) === 0o500,
+    "ROOT_HSM_SIGNER_NOT_DEPLOYED",
+  );
+  return execFileSync(HOST_HSM_SIGNER, [], {
+    input: message,
+    encoding: "utf8",
+    timeout: 10000,
+    maxBuffer: 512,
+    env: { PATH: "/usr/sbin:/usr/bin:/sbin:/bin", LC_ALL: "C" },
+  }).trim();
+}
+/** Require four DISTINCT, independently signed, still-bound host
+ * preflights before an after-job release certificate can be published. A
+ * one-mode HSM signature cannot certify three later unsigned browser runs. */
+export function verifyFourModeHostProofs(proofs, publicPem, expected, times) {
+  requireTrue(
+    Array.isArray(proofs) && proofs.length === PROOF_MODES.length,
+    "FOUR_SIGNED_HOST_PREFLIGHTS_MISSING",
+  );
+  const key = createPublicKey(publicPem);
+  requireTrue(
+    key.asymmetricKeyType === "ed25519",
+    "HOST_ED25519_PUBLIC_KEY_INVALID",
+  );
+  let previousTime = times.runStartedAtMs - 30000;
+  for (let i = 0; i < PROOF_MODES.length; i++) {
+    const proof = proofs[i];
+    const p = proof?.payload;
+    requireTrue(
+      p?.version === 1 &&
+        p.mode === PROOF_MODES[i] &&
+        p.repository === REPOSITORY &&
+        String(p.repositoryId) === REPOSITORY_ID &&
+        p.sourceSha === expected.sourceSha &&
+        same(p.runId, expected.runId) &&
+        same(p.runAttempt, expected.runAttempt) &&
+        same(p.jobId, expected.jobId) &&
+        p.runnerName === expected.runnerName &&
+        same(p.runnerId, expected.runnerId) &&
+        p.challenge === expected.challenge &&
+        Number.isSafeInteger(p.issuedAtMs) &&
+        Number.isSafeInteger(p.expiresAtMs) &&
+        p.issuedAtMs >= previousTime &&
+        p.issuedAtMs <= times.jobCompletedAtMs &&
+        p.expiresAtMs - p.issuedAtMs <= 120000 &&
+        p.expiresAtMs > p.issuedAtMs &&
+        typeof proof.signature === "string" &&
+        /^(?:[A-Za-z0-9+/]{4}){21}(?:[A-Za-z0-9+/]{2}==)$/.test(
+          proof.signature,
+        ) &&
+        verify(
+          null,
+          Buffer.from(JSON.stringify(p), "utf8"),
+          key,
+          Buffer.from(proof.signature, "base64"),
+        ),
+      "FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED",
+    );
+    previousTime = p.issuedAtMs;
+  }
+  return true;
 }
 const bound = (expected) => ({
   version: 1,
@@ -490,8 +605,12 @@ const assertHostOnly = () => {
 async function main() {
   assertHostOnly();
   const phase = process.argv[2];
+  const mode = process.argv[3];
   requireTrue(
-    ["preflight", "postflight"].includes(phase) && process.argv.length === 3,
+    (phase === "postflight" && process.argv.length === 3) ||
+      ((phase === "preflight" || phase === "refresh-preflight") &&
+        process.argv.length === 4 &&
+        PROOF_MODES.includes(mode)),
     "UNAPPROVED_HOST_WITNESS_ACTION",
   );
   const expected = readRootJson("trusted-github-run-context.json");
@@ -501,7 +620,7 @@ async function main() {
     "GITHUB_HOST_READ_TOKEN_NOT_PROVISIONED",
   );
   const { times, prefix } = await controllerContext(token, expected);
-  const privateKey = readRoot("controller-ed25519-private.pem");
+  const pem = readRoot("host-public-key.pem").toString("utf8");
   const pinned = JSON.parse(
     readFileSync(
       fileURLToPath(
@@ -513,20 +632,38 @@ async function main() {
   const policy = readRootJson("host-trust-policy.json");
   const enrolled = pinned.trustedEd25519PublicKeySha256;
   const hostTrust = policy.trustedEd25519PublicKeySha256;
+  const hostSign = (payload) =>
+    signHostWithExternalKey(
+      payload,
+      pem,
+      enrolled,
+      hostTrust,
+      liveHardwareSigner,
+    );
   let payload;
-  if (phase === "preflight") {
+  if (phase === "preflight" || phase === "refresh-preflight") {
     const physical = probePhysicalPreflight(expected);
     const observed = readRootJson("controller-gpu-observation.json");
+    requireTrue(
+      observed.mode === mode,
+      "CONTROLLER_OBSERVED_WRONG_GPU_SCENARIO",
+    );
     const guest = validateControllerObservation(observed, expected);
     requireTrue(
       Math.abs(Date.now() - observed.observedAtMs) <= 120000,
       "OUT_OF_GUEST_WEBGL_OBSERVATION_STALE",
     );
-    payload = createHostPreflight(expected, times, physical, guest, Date.now());
-    safeWrite(
-      "controller-preflight.json",
-      signedHostRecord(payload, privateKey, enrolled, hostTrust),
-    );
+    payload = {
+      ...createHostPreflight(expected, times, physical, guest, Date.now()),
+      mode,
+    };
+    const signed = hostSign(payload);
+    // Retain first preflight as independently reviewed host anchor.
+    if (phase === "preflight") {
+      requireTrue(mode === "national-desktop", "FIRST_GPU_MODE_REQUIRED");
+      safeWrite("controller-preflight.json", signed);
+    }
+    safeWrite("controller-preflight-" + mode + ".json", signed);
   } else {
     requireTrue(
       times.jobCompletedAtMs !== null,
@@ -560,22 +697,17 @@ async function main() {
       summaryBytes,
       Date.now(),
     );
-    safeWrite(
-      "controller-postflight.json",
-      signedHostRecord(payload, privateKey, enrolled, hostTrust),
+    // Sign now, but do not publish a contradictory/failed release result.
+    const allSignedModes = PROOF_MODES.map((mode) =>
+      readRootJson("controller-preflight-" + mode + ".json"),
     );
-    const pem = createPublicKey(createPrivateKey(privateKey))
-      .export({ type: "spki", format: "pem" })
-      .toString();
-    requireTrue(
-      readRoot("host-public-key.pem").toString("utf8") === pem,
-      "HOST_PUBLIC_KEY_MISMATCH",
-    );
+    verifyFourModeHostProofs(allSignedModes, pem, expected, times);
+    const signedPostflight = hostSign(payload);
     const verdict = verifyIndependentRelease({
       summaryBytes,
       artifactRoot: join(HOST_ROOT, "verified-artifacts"),
       preflight: readRootJson("controller-preflight.json"),
-      postflight: readRootJson("controller-postflight.json"),
+      postflight: signedPostflight,
       trustedPublicKeyPem: pem,
       enrolledFingerprints: enrolled,
       hostTrustedFingerprints: hostTrust,
@@ -589,6 +721,7 @@ async function main() {
       verdict.accepted && verdict.releaseCertified,
       "HOST_SIGNED_PROOF_GAMEPLAY_NOT_RELEASE_CERTIFIED",
     );
+    safeWrite("controller-postflight.json", signedPostflight);
   }
   console.info(
     "SKYBOT_HOST_WITNESS_" +

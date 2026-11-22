@@ -11,6 +11,13 @@ import {
   GameUpdateType,
   type GameUpdateViewData,
 } from "@openfront/engine-api/game/GameUpdates";
+import {
+  NATIONAL_OBSERVER_MAX_TILES,
+  NATIONAL_OBSERVER_MAX_UNITS,
+  NATIONAL_OBSERVER_MAP_VERSION,
+  type NationalObserverMapV1,
+} from "@openfront/engine/national/observation/NationalObserverMap";
+import type { NationalPublicConflictView } from "@openfront/engine/national/observation/NationalOutbound";
 import { replacer } from "@openfront/shared/SharedUtil";
 
 export const MAX_NATIONAL_PROJECTION_BYTES = 2_000_000;
@@ -25,8 +32,39 @@ export function encodeNationalRecipientProjection(
   // absent, including enemy attacks, embargoes and private diplomacy.
   const updates = filtered.updates;
   const politics = filtered as GameUpdateViewData & {
-    nationalConflicts?: unknown;
+    nationalConflicts?: NationalPublicConflictView;
+    nationalObserverMap?: NationalObserverMapV1;
   };
+  const map = politics.nationalObserverMap;
+  const conflicts = politics.nationalConflicts;
+  if (map !== undefined) {
+    if (
+      map.version !== NATIONAL_OBSERVER_MAP_VERSION ||
+      map.tick !== filtered.tick ||
+      !Number.isSafeInteger(map.width) ||
+      map.width <= 0 ||
+      !Number.isSafeInteger(map.height) ||
+      map.height <= 0 ||
+      !Number.isSafeInteger(map.cursor) ||
+      map.cursor < 0 ||
+      (map.nextCursor !== null &&
+        (!Number.isSafeInteger(map.nextCursor) ||
+          map.nextCursor < map.cursor)) ||
+      map.tiles.length > NATIONAL_OBSERVER_MAX_TILES ||
+      map.units.length > NATIONAL_OBSERVER_MAX_UNITS ||
+      map.units.some(
+        (unit) => unit.ownerId !== map.observerId && unit.troops !== undefined,
+      ) ||
+      (filtered.nationalAccessionOffers !== undefined &&
+        filtered.nationalAccessionOffers.recipientId !== map.observerId) ||
+      (filtered.nationalCommandResults ?? []).some(
+        (result) =>
+          result.actorId !== map.observerId ||
+          result.recipientId !== map.observerId,
+      )
+    )
+      throw new Error("NATIONAL invalid bounded observer-map v1");
+  }
   const allowed = {
     tick: filtered.tick,
     updates: {
@@ -57,9 +95,75 @@ export function encodeNationalRecipientProjection(
     ...(filtered.nationalAccessionOffers === undefined
       ? {}
       : { nationalAccessionOffers: filtered.nationalAccessionOffers }),
-    ...(politics.nationalConflicts === undefined
+    ...(conflicts === undefined
       ? {}
-      : { nationalConflicts: politics.nationalConflicts }),
+      : {
+          nationalConflicts: {
+            version: 1 as const,
+            recipientId: conflicts.recipientId,
+            layers: conflicts.layers.map((layer) => ({
+              id: layer.id,
+              scope: layer.scope,
+              first: { kind: layer.first.kind, id: layer.first.id },
+              second: { kind: layer.second.kind, id: layer.second.id },
+              declaredBy: layer.declaredBy,
+              startedTick: layer.startedTick,
+              endedTick: layer.endedTick,
+            })),
+            motions: conflicts.motions.map((motion) => ({
+              id: motion.id,
+              layerId: motion.layerId,
+              proposedBy: motion.proposedBy,
+              proposingSide: motion.proposingSide,
+              proposedTick: motion.proposedTick,
+              acceptedTick: motion.acceptedTick,
+              acceptedBy: motion.acceptedBy,
+            })),
+          },
+        }),
+    ...(map === undefined
+      ? {}
+      : {
+          nationalObserverMap: {
+            version: NATIONAL_OBSERVER_MAP_VERSION,
+            tick: map.tick,
+            observerId: map.observerId,
+            width: map.width,
+            height: map.height,
+            reset: map.reset,
+            cursor: map.cursor,
+            nextCursor: map.nextCursor,
+            tiles: map.tiles.map(([tile, state, terrain, borderMask]) => [
+              tile,
+              state,
+              terrain,
+              borderMask,
+            ]),
+            units: map.units.map((unit) => ({
+              id: unit.id,
+              ownerId: unit.ownerId,
+              kind: unit.kind,
+              tile: unit.tile,
+              ...(unit.troops === undefined ? {} : { troops: unit.troops }),
+            })),
+            unitsTruncated: map.unitsTruncated,
+            visibleBorders: map.visibleBorders.map((frontier) => ({
+              targetId: frontier.targetId,
+              access: frontier.access,
+            })),
+            ownResources: {
+              troops: map.ownResources.troops,
+              treasury: map.ownResources.treasury,
+            },
+            countries: map.countries.map((country) => ({
+              id: country.id,
+              name: country.name,
+              alive: country.alive,
+              landPercent: country.landPercent,
+              status: country.status,
+            })),
+          },
+        }),
   };
   // Political and player DTOs may contain bigint currency fields; only
   // inside this E3-filtered whitelist do we normalize them to JSON strings.

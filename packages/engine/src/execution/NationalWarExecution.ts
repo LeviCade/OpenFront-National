@@ -334,7 +334,8 @@ export class NationalWarExecution implements Execution {
           (error.message ===
             "NATIONAL command journal: reused foreign request ID" ||
             error.message === "NATIONAL: stale authenticated actor session" ||
-            error.message === "NATIONAL: missing authenticated actor session")
+            error.message === "NATIONAL: missing authenticated actor session" ||
+            error.message === "NATIONAL: stale sovereign replay authority")
         )
           return;
         throw error;

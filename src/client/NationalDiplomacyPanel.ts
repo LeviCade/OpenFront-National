@@ -453,6 +453,11 @@ export class NationalDiplomacyPanel extends LitElement {
   private get trustedPrivateCommandsReady(): boolean {
     const game = this.game;
     if (!game || game.config().isReplay() || game.isSpectator()) return false;
+    if (
+      game.isTrustedNationalProjection?.() === true &&
+      game.trustedProjectionReady?.() !== true
+    )
+      return false;
     const cfg = game.config().gameConfig();
     return (
       cfg.nationalMode === true &&
