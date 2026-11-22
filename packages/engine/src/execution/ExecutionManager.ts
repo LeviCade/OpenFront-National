@@ -78,6 +78,40 @@ export class Executor {
           intent.clientID,
         );
       }
+      case "national_found_pact":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          {
+            kind: "found-pact",
+            pactId: intent.pactId,
+            name: intent.name,
+            pactKind: intent.pactKind,
+            terms: intent.terms,
+          },
+          intent.requestId,
+          intent.clientID,
+        );
+      case "national_invite_pact":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          {
+            kind: "invite-pact",
+            pactId: intent.pactId,
+            candidateId: intent.candidateId,
+          },
+          intent.requestId,
+          intent.clientID,
+        );
+      case "national_accept_pact":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          { kind: "accept-pact", pactId: intent.pactId },
+          intent.requestId,
+          intent.clientID,
+        );
       case "national_found_empire":
         // Authenticated actor comes ONLY from the stamped clientID above.
         // requestId is untrusted correlation metadata, never a principal.

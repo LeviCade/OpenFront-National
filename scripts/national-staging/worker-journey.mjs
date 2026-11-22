@@ -404,6 +404,49 @@ try {
     "server-authored spawn phase end",
     120_000,
   );
+  // All requests cross the real binary socket and canonical stamped executor.
+  // Outsider C must not accept A's invitation to B.
+  async function pactReceipt(index, intent, accepted) {
+    send(players[index], { type: "intent", intent });
+    await until(
+      () => players[index].receipts?.has(intent.requestId),
+      "canonical pact receipt",
+      30_000,
+    );
+    const receipt = players[index].receipts.get(intent.requestId);
+    assert.equal(receipt.accepted, accepted);
+    assert.equal(receipt.actorId, players[index].actor);
+    assert.equal(receipt.type, intent.type);
+    for (let j = 0; j < players.length; j++)
+      if (j !== index) assert(!players[j].receipts?.has(intent.requestId));
+  }
+  const pactId = "c4-local-mda";
+  await pactReceipt(0, {
+    type: "national_found_pact",
+    pactId,
+    name: "Local defense",
+    pactKind: "MDA",
+    terms: { admission: "leader", expulsion: "forbidden" },
+    requestId: "c4-pact-found",
+  }, true);
+  await pactReceipt(0, {
+    type: "national_invite_pact",
+    pactId,
+    candidateId: players[1].actor,
+    requestId: "c4-pact-invite",
+  }, true);
+  await pactReceipt(2, {
+    type: "national_accept_pact",
+    pactId,
+    requestId: "c4-pact-outsider",
+  }, false);
+  await pactReceipt(1, {
+    type: "national_accept_pact",
+    pactId,
+    requestId: "c4-pact-accept",
+  }, true);
+  pass("real-worker-pact-founding-invitation-consent-and-outsider-denial");
+
   const requests = ["e2-local-alpha", "e2-local-bravo", "e2-local-charlie"];
   send(players[0], {
     type: "intent",

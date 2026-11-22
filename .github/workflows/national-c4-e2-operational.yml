@@ -1,6 +1,9 @@
 name: C4 E2 — operational local staging identity and Worker journey
 
 on:
+  push:
+    branches:
+      - stage3/conductor4-class1-integration-20261121
   pull_request:
     branches:
       - stage3/conductor4-class1-integration-20261121

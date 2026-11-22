@@ -6,7 +6,6 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
-import { NationalFoundEmpireExecution } from "@openfront/engine/execution/NationalFoundEmpireExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
@@ -121,26 +120,26 @@ function military(m: Match, id: string, requestId: string) {
 }
 
 /**
- * Pact transport is absent at the founding SHA: the actual authenticated
- * political execution exists, is snapshotted and commits actor-only receipts.
- * Schedule that execution; do not invent a wire command or mutate the roster.
+ * Exercise the same stamped wire commands used by an admitted host seat.
+ * No direct execution scheduling or roster mutation for pact commands.
  */
 function pactCommand(
   m: Match,
   actor: string,
-  command: Exclude<NationalCommand, { kind: "found-empire" }>,
+  command: Extract<
+    NationalCommand,
+    { kind: "found-pact" | "invite-pact" | "accept-pact" }
+  >,
   requestId: string,
 ) {
-  m.game.addExecution(
-    new NationalFoundEmpireExecution(
-      m.game.player(actor),
-      "",
-      command,
-      requestId,
-      infos.find((p) => p.id === actor)!.clientID!,
-    ),
-  );
-  wait(m, 2);
+  const { kind, ...fields } = command;
+  const type =
+    kind === "found-pact"
+      ? "national_found_pact"
+      : kind === "invite-pact"
+        ? "national_invite_pact"
+        : "national_accept_pact";
+  clicks(m, stamped(actor, { ...fields, type, requestId }));
   expect(political(m, actor, requestId).accepted).toBe(true);
 }
 

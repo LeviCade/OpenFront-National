@@ -694,6 +694,30 @@ export const NationalAcceptPeaceIntentSchema = z.object({
   requestId: NationalWarRequestId.optional(),
 });
 
+// Append new variants to preserve existing Zbin discriminant ordering.
+export const NationalFoundPactIntentSchema = z.object({
+  type: z.literal("national_found_pact"),
+  pactId: NationalPoliticalId,
+  name: z.string().trim().min(1).max(64),
+  pactKind: z.enum(["NAP", "MDA"]),
+  terms: z.object({
+    admission: z.enum(["leader", "unanimous"]),
+    expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+  }),
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalInvitePactIntentSchema = z.object({
+  type: z.literal("national_invite_pact"),
+  pactId: NationalPoliticalId,
+  candidateId: MappedID,
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalAcceptPactIntentSchema = z.object({
+  type: z.literal("national_accept_pact"),
+  pactId: NationalPoliticalId,
+  requestId: NationalPoliticalRequestId,
+});
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -728,6 +752,9 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalDeclareWarIntentSchema,
   NationalProposePeaceIntentSchema,
   NationalAcceptPeaceIntentSchema,
+  NationalFoundPactIntentSchema,
+  NationalInvitePactIntentSchema,
+  NationalAcceptPactIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)
