@@ -193,7 +193,11 @@ export function planObservedImperialCoercion(
     }
     if (v.issuerId===self && v.phase==="decision-required" && own.status==="imperial") {
       const recipient=observation.nations.find((n)=>n.id===v.recipientId);
-      const reach=recipient?.alive && observedImperialReach(observation,empire)!=="none";
+      const reach=recipient?.alive && (
+        observation.frontiers.some((f)=>f.targetId===v.recipientId && f.access==="land") ||
+        (observation.frontiers.some((f)=>f.targetId===v.recipientId && f.access==="naval") &&
+          observation.visibleAssets.some((a)=>a.ownerId===self && a.kind==="transport"))
+      );
       // A declaration of coercion is not proof of capacity to enforce it.
       return {kind:reach?"enforce":"back-down",ultimatumId:v.id,reason:reach?"observed-reach":"unreachable-threat"};
     }
