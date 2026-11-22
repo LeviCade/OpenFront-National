@@ -316,7 +316,7 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
   });
 
   it("ECON-03/06: AI issuer backs down after losing observed reach and recipient learns the bluff", async () => {
-    const { game, a, b, c, ca, bb } = await live(221);
+    const { game, a, b, c, ca, bb, cc } = await live(221);
     const before = ledger(game);
     const leverage = voyage(game, a, ca, bb);
     expect(leverage.isActive()).toBe(true);
@@ -335,21 +335,10 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     a.setTroops(10);
     game.convertHumanToNation(b, "c5-e5-learns-bluff");
     tick(game, 45);
-    console.info("C5_E5_BACKDOWN_DIAG=" + JSON.stringify({
-      tick: game.ticks(),
-      phase: NationalSanctionExecution.viewFor(game, a)[0]?.phase,
-      response: NationalSanctionExecution.viewFor(game, b)[0]?.response,
-      bToC: b.canTrade(c),
-      aToB: a.canTrade(b),
-      border: collectLiveNationalObservation(game, A).observation.frontiers,
-      units: a.units(UnitType.TradeShip).map((u) => ({
-        id: u.id(), active: u.isActive(),
-        destination: u.targetUnit()?.owner().id(),
-      })),
-    }));
-    until(game, () =>
-      NationalSanctionExecution.viewFor(game, a)[0].phase === "backed-down",
-    55);
+    expect(NationalSanctionExecution.viewFor(game, a)[0].phase).toBe("backed-down");
+    expect(collectLiveNationalObservation(game, A).observation.frontiers.some(
+      (f) => f.targetId === C,
+    )).toBe(false);
     expect(a.canTrade(b)).toBe(true);
     expect(b.canTrade(c)).toBe(true);
     tick(game, 6); // Recipient's own AI observes the terminal outcome.
@@ -359,6 +348,10 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     tick(game);
     const dependency = voyage(game, b, bb, distant);
     expect(dependency.isActive()).toBe(true);
+    // Countervailing B-C voyage makes A's bluff actually consequential:
+    // baseline (4 + 1 reach) > 4, but remembered bluff (4 - 3 + 1) < 4.
+    const cDependency = voyage(game, b, bb, cc);
+    expect(cDependency.isActive()).toBe(true);
     game.addExecution(new NationalSanctionExecution(a, {
       type: "national_issue_sanction", scope: "national",
       targetId: C, recipientIds: [B], durationTicks: 30,
@@ -374,7 +367,7 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
       [next!],
       [
         { partnerId: A, tradePermitted: b.canTrade(a), activeOwnVoyages: 1 },
-        { partnerId: C, tradePermitted: b.canTrade(c), activeOwnVoyages: 0 },
+        { partnerId: C, tradePermitted: b.canTrade(c), activeOwnVoyages: 1 },
       ],
       initialNationalEconomicMemory(B),
     )).toMatchObject({ kind: "respond", decision: "comply" });
