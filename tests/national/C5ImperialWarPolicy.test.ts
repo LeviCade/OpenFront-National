@@ -534,10 +534,17 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     expect(original.accepted).toBe(true);
     found(m);
     act(m, 0, {
-      ...policy(0, "imperial", [], [B]),
+      ...policy(0, "imperial"),
       requestId: "c5_real_army_policy",
     });
+    expect(political(m, A, "c5_real_army_policy").accepted).toBe(true);
     join(m, 1);
+    // Delegation becomes valid only AFTER actual constituent admission.
+    act(m, 0, {
+      ...policy(1, "imperial", [], [B]),
+      requestId: "c5_real_army_national_peace_grant",
+    });
+    expect(political(m, A, "c5_real_army_national_peace_grant").accepted).toBe(true);
     const imperial = m.game.nationalWarState()!.wars.layers.find(
       (layer) => layer.scope === "imperial" && layer.endedTick === null,
     )!;
