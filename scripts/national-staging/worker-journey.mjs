@@ -114,6 +114,9 @@ async function peer() {
         // engine principal. The actual browser resolves the same mapping
         // through GameView.playerByClientID, not by equating the two IDs.
         const updates = packet.updates[String(GameUpdateType.Player)] ?? [];
+        if (updates.some((player) => player.clientID &&
+            player.clientID !== state.seat))
+          throw new Error("foreign seat metadata");
         const own = updates.find((player) => player.clientID === state.seat);
         if (own) {
           if (state.actor && own.id !== state.actor)
@@ -141,7 +144,8 @@ async function peer() {
           state.spawnEnded = true;
         if (
           updates.some(
-            (p) => (p.clientID === state.seat || p.id === state.actor) &&
+            (p) =>
+              (p.clientID === state.seat || p.id === state.actor) &&
               p.hasSpawned === true,
           )
         )
@@ -153,7 +157,10 @@ async function peer() {
         )
           state.visibleOwnLand = true;
         for (const result of packet.nationalCommandResults ?? []) {
-          if (result.actorId !== state.actor || result.recipientId !== state.actor)
+          if (
+            result.actorId !== state.actor ||
+            result.recipientId !== state.actor
+          )
             throw new Error("wrong receipt recipient");
           state.receipts ??= new Map();
           state.receipts.set(result.requestId, {
@@ -179,6 +186,7 @@ async function peer() {
         "NATIONAL invalid visible border",
         "NATIONAL invalid public country",
         "wrong recipient",
+        "foreign seat metadata",
         "wrong receipt recipient",
         "own engine identity changed",
         "stream changed",
@@ -349,6 +357,8 @@ try {
     60_000,
   );
   assert(allHealthy(players));
+  assert(players.every((p) => typeof p.actor === "string"));
+  assert.equal(new Set(players.map((p) => p.actor)).size, 3);
   assert.deepEqual(
     players.map((p) => p.seat),
     seatIds,
@@ -429,7 +439,10 @@ try {
     120_000,
   );
   for (let i = 0; i < 3; i++) {
-    assert.equal(players[i].receipts.get(requests[i]).actorId, players[i].actor);
+    assert.equal(
+      players[i].receipts.get(requests[i]).actorId,
+      players[i].actor,
+    );
     for (let j = 0; j < 3; j++)
       if (i !== j) assert(!players[j].receipts?.has(requests[i]));
   }
@@ -438,7 +451,6 @@ try {
   setStage("refresh rotation and same-seat socket replacement");
   const renewed = await refresh(auth[1].cookie);
   const replacement = await peer();
-  replacement.actor = players[1].actor;
   const previousTick = players[0].lastProjectionTick;
   rejoin(replacement, id, renewed.jwt);
   await until(
@@ -488,13 +500,13 @@ try {
   assert(!banned.starts);
   const recoveredAuth = await login(fixture.dir, emails[1]);
   const recovered = await peer();
-  recovered.actor = players[1].actor;
   rejoin(recovered, id, recoveredAuth.jwt);
   await until(
     () => recovered.starts === 1 && recovered.lastProjectionTick >= 1,
     "new legitimate session recovers original seat",
   );
   assert.equal(recovered.seat, seatIds[1]);
+  assert.equal(recovered.actor, players[1].actor);
   accountCommand(fixture.env, "ban", emails[2]);
   await until(() => players[2].closeCode !== null, "live account ban", 22_000);
   assert(!players[0].decodeFailed && !recovered.decodeFailed);

@@ -11,7 +11,11 @@ import {
   GameType,
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
-import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import {
+  GameUpdateType,
+  type GameUpdateViewData,
+  type PlayerUpdate,
+} from "@openfront/engine-api/game/GameUpdates";
 import {
   type ClientID,
   IntentSchema,
@@ -136,7 +140,38 @@ export class TrustedNationalMatch {
         // The runner already passed the host-only frame through E3's ONE
         // principal-bound projection. E2 GameServer alone owns encoding and
         // sending the existing national_projection wire variant.
-        if (active()) this.deliver(client, packet);
+        if (!active()) return;
+        // The seat-to-player binding is host-owned identity metadata, not
+        // sight intelligence. E3 intentionally omits clientIDs from public
+        // player deltas, including the pre-spawn baseline. A global diff may
+        // therefore never repeat a newly authorized recipient's clientID.
+        // Restore ONLY this authenticated seat's canonical mapping so a new
+        // browser can identify itself before spawn and after replacement.
+        const player = this.runner.game.playerByClientID(client.clientID);
+        if (!player || player.type() !== PlayerType.Human) return;
+        const identity: PlayerUpdate = {
+          type: GameUpdateType.Player,
+          id: player.id(),
+          clientID: client.clientID,
+          smallID: player.smallID(),
+          name: player.name(),
+          displayName: player.displayName(),
+          playerType: PlayerType.Human,
+          hasSpawned: player.hasSpawned(),
+        };
+        const players = packet.updates[GameUpdateType.Player] as PlayerUpdate[];
+        const ownPresent = players.some((update) => update.id === identity.id);
+        const bound = players.map((update) =>
+          update.id === identity.id ? { ...update, ...identity } : update,
+        );
+        if (!ownPresent) bound.push(identity);
+        this.deliver(client, {
+          ...packet,
+          updates: {
+            ...packet.updates,
+            [GameUpdateType.Player]: bound,
+          },
+        });
       },
     );
   }
