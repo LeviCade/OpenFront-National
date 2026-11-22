@@ -15,6 +15,7 @@ import {
 import {
   GameUpdateType,
   GameUpdateViewData,
+  PlayerUpdate,
   SpawnPhaseEndUpdate,
   UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
@@ -52,6 +53,10 @@ import {
   type NationalAccessionView,
   type NationalPoliticalResult,
 } from "../NationalDiplomacyState";
+import type {
+  NationalObserverMapContinuity,
+  NationalObserverMapDelta,
+} from "../NationalObserverMapContinuity";
 import { computeAllianceClusters } from "../render/frame/derive/AllianceClusters";
 import { extractAttackRings } from "../render/frame/derive/AttackRings";
 import { extractNukeTelegraphs } from "../render/frame/derive/NukeTelegraphs";
@@ -63,6 +68,7 @@ import { SpiralTrails } from "../render/frame/SpiralTrails";
 import { TrailManager } from "../render/frame/TrailManager";
 import type { FrameData, NameEntry } from "../render/types";
 import { STRUCTURE_TYPES, TRAIL_TYPES } from "../render/types";
+import type { TrustedNationalObserverMap } from "../TrustedNationalSession";
 import { UserSettings } from "../UserSettings";
 import { resolveTeamClanTag } from "../Utils";
 import { WorkerClient } from "../WorkerClient";
@@ -98,6 +104,88 @@ export class GameView implements GameLike {
   private _nationalAccessionOffers: NationalAccessionView | null = null;
   private _nationalPoliticalResults: readonly NationalPoliticalResult[] = [];
   private _trustedProjectionReady = false;
+  private trustedPrincipal: string | null = null;
+  private trustedSight: NationalObserverMapContinuity | null = null;
+
+  public setTrustedPrincipal(principal: string | null): void {
+    this.trustedPrincipal = principal;
+  }
+  private readonly trustedUnitMarkers = new Map<
+    number,
+    TrustedNationalObserverMap["units"][number]
+  >();
+  private trustedMarkerRevision = 0;
+
+  public trustedObserverMarkerRevision(): number {
+    return this.trustedMarkerRevision;
+  }
+
+  /** Fallback geometry is explicitly coarse; never fabricate a UnitType or private strength. */
+  public *trustedObserverFallbackMarkers(): Iterable<
+    TrustedNationalObserverMap["units"][number]
+  > {
+    for (const marker of this.trustedUnitMarkers.values()) {
+      if (!this._units.has(marker.id)) yield marker;
+    }
+  }
+  private readonly trustedOriginalTerrain = new Map<TileRef, number>();
+  private trustedPendingTiles: TileRef[] = [];
+  private trustedPendingTerrain: TileRef[] = [];
+  private _trustedSpawnReady = false;
+
+  public trustedSpawnReady(): boolean {
+    return (
+      this._trustedNationalProjection &&
+      this._trustedSpawnReady &&
+      this.inSpawnPhase()
+    );
+  }
+
+  public setTrustedSpawnReady(ready: boolean): void {
+    if (this._trustedNationalProjection) this._trustedSpawnReady = ready;
+  }
+
+  /** Tile and unit pager epochs are independent. A tile clear must not erase authorized units. */
+  public resetTrustedTileSight(): void {
+    if (!this._trustedNationalProjection) return;
+    this._trustedProjectionReady = false;
+    this._trustedSpawnReady = false;
+    this.trustedPendingTiles = [];
+    for (const [tile, terrain] of this.trustedOriginalTerrain) {
+      if (this._map.updateTile(tile, terrain << 16))
+        this.trustedPendingTerrain.push(tile);
+    }
+    this.trustedOriginalTerrain.clear();
+    this._map.tileStateBuffer().fill(0);
+    for (const player of this._players.values()) player.nameData = undefined;
+    this._names.clear();
+    this._namesDirty = true;
+    this._firstPopulate = true;
+  }
+
+  /** Sparse revocations publish only changed native tile refs, including restored terrain. */
+  public reconcileTrustedTileVisibility(removed: readonly TileRef[]): void {
+    if (!this._trustedNationalProjection || !removed.length) return;
+    const removedSet = new Set(removed);
+    for (const tile of removed) {
+      const terrain =
+        this.trustedOriginalTerrain.get(tile) ?? this._map.terrainByte(tile);
+      if (this._map.updateTile(tile, terrain << 16))
+        this.trustedPendingTerrain.push(tile);
+      this.trustedOriginalTerrain.delete(tile);
+      this.trustedPendingTiles.push(tile);
+    }
+    for (const player of this._players.values()) {
+      const name = player.nameData;
+      if (
+        name &&
+        removedSet.has(this._map.ref(Math.floor(name.x), Math.floor(name.y)))
+      ) {
+        player.nameData = undefined;
+        this._namesDirty = true;
+      }
+    }
+  }
 
   /** Strictly a view of the E3 recipient packet, NEVER a browser GameRunner. */
   public isTrustedNationalProjection(): boolean {
@@ -110,7 +198,12 @@ export class GameView implements GameLike {
   }
 
   public markTrustedProjectionReady(): void {
-    if (this._trustedNationalProjection) this._trustedProjectionReady = true;
+    this.setTrustedProjectionReady(true);
+  }
+
+  public setTrustedProjectionReady(ready: boolean): void {
+    if (!this._trustedNationalProjection) return;
+    this._trustedProjectionReady = ready;
   }
 
   /**
@@ -121,14 +214,127 @@ export class GameView implements GameLike {
   public resetTrustedProjectionSight(): void {
     if (!this._trustedNationalProjection) return;
     this._trustedProjectionReady = false;
+    this._trustedSpawnReady = false;
+    this.trustedPendingTiles = [];
+    this.trustedPendingTerrain = [];
+    this.trustedSight = null;
+    this.updatedTerrainTiles = [];
+    for (const [tile, terrain] of this.trustedOriginalTerrain) {
+      if (this._map.updateTile(tile, terrain << 16))
+        this.updatedTerrainTiles.push(tile);
+    }
+    this.trustedOriginalTerrain.clear();
     this._map.tileStateBuffer().fill(0);
+    this.updatedTiles = [];
+    this.nukeImpactTiles = [];
+    this.trustedUnitMarkers.clear();
+    this.trustedMarkerRevision++;
+    this.trailManager.reset();
+    this.spiralTrails.reset();
+    this.railroadCache.reset();
+    for (const player of this._players.values()) player.nameData = undefined;
+    const frame = this._frame as {
+      -readonly [K in keyof FrameData]: FrameData[K];
+    };
+    frame.changedTiles = null;
+    frame.structuresDirty = true;
+    frame.railroadDirty = true;
+    frame.events.deadUnits.length = 0;
+    frame.events.conquestEvents.length = 0;
+    frame.events.bonusEvents.length = 0;
+    frame.attackRings = [];
+    frame.nukeTelegraphs = [];
+    frame.playerStatus = new Map();
+    frame.relationMatrix = new Uint8Array(1024 * 1024);
+    frame.relationSize = 1024;
+    frame.relationsDirty = true;
+    frame.allianceClusters = new Map();
+    this._relationsDirty = true;
+    this._clustersDirty = true;
+    this._firstPopulate = true;
     this._units.clear();
     this._unitStates.clear();
     this._unitsByOwner.clear();
     this._unitsByOwnerStale = true;
     this.toDelete.clear();
+    // Names are renderer state too: retain no former ally/enemy placement
+    // after E3 withdraws sight, even if the same browser view survives.
+    this._names.clear();
+    this._namesDirty = true;
     this.unitGrid = new UnitGrid<UnitView>(this._map);
     this.invalidateNationalPoliticalView();
+  }
+
+  /** Unit visibility revocation is not a battle death. Remove from native indices before applying the next frame. */
+  public reconcileTrustedUnitVisibility(
+    clear: boolean,
+    removed: readonly number[],
+  ): void {
+    if (!this._trustedNationalProjection) return;
+    const ids = clear ? [...this._units.keys()] : removed;
+    if (clear) this.trustedUnitMarkers.clear();
+    if (clear || removed.length > 0) this.trustedMarkerRevision++;
+    for (const id of ids) {
+      this.trustedUnitMarkers.delete(id);
+      const unit = this._units.get(id);
+      if (unit) this.unitGrid.removeUnit(unit);
+      this._units.delete(id);
+      this._unitStates.delete(id);
+      this.toDelete.delete(id);
+      this.motion.unitRemoved(id);
+    }
+    if (ids.length) {
+      this._structuresDirty = true;
+      this._unitsByOwnerStale = true;
+    }
+  }
+
+  /** Keep exact native unit DTOs only after the independently accepted marker authorizes their ID. */
+  public applyTrustedUnitPage(
+    update: GameUpdateViewData,
+    delta: NationalObserverMapDelta,
+    receiver: NationalObserverMapContinuity,
+  ): void {
+    this.trustedSight = receiver;
+    for (const marker of delta.units) {
+      const previous = this.trustedUnitMarkers.get(marker.id);
+      if (
+        previous?.tile !== marker.tile ||
+        previous.ownerId !== marker.ownerId ||
+        previous.kind !== marker.kind
+      )
+        this.trustedMarkerRevision++;
+      this.trustedUnitMarkers.set(marker.id, marker);
+      // Coarse sight is independent from the detailed PackedUnit lane. If
+      // the latter disappears, never leave an old detailed unit position.
+      const native = this._units.get(marker.id);
+      if (native && native.tile() !== marker.tile) {
+        this.reconcileTrustedUnitVisibility(false, [marker.id]);
+        this.trustedUnitMarkers.set(marker.id, marker);
+      }
+    }
+    if (!update.packedUnitUpdates) return;
+    const kept: number[] = [];
+    const currentMarkers = new Map(
+      delta.units.map((marker) => [marker.id, marker]),
+    );
+    const buffer = update.packedUnitUpdates;
+    for (let offset = 0; offset < buffer.length; offset += UNIT_UPDATE_STRIDE) {
+      const decoded = new PackedUnitUpdateDecoder(buffer, offset);
+      const marker = currentMarkers.get(decoded.id);
+      if (!marker || decoded.pos !== marker.tile)
+        throw new Error("NATIONAL native unit outside current authorized page");
+      if (!decoded.isActive) {
+        this.reconcileTrustedUnitVisibility(false, [decoded.id]);
+        continue;
+      }
+      if (!this._units.has(decoded.id)) this.trustedMarkerRevision++;
+      for (let i = 0; i < UNIT_UPDATE_STRIDE; i++)
+        kept.push(buffer[offset + i]);
+    }
+    update.packedUnitUpdates = Float64Array.from(kept);
+    // No trails/missile queue can be reconstructed from observer markers.
+    update.packedMissileTimers = undefined;
   }
 
   /**
@@ -160,6 +366,93 @@ export class GameView implements GameLike {
       target.isPlayer() &&
       target.id() !== playerID
     );
+  }
+
+  /**
+   * Native intent eligibility, not an authority oracle. Undefined means the
+   * current sight/war projection does not permit offering this action; null
+   * is a positively sighted neutral land tile, never an unknown/fog tile.
+   * Private treaties, geographic frontiers and execution remain host-owned.
+   */
+  public trustedAttackTarget(
+    playerID: string,
+    tile: TileRef | undefined,
+  ): PlayerID | null | undefined {
+    if (
+      !this.trustedProjectionReady() ||
+      tile === undefined ||
+      this.inSpawnPhase() ||
+      !this.isValidRef(tile) ||
+      !this.isLand(tile) ||
+      this.trustedSight?.tileStatus(tile) !== "observed"
+    )
+      return undefined;
+    const actor = this.myPlayer();
+    if (
+      !actor ||
+      actor.id() !== playerID ||
+      !actor.isAlive() ||
+      !actor.hasSpawned() ||
+      actor.troops() <= 0
+    )
+      return undefined;
+    const smallID = this.ownerID(tile);
+    if (smallID === 0) return null;
+    const targetID = this.smallIDToID.get(smallID);
+    if (
+      !targetID ||
+      targetID === playerID ||
+      !this._players.get(targetID)?.isAlive()
+    )
+      return undefined;
+    const politics = this.nationalPolitics();
+    const conflicts = this.nationalConflicts();
+    if (
+      !politics ||
+      !conflicts ||
+      conflicts.recipientId !== playerID ||
+      this._nationalConflictsTick !== this.ticks() ||
+      this._nationalPoliticsTick !== this.ticks()
+    )
+      return undefined;
+    const empireOf = (id: PlayerID) =>
+      politics.empires.find((empire) => empire.memberIds.includes(id))?.id;
+    const actorEmpire = empireOf(playerID);
+    const targetEmpire = empireOf(targetID);
+    if (actorEmpire !== undefined && actorEmpire === targetEmpire)
+      return undefined;
+    const contains = (
+      side: { kind: "nation" | "empire"; id: string },
+      id: PlayerID,
+      empire: string | undefined,
+    ) => (side.kind === "nation" ? side.id === id : side.id === empire);
+    const opposed = conflicts.layers.some(
+      (layer) =>
+        layer.endedTick === null &&
+        ((contains(layer.first, playerID, actorEmpire) &&
+          contains(layer.second, targetID, targetEmpire)) ||
+          (contains(layer.second, playerID, actorEmpire) &&
+            contains(layer.first, targetID, targetEmpire))),
+    );
+    return opposed ? targetID : undefined;
+  }
+
+  /**
+   * A stale nameLocation from a previous E3 sight lease must not be drawn.
+   * Public roster membership is NOT permission to reveal map coordinates.
+   */
+  public trustedNameVisible(player: PlayerView): boolean {
+    if (!this._trustedNationalProjection) return true;
+    if (!this._trustedProjectionReady || !player.nameData) return false;
+    const { x, y } = player.nameData;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const tileX = Math.floor(x);
+    const tileY = Math.floor(y);
+    if (!this.isValidCoord(tileX, tileY)) return false;
+    const tile = this.ref(tileX, tileY);
+    if (!this.hasOwner(tile)) return false;
+    const owner = this.owner(tile);
+    return owner.isPlayer() && owner.id() === player.id();
   }
 
   public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
@@ -426,7 +719,8 @@ export class GameView implements GameLike {
       this._nationalPoliticsTick =
         this._nationalPolitics === null ? null : gu.tick;
 
-      const currentActorId = this._myPlayer?.id() ?? null;
+      const currentActorId =
+        this.trustedPrincipal ?? this._myPlayer?.id() ?? null;
       this._nationalAccessionOffers = readNationalAccessionOffers(
         nationalPacket.nationalAccessionOffers,
         currentActorId,
@@ -446,7 +740,7 @@ export class GameView implements GameLike {
       // than engine ticks; retain a bounded, principal-scoped receipt buffer
       // until the panel sees it. Old request ticks cannot acknowledge a new
       // click, and disconnect/replay rewind clears all buffered receipts.
-      const myActorId = this._myPlayer?.id() ?? null;
+      const myActorId = this.trustedPrincipal ?? this._myPlayer?.id() ?? null;
       const received =
         myActorId === null
           ? []
@@ -498,12 +792,27 @@ export class GameView implements GameLike {
       );
     }
 
-    this.updatedTiles = [];
-    this.updatedTerrainTiles = [];
+    this.updatedTiles = this.trustedPendingTiles;
+    this.updatedTerrainTiles = this.trustedPendingTerrain;
+    this.trustedPendingTiles = [];
+    this.trustedPendingTerrain = [];
     const packed = this.lastUpdate.packedTileUpdates;
     for (let i = 0; i + 1 < packed.length; i += 2) {
       const tile = packed[i];
       const state = packed[i + 1];
+      if (this._trustedNationalProjection) {
+        const terrain = this._map.terrainByte(tile);
+        if (
+          this._map.tileState(tile) === (state & 0xffff) &&
+          terrain === ((state >>> 16) & 0xff)
+        )
+          continue;
+        if (
+          terrain !== ((state >>> 16) & 0xff) &&
+          !this.trustedOriginalTerrain.has(tile)
+        )
+          this.trustedOriginalTerrain.set(tile, terrain);
+      }
       const terrainChanged = this.updateTile(tile, state);
       this.updatedTiles.push(tile);
       if (terrainChanged) {
@@ -557,10 +866,63 @@ export class GameView implements GameLike {
     // all smallIDs registered before pass 2 can translate embargo PlayerIDs.
     // PlayerUpdate is now partial: only `id` is guaranteed; everything else
     // is present only when its value changed since the last emission.
-    gu.updates[GameUpdateType.Player].forEach((pu) => {
+    gu.updates[GameUpdateType.Player].forEach((wirePlayer) => {
+      let pu = wirePlayer;
       // First-emission (new player) — must have all static fields populated.
       // Subsequent emissions for an existing player carry only changed fields.
       const existing = this._players.get(pu.id);
+      // Public-only pre-spawn self identity has no private/static client header.
+      // Wait for the first full authenticated own update, rather than creating
+      // a fake local player which cannot later be promoted by a partial diff.
+      if (
+        this._trustedNationalProjection &&
+        !existing &&
+        pu.id === this.trustedPrincipal &&
+        pu.clientID !== this._myClientID
+      )
+        return;
+      if (
+        this._trustedNationalProjection &&
+        (pu.id !== this.trustedPrincipal || pu.troops === undefined)
+      ) {
+        // E3 deliberately strips private enemy fields. The legacy constructor
+        // requires arrays and numeric slots; these are inert renderer defaults,
+        // not intelligence about the other player's resources or relationships.
+        if (!existing) {
+          if (
+            pu.smallID === undefined ||
+            pu.name === undefined ||
+            pu.playerType === undefined
+          )
+            return;
+          const publicView: PlayerUpdate = {
+            clientID: null,
+            clanTag: null,
+            displayName: pu.name,
+            isDisconnected: false,
+            tilesOwned: 0,
+            gold: 0n,
+            troops: 0,
+            allies: [],
+            targets: [],
+            outgoingAllianceRequests: [],
+            alliances: [],
+            outgoingEmojis: [],
+            outgoingAttacks: [],
+            incomingAttacks: [],
+            isTraitor: false,
+            betrayals: 0,
+            lastDeleteUnitTick: 0,
+            isLobbyCreator: false,
+            isAlive: false,
+            ...pu,
+            hasSpawned: pu.hasSpawned ?? (pu.tilesOwned ?? 0) > 0,
+          };
+          pu = publicView;
+        } else if (pu.tilesOwned !== undefined && pu.hasSpawned === undefined) {
+          pu = { ...pu, hasSpawned: pu.tilesOwned > 0 };
+        }
+      }
 
       // Replace the local player's name/displayName with their own stored values.
       // This way the user does not know they are being censored. clientID is
@@ -628,6 +990,13 @@ export class GameView implements GameLike {
       if (pu.embargoes === undefined) return;
       const player = this._players.get(pu.id);
       if (player === undefined) return;
+      // The JSON wire cannot encode a Set without an explicit representation.
+      // Never interpret the empty serialized object as a private relationship.
+      if (
+        this._trustedNationalProjection &&
+        !(Symbol.iterator in Object(pu.embargoes))
+      )
+        return;
       const smallIDs = embargoSmallIDs(pu.embargoes, (id) =>
         this._players.get(id)?.smallID(),
       );
@@ -731,7 +1100,11 @@ export class GameView implements GameLike {
     // Trail update: walk active trail-type units and stamp/decay.
     this._trailIdsScratch.length = 0;
     for (const u of this._units.values()) {
-      if (u.isActive() && TRAIL_TYPES.has(u.type())) {
+      if (
+        !this._trustedNationalProjection &&
+        u.isActive() &&
+        TRAIL_TYPES.has(u.type())
+      ) {
         this._trailIdsScratch.push(u.id());
       }
     }
@@ -746,6 +1119,10 @@ export class GameView implements GameLike {
       this._trailIdsScratch,
     );
 
+    // Trusted E3 page visibility may change every tick without nameData
+    // changing. Re-evaluate each placement against current *sighted* tiles.
+    // Ordinary FFA keeps its existing change-driven fast path.
+    if (this._trustedNationalProjection) this._namesDirty = true;
     // Names map — rebuilt only when a placement record arrived or a player
     // was added (nameData values cannot change between those ticks). Entry
     // order is irrelevant for the renderer.
@@ -753,6 +1130,7 @@ export class GameView implements GameLike {
       this._namesDirty = false;
       this._names.clear();
       for (const p of this._players.values()) {
+        if (!this.trustedNameVisible(p)) continue;
         this._names.set(p.id(), {
           playerID: p.id(),
           x: p.nameData?.x ?? 0,
@@ -1156,7 +1534,9 @@ export class GameView implements GameLike {
   }
   isSpectator(): boolean {
     return (
-      (this._trustedNationalProjection && !this._trustedProjectionReady) ||
+      (this._trustedNationalProjection &&
+        !this._trustedProjectionReady &&
+        !this.trustedSpawnReady()) ||
       !this.myPlayer()?.isAlive() ||
       this._config.isReplay()
     );

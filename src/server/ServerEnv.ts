@@ -33,6 +33,23 @@ export class ServerEnv {
   // read from different sources (process.env vs window.BOOTSTRAP_CONFIG) but
   // the derived logic is identical. Consolidate into a shared helper that
   // takes a source so we don't have to keep them in sync by hand.
+  static localNationalStaging(): boolean {
+    if (process.env.NATIONAL_LOCAL_STAGING !== "1") return false;
+    if (
+      ServerEnv.gameEnv !== GameEnv.Dev ||
+      process.env.DOMAIN !== "localhost" ||
+      process.env.API_DOMAIN ||
+      process.env.GAME_DOMAIN ||
+      process.env.CDN_BASE ||
+      process.env.FARO_COLLECTOR_URL ||
+      process.env.SUBDOMAIN
+    ) {
+      throw new Error(
+        "Local NATIONAL staging requires isolated localhost development",
+      );
+    }
+    return true;
+  }
   static env(): GameEnv {
     return ServerEnv.gameEnv;
   }
@@ -124,6 +141,7 @@ export class ServerEnv {
     const response = await fetch(jwksUrl, {
       headers: { "x-api-key": ServerEnv.apiKey() },
       redirect: "error",
+      signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) {
       const body = await response.text();

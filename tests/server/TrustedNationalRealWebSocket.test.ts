@@ -202,7 +202,7 @@ describe("C2 E2 REAL WebSocket three-account NATIONAL server", () => {
     vi.spyOn(ServerEnv, "jwkPublicKey").mockResolvedValue(pubJwk);
     const tokens = await Promise.all(
       ACCOUNT_UUIDS.map((sub, index) =>
-        new SignJWT({ sub: uuidToBase64url(sub) })
+        new SignJWT({ sub: uuidToBase64url(sub), provider: "google" })
           .setProtectedHeader({ alg: "EdDSA" })
           .setJti("c2-signed-session-" + index)
           .setIssuedAt()
@@ -374,12 +374,12 @@ describe("C2 E2 REAL WebSocket three-account NATIONAL server", () => {
       socket(url),
     ]);
     peers.push(a, b, c);
-    for (let i = 0; i < 3; i++)
+    // Sending a join is not completion: asynchronous signature checks can
+    // reorder concurrent admissions. Establish the seat order tested below.
+    for (let i = 0; i < 3; i++) {
       await joined([a, b, c][i], MATCH_ID, tokens[i], i);
-    await waitFor(
-      () => acceptedSockets === 3,
-      "three signed WebSocket admissions",
-    );
+      await waitFor(() => acceptedSockets === i + 1, "signed admission");
+    }
     game.prestart();
     game.start();
     await waitFor(

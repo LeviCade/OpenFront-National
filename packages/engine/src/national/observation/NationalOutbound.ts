@@ -20,6 +20,10 @@ import {
   type PlayerUpdate,
   type UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
+import type {
+  NationalObserverMapV1,
+  NationalPublicConflictView,
+} from "@openfront/engine-api/game/NationalRecipientView";
 import {
   packUnitUpdates,
   unpackUnitUpdates,
@@ -32,6 +36,8 @@ import {
   type NationalSightMemory,
 } from "./NationalObservation";
 import type { OutboundNationalResult } from "./NationalPoliticalPacket";
+
+export type { NationalPublicConflictView } from "@openfront/engine-api/game/NationalRecipientView";
 
 /**
  * Explicit PUBLIC political whitelist. Even an accidentally extended E1
@@ -74,36 +80,6 @@ function publicPolitics(
             ),
           },
   };
-}
-
-/** Safe, detached WAR projection for E4. Never forward raw WAR/LEVY snapshots.
- * E2 owns the engine-api typed wire schema. Pending diplomacy is only visible
- * to current participants, while WAR declarations/cessations are public. */
-export interface NationalPublicConflictView {
-  readonly version: 1;
-  /** Empty for spectators, never interpreted as an authenticated principal. */
-  readonly recipientId: string;
-  readonly layers: readonly {
-    readonly id: string;
-    readonly scope: "national" | "imperial";
-    readonly first: { readonly kind: "nation" | "empire"; readonly id: string };
-    readonly second: {
-      readonly kind: "nation" | "empire";
-      readonly id: string;
-    };
-    readonly declaredBy: string;
-    readonly startedTick: number;
-    readonly endedTick: number | null;
-  }[];
-  readonly motions: readonly {
-    readonly id: string;
-    readonly layerId: string;
-    readonly proposedBy: string;
-    readonly proposingSide: 0 | 1;
-    readonly proposedTick: number;
-    readonly acceptedTick: number | null;
-    readonly acceptedBy: string | null;
-  }[];
 }
 
 const publicId = (value: unknown): value is string =>
@@ -450,6 +426,7 @@ export class NationalOutboundFilter {
     game: Game,
     data: GameUpdateViewData,
     verified: LiveNationalObservation | null,
+    page?: NationalObserverMapV1,
   ): GameUpdateViewData {
     if (!game.config().nationalMode()) {
       throw new Error("NATIONAL packet projection used in legacy mode");
@@ -497,9 +474,32 @@ export class NationalOutboundFilter {
     const visibleAssetIds = new Set(visibleAssets.keys());
     const ownID = this.observerId;
     const rawPlayer = data.updates[GameUpdateType.Player] as PlayerUpdate[];
-    const players = rawPlayer.map((u) =>
-      u.id === ownID ? { ...u } : publicPlayer(u),
-    );
+    // An authenticated rejoin is a fresh view, not a continuation of
+    // GameImpl's globally consumed player-diff stream. Rebuild its public
+    // roster without mutating engine diff state. Full own state each live
+    // tick also replaces the intentionally suppressed packed attack lane.
+    const firstPage = page?.sweepId === 1 && page.cursor === 0;
+    const players = firstPage
+      ? game.allPlayers().map((player): PlayerUpdate =>
+          player.id() === ownID
+            ? player.toFullUpdate()
+            : {
+                type: GameUpdateType.Player,
+                id: player.id(),
+                name: player.name(),
+                displayName: player.displayName(),
+                nationFlag: player.info().nationFlag,
+                playerType: player.type(),
+                smallID: player.smallID(),
+                isAlive: player.isAlive(),
+                tilesOwned: player.numTilesOwned(),
+              },
+        )
+      : rawPlayer
+          .filter((u) => page === undefined || u.id !== ownID)
+          .map((u) => (u.id === ownID ? { ...u } : publicPlayer(u)));
+    if (page !== undefined && !firstPage && ownID !== null)
+      players.push(game.player(ownID).toFullUpdate());
 
     // Never forward an unfiltered enum bucket. This drops hidden diplomatic
     // events, targets, embargoes, ship arrivals, railroad and attack messages.
@@ -510,35 +510,51 @@ export class NationalOutboundFilter {
     updates[GameUpdateType.GamePaused] = [
       ...data.updates[GameUpdateType.GamePaused],
     ];
-    updates[GameUpdateType.SpawnPhaseEnd] = [
-      ...data.updates[GameUpdateType.SpawnPhaseEnd],
-    ];
+    updates[GameUpdateType.SpawnPhaseEnd] =
+      firstPage && !game.inSpawnPhase()
+        ? [
+            {
+              type: GameUpdateType.SpawnPhaseEnd,
+              // GameImpl.elapsedGameSeconds() is canonical elapsed ticks / 10.
+              startTick:
+                game.ticks() - Math.round(game.elapsedGameSeconds() * 10),
+            },
+          ]
+        : [...data.updates[GameUpdateType.SpawnPhaseEnd]];
 
     const packedTile: number[] = [];
     for (let i = 0; i + 1 < data.packedTileUpdates.length; i += 2) {
       const tile = data.packedTileUpdates[i];
-      if (!visibleTiles.has(tile)) continue;
+      // Private host map tuples are the only ownership lane; Solo retains deltas.
+      if (page !== undefined || !visibleTiles.has(tile)) continue;
       packedTile.push(tile, data.packedTileUpdates[i + 1]);
     }
 
     // New sightings (including static units after resync) must be emitted
     // even if the authoritative engine did not produce a movement delta.
     const rawUnits = new Map<number, UnitUpdate>();
-    for (const unit of [
-      ...unpackUnitUpdates(data.packedUnitUpdates, data.packedMissileTimers),
-      ...(data.updates[GameUpdateType.Unit] as UnitUpdate[]),
-    ])
-      rawUnits.set(unit.id, unit);
+    if (page === undefined) {
+      for (const unit of [
+        ...unpackUnitUpdates(data.packedUnitUpdates, data.packedMissileTimers),
+        ...(data.updates[GameUpdateType.Unit] as UnitUpdate[]),
+      ])
+        rawUnits.set(unit.id, unit);
+    }
 
     const unitUpdates: UnitUpdate[] = [];
     const stillVisible = new Set<number>();
-    const orderedVisible = [...visibleAssetIds].sort((a, b) => a - b);
+    const orderedVisible =
+      page === undefined
+        ? [...visibleAssetIds].sort((a, b) => a - b)
+        : page.units.map((unit) => unit.id);
     for (const id of orderedVisible) {
       const unit = game.unit(id);
       if (!unit) continue;
       const raw =
-        rawUnits.get(id) ??
-        (this.previousUnits.has(id) ? null : unit.toUpdate());
+        page !== undefined
+          ? unit.toUpdate()
+          : (rawUnits.get(id) ??
+            (this.previousUnits.has(id) ? null : unit.toUpdate()));
       stillVisible.add(id);
       if (raw === null) continue;
       const allied = visibleAssets.get(id);
@@ -556,12 +572,14 @@ export class NationalOutboundFilter {
                 : {}),
             };
       unitUpdates.push(outgoing);
-      this.previousUnits.set(id, outgoing);
+      if (page === undefined) this.previousUnits.set(id, outgoing);
     }
 
     // Revoke sight using the LAST VISIBLE position, never the now-hidden
     // authoritative position/strength. A loss of empire membership is
     // reflected immediately by absence from the fresh verified sight set.
+    // Private host deletion is exclusively the disclosed map tombstone/clear.
+    if (page !== undefined) this.previousUnits.clear();
     for (const [id, prior] of this.previousUnits) {
       if (stillVisible.has(id)) continue;
       unitUpdates.push({

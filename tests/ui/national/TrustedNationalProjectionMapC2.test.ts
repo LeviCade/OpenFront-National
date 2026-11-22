@@ -1,13 +1,21 @@
 // @vitest-environment jsdom
+import { PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import { describe, expect, it } from "vitest";
 import {
+  completedTrustedObserverMap,
   materializeTrustedNationalUpdate,
   parseTrustedNationalProjection,
   readTrustedNationalObserverMap,
 } from "../../../src/client/TrustedNationalSession";
 import { GameView } from "../../../src/client/view/GameView";
 import type { PlayerView } from "../../../src/client/view/PlayerView";
+import {
+  makeEmptyGu,
+  makeGameView,
+  makeNameViewData,
+  makePlayerUpdate,
+} from "../../util/viewStubs";
 
 function packet(tick: number) {
   return {
@@ -140,6 +148,81 @@ describe("Second Conductor Class One E4: E3-authoritative graphical map feed", (
       }),
     });
     expect(view.trustedVisibleAttack("nation-a", 42)).toBe(false);
+  });
+
+  it("keeps private gameplay locked during page fetch, mismatched actor and revocation", () => {
+    const complete = {
+      version: 1 as const,
+      tick: 12,
+      observerId: "nation-a",
+      width: 10,
+      height: 10,
+      reset: false,
+      cursor: 90,
+      nextCursor: null,
+      tiles: [],
+      units: [],
+      unitsTruncated: false,
+      visibleBorders: [],
+      ownResources: { troops: 20, treasury: 50 },
+      countries: [],
+    };
+    expect(completedTrustedObserverMap(null, "nation-a")).toBe(false);
+    expect(completedTrustedObserverMap(complete, null)).toBe(false);
+    expect(completedTrustedObserverMap(complete, "nation-b")).toBe(false);
+    expect(
+      completedTrustedObserverMap({ ...complete, nextCursor: 95 }, "nation-a"),
+    ).toBe(false);
+    expect(completedTrustedObserverMap(complete, "nation-a")).toBe(true);
+  });
+
+  it("erases actual GameView ownership, placement and rendered state on E3 revocation", () => {
+    const view = makeGameView({
+      trustedProjection: true,
+      myClientID: "client-a",
+    });
+    view.setTrustedPrincipal("nation-a");
+    view.markTrustedProjectionReady();
+    const gu = makeEmptyGu(1, {
+      packedTileUpdates: new Uint32Array([
+        22,
+        1 | (128 << 16),
+        33,
+        2 | (128 << 16),
+      ]),
+      playerNameViewData: {
+        "nation-a": makeNameViewData({ x: 2, y: 2 }),
+        "nation-b": makeNameViewData({ x: 3, y: 3 }),
+      },
+    });
+    gu.updates[GameUpdateType.Player] = [
+      makePlayerUpdate({ id: "nation-a" }),
+      {
+        type: GameUpdateType.Player,
+        id: "nation-b",
+        name: "B",
+        displayName: "B",
+        smallID: 2,
+        playerType: PlayerType.Human,
+        tilesOwned: 1,
+        isAlive: true,
+      },
+    ];
+    view.update(gu);
+    expect(view.trustedNameVisible(view.player("nation-a"))).toBe(true);
+    expect(view.trustedNameVisible(view.player("nation-b"))).toBe(true);
+    expect(view.frameData().names.size).toBe(2);
+    expect(view.player("nation-b").hasSpawned()).toBe(true);
+    view.resetTrustedProjectionSight();
+    expect([...view.frameData().tileState].every((value) => value === 0)).toBe(
+      true,
+    );
+    expect(view.frameData().names.size).toBe(0);
+    expect(view.trustedProjectionReady()).toBe(false);
+    expect(view.trustedNameVisible(view.player("nation-a"))).toBe(false);
+    expect(view.player("nation-b").nameData).toBeUndefined();
+    expect(view.terrainByte(33)).toBe(0);
+    expect(view.frameData().changedTiles).toBeNull();
   });
 
   it("merges only E3 current visible terrain pages into actual WebGL tile lanes", () => {

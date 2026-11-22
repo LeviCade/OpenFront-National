@@ -1,0 +1,149 @@
+name: NATIONAL C4 Class 1 — integrated source acceptance
+
+on:
+  push:
+    branches:
+      - stage3/conductor4-class1-integration-20261121
+  pull_request:
+    branches:
+      - stage3/conductor4-class1-integration-20261121
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c4-class1-source-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused:
+    name: Integrated authority, transport, wire and client regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact source
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: npm run typecheck
+      - name: Cross-engine source gate
+        run: |
+          npx --no-install vitest run --project node \
+            tests/LayerBoundaries.test.ts \
+            tests/national/ConductorTwoCrownWarContinuity.test.ts \
+            tests/national/ConductorThreeAuthoritativeCombat.test.ts \
+            tests/national/ClassFiveTrustedLobbyTransport.test.ts \
+            tests/national/C2PrivateObserverMapWire.test.ts \
+            tests/server/NationalAccountGate.test.ts \
+            tests/server/TrustedNationalRealWebSocket.test.ts \
+            tests/national/ConductorFourSovereignMatch.test.ts \
+            tests/national/C4ContinuousFogAlgorithm.test.ts \
+            tests/server/NationalAccountLease.test.ts \
+            tests/national/TrustedNationalServerAuthority.test.ts \
+            tests/national/ClassFivePrincipalWireFanout.test.ts \
+            tests/server/ServerEnv.test.ts
+      - name: Independent witness regressions
+        run: |
+          npx --no-install vitest run --project node \
+            tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs \
+            tests/e2e/national/C3ScreenshotEvidence.test.mjs \
+            tests/e2e/national/C4IndependentJourneyEvidence.test.mjs
+      - name: Native-client integration regressions
+        run: |
+          npx --no-install vitest run \
+            tests/ui/national/C4NativeObserverRevocation.test.ts \
+            tests/ui/national/NationalPrivatePanelClass5.test.ts \
+            tests/ui/national/TrustedNationalProjectionMapC2.test.ts \
+            tests/ui/national/NationalHumanMapInputR11.test.ts
+      - name: Check conductor's public wire boundary formatting
+        run: |
+          FILES=(
+            packages/engine-api/src/game/NationalRecipientView.ts
+            packages/engine/src/national/observation/NationalObserverMap.ts
+            packages/engine/src/national/observation/NationalObservation.ts
+            packages/engine/src/national/observation/NationalOutbound.ts
+            src/server/national/NationalRecipientWire.ts
+            tests/e2e/national/C3ScreenshotEvidence.test.mjs
+          )
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            echo C4_FORMAT_REPAIR_BEGIN
+            git -c color.ui=false diff -- "${FILES[@]}"
+            echo C4_FORMAT_REPAIR_END
+            exit 1
+          fi
+  full:
+    name: Exact integrated full source, legacy regression and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact source
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: npm run typecheck
+      - name: Complete project tests
+        run: npm test
+      - name: Complete lint
+        if: success() || failure()
+        run: npm run lint
+      - name: Production compile
+        if: success() || failure()
+        run: npm run build-prod
+      - name: Complete format check
+        if: success() || failure()
+        run: npm run format:check
+  format:
+    name: Exact whole-tree format and actionable patch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Format validation (diagnostic patch on failure)
+        run: |
+          if ! npm run format:check; then
+            npx --no-install oxfmt --write .
+            echo C4_WHOLE_FORMAT_BEGIN
+            git -c color.ui=false diff --
+            echo C4_WHOLE_FORMAT_END
+            exit 1
+          fi

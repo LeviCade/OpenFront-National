@@ -12,6 +12,7 @@ import { adjustForTeams } from "@openfront/engine-lib/game/TeamAssignment";
 
 // Copied whenever the patch carries them.
 const COPIED_KEYS = [
+  "nationalMode",
   "gameMap",
   "gameMapSize",
   "difficulty",

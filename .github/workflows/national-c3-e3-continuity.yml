@@ -1,0 +1,86 @@
+name: C3 E3 — exact private observer continuity source
+
+on:
+  pull_request:
+    branches:
+      - stage3/conductor3-class1-integration-20261121
+    paths:
+      - packages/engine/src/national/observation/NationalObserverMap.ts
+      - packages/engine/src/national/observation/NationalServerOutbound.ts
+      - src/server/national/NationalRecipientWire.ts
+      - src/client/NationalObserverMapContinuity.ts
+      - tests/national/C2PrivateObserverMapWire.test.ts
+      - docs/release/NATIONAL_C3_CLASS1_E3_PRIVATE_MAP_CONTINUITY.md
+      - .github/workflows/national-c3-e3-continuity.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c3-e3-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: Exact-head E3 typecheck, real-game privacy, lint, format
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout immutable PR head without retained credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Prove checked SHA
+        shell: bash
+        env:
+          REQUIRED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          echo "TESTED_SHA=$actual"
+          test "$actual" = "$REQUIRED_SHA"
+      - name: Pinned Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - name: Pinned npm and dependencies
+        run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - name: Whole-source TS contract
+        run: npm run typecheck
+      - name: Real host A/B/C and legacy fog regression
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/C2PrivateObserverMapWire.test.ts \
+            tests/national/NationalGeographicFogR8.test.ts \
+            tests/national/NationalServerOutboundClass4.test.ts
+      - name: Targeted E3 lint
+        run: |
+          npx --no-install oxlint \
+            packages/engine/src/national/observation/NationalObserverMap.ts \
+            packages/engine/src/national/observation/NationalServerOutbound.ts \
+            src/server/national/NationalRecipientWire.ts \
+            src/client/NationalObserverMapContinuity.ts \
+            tests/national/C2PrivateObserverMapWire.test.ts
+      - name: Pinned E3 formatting with exact repair diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            packages/engine/src/national/observation/NationalObserverMap.ts
+            packages/engine/src/national/observation/NationalServerOutbound.ts
+            src/server/national/NationalRecipientWire.ts
+            src/client/NationalObserverMapContinuity.ts
+            tests/national/C2PrivateObserverMapWire.test.ts
+            docs/release/NATIONAL_C3_CLASS1_E3_PRIVATE_MAP_CONTINUITY.md
+            .github/workflows/national-c3-e3-continuity.yml
+          )
+          if ! npx --no-install oxfmt --check "${files[@]}"; then
+            npx --no-install oxfmt --write "${files[@]}"
+            git -c color.ui=false diff -- "${files[@]}"
+            exit 1
+          fi

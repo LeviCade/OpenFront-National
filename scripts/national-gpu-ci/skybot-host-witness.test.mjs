@@ -2,10 +2,10 @@ import { strict as assert } from "node:assert";
 import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
 import { test } from "vitest";
 import {
-  APPROVED_STAGING,
   REPOSITORY,
   REPOSITORY_ID,
   verifyControllerRun,
+  verifyArtifactCustody,
   validateControllerObservation,
   verifyControllerTeardown,
   signedHostRecord,
@@ -15,6 +15,7 @@ import {
   createHostPostflight,
 } from "./skybot-host-witness.mjs";
 
+const APPROVED_STAGING = "stage3/conductor4-class1-integration-20261121";
 const SHA = "a".repeat(40);
 const CHALLENGE = "b".repeat(64);
 const STAGE_SHA = SHA;
@@ -34,6 +35,13 @@ const expected = Object.freeze({
 });
 const proof = () => ({
   expected: { ...expected },
+  approval: {
+    repository: REPOSITORY,
+    repositoryId: REPOSITORY_ID,
+    approvedStagingRef: APPROVED_STAGING,
+    approvedStagingSha: SHA,
+    sourceSha: SHA,
+  },
   repository: {
     id: Number(REPOSITORY_ID),
     full_name: REPOSITORY,
@@ -42,6 +50,10 @@ const proof = () => ({
   run: {
     id: Number(expected.runId),
     run_attempt: 1,
+    head_sha: SHA,
+    head_branch: APPROVED_STAGING,
+    head_repository: { id: Number(REPOSITORY_ID) },
+    path: ".github/workflows/national-hardware-acceptance.yml",
     event: "workflow_dispatch",
     status: "in_progress",
     repository: { id: Number(REPOSITORY_ID), full_name: REPOSITORY },
@@ -52,6 +64,7 @@ const proof = () => ({
     id: Number(expected.jobId),
     run_id: Number(expected.runId),
     run_attempt: 1,
+    head_sha: SHA,
     status: "in_progress",
     runner_id: Number(expected.runnerId),
     runner_name: expected.runnerName,
@@ -122,6 +135,22 @@ test("source, repository ID, workflow attempt, runner ID, stage and writer must 
   for (const [section, key, value, reason] of [
     ["expected", "sourceSha", "f".repeat(40), "TRUSTED_RUN_CONTEXT_INCOMPLETE"],
     ["run", "run_attempt", 2, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    ["run", "head_sha", "f".repeat(40), "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    ["run", "head_branch", "main", "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    [
+      "run",
+      "path",
+      ".github/workflows/other.yml",
+      "GITHUB_JOB_RUN_RUNNER_MISMATCH",
+    ],
+    ["job", "head_sha", "f".repeat(40), "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    ["job", "run_attempt", undefined, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    [
+      "approval",
+      "approvedStagingRef",
+      "stage3/conductor3-class1-integration-20261121",
+      "TRUSTED_RUN_CONTEXT_INCOMPLETE",
+    ],
     ["job", "runner_id", 222, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
     [
       "stage",
@@ -157,6 +186,17 @@ test("source, repository ID, workflow attempt, runner ID, stage and writer must 
   rejectWith("CONDUCTOR_SOURCE_ANCESTRY_UNVERIFIED", () =>
     verifyControllerRun(staleStage),
   );
+});
+
+test("new conductor requires independently replaced root policy, not a guest ref", () => {
+  const p = proof();
+  const next = "stage3/conductor5-class1-integration-20261122";
+  p.expected.approvedStagingRef = next;
+  p.run.head_branch = next;
+  p.stage.ref = "refs/heads/" + next;
+  rejectWith("TRUSTED_RUN_CONTEXT_INCOMPLETE", () => verifyControllerRun(p));
+  p.approval.approvedStagingRef = next;
+  assert.equal(verifyControllerRun(p).runStartedAtMs, NOW);
 });
 
 test("guest-published shader claims cannot replace out-of-guest controller observation", () => {
@@ -209,10 +249,9 @@ test("host teardown must independently account for private logs, CPU slots and J
 test("synthetic Ed25519 signer respects independent dual enrollment and immutable bytes", () => {
   const keys = generateKeyPairSync("ed25519");
   const privatePem = keys.privateKey.export({ format: "pem", type: "pkcs8" });
-  const publicPem = keys.publicKey
-    .export({ format: "pem", type: "spki" })
-    .toString();
-  const fp = createHash("sha256").update(publicPem).digest("hex");
+  const fp = createHash("sha256")
+    .update(keys.publicKey.export({ type: "spki", format: "der" }))
+    .digest("hex");
   const payload = { sourceSha: SHA, runId: expected.runId, nonce: CHALLENGE };
   const signed = signedHostRecord(payload, privatePem, [fp], [fp]);
   assert.equal(
@@ -293,7 +332,9 @@ test("hardware signer contract refuses exportable fallback, wrong enrollment or 
   const publicPem = publicKey
     .export({ format: "pem", type: "spki" })
     .toString();
-  const fp = createHash("sha256").update(publicPem, "utf8").digest("hex");
+  const fp = createHash("sha256")
+    .update(publicKey.export({ type: "spki", format: "der" }))
+    .digest("hex");
   const payload = {
     jobId: expected.jobId,
     runId: expected.runId,
@@ -355,6 +396,7 @@ test("postflight requires four distinct signed, source-bound and non-replayed mo
   ].map((mode, index) => {
     const p = {
       version: 1,
+      purpose: "skybot-gpu-preflight-v1",
       mode,
       repository: REPOSITORY,
       repositoryId: REPOSITORY_ID,
@@ -407,5 +449,71 @@ test("postflight requires four distinct signed, source-bound and non-replayed mo
   forged[2].signature = "A".repeat(86) + "==";
   rejectWith("FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED", () =>
     verifyFourModeHostProofs(forged, publicPem, expected, times),
+  );
+});
+
+test("preflight phase is signed separately from postflight", () => {
+  const before = createHostPreflight(
+    expected,
+    { runStartedAtMs: NOW, jobCompletedAtMs: null },
+    { physicallyVerified: true },
+    { hardwareBackedVerified: true },
+    NOW + 1_000,
+  );
+  assert.equal(before.purpose, "skybot-gpu-preflight-v1");
+});
+
+test("root artifact receipt binds exact bytes and numeric execution identity", () => {
+  const bytes = Buffer.from("reviewed artifact summary");
+  const times = {
+    runStartedAtMs: NOW,
+    jobCompletedAtMs: NOW + 120_000,
+  };
+  const receipt = {
+    kind: "skybot-github-artifact-custody-v1",
+    artifactId: 7,
+    archiveSha256: "c".repeat(64),
+    summarySha256: createHash("sha256").update(bytes).digest("hex"),
+    sourceSha: expected.sourceSha,
+    runId: expected.runId,
+    runAttempt: expected.runAttempt,
+    jobId: expected.jobId,
+    runnerId: expected.runnerId,
+    challenge: expected.challenge,
+    ...times,
+  };
+  assert.doesNotThrow(() =>
+    verifyArtifactCustody(receipt, expected, bytes, times),
+  );
+  for (const key of [
+    "artifactId",
+    "archiveSha256",
+    "summarySha256",
+    "sourceSha",
+    "runId",
+    "runAttempt",
+    "jobId",
+    "runnerId",
+    "challenge",
+    "runStartedAtMs",
+    "jobCompletedAtMs",
+  ]) {
+    rejectWith("HOST_ARTIFACT_CUSTODY_UNVERIFIED", () =>
+      verifyArtifactCustody(
+        { ...receipt, [key]: "invalid" },
+        expected,
+        bytes,
+        times,
+      ),
+    );
+  }
+  rejectWith("HOST_ARTIFACT_CUSTODY_UNVERIFIED", () =>
+    verifyArtifactCustody(receipt, expected, Buffer.from("tampered"), times),
+  );
+  const failed = proof();
+  failed.job.status = "completed";
+  failed.job.conclusion = "failure";
+  rejectWith("GITHUB_JOB_RUN_RUNNER_MISMATCH", () =>
+    verifyControllerRun(failed),
   );
 });

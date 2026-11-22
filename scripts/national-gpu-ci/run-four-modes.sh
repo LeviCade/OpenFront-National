@@ -55,4 +55,8 @@ if (( failed )); then
   echo "E6_${kind^^}_OVERALL=FAIL"
   exit 1
 fi
-echo "E6_${kind^^}_OVERALL=PASS (release certification separately gated)"
+if [[ "$kind" == release ]]; then
+  echo "E6_RELEASE_EVIDENCE=READY_FOR_INDEPENDENT_HOST_REVIEW_NOT_CERTIFIED"
+else
+  echo "E6_DIAGNOSTIC_OVERALL=PASS (not release certification)"
+fi

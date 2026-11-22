@@ -1,0 +1,207 @@
+name: C3 E5 - Independent software Chrome witness (diagnostic only)
+
+on:
+  push:
+    branches:
+      - feature/c3-class1-e5-independent-browser-acceptance-20261121
+  pull_request:
+    branches:
+      - stage3/conductor3-class1-integration-20261121
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c3-e5-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  REQUIRED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  screenshot-and-verdict-controls:
+    name: Source-only controls (not a gameplay PASS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout immutable source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.REQUIRED_SHA }}
+          persist-credentials: false
+      - name: Verify exact source
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$REQUIRED_SHA"
+      - name: Pin Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - name: Install pinned deps
+        run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - name: Real PNG negative controls
+        run: npx --no-install vitest run --project node tests/e2e/national/C3ScreenshotEvidence.test.mjs
+      - name: Source-only acceptance predicate controls
+        run: npx --no-install vitest run --project node tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs
+      - name: Require genuine three-session PRIVATE NATIONAL preflight to BLOCK without credentials
+        shell: bash
+        run: |
+          set +e
+          NATIONAL_QA_PRIVATE_CDP_PORTS="" NATIONAL_GPU_CANDIDATE_SHA="$REQUIRED_SHA" node scripts/national-qa/browser-c2-run.mjs --mode private-national
+          status=$?
+          set -e
+          test "$status" -eq 1
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          const r = JSON.parse(readFileSync("national-qa-artifacts/c2/private-national.json", "utf8"));
+          if (r.exactSource !== process.env.REQUIRED_SHA ||
+              r.gameplay !== "BLOCKED" || r.hardware !== "BLOCKED" ||
+              r.firstFailure !== "THREE_AUTHENTICATED_BROWSER_CDP_PORTS_MISSING")
+            throw Error("UNAUTHENTICATED_PRIVATE_PREFLIGHT_WAS_NOT_BLOCKED");
+          console.log("C3_E5_PRIVATE_REAL_SESSION_PREFLIGHT_BLOCKED " + JSON.stringify({
+            source: r.exactSource,
+            gameplay: r.gameplay,
+            hardware: r.hardware,
+            firstFailure: r.firstFailure,
+          }));
+          NODE
+      - name: Publish sanitized private readiness refusal
+        uses: actions/upload-artifact@v4
+        with:
+          name: c3-e5-private-preflight-${{ env.REQUIRED_SHA }}
+          path: national-qa-artifacts/c2/private-national.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Syntax, formatter and lint
+        run: |
+          node --check scripts/national-qa/browser-c2-run.mjs
+          node --check scripts/national-qa/browser-c2-verdict.mjs
+          node --check scripts/national-qa/png-evidence.mjs
+          if ! npx --no-install oxfmt --check scripts/national-qa/browser-c2-run.mjs scripts/national-qa/browser-c2-verdict.mjs scripts/national-qa/png-evidence.mjs tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs tests/e2e/national/C3ScreenshotEvidence.test.mjs; then
+            npx --no-install oxfmt --write scripts/national-qa/browser-c2-run.mjs scripts/national-qa/browser-c2-verdict.mjs scripts/national-qa/png-evidence.mjs tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs tests/e2e/national/C3ScreenshotEvidence.test.mjs
+            git -c color.ui=false diff -- scripts/national-qa/browser-c2-run.mjs scripts/national-qa/browser-c2-verdict.mjs scripts/national-qa/png-evidence.mjs tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs tests/e2e/national/C3ScreenshotEvidence.test.mjs
+            exit 1
+          fi
+          npx --no-install oxlint scripts/national-qa/browser-c2-run.mjs scripts/national-qa/browser-c2-verdict.mjs scripts/national-qa/png-evidence.mjs tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs tests/e2e/national/C3ScreenshotEvidence.test.mjs
+
+  real-browser-diagnostic:
+    name: "REAL Chrome ${{ matrix.mode }} - collect verdict only, NEVER physical GPU"
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        mode:
+          - national-solo-desktop
+          - national-solo-mobile
+          - legacy-desktop
+          - legacy-mobile
+    env:
+      NATIONAL_QA_SOFTWARE_CDP: "1"
+      NATIONAL_REQUIRE_HARDWARE_GPU: "0"
+      CHROME_BIN: /usr/bin/google-chrome
+      NATIONAL_GPU_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout immutable source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.REQUIRED_SHA }}
+          persist-credentials: false
+      - name: Verify checked-out source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$REQUIRED_SHA"
+          test "$REQUIRED_SHA" = "$NATIONAL_GPU_CANDIDATE_SHA"
+          test "$NATIONAL_REQUIRE_HARDWARE_GPU" = 0
+          test "$NATIONAL_QA_SOFTWARE_CDP" = 1
+          "$CHROME_BIN" --version
+      - name: Pin Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - name: Install pinned dependencies
+        run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - name: Execute real Chrome CDP gameplay, record failure without pretending PASS
+        id: diagnostic
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          set +e
+          set -uo pipefail
+          timeout --kill-after=10s 215s node scripts/national-qa/browser-c2-run.mjs --mode "$MODE"
+          status=$?
+          echo "CDP_EXIT_CODE=$status" >> "$GITHUB_ENV"
+          echo "CDP_DIAGNOSTIC_EXIT=$status"
+          test -f "national-qa-artifacts/c2/$MODE.json"
+      - name: Validate verdict and image hashes; print bounded first failure
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, existsSync } from "node:fs";
+          import { inspectScreenshotFile } from "./scripts/national-qa/png-evidence.mjs";
+          const mode = process.env.MODE;
+          const report = JSON.parse(readFileSync("national-qa-artifacts/c2/" + mode + ".json", "utf8"));
+          if (report.exactSource !== process.env.REQUIRED_SHA ||
+              report.hardware !== "BLOCKED" ||
+              !["PASS", "FAIL", "BLOCKED"].includes(report.gameplay))
+            throw Error("C3_E5_INVALID_VERDICT_OR_SOURCE");
+          for (const item of report.screenshotEvidence ?? []) {
+            if (!/^[a-z0-9-]{2,80}$/.test(item.label)) throw Error("UNSAFE_SCREENSHOT_LABEL");
+            const path = "national-qa-artifacts/browser-" +
+              (mode.startsWith("legacy") ? "legacy-ffa-" : "national-") +
+              (mode.endsWith("mobile") ? "mobile" : "desktop") + "/" + item.label + ".png";
+            if (!existsSync(path)) throw Error("SCREENSHOT_MISSING");
+            const actual = inspectScreenshotFile(path);
+            if (!actual || actual.sha256 !== item.sha256 ||
+                actual.width !== item.width || actual.height !== item.height)
+              throw Error("SCREENSHOT_BYTES_UNVERIFIED");
+          }
+          const summary = {
+            source: report.exactSource,
+            mode, gameplay: report.gameplay,
+            hardware: report.hardware,
+            firstFailure: report.firstFailure,
+            firstFailedStage: report.firstFailedStage,
+            completedStages: report.completedStages,
+            renderer: report.renderer,
+            browserProduct: report.browserProduct,
+            screenshotCount: report.screenshotCount,
+            verifiedPngCount: (report.screenshotEvidence ?? []).length,
+            workerPacketCount: report.workerPacketCount,
+            consoleErrorCount: report.consoleErrorCount,
+            networkErrorCount: report.networkErrorCount,
+          };
+          console.log("C3_E5_REAL_BROWSER_VERDICT " + JSON.stringify(summary));
+          if (report.gameplay !== "PASS")
+            console.log("C3_E5_RELEASE_GATE=NOT_PASSED");
+          const lines = [
+            "### E5 " + mode + " — software Chrome diagnostics only",
+            "`source` " + report.exactSource,
+            "`gameplay` " + report.gameplay + "; `hardware` BLOCKED",
+            "`first failure` " + JSON.stringify(report.firstFailure),
+            "`stage` " + (report.firstFailedStage ?? "none"),
+            "`renderer` " + (report.renderer ?? "unknown"),
+            "`verified local PNGs` " + (report.screenshotEvidence?.length ?? 0),
+            "CI SUCCESS means diagnostic collection succeeded; not gameplay PASS.",
+          ];
+          const { appendFileSync } = await import("node:fs");
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n\n") + "\n");
+          NODE
+      - name: Publish sanitized verdict and image digests only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c3-e5-software-${{ matrix.mode }}-${{ env.REQUIRED_SHA }}
+          path: national-qa-artifacts/c2/${{ matrix.mode }}.json
+          if-no-files-found: error
+          retention-days: 14

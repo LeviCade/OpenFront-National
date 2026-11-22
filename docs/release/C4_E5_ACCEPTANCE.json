@@ -1,0 +1,174 @@
+{
+  "schema": 1,
+  "sourceSha": "7ba909572739bd0778c9cf34074008f1bf244124",
+  "sourceGate": {
+    "runId": 44974332727,
+    "testsPassed": 11797,
+    "testsSkipped": 1,
+    "testFiles": 825,
+    "typecheck": "PASS",
+    "lint": "PASS",
+    "productionBuild": "PASS",
+    "format": "FAIL",
+    "owners": ["E1", "E2", "E4"]
+  },
+  "lanes": [
+    {
+      "mode": "national-solo-desktop",
+      "sourceSha": "7ba909572739bd0778c9cf34074008f1bf244124",
+      "environment": "GitHub CPU Chrome/157.0.8103.78 ANGLE SwiftShader; local Vite Solo worker",
+      "hostIdentity": "Solo local browser worker; no external hosted game",
+      "verdict": "FAIL",
+      "physical": "BLOCKED",
+      "firstFailedTransition": "start",
+      "firstFailure": "REAL_CHROMIUM_GPU_REQUIRED: WebGL gate",
+      "owner": "E6/E4",
+      "repro": "NATIONAL_GPU_CANDIDATE_SHA=7ba909572739bd0778c9cf34074008f1bf244124 node scripts/national-qa/browser-c2-run.mjs --mode national-solo-desktop",
+      "artifactId": 14734654102,
+      "archiveSha256": "afceec4cf3c99dfc7e3fad505efff0a4712396b5b1378ad9ef4b09cfda87d807",
+      "artifactRef": "https://github.com/LeviCade/OpenFront-National/actions/runs/44974337371/artifacts/14734654102",
+      "jobRef": "https://github.com/LeviCade/OpenFront-National/actions/runs/44974337371/job/137060739830",
+      "verifiedPngCount": 4,
+      "networkErrors": 22,
+      "nextCorrection": "Run authorized owner-operated hardware browser; separate E6 physical signer and cleanup; capture first real application transition."
+    },
+    {
+      "mode": "national-solo-mobile",
+      "sourceSha": "7ba909572739bd0778c9cf34074008f1bf244124",
+      "environment": "GitHub CPU Chrome/157.0.8103.78 ANGLE SwiftShader; local Vite Solo worker",
+      "hostIdentity": "Solo local browser worker; no external hosted game",
+      "verdict": "FAIL",
+      "physical": "BLOCKED",
+      "firstFailedTransition": "start",
+      "firstFailure": "REAL_CHROMIUM_GPU_REQUIRED: WebGL gate",
+      "owner": "E6/E4",
+      "repro": "NATIONAL_GPU_CANDIDATE_SHA=7ba909572739bd0778c9cf34074008f1bf244124 node scripts/national-qa/browser-c2-run.mjs --mode national-solo-mobile",
+      "artifactId": 14733954921,
+      "archiveSha256": "06d2392b8d852ab90209db7d47fe41c4acdc5a55a63d6e02595fc865d91e051f",
+      "artifactRef": "https://github.com/LeviCade/OpenFront-National/actions/runs/44974337371/artifacts/14733954921",
+      "jobRef": "https://github.com/LeviCade/OpenFront-National/actions/runs/44974337371/job/137060739803",
+      "verifiedPngCount": 4,
+      "networkErrors": 23,
+      "nextCorrection": "Run authorized owner-operated hardware browser; separate E6 physical signer and cleanup; capture first real application transition."
+    },
+    {
+      "mode": "legacy-desktop",
+      "sourceSha": "7ba909572739bd0778c9cf34074008f1bf244124",
+      "environment": "GitHub CPU Chrome/157.0.8103.78 ANGLE SwiftShader; local Vite Solo worker",
+      "hostIdentity": "Solo local browser worker; no external hosted game",
+      "verdict": "FAIL",
+      "physical": "BLOCKED",
+      "firstFailedTransition": "legacy-ffa",
+      "firstFailure": "REAL_CHROMIUM_GPU_REQUIRED: WebGL gate",
+      "owner": "E6/E4",
+      "repro": "NATIONAL_GPU_CANDIDATE_SHA=7ba909572739bd0778c9cf34074008f1bf244124 node scripts/national-qa/browser-c2-run.mjs --mode legacy-desktop",
+      "artifactId": 14735210748,
+      "archiveSha256": "a6e3f8c2a6e890ad3e30158b6085dbebd64eb9c0e1483be84ddb6343ea5e56b0",
+      "artifactRef": "https://github.com/LeviCade/OpenFront-National/actions/runs/44974337371/artifacts/14735210748",
+      "jobRef": "https://github.com/LeviCade/OpenFront-National/actions/runs/44974337371/job/137060739922",
+      "verifiedPngCount": 4,
+      "networkErrors": 22,
+      "nextCorrection": "Run authorized owner-operated hardware browser; separate E6 physical signer and cleanup; capture first real application transition."
+    },
+    {
+      "mode": "legacy-mobile",
+      "sourceSha": "7ba909572739bd0778c9cf34074008f1bf244124",
+      "environment": "GitHub CPU Chrome/157.0.8103.78 ANGLE SwiftShader; local Vite Solo worker",
+      "hostIdentity": "Solo local browser worker; no external hosted game",
+      "verdict": "FAIL",
+      "physical": "BLOCKED",
+      "firstFailedTransition": "legacy-ffa",
+      "firstFailure": "REAL_CHROMIUM_GPU_REQUIRED: WebGL gate",
+      "owner": "E6/E4",
+      "repro": "NATIONAL_GPU_CANDIDATE_SHA=7ba909572739bd0778c9cf34074008f1bf244124 node scripts/national-qa/browser-c2-run.mjs --mode legacy-mobile",
+      "artifactId": 14734574377,
+      "archiveSha256": "a9b9280db7db306b5ef215dee985fbbd8bf64910e732d26ce14c97db769615ab",
+      "artifactRef": "https://github.com/LeviCade/OpenFront-National/actions/runs/44974337371/artifacts/14734574377",
+      "jobRef": "https://github.com/LeviCade/OpenFront-National/actions/runs/44974337371/job/137060739849",
+      "verifiedPngCount": 4,
+      "networkErrors": 23,
+      "nextCorrection": "Run authorized owner-operated hardware browser; separate E6 physical signer and cleanup; capture first real application transition."
+    },
+    {
+      "mode": "private-national",
+      "sourceSha": "7ba909572739bd0778c9cf34074008f1bf244124",
+      "environment": "GitHub CPU preflight; no authenticated CDP profiles",
+      "hostIdentity": null,
+      "verdict": "BLOCKED",
+      "physical": "BLOCKED",
+      "firstFailedTransition": "preflight",
+      "firstFailure": "THREE_AUTHENTICATED_BROWSER_CDP_PORTS_MISSING",
+      "owner": "E2/E4/E5",
+      "repro": "NATIONAL_GPU_CANDIDATE_SHA=7ba909572739bd0778c9cf34074008f1bf244124 node scripts/national-qa/browser-c2-run.mjs --mode private-national",
+      "artifactId": 14734024848,
+      "archiveSha256": "a24a777a9b3d8c682a04f429633d8c1c87628feec8c73510cebb63d0a4ca2620",
+      "artifactRef": "https://github.com/LeviCade/OpenFront-National/actions/runs/44974337371/artifacts/14734024848",
+      "jobRef": "https://github.com/LeviCade/OpenFront-National/actions/runs/44974337371/job/137060739592",
+      "verifiedPngCount": 0,
+      "networkErrors": null,
+      "nextCorrection": "Provide reviewed isolated registered principals, same host/game/runner and distinct browser profiles; run real commands and privacy negatives."
+    }
+  ],
+  "release": "BLOCKED",
+  "assetGate": {
+    "issue": 5,
+    "missingMusic": [
+      "gameplay.mp3",
+      "gameplay-2.mp3",
+      "gameplay-3.mp3",
+      "menu-theme.mp3"
+    ],
+    "mediaOriginPending": 40,
+    "exactAuditedSource": "23f744402a6678c4b77a66af841493fea226318a",
+    "knownShellChecks": 12,
+    "knownShellStatus": "PASS",
+    "fontsPending": 2,
+    "audioPending": 38,
+    "strictRelease": "FAIL"
+  },
+  "dependencyGate": {
+    "issue": 6,
+    "exactAuditedSource": "23f744402a6678c4b77a66af841493fea226318a",
+    "productionAdvisories": {
+      "total": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0
+    },
+    "allInstalledAdvisories": {
+      "total": 10,
+      "moderate": 4,
+      "high": 4,
+      "critical": 2
+    },
+    "devOnlyCandidates": {
+      "critical": ["concurrently", "shell-quote"],
+      "high": ["brace-expansion", "source-map-js", "undici", "vite"],
+      "moderate": [
+        "@vitest/coverage-v8",
+        "@vitest/mocker",
+        "@vitest/ui",
+        "vitest"
+      ]
+    },
+    "strictRelease": "FAIL",
+    "classification": "Production-tree audit zero; development/build/CI exposure remains open and not equivalent to proven exploitation",
+    "lockfileUnchangedFromFounding": true
+  },
+  "auditArtifact": {
+    "runId": 44975025594,
+    "jobId": 137062878375,
+    "artifactId": 14735475520,
+    "archiveSha256": "ffe932cd49f342f23fa12df4ff4a3395057a0ac8d6eec59b54d52317ab0cb8c5",
+    "url": "https://github.com/LeviCade/OpenFront-National/actions/runs/44975025594/artifacts/14735475520"
+  },
+  "oracleTestEvidence": {
+    "exactSource": "23f744402a6678c4b77a66af841493fea226318a",
+    "runId": 44975025594,
+    "jobId": 137062878651,
+    "newTestsPassed": 20,
+    "totalTestsPassed": 53,
+    "lint": "PASS",
+    "formatter": "FAIL (corrected from exact CI diff in next commit)"
+  }
+}

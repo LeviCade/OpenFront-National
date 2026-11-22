@@ -1,4 +1,8 @@
 import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
+import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
+import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
+import { simpleHash } from "@openfront/engine-lib/Util";
+import { decodeNationalObserverNativeUnits } from "@openfront/shared/NationalObserverNativeWire";
 /**
  * Reader for E3's authenticated per-recipient NATIONAL view ONLY.
  * This module never runs a GameRunner, simulates turns or loads private state.
@@ -36,39 +40,19 @@ export interface TrustedNationalProjection {
 }
 
 /** E3 / C2 authenticated visible map page, never a Game snapshot. */
-export interface TrustedNationalObserverMap {
-  readonly version: 1;
-  readonly tick: number;
-  readonly observerId: string;
-  readonly width: number;
-  readonly height: number;
-  readonly reset: boolean;
-  readonly cursor: number;
-  readonly nextCursor: number | null;
-  readonly tiles: readonly (readonly [number, number, number, number])[];
-  readonly units: readonly {
-    readonly id: number;
-    readonly ownerId: string;
-    readonly kind: string;
-    readonly tile: number;
-    readonly troops?: number;
-  }[];
-  readonly unitsTruncated: boolean;
-  readonly visibleBorders: readonly {
-    readonly targetId: string;
-    readonly access: "land" | "naval";
-  }[];
-  readonly ownResources: {
-    readonly troops: number;
-    readonly treasury: number;
-  };
-  readonly countries: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly alive: boolean;
-    readonly landPercent: number;
-    readonly status: string;
-  }[];
+export type TrustedNationalObserverMap = NationalObserverMapV1;
+
+/** Do not unlock Private NATIONAL until the final authorized map page arrives. */
+export function completedTrustedObserverMap(
+  page: Pick<TrustedNationalObserverMap, "observerId" | "nextCursor"> | null,
+  actorId: string | null,
+): boolean {
+  return (
+    page !== null &&
+    actorId !== null &&
+    page.observerId === actorId &&
+    page.nextCursor === null
+  );
 }
 
 const safeInteger = (v: unknown, min: number, max: number): v is number =>
@@ -240,6 +224,109 @@ export function parseTrustedNationalProjection(
  *
  * Reject mismatched ticks, backward/replayed projections and invalid lanes.
  */
+/** E3 intentionally omits the private map for unspawned or eliminated seats.
+ * This restricted public frame MUST NOT authorize a private map or commands. */
+export function assertTrustedPublicProjection(
+  packet: TrustedNationalProjection,
+  actor?: string,
+  clientID?: string,
+): void {
+  if (
+    packet.nationalObserverMap !== undefined ||
+    !Array.isArray(packet.packedTileUpdates) ||
+    packet.packedTileUpdates.length !== 0 ||
+    [
+      "packedUnitUpdates",
+      "packedPlayerUpdates",
+      "packedMissileTimers",
+      "playerNameViewData",
+      "nationalCommandResults",
+      "nationalAccessionOffers",
+    ].some((key) => packet[key] !== undefined) ||
+    !record(packet.updates)
+  )
+    throw new Error("NATIONAL unauthorized public-only projection");
+  const allowed = new Set([
+    "type",
+    "id",
+    "name",
+    "displayName",
+    "nationFlag",
+    "playerType",
+    "smallID",
+    "isAlive",
+    "tilesOwned",
+  ]);
+  const players = packet.updates[GameUpdateType.Player];
+  const seen = new Set<string>();
+  if (!Array.isArray(players))
+    throw new Error("NATIONAL malformed public roster");
+  for (const player of players) {
+    if (
+      !record(player) ||
+      player.type !== GameUpdateType.Player ||
+      typeof player.id !== "string" ||
+      seen.has(player.id)
+    )
+      throw new Error("NATIONAL invalid public roster");
+    seen.add(player.id);
+    const ownIdentity =
+      actor !== undefined &&
+      clientID !== undefined &&
+      player.id === actor &&
+      player.clientID === clientID;
+    if (
+      Object.keys(player).some(
+        (key) =>
+          !allowed.has(key) &&
+          !(ownIdentity && (key === "clientID" || key === "hasSpawned")),
+      ) ||
+      (ownIdentity && typeof player.hasSpawned !== "boolean")
+    )
+      throw new Error(
+        "NATIONAL public roster contains unauthorized player fields",
+      );
+  }
+  const conflict = packet.nationalConflicts;
+  if (
+    conflict !== undefined &&
+    (!record(conflict) ||
+      conflict.recipientId !== "" ||
+      !Array.isArray(conflict.motions) ||
+      conflict.motions.length !== 0)
+  )
+    throw new Error("NATIONAL private conflict data without active sight");
+}
+
+/** Only the explicit E1 public terminal result may be displayed as victory. */
+export function readTrustedVictory(
+  packet: TrustedNationalProjection,
+  actor: string,
+): "victory" | "defeat" | "unresolved" {
+  const politics = packet.nationalPolitics;
+  if (!record(politics) || !record(politics.victory)) return "unresolved";
+  const victory = politics.victory;
+  if (
+    victory.resolved !== true ||
+    victory.sovereignPowerCount !== 1 ||
+    !Array.isArray(victory.prizes) ||
+    !victory.prizes.length ||
+    victory.prizes.some(
+      (p) =>
+        !record(p) ||
+        typeof p.nationId !== "string" ||
+        (p.kind !== "SovereignVictor" &&
+          p.kind !== "ImperialVictor" &&
+          p.kind !== "EmpireVictor") ||
+        (p.kind !== "SovereignVictor" && typeof p.empireId !== "string"),
+    )
+  )
+    return "unresolved";
+  return victory.prizes.some((p) => p.nationId === actor)
+    ? "victory"
+    : "defeat";
+}
+
 export function materializeTrustedNationalUpdate(
   packet: TrustedNationalProjection,
   previousTick: number,
@@ -274,9 +361,7 @@ export function materializeTrustedNationalUpdate(
   // E3's paged current-sight map gives late joiners real visible territory.
   // All added states belong to the authenticated observer's current sight.
   const visibleTilePairs = [...tiles, ...observerMapTilePairs(observerMap)];
-  const units = numericArray(packet.packedUnitUpdates, 210_000);
-  if (units !== undefined && units.length % 21 !== 0)
-    throw new Error("NATIONAL invalid projected unit stride");
+  const units = decodeNationalObserverNativeUnits(packet.packedUnitUpdates);
   const players = numericArray(packet.packedPlayerUpdates, 25_000);
   if (players !== undefined && players.length % 5 !== 0)
     throw new Error("NATIONAL invalid projected player stride");
@@ -286,9 +371,7 @@ export function materializeTrustedNationalUpdate(
     tick: packet.tick,
     updates: safeUpdates,
     packedTileUpdates: Uint32Array.from(visibleTilePairs),
-    ...(units === undefined
-      ? {}
-      : { packedUnitUpdates: Float64Array.from(units) }),
+    ...(units === undefined ? {} : { packedUnitUpdates: units }),
     ...(players === undefined
       ? {}
       : { packedPlayerUpdates: Float64Array.from(players) }),
@@ -313,10 +396,34 @@ export function materializeTrustedNationalUpdate(
   } as GameUpdateViewData;
 }
 
+/** Same deterministic human ID derivation as createGameRunnerInternal. Never read the observerId from a projection to select a principal. */
+export function trustedNationalPrincipal(
+  start: ServerNationalStartMessage,
+): string {
+  const random = new PseudoRandom(simpleHash(start.gameStartInfo.gameID));
+  let principal: string | null = null;
+  for (const player of start.gameStartInfo.players) {
+    const id = random.nextID();
+    if (player.clientID !== start.myClientID) continue;
+    if (principal !== null) throw new Error("NATIONAL duplicate admitted seat");
+    principal = id;
+  }
+  if (principal === null) throw new Error("NATIONAL missing admitted seat");
+  return principal;
+}
+
 export class TrustedNationalStartedEvent implements GameEvent {
   constructor(public readonly start: ServerNationalStartMessage) {}
 }
 
+/** Close native menus holding coordinates and requests from an expired sight lease. */
+export class TrustedNationalSightRevokedEvent implements GameEvent {}
+
 export class TrustedNationalProjectionEvent implements GameEvent {
   constructor(public readonly projection: TrustedNationalProjection) {}
+}
+
+/** The authenticated wire carried a malformed projection. Fail closed, not silent. */
+export class TrustedNationalProjectionRejectedEvent implements GameEvent {
+  constructor(public readonly gameID: string) {}
 }

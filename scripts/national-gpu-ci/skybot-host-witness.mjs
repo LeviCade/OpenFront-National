@@ -32,13 +32,14 @@ import { verifyIndependentRelease } from "./verify-independent-release.mjs";
 export const HOST_ROOT = "/etc/skybot-ci/national-gpu-release";
 export const REPOSITORY = "LeviCade/OpenFront-National";
 export const REPOSITORY_ID = "1459234894";
-export const APPROVED_STAGING = "stage3/conductor2-class1-engineering-20261121";
+const STAGING =
+  /^stage3\/conductor[1-9][0-9]*-class[1-9][0-9]*-integration-[0-9]{8}$/;
+const HARDWARE_WORKFLOW = ".github/workflows/national-hardware-acceptance.yml";
 export const OVERLAY_DIR = "/var/lib/libvirt/images/ci-disposable/overlays";
 const SHA = /^[a-f0-9]{40}$/;
 const HEX64 = /^[a-f0-9]{64}$/;
 const NUM = /^[1-9][0-9]*$/;
-const RUNNER =
-  /^(?:skybot-gpu-openfront-national-[0-9a-f]{8}|skybot-ci-gpu-[a-zA-Z0-9-]{4,80})$/;
+const RUNNER = /^skybot-gpu-openfront-national-[0-9a-f]{8}$/;
 const RENDER = "/dev/dri/renderD128";
 const LEASE = "/run/skybot-ci/intel-virgl-acl.lease";
 // Production requires an operator-installed nonexportable Ed25519 key bridge.
@@ -65,6 +66,7 @@ const millis = (v) => {
 
 export function verifyControllerRun({
   expected,
+  approval,
   repository,
   run,
   job,
@@ -82,7 +84,12 @@ export function verifyControllerRun({
       NUM.test(String(expected.runnerId ?? "")) &&
       RUNNER.test(expected.runnerName ?? "") &&
       HEX64.test(expected.challenge ?? "") &&
-      expected.approvedStagingRef === APPROVED_STAGING &&
+      STAGING.test(expected.approvedStagingRef ?? "") &&
+      approval?.repository === REPOSITORY &&
+      same(approval.repositoryId, REPOSITORY_ID) &&
+      approval.approvedStagingRef === expected.approvedStagingRef &&
+      approval.approvedStagingSha === expected.sourceSha &&
+      approval.sourceSha === expected.sourceSha &&
       SHA.test(expected.approvedStagingSha ?? "") &&
       expected.sourceSha === expected.approvedStagingSha,
     "TRUSTED_RUN_CONTEXT_INCOMPLETE",
@@ -95,14 +102,20 @@ export function verifyControllerRun({
       run.repository.full_name === REPOSITORY &&
       same(run.id, expected.runId) &&
       same(run.run_attempt, expected.runAttempt) &&
+      run.head_sha === expected.sourceSha &&
+      run.head_branch === expected.approvedStagingRef &&
+      same(run.head_repository?.id, REPOSITORY_ID) &&
+      run.path === HARDWARE_WORKFLOW &&
       run.event === "workflow_dispatch" &&
       ["queued", "in_progress", "completed"].includes(run.status) &&
       same(job?.id, expected.jobId) &&
-      same(job.run_id ?? expected.runId, expected.runId) &&
-      same(job.run_attempt ?? expected.runAttempt, expected.runAttempt) &&
+      same(job.run_id, expected.runId) &&
+      same(job.run_attempt, expected.runAttempt) &&
+      job.head_sha === expected.sourceSha &&
       same(job.runner_id, expected.runnerId) &&
       job.runner_name === expected.runnerName &&
-      ["queued", "in_progress", "completed"].includes(job.status),
+      ["queued", "in_progress", "completed"].includes(job.status) &&
+      (job.status !== "completed" || job.conclusion === "success"),
     "GITHUB_JOB_RUN_RUNNER_MISMATCH",
   );
   const actor = Number(run.run_attempt) > 1 ? run.triggering_actor : run.actor;
@@ -116,7 +129,7 @@ export function verifyControllerRun({
     "GITHUB_INITIATOR_NOT_AUTHORIZED",
   );
   requireTrue(
-    stage?.ref === "refs/heads/" + APPROVED_STAGING &&
+    stage?.ref === "refs/heads/" + expected.approvedStagingRef &&
       stage.object?.sha === expected.approvedStagingSha &&
       ancestry?.status === "identical" &&
       ancestry.merge_base_commit?.sha === expected.sourceSha &&
@@ -131,6 +144,27 @@ export function verifyControllerRun({
 
 /** Root-owned files can originate from the controller only. Guest uploads
  * are NEVER read from these paths and guest paths are NEVER accepted. */
+export function verifyArtifactCustody(receipt, expected, bytes, times) {
+  requireTrue(
+    receipt?.kind === "skybot-github-artifact-custody-v1" &&
+      Number.isSafeInteger(receipt.artifactId) &&
+      receipt.artifactId > 0 &&
+      HEX64.test(receipt.archiveSha256 ?? "") &&
+      receipt.summarySha256 === digest(bytes) &&
+      receipt.sourceSha === expected.sourceSha &&
+      same(receipt.runId, expected.runId) &&
+      same(receipt.runAttempt, expected.runAttempt) &&
+      same(receipt.jobId, expected.jobId) &&
+      same(receipt.runnerId, expected.runnerId) &&
+      receipt.challenge === expected.challenge &&
+      Number.isSafeInteger(receipt.runStartedAtMs) &&
+      Number.isSafeInteger(receipt.jobCompletedAtMs) &&
+      receipt.runStartedAtMs === times.runStartedAtMs &&
+      receipt.jobCompletedAtMs === times.jobCompletedAtMs,
+    "HOST_ARTIFACT_CUSTODY_UNVERIFIED",
+  );
+}
+
 export function checkRootFile(path, uid = 0) {
   const st = lstatSync(path);
   requireTrue(st.isFile() && !st.isSymbolicLink(), "HOST_FILE_SYMLINK_OR_TYPE");
@@ -359,10 +393,9 @@ export function verifyControllerTeardown(teardown, expected, jobCompletedAtMs) {
 export function signedHostRecord(payload, privateKeyPem, enrolled, hostTrust) {
   const key = createPrivateKey(privateKeyPem);
   requireTrue(key.asymmetricKeyType === "ed25519", "HOST_SIGNER_KEY_INVALID");
-  const pem = createPublicKey(key)
-    .export({ type: "spki", format: "pem" })
-    .toString();
-  const fingerprint = digest(Buffer.from(pem, "utf8"));
+  const fingerprint = digest(
+    createPublicKey(key).export({ type: "spki", format: "der" }),
+  );
   requireTrue(
     enrolled?.includes(fingerprint) && hostTrust?.includes(fingerprint),
     "HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED",
@@ -385,15 +418,15 @@ export function signHostWithExternalKey(
   hostTrust,
   signMessage,
 ) {
-  const fingerprint = digest(Buffer.from(publicPem, "utf8"));
-  requireTrue(
-    enrolled?.includes(fingerprint) && hostTrust?.includes(fingerprint),
-    "HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED",
-  );
   const key = createPublicKey(publicPem);
   requireTrue(
     key.asymmetricKeyType === "ed25519",
     "HOST_ED25519_PUBLIC_KEY_INVALID",
+  );
+  const fingerprint = digest(key.export({ type: "spki", format: "der" }));
+  requireTrue(
+    enrolled?.includes(fingerprint) && hostTrust?.includes(fingerprint),
+    "HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED",
   );
   const bytes = Buffer.from(JSON.stringify(payload), "utf8");
   const response = signMessage(bytes);
@@ -446,6 +479,7 @@ export function verifyFourModeHostProofs(proofs, publicPem, expected, times) {
     const p = proof?.payload;
     requireTrue(
       p?.version === 1 &&
+        p.purpose === "skybot-gpu-preflight-v1" &&
         p.mode === PROOF_MODES[i] &&
         p.repository === REPOSITORY &&
         String(p.repositoryId) === REPOSITORY_ID &&
@@ -499,6 +533,7 @@ export function createHostPreflight(expected, times, physical, guest, now) {
   );
   return {
     ...bound(expected),
+    purpose: "skybot-gpu-preflight-v1",
     issuedAtMs: now,
     expiresAtMs: now + 120000,
     host: physical,
@@ -547,12 +582,19 @@ async function githubGet(token, path) {
   return response.json();
 }
 async function controllerContext(token, expected) {
+  const approval = readRootJson("approved-candidate.json");
+  requireTrue(
+    STAGING.test(expected.approvedStagingRef ?? "") &&
+      approval.approvedStagingRef === expected.approvedStagingRef &&
+      approval.sourceSha === expected.sourceSha,
+    "TRUSTED_RUN_CONTEXT_INCOMPLETE",
+  );
   const prefix = "/repos/" + REPOSITORY;
   const [repository, run, job, stage, ancestry] = await Promise.all([
     githubGet(token, prefix),
     githubGet(token, prefix + "/actions/runs/" + expected.runId),
     githubGet(token, prefix + "/actions/jobs/" + expected.jobId),
-    githubGet(token, prefix + "/git/ref/heads/" + APPROVED_STAGING),
+    githubGet(token, prefix + "/git/ref/heads/" + expected.approvedStagingRef),
     githubGet(
       token,
       prefix +
@@ -572,8 +614,18 @@ async function controllerContext(token, expected) {
     token,
     prefix + "/collaborators/" + actor.login + "/permission",
   );
+  const latestStage = await githubGet(
+    token,
+    prefix + "/git/ref/heads/" + expected.approvedStagingRef,
+  );
+  requireTrue(
+    latestStage.ref === stage.ref &&
+      latestStage.object?.sha === stage.object?.sha,
+    "CONDUCTOR_SOURCE_ANCESTRY_UNVERIFIED",
+  );
   const times = verifyControllerRun({
     expected,
+    approval,
     repository,
     run,
     job,
@@ -675,8 +727,11 @@ async function main() {
       prefix + "/actions/runners?per_page=100",
     );
     requireTrue(
-      runnerRegistry.total_count <= 100 &&
+      Number.isSafeInteger(runnerRegistry.total_count) &&
+        runnerRegistry.total_count >= 0 &&
+        runnerRegistry.total_count <= 100 &&
         Array.isArray(runnerRegistry.runners) &&
+        runnerRegistry.runners.length === runnerRegistry.total_count &&
         runnerRegistry.runners.every((r) => !same(r.id, expected.runnerId)),
       "GITHUB_EPHEMERAL_RUNNER_NOT_DEREGISTERED",
     );
@@ -688,7 +743,14 @@ async function main() {
       expected,
       times.jobCompletedAtMs,
     );
+    checkRootDirectory(join(HOST_ROOT, "verified-artifacts"));
     const summaryBytes = readRoot("verified-artifacts/summary.json");
+    verifyArtifactCustody(
+      readRootJson("verified-artifacts/import-receipt.json"),
+      expected,
+      summaryBytes,
+      times,
+    );
     payload = createHostPostflight(
       expected,
       times,
@@ -707,6 +769,7 @@ async function main() {
       summaryBytes,
       artifactRoot: join(HOST_ROOT, "verified-artifacts"),
       preflight: readRootJson("controller-preflight.json"),
+      modePreflights: allSignedModes,
       postflight: signedPostflight,
       trustedPublicKeyPem: pem,
       enrolledFingerprints: enrolled,

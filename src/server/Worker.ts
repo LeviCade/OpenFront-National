@@ -1,4 +1,4 @@
-import { GameMode } from "@openfront/engine-api/game/GameTypes";
+import { GameMode, GameType } from "@openfront/engine-api/game/GameTypes";
 import {
   ID,
   isValidGameID,
@@ -42,7 +42,11 @@ import { Client } from "./Client";
 import { gameApiCors } from "./GameApiCors";
 import { GameManager } from "./GameManager";
 import { registerGamePreviewRoute } from "./GamePreviewRoute";
-import { GamePhase, type GameServer } from "./GameServer";
+import {
+  GamePhase,
+  type GameServer,
+  type NationalReconnectPrincipal,
+} from "./GameServer";
 import {
   isSteamAuthenticated,
   type JoinVerifyResponse,
@@ -58,6 +62,8 @@ import { resolveVerifiedJoin } from "./Privilege";
 
 import { loadGatekeeper } from "./Gatekeeper";
 import { MapPlaylist } from "./MapPlaylist";
+import { isNationalSignedInAccount } from "./national/NationalAccountGate";
+import { watchNationalAccount } from "./national/NationalAccountLease";
 import { setNoStoreHeaders } from "./NoStoreHeaders";
 import { PrivilegeRefresher } from "./PrivilegeRefresher";
 import { startRankedCheckinLoops } from "./RankedCheckin";
@@ -388,9 +394,8 @@ export async function startWorker() {
         .status(400)
         .json({ error: "Authorization header required to create a game" });
     }
-    const auth = await verifyClientToken(
-      authHeader.substring("Bearer ".length),
-    );
+    const token = authHeader.substring("Bearer ".length);
+    const auth = await verifyClientToken(token);
     if (auth.type !== "success") {
       log.warn(`Invalid creator token: ${auth.message}`);
       return res.status(401).json({ error: "Invalid creator token" });
@@ -454,6 +459,23 @@ export async function startWorker() {
       }
       // A recorded successor that no longer exists (already cleaned up) falls
       // through and gets replaced by a fresh lobby.
+    }
+
+    // NATIONAL host is a signed-in account verified against the CURRENT API
+    // record, not merely a valid JWT signature or Dev persistent ID.
+    if (gc?.nationalMode === true) {
+      if (!isNationalSignedInAccount(auth.claims)) {
+        return res.status(401).json({ error: "national_account_required" });
+      }
+      const account = await getUserMe(token);
+      if (account.type === "error") {
+        return res
+          .status(account.status === 401 || account.status === 403 ? 401 : 503)
+          .json({ error: "national_account_verification_failed" });
+      }
+      if (!account.response.player.publicId || account.response.ban) {
+        return res.status(403).json({ error: "national_account_unavailable" });
+      }
     }
 
     const id = ServerEnv.generateGameIdForWorker(workerId);
@@ -579,6 +601,9 @@ export async function startWorker() {
 
   // WebSocket handling
   wss.on("connection", (ws: WebSocket, req) => {
+    // First admission awaits API calls. A second join frame cannot overtake
+    // that call and claim multiple roster seats from one physical socket.
+    let admissionStarted = false;
     ws.on("message", async (message: Buffer) => {
       const ip = getClientIp(req);
 
@@ -613,6 +638,12 @@ export async function startWorker() {
           );
           return;
         }
+
+        if (admissionStarted) {
+          ws.close(CloseCode.BadRequest, CloseReason.InvalidMessage);
+          return;
+        }
+        admissionStarted = true;
 
         // Verify this worker should handle this game. Close loudly: the bare
         // return this replaces left the socket open with no reply, so a
@@ -677,6 +708,31 @@ export async function startWorker() {
           return;
         }
         const { persistentId, claims } = result;
+        const leaseGameID = clientMsg.gameID;
+        const leaseToken = clientMsg.token;
+        const attachAccountLease = () => {
+          const game = gm.game(leaseGameID);
+          if (
+            !game ||
+            game.gameConfig.gameType !== GameType.Private ||
+            !claims ||
+            !isNationalSignedInAccount(claims)
+          )
+            return;
+          const publicId = game.nationalAccountSocket(persistentId, ws);
+          if (!publicId) return;
+          const stop = watchNationalAccount({
+            token: leaseToken,
+            claims,
+            publicId,
+            current: () =>
+              game.nationalAccountSocket(persistentId, ws) === publicId,
+            national: () => game.gameConfig.nationalMode === true,
+            disconnect: (code, reason) =>
+              game.revokeNationalAccountSocket(persistentId, ws, code, reason),
+          });
+          ws.once("close", stop);
+        };
 
         if (claims?.role === "banned") {
           ws.close(CloseCode.Banned, CloseReason.Banned);
@@ -688,14 +744,23 @@ export async function startWorker() {
         // the join/readmission fast path) query the account service again and
         // compare the verified publicId and JWT subject with the original seat.
         const incumbent = gm.game(clientMsg.gameID);
+        if (
+          incumbent?.gameConfig.nationalMode === true &&
+          !isNationalSignedInAccount(claims)
+        ) {
+          ws.close(CloseCode.Unauthorized, CloseReason.LoginRequired);
+          return;
+        }
         const returningNationalSeat =
           incumbent?.gameConfig.nationalMode === true &&
           (clientMsg.type === "rejoin" ||
             incumbent.getClientIdForPersistentId(persistentId) !== null);
-        let nationalPrincipal:
-          | { subject: string; publicId: string }
-          | undefined;
+        let nationalPrincipal: NationalReconnectPrincipal | undefined;
         if (returningNationalSeat) {
+          if (clientMsg.type === "join" && clientMsg.spectator) {
+            ws.close(CloseCode.Unauthorized, CloseReason.InvalidToken);
+            return;
+          }
           if (!claims || claims.sub !== persistentId) {
             ws.close(CloseCode.Unauthorized, CloseReason.InvalidToken);
             return;
@@ -707,9 +772,14 @@ export async function startWorker() {
             ws.close(close.code, close.reason);
             return;
           }
+          if (account.response.ban) {
+            ws.close(CloseCode.Unauthorized, CloseReason.LoginRequired);
+            return;
+          }
           nationalPrincipal = {
             subject: claims.sub,
             publicId: account.response.player.publicId,
+            claims,
           };
         }
 
@@ -728,6 +798,7 @@ export async function startWorker() {
             clientMsg.lastTurn,
             nationalPrincipal,
           );
+          attachAccountLease();
           return;
         }
 
@@ -802,10 +873,22 @@ export async function startWorker() {
               clientMsg.clanTag ?? null,
               persistentId,
             );
+            if (
+              game?.gameConfig.nationalMode === true &&
+              verdict.status === "error"
+            ) {
+              admissionGuard.rollback();
+              ws.close(
+                CloseCode.TryAgainLater,
+                CloseReason.AccountLookupFailed,
+              );
+              return;
+            }
             if (verdict.status === "approved" || verdict.status === "error") {
               admissionGuard.markAdmittedIfNeeded();
             }
             if (isSocketClosed(ws)) {
+              admissionGuard.rollback();
               return;
             }
             const resolved = resolveJoinVerdict(verdict, {
@@ -861,6 +944,7 @@ export async function startWorker() {
             nationalPrincipal,
           )
         ) {
+          attachAccountLease();
           return;
         }
 
@@ -900,6 +984,12 @@ export async function startWorker() {
             return;
           }
           if (isSocketClosed(ws)) {
+            admissionGuard.rollback();
+            return;
+          }
+          if (game?.gameConfig.nationalMode === true && result.response.ban) {
+            admissionGuard.rollback();
+            ws.close(CloseCode.Unauthorized, CloseReason.LoginRequired);
             return;
           }
           flares = result.response.player.flares;
@@ -1002,6 +1092,7 @@ export async function startWorker() {
         );
 
         const joinResult = gm.joinClient(client, clientMsg.gameID);
+        if (joinResult === "joined") attachAccountLease();
         if (joinResult !== "joined" && joinResult !== "redirected") {
           admissionGuard.rollback();
         }
@@ -1080,13 +1171,17 @@ export async function startWorker() {
 
   // The load balancer will handle routing to this server based on path
   const PORT = ServerEnv.workerPortByIndex(workerId);
-  server.listen(PORT, () => {
-    log.info(`running on http://localhost:${PORT}`);
-    log.info(`Handling requests with path prefix /w${workerId}/`);
-    // Signal to the master process that this worker is ready
-    lobbyService.sendReady(workerId);
-    log.info(`signaled ready state to master`);
-  });
+  server.listen(
+    PORT,
+    ServerEnv.localNationalStaging() ? "localhost" : undefined,
+    () => {
+      log.info(`running on http://localhost:${PORT}`);
+      log.info(`Handling requests with path prefix /w${workerId}/`);
+      // Signal to the master process that this worker is ready
+      lobbyService.sendReady(workerId);
+      log.info(`signaled ready state to master`);
+    },
+  );
 
   // Global error handler
   app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
@@ -1116,7 +1211,11 @@ export function getListingEligibilityError(
   game: GameServer,
   maxPlayers?: number,
 ): string | null {
-  if (game.isPublic() || game.hasStarted()) {
+  if (
+    game.gameConfig.nationalMode === true ||
+    game.isPublic() ||
+    game.hasStarted()
+  ) {
     return "Game cannot be listed";
   }
   if (game.hasJoinWhitelist()) {

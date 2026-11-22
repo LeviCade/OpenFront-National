@@ -97,7 +97,11 @@ export class NationalServerRecipientSession {
     this.observerMap =
       this.principalId === null
         ? null
-        : new NationalObserverMapPager(game, this.principalId);
+        : new NationalObserverMapPager(
+            game,
+            this.principalId,
+            this.originalSessionId,
+          );
     this.outbound = new NationalOutboundFilter(game, this.principalId);
     if (this.principalId !== null) {
       this.outbound.restoreSightMemory(
@@ -247,7 +251,11 @@ export class NationalServerRecipientSession {
       actor === null
         ? new NationalOutboundFilter(this.game, null)
         : this.outbound;
-    const outbound = filter.project(this.game, selected, verified);
+    const page =
+      actor === null || verified === null || this.observerMap === null
+        ? undefined
+        : this.observerMap.page(verified);
+    const outbound = filter.project(this.game, selected, verified, page);
     if (actor !== null) {
       persistNationalHumanSight(
         this.game,
@@ -258,12 +266,12 @@ export class NationalServerRecipientSession {
     // This additive map belongs ONLY to the authenticated original socket.
     // It is computed from Game + verified sight AFTER E3's existing raw
     // packet whitelist. No client-selectable tile, observer or page cursor.
-    if (actor === null || verified === null || this.observerMap === null) {
+    if (page === undefined) {
       return outbound;
     }
     return {
       ...outbound,
-      nationalObserverMap: this.observerMap.page(verified),
+      nationalObserverMap: page,
     } as GameUpdateViewData;
   }
 }

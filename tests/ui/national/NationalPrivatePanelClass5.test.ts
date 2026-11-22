@@ -3,7 +3,7 @@ import { GameType } from "@openfront/engine-api/game/GameTypes";
 import { EventBus } from "@openfront/shared/EventBus";
 import type { WireGameStartInfo } from "@openfront/shared/WireSchemas";
 import "../../../src/client/NationalDiplomacyPanel";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LobbyConfig } from "../../../src/client/ClientGameRunner";
 import type { NationalDiplomacyPanel } from "../../../src/client/NationalDiplomacyPanel";
 import {
@@ -12,7 +12,12 @@ import {
   type NationalPrivateCapabilityContext,
   type TrustedNationalStartLike,
 } from "../../../src/client/NationalPrivateCapability";
-import { Transport } from "../../../src/client/Transport";
+import {
+  SendAttackIntentEvent,
+  SendSpawnIntentEvent,
+  Transport,
+} from "../../../src/client/Transport";
+import { TrustedNationalProjectionRejectedEvent } from "../../../src/client/TrustedNationalSession";
 import type { GameView } from "../../../src/client/view";
 
 const elements: HTMLElement[] = [];
@@ -70,6 +75,53 @@ describe("Class Five E4 real Private NATIONAL human controls", () => {
     expect(panel.querySelector("form")).toBeNull();
     expect(panel.textContent).toContain("server verifies");
     expect(hasTrustedNationalPrivateCapability(bus, start.gameID)).toBe(false);
+  });
+
+  it("revokes the real transport send path on a rejected matching projection", () => {
+    const { bus, start, packet, context } = session();
+    const transport = new Transport(
+      {
+        gameID: start.gameID,
+        gameStartInfo: start,
+        spectator: false,
+      } as LobbyConfig,
+      bus,
+    );
+    const send = vi.fn();
+    Object.assign(transport, {
+      isSessionReady: true,
+      socket: { readyState: WebSocket.OPEN, send },
+      trustedNationalStart: {
+        gameStartInfo: start,
+        clientID: packet.myClientID,
+      },
+      buffer: [{ type: "intent", intent: { type: "spawn", tile: 3 } }],
+    });
+    const internal = transport as unknown as {
+      buffer: unknown[];
+      isSessionReady: boolean;
+      nationalDiplomacyWireEnabled(): boolean;
+      sendMsg: (msg: unknown) => void;
+    };
+    const sendMessage = vi
+      .spyOn(internal, "sendMsg")
+      .mockImplementation(() => {});
+    expect(acceptTrustedNationalPrivateCapability(bus, packet, context)).toBe(
+      true,
+    );
+    bus.emit(new TrustedNationalProjectionRejectedEvent("unrelated-game"));
+    bus.emit(new SendAttackIntentEvent("enemy", 100));
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    bus.emit(new TrustedNationalProjectionRejectedEvent(start.gameID));
+    expect(hasTrustedNationalPrivateCapability(bus, start.gameID)).toBe(false);
+    expect(internal.buffer).toEqual([]);
+    expect(internal.isSessionReady).toBe(false);
+    bus.emit(new SendAttackIntentEvent("enemy", 100));
+    bus.emit(new SendSpawnIntentEvent(3));
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    // Even a stale ready bit/capability event cannot restore this rejected socket.
+    Object.assign(transport, { isSessionReady: true });
+    expect(internal.nationalDiplomacyWireEnabled()).toBe(false);
   });
 
   it("Transport refuses Private commands until the exact E2 trusted start, not a room flag", () => {

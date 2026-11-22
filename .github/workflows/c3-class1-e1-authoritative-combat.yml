@@ -1,0 +1,62 @@
+name: C3 E1 - authoritative combat source acceptance
+
+on:
+  push:
+    branches:
+      - feature/c3-class1-e1-authoritative-war-combat-20261121
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c3-e1-source
+  cancel-in-progress: true
+
+jobs:
+  combat-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout immutable head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Exact source witness
+        run: echo C3_E1_SOURCE_SHA=$(git rev-parse HEAD)
+      - name: Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - name: Install pinned dependencies
+        run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - name: Pinned formatter on E1-owned changes
+        run: |
+          set -euo pipefail
+          npx --no-install oxfmt --write \
+            packages/engine/src/execution/AttackExecution.ts \
+            packages/engine/src/execution/ExecutionManager.ts \
+            tests/national/ConductorTwoCrownWarContinuity.test.ts \
+            tests/national/ConductorThreeAuthoritativeCombat.test.ts
+          git -c color.ui=false diff -- \
+            packages/engine/src/execution/AttackExecution.ts \
+            packages/engine/src/execution/ExecutionManager.ts \
+            tests/national/ConductorTwoCrownWarContinuity.test.ts \
+            tests/national/ConductorThreeAuthoritativeCombat.test.ts
+          git diff --exit-code -- \
+            packages/engine/src/execution/AttackExecution.ts \
+            packages/engine/src/execution/ExecutionManager.ts \
+            tests/national/ConductorTwoCrownWarContinuity.test.ts \
+            tests/national/ConductorThreeAuthoritativeCombat.test.ts
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Real combat and adversarial regression
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/ConductorThreeAuthoritativeCombat.test.ts \
+            tests/national/ConductorTwoCrownWarContinuity.test.ts \
+            tests/national/ClassFiveStampedExecutionChain.test.ts \
+            tests/national/LiveLevyCombatRound5.test.ts

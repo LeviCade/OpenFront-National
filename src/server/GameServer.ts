@@ -30,7 +30,7 @@ import {
   createTrustedNationalGameRunner,
   type GameRunner,
 } from "@openfront/engine/WinnerReplay";
-import { isAdminRole } from "@openfront/shared/ApiSchemas";
+import { isAdminRole, type TokenPayload } from "@openfront/shared/ApiSchemas";
 import { CloseCode, CloseReason } from "@openfront/shared/CloseCodes";
 import { GameEnv } from "@openfront/shared/configuration/Env";
 import { createPartialGameRecord } from "@openfront/shared/SharedUtil";
@@ -84,6 +84,7 @@ import {
 } from "./IntentAuthorization";
 import { ListingState } from "./ListingState";
 import { friendsLookup, NameVisibility } from "./NameVisibility";
+import { isNationalSignedInAccount } from "./national/NationalAccountGate";
 import { encodeNationalRecipientProjection } from "./national/NationalRecipientWire";
 import { loadTrustedNationalMapFiles } from "./national/TrustedNationalMapFiles";
 import { TrustedNationalMatch } from "./national/TrustedNationalMatch";
@@ -176,6 +177,8 @@ export interface GameServerOptions {
 export interface NationalReconnectPrincipal {
   readonly subject: string;
   readonly publicId: string;
+  /** Freshly verified Worker JWT claims, including current effective role. */
+  readonly claims?: TokenPayload;
 }
 
 export interface GameServerDeps {
@@ -530,6 +533,36 @@ export class GameServer {
       }
 
       case "update_game_config": {
+        // A private lobby may opt in only while every seated human carries
+        // API-backed signed account authority. No in-place guest promotion.
+        const national =
+          stamped.config.nationalMode ?? this.gameConfig.nationalMode === true;
+        if (national) {
+          const mode = stamped.config.gameMode ?? this.gameConfig.gameMode;
+          const players = this.clients.players();
+          if (
+            new Set(players.map((c) => c.publicId)).size !== players.length ||
+            new Set(players.map((c) => c.persistentID)).size !==
+              players.length ||
+            this.isPublic() ||
+            this.isListed() ||
+            mode !== GameMode.FFA ||
+            this.gameConfig.tutorial === true ||
+            this.clients
+              .players()
+              .some(
+                (c) =>
+                  !isNationalSignedInAccount(c.claims) ||
+                  !c.publicId ||
+                  c.claims?.sub !== c.persistentID,
+              )
+          ) {
+            return finish({
+              status: 403,
+              error: "NATIONAL requires signed-in private FFA seats",
+            });
+          }
+        }
         this.updateGameConfig(stamped.config);
         return finish({ status: 200 });
       }
@@ -617,6 +650,43 @@ export class GameServer {
     return { username: client.username, clanTag: client.clanTag };
   }
 
+  // Worker account lease callbacks must refer to the exact physical socket,
+  // not merely a persistent ID (which can reconnect while an API call awaits).
+  public nationalAccountSocket(
+    persistentID: string,
+    ws: WebSocket,
+  ): string | null {
+    const clientID = this.getClientIdForPersistentId(persistentID);
+    const client = clientID ? this.clients.get(clientID) : undefined;
+    return client &&
+      client.ws === ws &&
+      this.clients.isConnected(client) &&
+      ws.readyState === WebSocket.OPEN
+      ? (client.publicId ?? null)
+      : null;
+  }
+
+  public revokeNationalAccountSocket(
+    persistentID: string,
+    ws: WebSocket,
+    code: CloseCode,
+    reason: CloseReason,
+  ): void {
+    if (
+      this.gameConfig.nationalMode !== true ||
+      this.nationalAccountSocket(persistentID, ws) === null
+    )
+      return;
+    const clientID = this.getClientIdForPersistentId(persistentID);
+    const client = clientID ? this.clients.get(clientID) : undefined;
+    if (!client) return;
+    // Disconnect now, not when the untrusted peer acknowledges CLOSE:
+    // cancel all queued recipient-bound commands before the next tick.
+    this.handleClientDisconnect(client);
+    ws.close(code, reason);
+    this.log.info("NATIONAL account lease ended", { gameID: this.id, code });
+  }
+
   public joinClient(client: Client): JoinResult {
     // e.g. the host left an unstarted lobby and GameManager hasn't pruned
     // it yet. Distinct from "rejected" so the worker does not tell a player
@@ -626,6 +696,48 @@ export class GameServer {
     }
     if (this.clients.isKicked(client.persistentID)) {
       return "kicked";
+    }
+    if (
+      this.gameConfig.nationalMode === true &&
+      (!isNationalSignedInAccount(client.claims) ||
+        client.claims?.sub !== client.persistentID ||
+        !client.publicId)
+    ) {
+      return "not_trusted";
+    }
+    // A separately signed login may still refer to the same provider-linked
+    // account row. Reject the alias before it can sabotage the starting roster.
+    if (this.gameConfig.nationalMode === true) {
+      // An async Worker account lookup can race another admission. Resolve
+      // the same subject against the already-seated principal atomically here.
+      const existingID = this.getClientIdForPersistentId(client.persistentID);
+      if (existingID !== null) {
+        const existing = this.clients.get(existingID);
+        if (
+          !existing ||
+          existing.spectator ||
+          client.spectator ||
+          existing.publicId !== client.publicId ||
+          !client.claims
+        ) {
+          return "not_trusted";
+        }
+        return this.rejoinClient(client.ws, client.persistentID, 0, undefined, {
+          subject: client.claims.sub,
+          publicId: client.publicId!,
+          claims: client.claims,
+        })
+          ? "joined"
+          : "not_trusted";
+      }
+      const occupiedByAnotherPrincipal = this.clients
+        .players()
+        .some(
+          (seated) =>
+            seated.publicId === client.publicId &&
+            seated.persistentID !== client.persistentID,
+        );
+      if (occupiedByAnotherPrincipal) return "not_trusted";
     }
 
     // OFM: if an allowlist is set, only those publicIds may join. Re-checked on
@@ -848,10 +960,19 @@ export class GameServer {
         !client.claims ||
         !client.publicId ||
         client.spectator ||
-        this.clients.isKicked(persistentID))
+        this.clients.isKicked(persistentID) ||
+        !isNationalSignedInAccount(client.claims) ||
+        (nationalPrincipal.claims !== undefined &&
+          (!isNationalSignedInAccount(nationalPrincipal.claims) ||
+            nationalPrincipal.claims.sub !== persistentID)))
     )
       return false;
 
+    // An API-reverified reconnect must not retain a revoked elevated role.
+    if (this.gameConfig.nationalMode === true && nationalPrincipal?.claims) {
+      client.claims = nationalPrincipal.claims;
+      client.role = nationalPrincipal.claims.role ?? null;
+    }
     this.log.info("client rejoining", { clientID, lastTurn });
     // Also closes the old WebSocket, to prevent resource leaks.
     this.clients.reconnect(client, ws);
@@ -881,6 +1002,11 @@ export class GameServer {
           return false;
         }
         this.markClientDisconnected(client.clientID, false);
+        this.log.info("NATIONAL authenticated socket resumed", {
+          gameID: this.id,
+          seat: client.clientID,
+          tick: this.nationalMatch.currentTick(),
+        });
       }
       this.sendStartGameMsg(client.ws, lastTurn);
     }
@@ -951,7 +1077,7 @@ export class GameServer {
       }
       case "spectate": {
         // NATIONAL roster and recipient rights freeze at server match start.
-        if (this.nationalMatch !== null) break;
+        if (this.gameConfig.nationalMode === true) break;
         this.setSpectator(client, clientMsg.spectator);
         break;
       }
@@ -979,6 +1105,7 @@ export class GameServer {
   }
 
   private handleClientDisconnect(client: Client) {
+    if (!this.clients.isConnected(client)) return;
     this.clients.markLeft(client);
     if (this.nationalMatch !== null) {
       this.nationalMatch.revokeRecipient(client);
@@ -1352,7 +1479,12 @@ export class GameServer {
       const host = seated.find(
         (c) => c.persistentID === this.creatorPersistentID,
       );
-      if (!host?.claims || !host.publicId || seated.length < 2) {
+      if (
+        !host?.claims ||
+        !isNationalSignedInAccount(host.claims) ||
+        !host.publicId ||
+        seated.length < 2
+      ) {
         throw new Error(
           "NATIONAL requires authenticated host and two real seats",
         );
@@ -1361,9 +1493,10 @@ export class GameServer {
       const persistents = new Set<string>();
       for (const client of seated) {
         if (
-          !client.claims ||
+          !isNationalSignedInAccount(client.claims) ||
           !client.publicId ||
           !client.persistentID ||
+          client.claims?.sub !== client.persistentID ||
           !this.clients.isConnected(client) ||
           client.ws.readyState !== WebSocket.OPEN ||
           accounts.has(client.publicId) ||
@@ -1437,6 +1570,15 @@ export class GameServer {
       this._startTime = Date.now();
       this.lastPingUpdate = Date.now();
       this.stopLobbyInfoBroadcast();
+      // Sanctioned host-only proof: counts and ticks, no user subjects,
+      // bearer tokens, public IDs or recipient-private state.
+      this.log.info("NATIONAL authoritative host ready", {
+        gameID: this.id,
+        authenticatedSeats: seated.length,
+        distinctAccounts: accounts.size,
+        authoritativeRunners: 1,
+        initialTick: match.currentTick(),
+      });
 
       // No spectators in the first trusted-host slice. They cannot join an
       // authoritative Game seat, nor obtain a privileged projection.
@@ -1536,7 +1678,15 @@ export class GameServer {
   private commitTrustedNationalTick(): void {
     if (this.paused || this.ended || this.nationalMatch === null) return;
     try {
-      this.nationalMatch.tick();
+      const receipt = this.nationalMatch.tick();
+      if (receipt.committedIntents > 0 || receipt.tick % 100 === 0) {
+        this.log.info("NATIONAL authoritative tick", {
+          gameID: this.id,
+          tick: receipt.tick,
+          queuedIntents: receipt.committedIntents,
+          replayDigestPrefix: receipt.replayDigest.slice(0, 12),
+        });
+      }
     } catch (error) {
       this.log.error("NATIONAL authoritative tick failed", {
         gameID: this.id,

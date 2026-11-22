@@ -1,0 +1,119 @@
+name: NATIONAL C3 E2 — real-account host source acceptance
+
+on:
+  pull_request:
+    branches:
+      - stage3/conductor3-class1-integration-20261121
+    paths:
+      - src/server/Worker.ts
+      - src/server/GameServer.ts
+      - src/server/Client.ts
+      - src/server/jwt.ts
+      - src/server/ConfigPatch.ts
+      - src/server/national/NationalAccountGate.ts
+      - src/client/HostLobbyModal.ts
+      - packages/shared/src/WorkerSchemas.ts
+      - tests/server/NationalAccountGate.test.ts
+      - tests/server/TrustedNationalRealWebSocket.test.ts
+      - tests/national/ClassFiveTrustedLobbyTransport.test.ts
+      - .github/workflows/national-c3-e2-real-host-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: national-c3-e2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: Exact head typecheck, format, lint and physical WS source tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact proposed HEAD
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Prove exact source identity
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
+      - name: Install pinned Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - name: Install pinned npm
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Install exact dependencies
+        run: npm run inst
+      - name: Check all TypeScript workspaces
+        id: types
+        continue-on-error: true
+        run: npm run typecheck
+      - name: Targeted exact-head live WebSocket and national authority regression
+        id: tests
+        continue-on-error: true
+        run: |
+          npx --no-install vitest run --project node \
+            tests/server/NationalAccountGate.test.ts \
+            tests/server/TrustedNationalRealWebSocket.test.ts \
+            tests/national/ClassFiveTrustedLobbyTransport.test.ts \
+            tests/national/TrustedNationalServerAuthority.test.ts
+      - name: Lint owned source and tests
+        id: lint
+        continue-on-error: true
+        run: |
+          npx --no-install oxlint \
+            src/server/Worker.ts src/server/GameServer.ts \
+            src/server/Client.ts src/server/jwt.ts \
+            src/server/ConfigPatch.ts src/server/national/NationalAccountGate.ts \
+            src/client/HostLobbyModal.ts packages/shared/src/WorkerSchemas.ts \
+            tests/server/NationalAccountGate.test.ts \
+            tests/server/TrustedNationalRealWebSocket.test.ts \
+            tests/national/ClassFiveTrustedLobbyTransport.test.ts
+
+      - name: Validate formatting and print exact candidate repairs on failure
+        id: format
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILES=(
+            src/server/Worker.ts src/server/GameServer.ts
+            src/server/Client.ts src/server/jwt.ts
+            src/server/ConfigPatch.ts src/server/national/NationalAccountGate.ts
+            src/client/HostLobbyModal.ts packages/shared/src/WorkerSchemas.ts
+            tests/server/NationalAccountGate.test.ts
+            tests/server/TrustedNationalRealWebSocket.test.ts
+            tests/national/ClassFiveTrustedLobbyTransport.test.ts
+          )
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            echo "E2_EXACT_FORMAT_REPAIR_BEGIN"
+            npx --no-install oxfmt --write "${FILES[@]}"
+            git -c color.ui=false diff -- "${FILES[@]}"
+            echo "E2_EXACT_FORMAT_REPAIR_END"
+            exit 1
+          fi
+      - name: Require all exact-source checks
+        if: always()
+        env:
+          TYPES_OUTCOME: ${{ steps.types.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          FORMAT_OUTCOME: ${{ steps.format.outcome }}
+        run: |
+          set -euo pipefail
+          printf 'TYPECHECK=%s TESTS=%s LINT=%s FORMAT=%s\n' \
+            "$TYPES_OUTCOME" "$TESTS_OUTCOME" "$LINT_OUTCOME" "$FORMAT_OUTCOME"
+          test "$TYPES_OUTCOME" = success
+          test "$TESTS_OUTCOME" = success
+          test "$LINT_OUTCOME" = success
+          test "$FORMAT_OUTCOME" = success

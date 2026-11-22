@@ -20,6 +20,13 @@ export function isNationalOpponentTile(
   screenX: number,
   screenY: number,
 ): boolean {
+  // E3 may revoke a page while this marker is on screen. Do not expose
+  // a former enemy tile from a stale, disconnected Private projection.
+  if (
+    game.isTrustedNationalProjection?.() === true &&
+    !game.trustedProjectionReady?.()
+  )
+    return false;
   const point = transform.screenToWorldCoordinates(screenX, screenY);
   if (!game.isValidCoord(point.x, point.y)) return false;
   const tile = game.ref(point.x, point.y);
@@ -55,8 +62,9 @@ export class NationalMapTargetController implements Controller {
   public init(): void {
     if (
       this.game.config().gameConfig().nationalMode !== true ||
-      this.game.config().gameConfig().gameType !== GameType.Singleplayer ||
-      this.game.config().isReplay()
+      this.game.config().isReplay() ||
+      (this.game.config().gameConfig().gameType !== GameType.Singleplayer &&
+        this.game.isTrustedNationalProjection?.() !== true)
     )
       return;
     this.marker = document.createElement("div");
@@ -102,6 +110,8 @@ export class NationalMapTargetController implements Controller {
     if (
       !id ||
       !viewer ||
+      (this.game.isTrustedNationalProjection?.() === true &&
+        !this.game.trustedProjectionReady?.()) ||
       this.game.inSpawnPhase() ||
       this.game.isSpectator() ||
       !viewer.isAlive()

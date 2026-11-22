@@ -1,0 +1,110 @@
+name: C4 E2 — operational local staging identity and Worker journey
+
+on:
+  push:
+    branches:
+      - stage3/conductor4-class1-integration-20261121
+  pull_request:
+    branches:
+      - stage3/conductor4-class1-integration-20261121
+    paths:
+      - scripts/national-staging/**
+      - src/server/**
+      - tests/server/NationalAccountLease.test.ts
+      - tests/national/TrustedNationalServerAuthority.test.ts
+      - vite.config.ts
+      - .github/workflows/national-c4-e2-operational.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c4-e2-operational-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  identity:
+    name: Actual HTTP account lifecycle (no fixtures or external credentials)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - name: Verify exact identity source and execute isolated HTTP sessions
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
+          node scripts/national-staging/identity-check.mjs
+  worker:
+    name: Real Master and Worker — 3 independent local account sessions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Bound account lease unit regressions
+        run: npx --no-install vitest run --project node tests/server/NationalAccountLease.test.ts tests/national/TrustedNationalServerAuthority.test.ts
+      - name: Verify exact source and execute actual Master/Worker process journey
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
+          node --import tsx scripts/national-staging/worker-journey.mjs
+      - name: Owned source formatter and lint (independent of journey)
+        if: always()
+        run: |
+          set -euo pipefail
+          FILES=(src/server/Worker.ts src/server/GameServer.ts src/server/ServerEnv.ts src/server/Server.ts src/server/Master.ts src/server/JoinVerify.ts src/server/national/NationalAccountLease.ts src/server/national/TrustedNationalMatch.ts scripts/national-staging/*.mjs tests/server/NationalAccountLease.test.ts tests/national/TrustedNationalServerAuthority.test.ts vite.config.ts)
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            echo E2_FORMAT_REPAIR_BEGIN
+            git -c color.ui=false diff -- "${FILES[@]}"
+            echo E2_FORMAT_REPAIR_END
+            exit 1
+          fi
+          npx --no-install oxlint "${FILES[@]}"
+  browser-auth:
+    name: Three actual isolated Chromium account UI sessions (CPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Ordinary UI authentication and cookie-only reload
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
+          node scripts/national-staging/browser-auth-check.mjs

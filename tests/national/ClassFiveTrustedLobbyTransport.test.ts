@@ -46,9 +46,10 @@ function verified(index: number): Client {
     publicId: publics[index],
     username: ["Alpha", "Bravo", "Charlie"][index],
     // The real Worker obtains this from a validated signed account token.
-    claims: { sub: "verified-persistent-" + index } as NonNullable<
-      Client["claims"]
-    >,
+    claims: {
+      sub: "verified-persistent-" + index,
+      provider: "google",
+    } as NonNullable<Client["claims"]>,
   });
 }
 
@@ -100,7 +101,17 @@ function fixture(
     },
     deps: { createNationalRunner: realRunner, turnIntervalMs: () => 1000 },
   });
-  for (const client of seats) expect(game.joinClient(client)).toBe("joined");
+  const admittedAccounts = new Set<string>();
+  for (const client of seats) {
+    const eligible =
+      client.claims !== null &&
+      client.publicId !== undefined &&
+      !admittedAccounts.has(client.publicId);
+    expect(game.joinClient(client)).toBe(eligible ? "joined" : "not_trusted");
+    if (eligible && client.publicId !== undefined) {
+      admittedAccounts.add(client.publicId);
+    }
+  }
   if (extra) expect(game.joinClient(extra)).toBe("joined");
   return { game, seats };
 }
@@ -271,7 +282,9 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
       clientID: cid("late5"),
       persistentID: "late-person",
       publicId: "verified-late",
-      claims: {} as NonNullable<Client["claims"]>,
+      claims: { sub: "late-person", provider: "google" } as NonNullable<
+        Client["claims"]
+      >,
     });
     expect(game.joinClient(late)).toBe("started");
     expect(game.rejoinClient(makeMockWs() as any, "not-seated")).toBe(false);
@@ -293,10 +306,9 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
       claims: null,
     }) as Client;
     const one = fixture([a, guest, c]);
-    await boot(one.game);
-    expect(one.game.hasEnded()).toBe(true);
+    expect(one.game.activeClients()).not.toContain(guest);
     expect(
-      sent(a).some((m) => m.type === "turn" || m.type === "national_start"),
+      sent(guest).some((m) => m.type === "turn" || m.type === "national_start"),
     ).toBe(false);
     const duplicate = Object.assign(
       Object.create(Object.getPrototypeOf(c)),
@@ -306,15 +318,26 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
       },
     ) as Client;
     const two = fixture([verified(0), verified(1), duplicate]);
+    expect(
+      two.game.getClientIdForPersistentId(duplicate.persistentID),
+    ).toBeNull();
     await boot(two.game);
-    expect(two.game.hasEnded()).toBe(true);
+    expect(two.game.hasEnded()).toBe(false);
+    expect(
+      sent(duplicate).some(
+        (m) => m.type === "national_start" || m.type === "national_projection",
+      ),
+    ).toBe(false);
   });
 
   it("refuses to grant spectators any private NATIONAL projection", async () => {
     const spectator = makeClient({
       clientID: cid("watch5"),
+      persistentID: "watch5-account",
       spectator: true,
-      claims: {} as NonNullable<Client["claims"]>,
+      claims: { sub: "watch5-account", provider: "google" } as NonNullable<
+        Client["claims"]
+      >,
       publicId: "verified-watcher",
     });
     const { game, seats } = fixture(undefined, spectator);
