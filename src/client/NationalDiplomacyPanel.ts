@@ -1204,9 +1204,22 @@ export class NationalDiplomacyPanel extends LitElement {
       ? { admission, expulsion }
       : null;
   }
-  private renderPacts() {
+  private renderImperialAdministration() {
+    const game = this.game;
+    const view = game?.nationalImperialAdministration?.();
+    if (!view || this.warUnavailableReason || game?.nationalPoliticsTick?.() !== game?.ticks() || this.memberEmpire?.id !== view.empireId) return nothing;
+    return html`<section data-national-imperial-administration aria-label="Imperial administration" class="space-y-2 rounded border border-amber-400/40 p-3">
+      <h2 class="font-semibold text-amber-200">Imperial administration · ${view.empireId}</h2>
+      <p>Imperial treasury: <strong>${view.treasury}</strong> gold</p>
+      <p>Worker income allocated to treasury: ${(view.workerIncomeBps / 100).toFixed(2)}%</p>
+      <p>Construction authority: ${view.allowedConstruction === null ? "All regulated construction categories permitted" : view.allowedConstruction.length ? view.allowedConstruction.join(", ") : "No regulated construction categories permitted"}</p>
+      <p>${view.canAmend ? "Current emperor holds policy and military administration authority." : "The current emperor holds policy and military administration authority."} Administrative commands are not yet exposed on this client. No unilateral secession control.</p>
+    </section>`;
+  }
+
+  private renderPacts(includePrivate = true) {
     const roster = this.game?.nationalPolitics()?.pacts;
-    const c = this.pactContext();
+    const c = includePrivate ? this.pactContext() : null;
     const enabled = c !== null && !this.pactAttempt;
     const button =
       "rounded border border-amber-400/50 px-3 py-2 min-h-10 disabled:opacity-50 focus-visible:outline focus-visible:outline-2";
@@ -1541,6 +1554,7 @@ export class NationalDiplomacyPanel extends LitElement {
       >
         NATIONAL Private controls are locked until the server verifies your
         current active seat and trusted match.
+        <details><summary>Public pact roster</summary>${this.renderPacts(false)}</details>
       </section>`;
     }
     const politics = game.nationalPolitics();
@@ -1630,6 +1644,7 @@ export class NationalDiplomacyPanel extends LitElement {
                   }
                 </p>
                 ${this.renderPacts()}
+                ${this.renderImperialAdministration()}
                 ${
                   politics
                     ? html`<div class="space-y-2">

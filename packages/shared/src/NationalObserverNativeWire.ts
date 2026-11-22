@@ -5,6 +5,7 @@ import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
  * representation must agree with it; it may not create a second sight path.
  * No simulation imports; used on both trusted host and browser.
  */
+import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import {
   NATIONAL_OBSERVER_MAX_UNITS,
@@ -135,6 +136,7 @@ interface NativeLanes {
   readonly updates?: unknown;
   readonly nationalPolitics?: unknown;
   readonly nationalPactDisclosure?: unknown;
+  readonly nationalImperialAdministration?: unknown;
   readonly nationalConflicts?: unknown;
   readonly nationalAccessionOffers?: unknown;
   readonly nationalCommandResults?: unknown;
@@ -173,6 +175,7 @@ export function validateNationalObserverNativeLanes(
     page.tick,
     page.streamId,
   );
+  validateNationalImperialPacket(packet.nationalImperialAdministration, packet.nationalPolitics, page.observerId, page.tick, page.streamId);
   const native = decodeNationalObserverNativeUnits(packet.packedUnitUpdates);
   if ((native?.length ?? 0) !== page.units.length * UNIT_UPDATE_STRIDE)
     invalid();

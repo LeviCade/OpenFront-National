@@ -17,6 +17,7 @@ import {
   UnitType,
   WarshipState,
 } from "./GameTypes";
+import type { NationalImperialAdministrationWire } from "./NationalImperialView";
 import type {
   NationalPublicPactView,
   NationalPactDisclosureWireData,
@@ -131,6 +132,7 @@ export interface GameUpdateViewData {
    */
   nationalAccessionOffers?: NationalAccessionOffersViewData;
   nationalPactDisclosure?: NationalPactDisclosureWireData;
+  nationalImperialAdministration?: NationalImperialAdministrationWire;
   /**
    * Outcomes scoped to the authenticated recipient of THIS view only.
    * E3 must filter before serialization; never broadcast the E1 journal.

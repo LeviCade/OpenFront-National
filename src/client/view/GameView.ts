@@ -19,6 +19,7 @@ import {
   SpawnPhaseEndUpdate,
   UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
+import { readNationalImperialAdministration, type NationalImperialAdministrationView } from "@openfront/engine-api/game/NationalImperialView";
 import {
   readNationalPactWireDisclosure,
   type NationalPactDisclosureViewData,
@@ -103,6 +104,7 @@ export class GameView implements GameLike {
   private lastUpdate: GameUpdateViewData | null;
   // Authoritative, viewer-filtered worker values only. Never reconstruct
   // sovereignty from local intents or speculative client player data.
+  private _nationalImperialAdministration: NationalImperialAdministrationView | null = null;
   private _nationalPactReceipts: PactReceipt[] = [];
   private _nationalPactDisclosure: NationalPactDisclosureViewData | null = null;
   private _nationalPolitics: NationalPublicPolitics | null = null;
@@ -121,6 +123,7 @@ export class GameView implements GameLike {
   public setTrustedPrincipal(principal: string | null): void {
     if (this.trustedPrincipal !== principal) {
       this._nationalPactDisclosure = null;
+    this._nationalImperialAdministration = null;
       this._nationalPactReceipts = [];
     }
     this.trustedPrincipal = principal;
@@ -229,6 +232,7 @@ export class GameView implements GameLike {
   public resetTrustedProjectionSight(): void {
     if (!this._trustedNationalProjection) return;
     this._nationalPactDisclosure = null;
+    this._nationalImperialAdministration = null;
     this._nationalPactReceipts = [];
     this._trustedProjectionReady = false;
     this._trustedSpawnReady = false;
@@ -478,6 +482,10 @@ export class GameView implements GameLike {
     return owner.isPlayer() && owner.id() === player.id();
   }
 
+  public nationalImperialAdministration(): NationalImperialAdministrationView | null {
+    return this._nationalImperialAdministration;
+  }
+
   public nationalPactReceipts(): readonly PactReceipt[] {
     return this._nationalPactReceipts;
   }
@@ -541,6 +549,7 @@ export class GameView implements GameLike {
   /** Invalidate an old roster on disconnect; await a new GameRunner packet. */
   public invalidateNationalPoliticalView(): void {
     this._nationalPactDisclosure = null;
+    this._nationalImperialAdministration = null;
     this._nationalPactReceipts = [];
     this._nationalPolitics = null;
     this._nationalPoliticsTick = null;
@@ -742,8 +751,9 @@ export class GameView implements GameLike {
 
     const previousTick = this.lastUpdate?.tick ?? -1;
     // Never keep an unvalidated or revoked constitutional snapshot in the raw renderer cache.
-    this.lastUpdate = gu.nationalPactDisclosure === undefined ? gu : { ...gu };
+    this.lastUpdate = gu.nationalPactDisclosure === undefined && gu.nationalImperialAdministration === undefined ? gu : { ...gu };
     delete this.lastUpdate.nationalPactDisclosure;
+    delete this.lastUpdate.nationalImperialAdministration;
 
     // Legacy/replay test adapters can provide a partial Config without
     // gameConfig(). Keep ordinary FFA view updates entirely unchanged.
@@ -767,6 +777,10 @@ export class GameView implements GameLike {
 
       const currentActorId =
         this.trustedPrincipal ?? this._myPlayer?.id() ?? null;
+      this._nationalImperialAdministration = gu.tick < previousTick ? null : readNationalImperialAdministration(
+        gu.nationalImperialAdministration, this._nationalPolitics, currentActorId, gu.tick,
+        this._trustedNationalProjection ? this.trustedSight?.lastAcceptedStreamId ?? null : undefined,
+      );
       this._nationalPactDisclosure =
         gu.tick < previousTick
           ? null
