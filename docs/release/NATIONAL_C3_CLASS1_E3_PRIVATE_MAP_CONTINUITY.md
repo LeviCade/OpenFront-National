@@ -15,16 +15,16 @@ The serializer remains an allowlist with a 2,000,000-character JSON cap. The ser
 
 Original v1 fields `version`, `tick`, `observerId`, `width`, `height`, `reset`, `cursor`, `nextCursor`, `tiles`, `units`, `unitsTruncated`, `visibleBorders`, `ownResources`, `countries` are retained.
 
-| Additive v1 field | Meaning |
-| --- | --- |
-| `streamId` | Opaque E2 original authenticated socket nonce, generated on host. Correlation only; **not an authentication credential**. Never copied from browser. |
-| `sweepId` | Server-local monotonically increasing tile sweep number. |
-| `sweepTick` | Tick when current tile ID membership was frozen. Tile owner/terrain values still read at each **current** emission tick. |
-| `unitCursor` / `unitNextCursor` | Independent server-controlled unit ID pagination, <=2048 slots per frame. `null` completes this unit sweep. |
-| `unitSweepId` | Server-local monotonically increasing unit sweep number. |
-| `unitReset` | E4 must erase all old visible unit markers before adding current page. Can occur without terrain reset on massive unit revocation or marker cache overflow. |
-| `unitRemovedIds` | Sorted IDs of previously **emitted** units no longer visible, up to 2048. No coordinates, troops, destination or former allegiance attached. Empty on `unitReset`. |
-| `unitOverflow` | Current sight exceeds bounded 131072-ID unit sweep memory. E4 must surface a partial-intelligence indicator; **not complete battlefield state**. |
+| Additive v1 field               | Meaning                                                                                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `streamId`                      | Opaque E2 original authenticated socket nonce, generated on host. Correlation only; **not an authentication credential**. Never copied from browser.               |
+| `sweepId`                       | Server-local monotonically increasing tile sweep number.                                                                                                           |
+| `sweepTick`                     | Tick when current tile ID membership was frozen. Tile owner/terrain values still read at each **current** emission tick.                                           |
+| `unitCursor` / `unitNextCursor` | Independent server-controlled unit ID pagination, <=2048 slots per frame. `null` completes this unit sweep.                                                        |
+| `unitSweepId`                   | Server-local monotonically increasing unit sweep number.                                                                                                           |
+| `unitReset`                     | E4 must erase all old visible unit markers before adding current page. Can occur without terrain reset on massive unit revocation or marker cache overflow.        |
+| `unitRemovedIds`                | Sorted IDs of previously **emitted** units no longer visible, up to 2048. No coordinates, troops, destination or former allegiance attached. Empty on `unitReset`. |
+| `unitOverflow`                  | Current sight exceeds bounded 131072-ID unit sweep memory. E4 must surface a partial-intelligence indicator; **not complete battlefield state**.                   |
 
 The previous `unitsTruncated` flag remains a per-frame statement: more than 2048 currently sighted units. It is NOT a declaration that the unit sweep is complete. Completion requires `unitNextCursor === null`, and only `!unitOverflow` permits a claim of full bounded sweep coverage.
 
@@ -51,7 +51,10 @@ A source-compatible receiver is provided at `src/client/NationalObserverMapConti
 const continuity = new NationalObserverMapContinuity(expectedPrincipal);
 
 // For each national_projection, before any GameView mutations:
-const delta = continuity.accept(projection.nationalObserverMap, projection.tick);
+const delta = continuity.accept(
+  projection.nationalObserverMap,
+  projection.tick,
+);
 if (delta.clearAllTiles) {
   // E4 native map: erase all private ownership/border/last-sight overlays.
   // Retain licensed public base geography, NOT stale political state.
