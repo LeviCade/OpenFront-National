@@ -9,6 +9,7 @@ on:
       - "scripts/national-qa/**"
       - "tests/e2e/national/**"
       - "tests/client/sound/**"
+      - "tests/national/C4Class2IndependentPactConsent.test.ts"
       - "src/client/sound/**"
       - "docs/release/**"
       - ".github/workflows/national-c4-e5-qa.yml"
@@ -42,6 +43,9 @@ jobs:
       - name: Actual producer mutation, normal baseline and restored-source tests
         if: success() || failure()
         run: node scripts/national-qa/mutation-gate.mjs
+      - name: New independent stamped-pact constitutional regression
+        if: success() || failure()
+        run: npx --no-install vitest run --project node tests/national/C4Class2IndependentPactConsent.test.ts
       - name: Actual sound-pipeline regression
         if: success() || failure()
         run: npx --no-install vitest run --project client tests/client/sound
@@ -56,9 +60,9 @@ jobs:
       - name: Owned files lint and formatter
         if: success() || failure()
         run: |
-          npx --no-install oxlint scripts/national-qa/mutation-gate.mjs src/client/sound tests/client/sound scripts/national-qa/c4-journey-semantics.mjs scripts/national-qa/c4-journey-evidence.mjs tests/e2e/national/C4IndependentJourneyEvidence.test.mjs
-          if ! npx --no-install oxfmt --check scripts/national-qa/mutation-gate.mjs src/client/sound tests/client/sound scripts/national-qa/c4-journey-semantics.mjs scripts/national-qa/c4-journey-evidence.mjs tests/e2e/national/C4IndependentJourneyEvidence.test.mjs; then
-            npx --no-install oxfmt --write scripts/national-qa/mutation-gate.mjs src/client/sound tests/client/sound scripts/national-qa/c4-journey-semantics.mjs scripts/national-qa/c4-journey-evidence.mjs tests/e2e/national/C4IndependentJourneyEvidence.test.mjs
+          npx --no-install oxlint scripts/national-qa/mutation-gate.mjs scripts/national-qa/asset-audit.mjs scripts/national-qa/private-staging-browser.mjs tests/national/C4Class2IndependentPactConsent.test.ts src/client/sound tests/client/sound scripts/national-qa/c4-journey-semantics.mjs scripts/national-qa/c4-journey-evidence.mjs tests/e2e/national/C4IndependentJourneyEvidence.test.mjs
+          if ! npx --no-install oxfmt --check scripts/national-qa/mutation-gate.mjs scripts/national-qa/asset-audit.mjs scripts/national-qa/private-staging-browser.mjs tests/national/C4Class2IndependentPactConsent.test.ts src/client/sound tests/client/sound scripts/national-qa/c4-journey-semantics.mjs scripts/national-qa/c4-journey-evidence.mjs tests/e2e/national/C4IndependentJourneyEvidence.test.mjs; then
+            npx --no-install oxfmt --write scripts/national-qa/mutation-gate.mjs scripts/national-qa/asset-audit.mjs scripts/national-qa/private-staging-browser.mjs tests/national/C4Class2IndependentPactConsent.test.ts src/client/sound tests/client/sound scripts/national-qa/c4-journey-semantics.mjs scripts/national-qa/c4-journey-evidence.mjs tests/e2e/national/C4IndependentJourneyEvidence.test.mjs
             git -c color.ui=false diff
             exit 1
           fi
@@ -82,6 +86,45 @@ jobs:
           npm run inst
       - run: node --check scripts/national-qa/private-staging-browser.mjs
       - run: node scripts/national-qa/private-staging-browser.mjs --auth-only
+  production-runtime:
+    name: Independent exact production compile and post-build application witness
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      REQUIRED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.REQUIRED_SHA }}
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "$REQUIRED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - run: npm run build-prod
+      - run: npx --no-install vitest run --project node tests/server/RenderHtml.test.ts
+  worker-baseline:
+    name: Real local Worker protocol acceptance and explicit pre-recovery loss baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      REQUIRED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.REQUIRED_SHA }}
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "$REQUIRED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - run: node --import tsx scripts/national-staging/worker-journey.mjs
   release-audit:
     name: Mandatory dependency and asset audit (strict, no auto-fix)
     runs-on: ubuntu-latest
