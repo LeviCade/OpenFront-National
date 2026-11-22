@@ -9,7 +9,7 @@ const legacy = ["start","spawn","legacy-action"];
 function fixture(mode) {
   const h = (n) => n.toString(16).padStart(64,"0");
   const privateMode = mode === "private-national";
-  const phases = mode.startsWith("legacy") ? legacy : privateMode ? [...national,"reconnect","cross-principal","stale-socket","replay","spectator"] : national;
+  const phases = mode.startsWith("legacy") ? legacy : privateMode ? [...national.slice(0,-1),"reconnect","cross-principal","stale-socket","replay","spectator","victory"] : national;
   const identity = {sourceSha:"a".repeat(40),mode,matchId:"game-1"};
   const trusted = {...identity, runnerId:"runner-1", hostId:"host-1", renderer:"Intel verified owner browser",executionKind:"owner-observed",authKind:"local-registered"};
   const transitions = phases.map((phase,i)=>{
@@ -46,7 +46,7 @@ const mutations = [["wrong SHA", f=>{f.browser.sourceSha="b".repeat(40)}, "SOURC
 ["cross game", f=>{f.authority.matchId="other"}, "MATCH_OR_RUNNER_MISMATCH"]];
 
 const hash = (b) => createHash("sha256").update(b).digest("hex");
-function png() {
+function png(seed = 123456) {
   const chunk = (type, data) => {
     const bytes = Buffer.concat([Buffer.from(type), data]);
     let crc = 0xffffffff;
@@ -60,16 +60,20 @@ function png() {
   };
   const ihdr=Buffer.alloc(13); ihdr.writeUInt32BE(320); ihdr.writeUInt32BE(240,4); ihdr[8]=8; ihdr[9]=6;
   const raw=Buffer.alloc(1281*240);
-  let n=123456;
+  let n=seed;
   for(let y=0;y<240;y++) for(let x=1;x<1281;x++){n^=n<<13;n^=n>>>17;n^=n<<5;raw[y*1281+x]=n&255;}
   return Buffer.concat([Buffer.from("89504e470d0a1a0a","hex"),chunk("IHDR",ihdr),chunk("IDAT",deflateSync(raw)),chunk("IEND",Buffer.alloc(0))]);
 }
 function bundle(mode) {
-  const f=fixture(mode), image=png();
-  for(const s of f.browser.transitions) s.screenshotSha256=hash(image);
+  const f=fixture(mode);
+  const screenshots = new Map(f.browser.transitions.map((s,i) => {
+    const image = png(123456 + i);
+    s.screenshotSha256 = hash(image);
+    return [s.phase, image];
+  }));
   const browserBytes=Buffer.from(JSON.stringify(f.browser)), authorityBytes=Buffer.from(JSON.stringify(f.authority));
   const trusted={...f.trusted,browserSha256:hash(browserBytes),authoritySha256:hash(authorityBytes)};
-  return {mode,browserBytes,authorityBytes,trusted,screenshots:new Map(f.browser.transitions.map(s=>[s.phase,image]))};
+  return {mode,browserBytes,authorityBytes,trusted,screenshots};
 }
 describe("C4 independent evidence oracle — synthetic tests only",()=>{
   for(const mode of modes) it("accepts coherent fixture "+mode,()=>{
@@ -88,6 +92,10 @@ describe("C4 independent evidence oracle — synthetic tests only",()=>{
     b.browserBytes=Buffer.from(JSON.stringify(report));b.trusted.browserSha256=hash(b.browserBytes);b.screenshots.set("start",other);
     expect(verifyC4Lane(b).reason).toBe("SCREENSHOT_DIGEST_MISMATCH_start");
     b.authorityBytes=Buffer.from("{}");expect(verifyC4Lane(b).reason).toBe("INDEPENDENT_ARTIFACT_DIGEST_MISMATCH");
+  });
+  it("rejects a reused screenshot",()=>{
+    const f=fixture("private-national"); f.browser.transitions[1].screenshotSha256=f.browser.transitions[0].screenshotSha256;
+    expect(validateJourney(f.mode,f.browser,f.authority,f.trusted).reason).toBe("SCREENSHOT_REUSED_spawn");
   });
   it("rejects a missing release lane and absent physical result",()=>{
     const all=modes.map(bundle), trustedByMode=Object.fromEntries(all.map(b=>[b.mode,b.trusted]));

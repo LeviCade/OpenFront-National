@@ -9,7 +9,7 @@ export function validateJourney(mode, browser, authority, trusted) {
   const count = (x) => Number.isSafeInteger(x) && x >= 0;
   const privateMode = mode === "private-national";
   const isLegacy = mode.startsWith("legacy-");
-  const phases = isLegacy ? legacy : privateMode ? [...national, "reconnect", "cross-principal", "stale-socket", "replay", "spectator"] : national;
+  const phases = isLegacy ? legacy : privateMode ? [...national.slice(0, -1), "reconnect", "cross-principal", "stale-socket", "replay", "spectator", "victory"] : national;
   if (!modes.includes(mode) || !trusted || !/^[a-f0-9]{40}$/.test(trusted.sourceSha ?? "") ||
       !browser || !authority || browser.sourceSha !== trusted.sourceSha ||
       authority.sourceSha !== trusted.sourceSha || browser.mode !== mode ||
@@ -27,6 +27,7 @@ export function validateJourney(mode, browser, authority, trusted) {
       browser.transitions.length !== phases.length || authority.transitions.length !== phases.length)
     return fail("TRANSITION_MISSING_OR_EXTRA");
   const requests = new Set();
+  const screenshots = new Set();
   let lastTick = -1;
   for (let i = 0; i < phases.length; i++) {
     const phase = phases[i], b = browser.transitions[i], a = authority.transitions[i];
@@ -39,6 +40,8 @@ export function validateJourney(mode, browser, authority, trusted) {
         a.tickBefore < lastTick || b.tickAfter !== a.tickAfter ||
         !hex(a.beforeStateSha256) || !hex(a.afterStateSha256))
       return fail("COMMAND_RECEIPT_OR_TICK_" + phase);
+    if (screenshots.has(b.screenshotSha256)) return fail("SCREENSHOT_REUSED_" + phase);
+    screenshots.add(b.screenshotSha256);
     requests.add(a.requestId);
     lastTick = a.tickAfter;
     const negative = ["illegal", "cross-principal", "stale-socket", "replay", "spectator"].includes(phase);
@@ -90,6 +93,7 @@ export function validateJourney(mode, browser, authority, trusted) {
         return fail("DUPLICATE_PRIVATE_" + field);
     }
     for (const s of authority.seats) {
+      if (!s) return fail("PRIVATE_SEAT_MISSING");
       const b = browser.seats.find(x => x?.seatId === s.seatId);
       if (!id(s.principal) || !id(s.seatId) || !id(s.profileId) ||
           !hex(s.projectionBefore) || !hex(s.projectionAfter) ||

@@ -22,6 +22,7 @@ export function verifyC4Lane({ mode, browserBytes, authorityBytes, screenshots, 
   } catch {
     return reject("EVIDENCE_JSON_INVALID");
   }
+  if (typeof mode !== "string") return reject("SOURCE_OR_MODE_MISMATCH");
   const semantic = validateJourney(mode, browser, authority, trusted);
   if (!semantic.accepted) return reject(semantic.reason);
   if (!(screenshots instanceof Map) || screenshots.size !== browser.transitions.length)
@@ -39,6 +40,7 @@ export function verifyC4Lane({ mode, browserBytes, authorityBytes, screenshots, 
 // This gate consumes its independently pinned result bytes, never guest booleans.
 export function verifyC4Release({ lanes, trustedByMode, physicalBytes, trustedPhysicalSha256, sourceSha }) {
   if (!Array.isArray(lanes) || lanes.length !== C4_MODES.length ||
+      lanes.some(l => !l || typeof l !== "object") ||
       new Set(lanes.map(l => l.mode)).size !== C4_MODES.length ||
       !C4_MODES.every(mode => lanes.some(l => l.mode === mode)))
     return reject("REQUIRED_RELEASE_LANE_MISSING_OR_DUPLICATE");

@@ -1,0 +1,90 @@
+name: C4 E5 - Independent journey evidence controls and release audit
+
+on:
+  pull_request:
+    branches:
+      - stage3/conductor4-class1-integration-20261121
+    paths:
+      - "scripts/national-qa/**"
+      - "tests/e2e/national/**"
+      - "docs/release/**"
+      - ".github/workflows/national-c4-e5-qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-controls:
+    name: Exact-source evidence mutations (never gameplay)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REQUIRED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.REQUIRED_SHA }}
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "$REQUIRED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - name: Independent evidence controls
+        run: |
+          npx --no-install vitest run --project node tests/e2e/national/C4IndependentJourneyEvidence.test.mjs tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs tests/e2e/national/C3ScreenshotEvidence.test.mjs scripts/national-gpu-ci/verify-independent-release.test.mjs
+      - name: Owned files lint and formatter
+        run: |
+          npx --no-install oxlint scripts/national-qa/c4-journey-semantics.mjs scripts/national-qa/c4-journey-evidence.mjs tests/e2e/national/C4IndependentJourneyEvidence.test.mjs
+          if ! npx --no-install oxfmt --check scripts/national-qa/c4-journey-semantics.mjs scripts/national-qa/c4-journey-evidence.mjs tests/e2e/national/C4IndependentJourneyEvidence.test.mjs; then
+            npx --no-install oxfmt --write scripts/national-qa/c4-journey-semantics.mjs scripts/national-qa/c4-journey-evidence.mjs tests/e2e/national/C4IndependentJourneyEvidence.test.mjs
+            git -c color.ui=false diff
+            exit 1
+          fi
+  release-audit:
+    name: Mandatory dependency and asset audit (strict, no auto-fix)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      REQUIRED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.REQUIRED_SHA }}
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "$REQUIRED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - name: Exact dependency inventory, separate runtime and development
+        run: |
+          node scripts/national-qa/security-audit.mjs --strict-release
+          cat national-qa-artifacts/dependencies.json
+      - name: Record dependency inventory even on failure
+        if: always()
+        run: |
+          if test -f national-qa-artifacts/dependencies.json; then cat national-qa-artifacts/dependencies.json; fi
+      - name: Exact asset inventory
+        if: always()
+        run: node scripts/national-qa/asset-audit.mjs --strict-release
+      - name: Preserve source identity and sanitized reports
+        if: always()
+        run: |
+          mkdir -p national-qa-artifacts
+          git rev-parse HEAD > national-qa-artifacts/head.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: c4-e5-release-audit-${{ env.REQUIRED_SHA }}
+          path: |
+            national-qa-artifacts/dependencies.json
+            national-qa-artifacts/assets.json
+            national-qa-artifacts/head.txt
+          if-no-files-found: error
+          retention-days: 14
