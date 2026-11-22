@@ -64,6 +64,7 @@ import type {
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
+import type { RegionalReconGrant } from "../national/observation/NationalReconnaissance";
 import type {
   NationalFoundEmpireResult,
   NationalPoliticalCommandResult,
@@ -704,6 +705,17 @@ export interface Game extends GameLike {
     data: NationalSightMemory,
   ): void;
   nationalWinner(): PlayerID | null;
+  /** Engine-only, session-checked regional reconnaissance purchase. */
+  performNationalReconnaissance(
+    actor: Player,
+    targetId: PlayerID,
+    centerX: number,
+    centerY: number,
+    requestId: string,
+    authenticatedClientID?: ClientID,
+  ): RegionalReconGrant;
+  /** Own purchases ONLY; LiveObservation performs reciprocal empire sharing. */
+  nationalReconnaissanceFor(payerId: PlayerID): readonly RegionalReconGrant[];
   performNationalCommand(
     actor: Player,
     command: NationalCommand,
