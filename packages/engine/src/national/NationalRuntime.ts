@@ -110,7 +110,9 @@ const politicsSchema = z.object({
       delegatedNationalPeace: z.array(z.string()).optional(),
       delegatedNationalDeclarations: z.array(z.string()).optional(),
       accessionWarResponse: z.enum(["none", "imperial"]).optional(),
-      standingDefenseResponse: z.enum(["none", "assist", "imperial", "both"]).optional(),
+      standingDefenseResponse: z
+        .enum(["none", "assist", "imperial", "both"])
+        .optional(),
       warPolicyVersion: counter.optional(),
     }),
   ),
@@ -947,18 +949,29 @@ export class NationalRuntime {
   /** Engine-only read: no client-supplied donor roster or claimed empire. */
   standingDefenseFor(
     defenderId: PlayerID,
-  ): { readonly empireId: string; readonly response: "none" | "assist" | "imperial" | "both" } | null {
+  ): {
+    readonly empireId: string;
+    readonly response: "none" | "assist" | "imperial" | "both";
+  } | null {
     if (!this.politics.nations.some((n) => n.id === defenderId && n.alive))
       return null;
-    const empire = this.politics.empires.find((e) => e.memberIds.includes(defenderId));
+    const empire = this.politics.empires.find((e) =>
+      e.memberIds.includes(defenderId),
+    );
     return empire
-      ? { empireId: empire.id, response: empire.standingDefenseResponse ?? "none" }
+      ? {
+          empireId: empire.id,
+          response: empire.standingDefenseResponse ?? "none",
+        }
       : null;
   }
 
   setStandingDefensePolicy(
     actorId: PlayerID,
-    command: Extract<NationalImperialAdministrationCommand, { kind: "set-standing-defense-policy" }>,
+    command: Extract<
+      NationalImperialAdministrationCommand,
+      { kind: "set-standing-defense-policy" }
+    >,
   ): void {
     this.politics = setImperialStandingDefensePolicy(
       this.politics,

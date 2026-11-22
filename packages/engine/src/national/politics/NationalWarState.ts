@@ -171,9 +171,17 @@ export class NationalWarStateService {
   }
 
   prepareStandingDefenseWar(
-    empireId: string, attackerId: string, defenderId: string, tick: number,
+    empireId: string,
+    attackerId: string,
+    defenderId: string,
+    tick: number,
   ): StandingDefenseWarPlan | null {
-    return this.wars.prepareStandingDefenseWar(empireId, attackerId, defenderId, tick);
+    return this.wars.prepareStandingDefenseWar(
+      empireId,
+      attackerId,
+      defenderId,
+      tick,
+    );
   }
 
   enactStandingDefenseWar(plan: StandingDefenseWarPlan, tick: number): void {

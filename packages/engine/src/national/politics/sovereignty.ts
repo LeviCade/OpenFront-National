@@ -239,7 +239,9 @@ export function validatePolitics(world: PoliticsProjection): void {
     );
     requireRule(
       e.standingDefenseResponse === undefined ||
-        ["none", "assist", "imperial", "both"].includes(e.standingDefenseResponse),
+        ["none", "assist", "imperial", "both"].includes(
+          e.standingDefenseResponse,
+        ),
       "invalid imperial standing DEFENSE response",
     );
     requireRule(
@@ -939,7 +941,10 @@ export function setImperialStandingDefensePolicy(
 ): PoliticsProjection {
   validatePolitics(world);
   const current = empire(world, empireId);
-  requireRule(current.leaderId === actorId, "only incumbent emperor may change DEFENSE policy");
+  requireRule(
+    current.leaderId === actorId,
+    "only incumbent emperor may change DEFENSE policy",
+  );
   requireRule(
     Number.isSafeInteger(expectedVersion) &&
       expectedVersion >= 0 &&
@@ -947,8 +952,10 @@ export function setImperialStandingDefensePolicy(
     "stale imperial DEFENSE policy version",
   );
   requireRule(
-    response === "none" || response === "assist" ||
-      response === "imperial" || response === "both",
+    response === "none" ||
+      response === "assist" ||
+      response === "imperial" ||
+      response === "both",
     "invalid imperial DEFENSE response",
   );
   const next = copy(world);

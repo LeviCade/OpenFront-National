@@ -369,16 +369,22 @@ export class WarLedger {
     const foreignEmpire = this.politics.empireOf(attackerId);
     if (foreignEmpire === empireId)
       throw new Error("NATIONAL WAR: no internal imperial defense");
-    const target: ConflictParty = foreignEmpire === null
-      ? { kind: "nation", id: attackerId }
-      : { kind: "empire", id: foreignEmpire };
+    const target: ConflictParty =
+      foreignEmpire === null
+        ? { kind: "nation", id: attackerId }
+        : { kind: "empire", id: foreignEmpire };
     const first: ConflictParty = { kind: "empire", id: empireId };
     const pair = this.pairKey("imperial", first, target);
-    if ([...this.layers.values()].some((layer) =>
-      this.pairKey(layer.scope, layer.first, layer.second) === pair
-    )) return null;
+    if (
+      [...this.layers.values()].some(
+        (layer) =>
+          this.pairKey(layer.scope, layer.first, layer.second) === pair,
+      )
+    )
+      return null;
     const emperorId = this.politics.emperorOf(empireId);
-    if (emperorId === null) throw new Error("NATIONAL WAR: no incumbent emperor");
+    if (emperorId === null)
+      throw new Error("NATIONAL WAR: no incumbent emperor");
     let ordinal = 0;
     let warId = `standing-defense-${tick}-${ordinal}`;
     while (this.layers.has(warId)) {
@@ -394,7 +400,10 @@ export class WarLedger {
   /** Commit only the exact previously validated plan under the engine tick lock. */
   enactStandingDefenseWar(plan: StandingDefenseWarPlan, tick: number): void {
     const fresh = this.prepareStandingDefenseWar(
-      plan.empireId, plan.attackerId, plan.defenderId, tick,
+      plan.empireId,
+      plan.attackerId,
+      plan.defenderId,
+      tick,
     );
     if (
       fresh === null ||
@@ -402,10 +411,14 @@ export class WarLedger {
       fresh.emperorId !== plan.emperorId ||
       fresh.target.kind !== plan.target.kind ||
       fresh.target.id !== plan.target.id
-    ) throw new Error("NATIONAL WAR: stale standing-defense plan");
+    )
+      throw new Error("NATIONAL WAR: stale standing-defense plan");
     this.declareImperial(
-      plan.warId, plan.emperorId,
-      { kind: "empire", id: plan.empireId }, plan.target, tick,
+      plan.warId,
+      plan.emperorId,
+      { kind: "empire", id: plan.empireId },
+      plan.target,
+      tick,
     );
   }
 

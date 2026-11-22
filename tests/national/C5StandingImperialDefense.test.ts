@@ -14,7 +14,11 @@ import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
 const [CROWN, MEMBER, DONOR, ENEMY, OTHER] = [
-  "C5E4_CROWN", "C5E4_MEMBER", "C5E4_DONOR", "C5E4_ENEMY", "C5E4_OTHER",
+  "C5E4_CROWN",
+  "C5E4_MEMBER",
+  "C5E4_DONOR",
+  "C5E4_ENEMY",
+  "C5E4_OTHER",
 ];
 const EMPIRE = "c5e4-imperium";
 const roster = [
@@ -30,28 +34,46 @@ type Response = "none" | "assist" | "imperial" | "both";
 async function found(): Promise<Game> {
   const game = await setup("plains", { nationalMode: true }, roster);
   const coordinates: [number, number][] = [
-    [20, 20], [35, 35], [50, 50], [80, 80], [70, 20],
+    [20, 20],
+    [35, 35],
+    [50, 50],
+    [80, 80],
+    [70, 20],
   ];
-  roster.forEach((player, index) => game.addExecution(
-    new SpawnExecution("c5e4-defense", player, game.ref(...coordinates[index])),
-  ));
+  roster.forEach((player, index) =>
+    game.addExecution(
+      new SpawnExecution(
+        "c5e4-defense",
+        player,
+        game.ref(...coordinates[index]),
+      ),
+    ),
+  );
   game.executeNextTick();
   game.executeNextTick();
   const emperor = game.player(CROWN);
-  game.performNationalCommand(emperor, { kind: "found-empire", empireId: EMPIRE });
+  game.performNationalCommand(emperor, {
+    kind: "found-empire",
+    empireId: EMPIRE,
+  });
   for (const id of [MEMBER, DONOR]) {
     game.performNationalCommand(emperor, {
-      kind: "offer-empire", empireId: EMPIRE, candidateId: id,
+      kind: "offer-empire",
+      empireId: EMPIRE,
+      candidateId: id,
     });
     game.performNationalCommand(game.player(id), {
-      kind: "accept-empire", empireId: EMPIRE, candidateId: id,
+      kind: "accept-empire",
+      empireId: EMPIRE,
+      candidateId: id,
     });
   }
   // The independent offensive WAR is already lawful before the first attack.
   game.performNationalWarCommand(game.player(ENEMY), {
     kind: "declare-national",
     warId: "c5e4-original-national",
-    aggressorId: ENEMY, targetId: MEMBER,
+    aggressorId: ENEMY,
+    targetId: MEMBER,
   });
   // A real defender-owned land tile touching the enemy's existing tiles.
   const buf = [0, 0, 0, 0];
@@ -65,7 +87,9 @@ async function found(): Promise<Game> {
         game.owner(candidate) === game.terraNullius()
       ) {
         game.player(MEMBER).conquer(candidate);
-        expect(game.player(ENEMY).sharesBorderWith(game.player(MEMBER))).toBe(true);
+        expect(game.player(ENEMY).sharesBorderWith(game.player(MEMBER))).toBe(
+          true,
+        );
         return game;
       }
     }
@@ -73,10 +97,16 @@ async function found(): Promise<Game> {
   throw new Error("fixture could not establish land border");
 }
 
-function setResponse(game: Game, response: Response, expectedVersion = 0): void {
+function setResponse(
+  game: Game,
+  response: Response,
+  expectedVersion = 0,
+): void {
   game.performNationalImperialAdministration(game.player(CROWN), {
     kind: "set-standing-defense-policy",
-    empireId: EMPIRE, expectedVersion, response,
+    empireId: EMPIRE,
+    expectedVersion,
+    response,
   });
 }
 function tick(game: Game, count = 1): void {
@@ -92,9 +122,9 @@ function tick(game: Game, count = 1): void {
   }
 }
 function hit(game: Game, troopCount: number): void {
-  game.addExecution(new AttackExecution(
-    troopCount, game.player(ENEMY), MEMBER,
-  ));
+  game.addExecution(
+    new AttackExecution(troopCount, game.player(ENEMY), MEMBER),
+  );
   tick(game);
 }
 function ledger(game: Game) {
@@ -121,9 +151,13 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     const { restored: control } = await roundTrip(game, "plains");
     tick(control);
     const baselineDonor = control.player(DONOR).troops();
-    const baselineGold = roster.map((p) => control.player(p.id).gold().toString());
+    const baselineGold = roster.map((p) =>
+      control.player(p.id).gold().toString(),
+    );
     const protectedReserve = reserve(game);
-    const oldWar = ledger(game).wars.layers.find((l) => l.id === "c5e4-original-national")!;
+    const oldWar = ledger(game).wars.layers.find(
+      (l) => l.id === "c5e4-original-national",
+    )!;
     expect(oldWar.scope).toBe("national");
     expect(imperialLayers(game)).toHaveLength(0);
 
@@ -136,13 +170,22 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     expect(recorded.intercepted).toBe(
       baselineDonor - game.player(DONOR).troops(),
     );
-    expect(recorded.remainingAttackingTroops).toBe(50_000 - recorded.intercepted);
-    expect(recorded.contributions).toEqual([{
-      nationId: DONOR, troopsDebited: recorded.intercepted,
-    }]);
-    expect(game.player(DONOR).troops()).toBeGreaterThanOrEqual(protectedReserve - 1);
+    expect(recorded.remainingAttackingTroops).toBe(
+      50_000 - recorded.intercepted,
+    );
+    expect(recorded.contributions).toEqual([
+      {
+        nationId: DONOR,
+        troopsDebited: recorded.intercepted,
+      },
+    ]);
+    expect(game.player(DONOR).troops()).toBeGreaterThanOrEqual(
+      protectedReserve - 1,
+    );
     expect(game.player(DONOR).troops()).toBeLessThanOrEqual(protectedReserve);
-    expect(roster.map((p) => game.player(p.id).gold().toString())).toEqual(baselineGold);
+    expect(roster.map((p) => game.player(p.id).gold().toString())).toEqual(
+      baselineGold,
+    );
     expect(imperialLayers(game)).toHaveLength(1);
     const imperial = imperialLayers(game)[0];
     expect(imperial.endedTick).toBeNull();
@@ -153,19 +196,25 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
 
     const { restored } = await roundTrip(game, "plains");
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
-    expect(restored.nationalImperialAdministrationFor(restored.player(CROWN)))
-      .toEqual(game.nationalImperialAdministrationFor(game.player(CROWN)));
+    expect(
+      restored.nationalImperialAdministrationFor(restored.player(CROWN)),
+    ).toEqual(game.nationalImperialAdministrationFor(game.player(CROWN)));
     expect(restored.player(DONOR).troops()).toBe(game.player(DONOR).troops());
 
     game.performNationalWarCommand(game.player(ENEMY), {
-      kind: "propose-peace", warId: imperial.id, motionId: "c5e4-peace",
+      kind: "propose-peace",
+      warId: imperial.id,
+      motionId: "c5e4-peace",
     });
     game.performNationalWarCommand(game.player(CROWN), {
-      kind: "accept-peace", motionId: "c5e4-peace",
+      kind: "accept-peace",
+      motionId: "c5e4-peace",
     });
     expect(game.nationalWarAuthority()?.atWar(CROWN, ENEMY)).toBe(false);
     expect(game.nationalWarAuthority()?.atWar(MEMBER, ENEMY)).toBe(true);
-    expect(ledger(game).wars.layers.find((l) => l.id === oldWar.id)?.endedTick).toBeNull();
+    expect(
+      ledger(game).wars.layers.find((l) => l.id === oldWar.id)?.endedTick,
+    ).toBeNull();
 
     // A subsequent national attack must not resurrect the accepted imperial peace.
     game.player(ENEMY).setTroops(1_000);
@@ -188,10 +237,16 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
       const territoryBefore = game.player(MEMBER).numTilesOwned();
       hit(game, 30_000);
       const record = ledger(game).levy.processed[0].result;
-      expect(record.intercepted).toBe(response === "assist" || response === "both" ? 30_000 : 0);
-      expect(baselineDonor - game.player(DONOR).troops()).toBe(record.intercepted);
+      expect(record.intercepted).toBe(
+        response === "assist" || response === "both" ? 30_000 : 0,
+      );
+      expect(baselineDonor - game.player(DONOR).troops()).toBe(
+        record.intercepted,
+      );
       expect(record.remainingAttackingTroops).toBe(30_000 - record.intercepted);
-      expect(imperialLayers(game)).toHaveLength(response === "imperial" || response === "both" ? 1 : 0);
+      expect(imperialLayers(game)).toHaveLength(
+        response === "imperial" || response === "both" ? 1 : 0,
+      );
       if (record.intercepted === 30_000)
         expect(game.player(MEMBER).numTilesOwned()).toBe(territoryBefore);
     }
@@ -203,14 +258,23 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     const untouched = snapshotGameData(game).game;
     const command = {
       kind: "set-standing-defense-policy" as const,
-      empireId: EMPIRE, expectedVersion: 0, response: "both" as const,
+      empireId: EMPIRE,
+      expectedVersion: 0,
+      response: "both" as const,
     };
-    expect(() => game.performNationalImperialAdministration(game.player(DONOR), command)).toThrow(/emperor/);
-    expect(() => game.performNationalImperialAdministration(game.player(ENEMY), command)).toThrow(/emperor/);
+    expect(() =>
+      game.performNationalImperialAdministration(game.player(DONOR), command),
+    ).toThrow(/emperor/);
+    expect(() =>
+      game.performNationalImperialAdministration(game.player(ENEMY), command),
+    ).toThrow(/emperor/);
     expect(snapshotGameData(game).game).toEqual(untouched);
     setResponse(game, "both");
     expect(() => setResponse(game, "none")).toThrow(/stale/);
-    expect(game.nationalImperialAdministrationFor(game.player(CROWN))?.warPolicyVersion).toBe(1);
+    expect(
+      game.nationalImperialAdministrationFor(game.player(CROWN))
+        ?.warPolicyVersion,
+    ).toBe(1);
 
     // An invalid target must not charge the donor or open a war layer.
     const beforeInvalid = ledger(game);
@@ -224,21 +288,32 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     expect(game.player(DONOR).troops()).toBe(donorWithoutAttack);
 
     game.performNationalCommand(game.player(CROWN), {
-      kind: "transfer-crown", empireId: EMPIRE, successorId: DONOR,
+      kind: "transfer-crown",
+      empireId: EMPIRE,
+      successorId: DONOR,
     });
-    expect(() => game.performNationalImperialAdministration(game.player(CROWN), {
-      ...command, expectedVersion: 2,
-    })).toThrow(/emperor/);
-    expect(() => game.performNationalImperialAdministration(game.player(DONOR), {
-      ...command, expectedVersion: 1,
-    })).toThrow(/stale/);
+    expect(() =>
+      game.performNationalImperialAdministration(game.player(CROWN), {
+        ...command,
+        expectedVersion: 2,
+      }),
+    ).toThrow(/emperor/);
+    expect(() =>
+      game.performNationalImperialAdministration(game.player(DONOR), {
+        ...command,
+        expectedVersion: 1,
+      }),
+    ).toThrow(/stale/);
     game.performNationalImperialAdministration(game.player(DONOR), {
-      ...command, expectedVersion: 2, response: "none",
+      ...command,
+      expectedVersion: 2,
+      response: "none",
     });
     const { restored } = await roundTrip(game, "plains");
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
-    expect(restored.nationalImperialAdministrationFor(restored.player(DONOR)))
-      .toEqual(game.nationalImperialAdministrationFor(game.player(DONOR)));
+    expect(
+      restored.nationalImperialAdministrationFor(restored.player(DONOR)),
+    ).toEqual(game.nationalImperialAdministrationFor(game.player(DONOR)));
   });
 
   it("shares real contributor balances across simultaneous attacks and never pierces reserves", async () => {
@@ -251,8 +326,10 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     game.player(ENEMY).setTroops(20_000);
     // TWO valid fronts against the same member in one GameRunner tick.
     game.performNationalWarCommand(game.player(OTHER), {
-      kind: "declare-national", warId: "c5e4-other-war",
-      aggressorId: OTHER, targetId: MEMBER,
+      kind: "declare-national",
+      warId: "c5e4-other-war",
+      aggressorId: OTHER,
+      targetId: MEMBER,
     });
     const buf = [0, 0, 0, 0];
     let shared = false;
@@ -260,9 +337,14 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
       const n = game.map().neighbors4(tile, buf);
       for (let i = 0; i < n; i++) {
         const c = buf[i];
-        if (!game.map().isWater(c) && !game.map().isImpassable(c) && game.owner(c) === game.terraNullius()) {
+        if (
+          !game.map().isWater(c) &&
+          !game.map().isImpassable(c) &&
+          game.owner(c) === game.terraNullius()
+        ) {
           game.player(MEMBER).conquer(c);
-          shared = true; break;
+          shared = true;
+          break;
         }
       }
       if (shared) break;
@@ -274,14 +356,20 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     tick(game);
     const accepted = ledger(game).levy.processed;
     expect(accepted).toHaveLength(2);
-    const debited = accepted.reduce((sum, r) =>
-      sum + r.result.contributions.reduce((v, c) => v + c.troopsDebited, 0), 0);
+    const debited = accepted.reduce(
+      (sum, r) =>
+        sum + r.result.contributions.reduce((v, c) => v + c.troopsDebited, 0),
+      0,
+    );
     // The two front lines share one live account, including regular production
     // credited before this tick's authoritative interception.
     expect(debited).toBeGreaterThanOrEqual(10_000);
     expect(game.player(DONOR).troops()).toBeGreaterThanOrEqual(min - 1);
     expect(debited).toBe(
-      ledger(game).levy.allowances.reduce((sum, allowance) => sum + allowance.spent, 0),
+      ledger(game).levy.allowances.reduce(
+        (sum, allowance) => sum + allowance.spent,
+        0,
+      ),
     );
     expect(accepted.every((r) => r.result.intercepted >= 0)).toBe(true);
     expect(imperialLayers(game)).toHaveLength(0);
@@ -299,14 +387,18 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     for (let i = 0; i < 20; i++) {
       hit(game, 1_000);
     }
-    const allowances = ledger(game).levy.allowances.filter((a) => a.contributorId === DONOR);
+    const allowances = ledger(game).levy.allowances.filter(
+      (a) => a.contributorId === DONOR,
+    );
     expect(allowances).toHaveLength(1);
     expect(allowances[0].spent).toBeLessThanOrEqual(allowances[0].limit);
     expect(game.player(DONOR).troops()).toBeGreaterThanOrEqual(reserve(game));
     expect(imperialLayers(game)).toHaveLength(0);
-    const totalReceipts = ledger(game).levy.processed.flatMap((row) =>
-      row.result.contributions.filter((c) => c.nationId === DONOR)
-    ).reduce((sum, c) => sum + c.troopsDebited, 0);
+    const totalReceipts = ledger(game)
+      .levy.processed.flatMap((row) =>
+        row.result.contributions.filter((c) => c.nationId === DONOR),
+      )
+      .reduce((sum, c) => sum + c.troopsDebited, 0);
     expect(totalReceipts).toBe(allowances[0].spent);
   });
 });

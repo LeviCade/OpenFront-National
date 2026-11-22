@@ -123,7 +123,10 @@ interface WarGamePort {
   nationalWarCommandResults?(observer: Player): readonly unknown[];
   /** Real GameImpl attack-time defense entry; supersedes the legacy MDA adapter. */
   interceptNationalIncomingAttack?(
-    attackId: string, attackerId: string, defenderId: string, troops: number,
+    attackId: string,
+    attackerId: string,
+    defenderId: string,
+    troops: number,
   ): DefenseResult;
   nationalLevySource(nationId: string): TroopSource | null;
   applyNationalDefenseLevy(
@@ -176,7 +179,10 @@ export function interceptNationalAttack(
 
   if (typeof port.interceptNationalIncomingAttack === "function") {
     return port.interceptNationalIncomingAttack(
-      attackId, attackerId, defenderId, Math.floor(troops),
+      attackId,
+      attackerId,
+      defenderId,
+      Math.floor(troops),
     );
   }
 

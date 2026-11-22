@@ -1011,12 +1011,12 @@ export class GameImpl implements Game {
         response?.response === "assist" || response?.response === "both"
           ? this._national.authority().membersOf(response.empireId)
           : [];
-      const expectedDonors = [...new Set([
-        ...this.nationalMdaAllies(attack.defenderId),
-        ...imperialDonors,
-      ])].filter(
-        (id) => id !== attack.attackerId && id !== attack.defenderId,
-      );
+      const expectedDonors = [
+        ...new Set([
+          ...this.nationalMdaAllies(attack.defenderId),
+          ...imperialDonors,
+        ]),
+      ].filter((id) => id !== attack.attackerId && id !== attack.defenderId);
       const suppliedDonors = attack.eligible.map((e) => e.source.nationId);
       if (
         suppliedDonors.length !== expectedDonors.length ||
@@ -1041,7 +1041,8 @@ export class GameImpl implements Game {
           ) ||
           entry.maximumFraction !== (imperialDonors.includes(id) ? 1 : 0.1) ||
           entry.protectedCapacityFraction !== 0.3 ||
-          entry.troopCapacity !== Math.floor(this._config.maxTroops(this.player(id)))
+          entry.troopCapacity !==
+            Math.floor(this._config.maxTroops(this.player(id)))
         ) {
           throw new Error(
             "NATIONAL levy: not an authoritative MDA contributor",
@@ -1067,30 +1068,42 @@ export class GameImpl implements Game {
     if (this._national === null || this._nationalWar === null)
       throw new Error("NATIONAL defense: mode not enabled");
     if (
-      typeof attackId !== "string" || attackId.length === 0 || attackId.length > 256 ||
-      !Number.isSafeInteger(troops) || troops < 1
-    ) throw new Error("NATIONAL defense: malformed accepted invasion");
+      typeof attackId !== "string" ||
+      attackId.length === 0 ||
+      attackId.length > 256 ||
+      !Number.isSafeInteger(troops) ||
+      troops < 1
+    )
+      throw new Error("NATIONAL defense: malformed accepted invasion");
     this.synchronizeNationalState();
     if (
-      !this._nationalWar.authority.authorizeOffensiveAction(attackerId, defenderId) ||
+      !this._nationalWar.authority.authorizeOffensiveAction(
+        attackerId,
+        defenderId,
+      ) ||
       !this._players.get(attackerId)?.hasSpawned() ||
       !this._players.get(attackerId)?.isAlive() ||
       !this._players.get(defenderId)?.hasSpawned() ||
       !this._players.get(defenderId)?.isAlive()
-    ) throw new Error("NATIONAL defense: unlawful or dead-member attack");
+    )
+      throw new Error("NATIONAL defense: unlawful or dead-member attack");
 
     const response = this._national.standingDefenseFor(defenderId);
     // A previously committed attack is replayed by the existing ledger even
     // after a policy, troop balance, member or crown mutation.
-    const alreadyProcessed = this._nationalWar.snapshot().levy.processed.some(
-      (record) => record.attackId === attackId,
-    );
+    const alreadyProcessed = this._nationalWar
+      .snapshot()
+      .levy.processed.some((record) => record.attackId === attackId);
     const mode = alreadyProcessed ? "none" : (response?.response ?? "none");
-    const plan = response && (mode === "imperial" || mode === "both")
-      ? this._nationalWar.prepareStandingDefenseWar(
-          response.empireId, attackerId, defenderId, this._ticks,
-        )
-      : null;
+    const plan =
+      response && (mode === "imperial" || mode === "both")
+        ? this._nationalWar.prepareStandingDefenseWar(
+            response.empireId,
+            attackerId,
+            defenderId,
+            this._ticks,
+          )
+        : null;
 
     const mda = new Set(this.nationalMdaAllies(defenderId));
     const imperials = new Set(
@@ -1101,26 +1114,34 @@ export class GameImpl implements Game {
     const donorIds = [...new Set([...mda, ...imperials])]
       .filter((id) => id !== attackerId && id !== defenderId)
       .sort();
-    const eligible = alreadyProcessed ? [] : donorIds.map((id) => {
-      const source = this.nationalLevySource(id);
-      const donor = this._players.get(id);
-      if (!source || !donor || !donor.hasSpawned() || !donor.isAlive())
-        throw new Error("NATIONAL defense: invalid standing donor");
-      return {
-        source,
-        troopCapacity: Math.floor(this._config.maxTroops(donor)),
-        maximumFraction: imperials.has(id) ? 1 : 0.1,
-        protectedCapacityFraction: 0.3,
-      };
-    });
-    const campaignId =
-      `national:${attackerId.length}:${attackerId}:${defenderId.length}:${defenderId}`;
+    const eligible = alreadyProcessed
+      ? []
+      : donorIds.map((id) => {
+          const source = this.nationalLevySource(id);
+          const donor = this._players.get(id);
+          if (!source || !donor || !donor.hasSpawned() || !donor.isAlive())
+            throw new Error("NATIONAL defense: invalid standing donor");
+          return {
+            source,
+            troopCapacity: Math.floor(this._config.maxTroops(donor)),
+            maximumFraction: imperials.has(id) ? 1 : 0.1,
+            protectedCapacityFraction: 0.3,
+          };
+        });
+    const campaignId = `national:${attackerId.length}:${attackerId}:${defenderId.length}:${defenderId}`;
     // One transaction across both MDA and imperial contributors; one campaign
     // allowance per real donor, shared across repeated clicks/fronts.
-    const result = this.applyNationalDefenseLevy([{
-      attackId, confirmedAccepted: true, campaignId,
-      attackerId, defenderId, attackingTroops: troops, eligible,
-    }])[0];
+    const result = this.applyNationalDefenseLevy([
+      {
+        attackId,
+        confirmedAccepted: true,
+        campaignId,
+        attackerId,
+        defenderId,
+        attackingTroops: troops,
+        eligible,
+      },
+    ])[0];
     if (result.application === "applied" && plan)
       this._nationalWar.enactStandingDefenseWar(plan, this._ticks);
     return result;
