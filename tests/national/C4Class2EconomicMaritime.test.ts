@@ -14,8 +14,10 @@ import { WarshipExecution } from "@openfront/engine/execution/WarshipExecution";
 import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import { Railroad } from "@openfront/engine/game/Railroad";
 import { TrainStation } from "@openfront/engine/game/TrainStation";
+import { WaterPathFinder } from "@openfront/engine/pathfinding/PathFinder";
+import { PathStatus } from "@openfront/engine/pathfinding/types";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 import { TestConfig } from "../util/TestConfig";
@@ -277,6 +279,53 @@ describe("C4 Class 2 E3 real NATIONAL economic and maritime execution", () => {
     expect(ship.owner()).toBe(c);
     expect(balances(game)).toEqual(before);
     witness(game, "NAV-02-home-loss", before, ship);
+  });
+
+  it("NAV-02: ownership transfer during return selects a still-owned harbor", async () => {
+    const { game, a, b, c, home, enemy, port } = await fixture();
+    war(game);
+    fleet(game, a, 8, 12);
+    const voyage = sail(game, c, home, enemy);
+    const ship = c.units(UnitType.TradeShip)[0];
+    until(game, () => ship.targetUnit() === home);
+    const alternative = port(c, 3);
+    // Seed an actual ownership transfer, not a claim that a land battle ran.
+    b.captureUnit(home);
+    expect(home.owner()).toBe(b);
+    const before = balances(game);
+    until(game, () => !voyage.isActive());
+    expect(ship.targetUnit()).toBe(alternative);
+    expect(ship.tile()).toBe(alternative.tile());
+    expect(ship.owner()).toBe(c);
+    expect(balances(game)).toEqual(before);
+    witness(game, "NAV-02-home-ownership", before, ship);
+  });
+
+  it("NAV-02: injected path failure excludes the failed port and reuses real navigation", async () => {
+    const { game, a, c, home, enemy, port } = await fixture();
+    war(game);
+    fleet(game, a, 8, 12);
+    const voyage = sail(game, c, home, enemy);
+    const ship = c.units(UnitType.TradeShip)[0];
+    until(game, () => ship.targetUnit() === home);
+    const alternative = port(c, 3);
+    const before = balances(game);
+    // Fault injection at the actual pathfinder boundary; all other ticks,
+    // route selection, positions, owners and accounting use the real engine.
+    const fail = vi
+      .spyOn(WaterPathFinder.prototype, "next")
+      .mockReturnValueOnce({ status: PathStatus.NOT_FOUND });
+    try {
+      game.executeNextTick();
+      expect(ship.targetUnit()).toBe(alternative);
+    } finally {
+      fail.mockRestore();
+    }
+    until(game, () => !voyage.isActive());
+    expect(ship.tile()).toBe(alternative.tile());
+    expect(ship.owner()).toBe(c);
+    expect(balances(game)).toEqual(before);
+    witness(game, "NAV-02-path-fault-hybrid", before, ship);
   });
 
   it("NAV-03/04: unrelated destination, displacement, destruction and peace do not stop fresh legitimate trade", async () => {

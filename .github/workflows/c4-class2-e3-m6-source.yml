@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/c4-class2-e3-m6-source.yml"
       - "tests/national/C4Class2EconomicMaritime.test.ts"
+      - "tests/national/C4Class2EconomicIngress.test.ts"
       - "packages/engine/src/execution/NationalSanctionExecution.ts"
 permissions:
   contents: read
@@ -35,7 +36,10 @@ jobs:
       - run: npm install --global --ignore-scripts npm@12.1.0
       - run: npm run inst
       - name: Real engine economics, maritime, replay and AI
-        run: npx --no-install vitest run --project node tests/national/C4Class2EconomicMaritime.test.ts
+        run: >-
+          npx --no-install vitest run --project node
+          tests/national/C4Class2EconomicMaritime.test.ts
+          tests/national/C4Class2EconomicIngress.test.ts
       - name: Existing real war and AI behavior
         if: success() || failure()
         run: npx --no-install vitest run --project node tests/national/NationalAIRealWar.test.ts tests/national/ConductorThreeAuthoritativeCombat.test.ts
