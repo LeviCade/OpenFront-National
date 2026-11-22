@@ -56,6 +56,7 @@ import type {
   NationalCommand,
   NationalAccessionOfferView,
   NationalPublicPoliticalView,
+  NationalPactDisclosureViewData,
   NationalPublicPactView,
   NationalRecipientPactView,
   NationalImperialAdministrationCommand,
@@ -615,6 +616,7 @@ export interface Game extends GameLike {
   > | null;
   /** Enumerates public empire leaders/members and warning/victory facts only. */
   nationalPublicPoliticalView(): NationalPublicPoliticalView | null;
+  nationalPactDisclosure(observer: Player): NationalPactDisclosureViewData | null;
   nationalPublicPactRoster(): readonly NationalPublicPactView[];
   nationalPactViewsFor(observer: Player): readonly NationalRecipientPactView[];
   nationalImperialAdministrationFor(observer: Player): NationalImperialAdministrationView | null;

@@ -256,7 +256,23 @@ export interface NationalRecipientPactView extends NationalPublicPactView {
   readonly expellableMemberIds: readonly PlayerID[];
 }
 
+export interface NationalPactDisclosureViewData {
+  readonly version: 1;
+  readonly recipientId: PlayerID;
+  readonly pacts: readonly {
+    readonly pactId: string;
+    readonly relationship: "member" | "invited";
+    readonly terms: Readonly<PactTerms>;
+    readonly pendingAmendment?: {
+      readonly terms: Readonly<PactTerms>;
+      readonly administratorId: PlayerID | null;
+      readonly approvedBy: readonly PlayerID[];
+    };
+  }[];
+}
+
 export interface NationalPublicPoliticalView {
+  readonly pacts?: readonly NationalPublicPactView[];
   readonly empires: readonly {
     readonly id: string;
     readonly leaderId: PlayerID;
@@ -616,6 +632,28 @@ export class NationalRuntime {
     return Object.freeze(views.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   }
 
+  /** Minimal canonical disclosure contract consumed by E4's strict encoder. */
+  pactDisclosure(recipientId: PlayerID): NationalPactDisclosureViewData {
+    return Object.freeze({
+      version: 1 as const,
+      recipientId,
+      pacts: Object.freeze(this.pactViewsFor(recipientId).map((p) =>
+        Object.freeze({
+          pactId: p.id,
+          relationship: p.role,
+          terms: p.terms,
+          ...(p.pendingAmendment ? {
+            pendingAmendment: Object.freeze({
+              terms: p.pendingAmendment.terms,
+              administratorId: p.pendingAmendment.administratorId,
+              approvedBy: p.pendingAmendment.approvedBy,
+            }),
+          } : {}),
+        }),
+      )),
+    });
+  }
+
   /** Copy-only, opt-in NATIONAL public facts for E3/E4's trusted UI bridge. */
   publicPoliticalView(): NationalPublicPoliticalView {
     return {
@@ -626,6 +664,7 @@ export class NationalRuntime {
           memberIds: [...e.memberIds],
         }))
         .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+      pacts: this.publicPactRoster(),
       warnings: this.ungovernableWarnings(),
       victory: this.victoryRoster(),
     };
@@ -730,7 +769,7 @@ export class NationalRuntime {
           command.pactId,
           actorId,
           command.memberId,
-          command.approvingIds ?? [],
+          command.approvingIds ?? [actorId],
         );
         break;
       default:

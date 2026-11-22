@@ -489,6 +489,9 @@ describe("Class Two E1 COAL-02/07 recipient pact reads", () => {
     });
     game.performNationalCommand(n, { kind: "invite-pact", pactId: "e1-pact", candidateId: S });
     expect(game.nationalPublicPactRoster()[0]).not.toHaveProperty("terms");
+    expect(game.nationalPublicPoliticalView()?.pacts).toEqual(game.nationalPublicPactRoster());
+    expect(game.nationalPactDisclosure(w)?.pacts).toEqual([]);
+    expect(game.nationalPactDisclosure(s)?.pacts[0]).not.toHaveProperty("pendingAmendment");
     expect(game.nationalPactViewsFor(w)).toEqual([]);
     expect(game.nationalPactViewsFor(s)[0].canAccept).toBe(true);
     game.performNationalCommand(s, { kind: "accept-pact", pactId: "e1-pact" });
@@ -501,6 +504,7 @@ describe("Class Two E1 COAL-02/07 recipient pact reads", () => {
     });
     expect(game.nationalPactViewsFor(s)[0].canApproveAmendment).toBe(true);
     expect(game.nationalPactViewsFor(n)[0].pendingAmendment?.ownVote).toBe(true);
+    expect(game.nationalPactDisclosure(n)?.pacts[0].pendingAmendment).not.toHaveProperty("ownVote");
     expect(game.nationalPactViewsFor(w)).toEqual([]);
     expect(Object.isFrozen(game.nationalPactViewsFor(n)[0].terms)).toBe(true);
     const { restored } = await roundTrip(game, "plains");

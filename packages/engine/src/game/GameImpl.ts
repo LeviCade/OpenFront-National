@@ -82,6 +82,7 @@ import {
   type NationalCommand,
   type NationalAccessionOfferView,
   type NationalPublicPoliticalView,
+  type NationalPactDisclosureViewData,
   type NationalUngovernableWarning,
   type NationalPublicPactView,
   type NationalRecipientPactView,
@@ -1038,6 +1039,13 @@ export class GameImpl implements Game {
         !observer.hasSpawned() || !observer.isAlive()) return [];
     this.synchronizeNationalState();
     return this._national?.pactViewsFor(observer.id()) ?? [];
+  }
+
+  nationalPactDisclosure(observer: Player): NationalPactDisclosureViewData | null {
+    if (!this._national || this._players.get(observer.id()) !== observer ||
+        !observer.hasSpawned() || !observer.isAlive()) return null;
+    this.synchronizeNationalState();
+    return this._national.pactDisclosure(observer.id());
   }
 
   private commitImperialDisposition(
