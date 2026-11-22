@@ -137,7 +137,9 @@ export type NationalImperialAdministrationCommand =
   | { kind: "release-imperial-troops"; empireId: string; memberId: PlayerID; amount: number }
   | { kind: "imperial-attack"; empireId: string; memberId: PlayerID; targetId: PlayerID; amount: number };
 
-export interface NationalImperialAdministrationView extends ImperialPolicy {
+export interface NationalImperialAdministrationView
+  extends Omit<ImperialPolicy, "allowedConstruction"> {
+  readonly allowedConstruction: readonly UnitType[] | null;
   readonly empireId: string;
   readonly treasury: string;
   readonly canAmend: boolean;
