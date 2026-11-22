@@ -14,7 +14,7 @@ export type ImperialPolicyCommand =
   | {
       kind: "set-army-mode";
       empireId: string;
-      mode: "decentralized" | "hybrid";
+      mode: "decentralized" | "hybrid" | "centralized";
       thresholdBps: number;
     };
 

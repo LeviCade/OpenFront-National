@@ -250,6 +250,31 @@ export class WarLedger {
     );
   }
 
+  assertAccessionCompatible(empireId: string, candidateId: string): void {
+    const members = new Set(this.politics.membersOf(empireId));
+    for (const layer of this.layers.values()) {
+      if (layer.endedTick !== null || layer.scope !== "national") continue;
+      const [a, b] = [layer.first.id, layer.second.id];
+      if (
+        (a === candidateId && members.has(b)) ||
+        (b === candidateId && members.has(a))
+      )
+        throw new Error(
+          "NATIONAL WAR: accession requires peace with current member",
+        );
+    }
+  }
+
+  /**
+   * WAR-08 standing response after BOTH parties consent to accession.
+   * The original NATIONAL layer survives unchanged. For a live independent
+   * opponent, the emperor's preset policy may open an additional imperial
+   * layer. Existing imperial layers and treaty-protected opponents never
+   * receive duplicate/illegal declarations.
+   *
+   * A foreign empire requires a separate policy decision (not automatic
+   * forced intervention); no war is invented in that case.
+   */
   escalateAccessionWars(
     empireId: string,
     candidateId: string,
