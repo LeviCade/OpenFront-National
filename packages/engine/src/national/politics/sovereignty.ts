@@ -70,6 +70,12 @@ export interface PoliticsEmpire {
   crisisDeadlineMs: number | null;
   /** Emperor-approved subordinate NATIONAL peace authority; not imperial. */
   delegatedNationalPeace?: string[];
+  /** Revocable, member-specific authority to DECLARE national (never imperial) war. */
+  delegatedNationalDeclarations?: string[];
+  /** Default is none; never invent intervention for a v1 empire. */
+  accessionWarResponse?: "none" | "imperial";
+  /** Mandatory compare-and-swap epoch for imperial WAR policy mutations. */
+  warPolicyVersion?: number;
 }
 
 export interface EmpireAccessionOffer {
@@ -144,6 +150,11 @@ function copy(world: PoliticsProjection): PoliticsProjection {
       ...(e.delegatedNationalPeace === undefined
         ? {}
         : { delegatedNationalPeace: [...e.delegatedNationalPeace] }),
+      ...(e.delegatedNationalDeclarations === undefined
+        ? {}
+        : {
+            delegatedNationalDeclarations: [...e.delegatedNationalDeclarations],
+          }),
     })),
     accessionOffers: world.accessionOffers.map((o) => ({ ...o })),
     simulationMs: world.simulationMs,
@@ -205,6 +216,31 @@ export function validatePolitics(world: PoliticsProjection): void {
             e.memberIds.includes(id),
         ),
       "invalid imperial national-peace delegation",
+    );
+    const declarers = e.delegatedNationalDeclarations ?? [];
+    requireRule(
+      Array.isArray(declarers) &&
+        unique(declarers) &&
+        declarers.every(
+          (id) =>
+            typeof id === "string" &&
+            id !== e.leaderId &&
+            e.memberIds.includes(id),
+        ),
+      "invalid imperial national-declaration delegation",
+    );
+    requireRule(
+      e.accessionWarResponse === undefined ||
+        e.accessionWarResponse === "none" ||
+        e.accessionWarResponse === "imperial",
+      "invalid imperial accession WAR response",
+    );
+    requireRule(
+      e.warPolicyVersion === undefined ||
+        (Number.isSafeInteger(e.warPolicyVersion) &&
+          e.warPolicyVersion >= 0 &&
+          e.warPolicyVersion < Number.MAX_SAFE_INTEGER),
+      "invalid imperial WAR policy version",
     );
     for (const id of e.memberIds) {
       requireRule(nationById.get(id)?.alive, "empire member does not survive");
@@ -818,6 +854,65 @@ export function setNationalPeaceDelegation(
   // Omit the empty policy, preserving the original v1 snapshots exactly.
   if (updated.length > 0) target.delegatedNationalPeace = updated;
   else delete target.delegatedNationalPeace;
+  target.warPolicyVersion = (target.warPolicyVersion ?? 0) + 1;
+  validatePolitics(next);
+  return next;
+}
+
+/**
+ * WAR-08: a single crown-authored, CAS-guarded policy transaction.
+ * An old policy version cannot overwrite succession, revocation, or a prior
+ * change. The default never escalates preexisting independent national wars.
+ * This never delegates imperial diplomacy.
+ */
+export function setImperialWarPolicy(
+  world: PoliticsProjection,
+  empireId: string,
+  actorId: string,
+  expectedVersion: number,
+  response: "none" | "imperial",
+  declarationDelegates: readonly string[],
+  peaceDelegates: readonly string[],
+): PoliticsProjection {
+  validatePolitics(world);
+  const current = empire(world, empireId);
+  requireRule(
+    current.leaderId === actorId,
+    "only incumbent emperor may change WAR policy",
+  );
+  requireRule(
+    Number.isSafeInteger(expectedVersion) &&
+      expectedVersion >= 0 &&
+      expectedVersion === (current.warPolicyVersion ?? 0),
+    "stale imperial WAR policy version",
+  );
+  requireRule(
+    response === "none" || response === "imperial",
+    "invalid imperial WAR response",
+  );
+  const validDelegates = (ids: readonly string[]) =>
+    Array.isArray(ids) &&
+    new Set(ids).size === ids.length &&
+    ids.every(
+      (id) =>
+        typeof id === "string" &&
+        id !== current.leaderId &&
+        current.memberIds.includes(id),
+    );
+  requireRule(
+    validDelegates(declarationDelegates) && validDelegates(peaceDelegates),
+    "invalid imperial WAR delegates",
+  );
+  const next = copy(world);
+  const target = empire(next, empireId);
+  target.accessionWarResponse = response;
+  if (declarationDelegates.length)
+    target.delegatedNationalDeclarations = sorted([...declarationDelegates]);
+  else delete target.delegatedNationalDeclarations;
+  if (peaceDelegates.length)
+    target.delegatedNationalPeace = sorted([...peaceDelegates]);
+  else delete target.delegatedNationalPeace;
+  target.warPolicyVersion = expectedVersion + 1;
   validatePolitics(next);
   return next;
 }
@@ -852,6 +947,8 @@ export function transferCrown(
   // Grants are appointments of the outgoing crown: NONE survive succession.
   // The successor may issue fresh grants through a new authenticated command.
   delete target.delegatedNationalPeace;
+  delete target.delegatedNationalDeclarations;
+  target.warPolicyVersion = (target.warPolicyVersion ?? 0) + 1;
   // Outstanding accession offers from the old emperor are invalidated.
   next.accessionOffers = next.accessionOffers.filter(
     (o) => o.empireId !== empireId,
@@ -903,6 +1000,10 @@ export function eliminatePoliticalNation(
         e.delegatedNationalPeace = e.delegatedNationalPeace.filter(
           (id) => id !== nationId,
         );
+      if (e.delegatedNationalDeclarations !== undefined)
+        e.delegatedNationalDeclarations =
+          e.delegatedNationalDeclarations.filter((id) => id !== nationId);
+      e.warPolicyVersion = (e.warPolicyVersion ?? 0) + 1;
     }
   }
   next.accessionOffers = next.accessionOffers.filter(

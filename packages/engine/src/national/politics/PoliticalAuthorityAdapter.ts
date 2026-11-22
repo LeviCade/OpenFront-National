@@ -57,6 +57,7 @@ export interface NationalPoliticalAuthority {
   alive(id: PlayerID): boolean;
   protectedByTreaty(a: PlayerID, b: PlayerID): boolean;
   delegatedNationalWar(id: PlayerID, action: NationalWarAction): boolean;
+  warPolicyVersionFor(id: PlayerID): number | null;
   checkLastSovereignVictory(): LastSovereignResult | null;
 }
 
@@ -72,6 +73,7 @@ export interface NationalConflictPoliticsPort {
   empireExists(empireId: string): boolean;
   mayDeclareNational(memberId: PlayerID): boolean;
   maySettleNational(memberId: PlayerID): boolean;
+  warPolicyVersionFor(memberId: PlayerID): number | null;
   treatyProtects(attackerId: PlayerID, targetId: PlayerID): boolean;
 }
 
@@ -214,6 +216,13 @@ export class PoliticalAuthorityAdapter
     const empire = state.empires.find((e) => e.memberIds.includes(id));
     if (!empire || empire.leaderId === id) return true;
     return this.readDelegation?.(id, action) === true;
+  }
+
+  warPolicyVersionFor(id: PlayerID): number | null {
+    const state = this.readCurrent();
+    if (!knownLiving(state, id)) return null;
+    const empire = state.empires.find((e) => e.memberIds.includes(id));
+    return empire ? (empire.warPolicyVersion ?? 0) : null;
   }
 
   mayDeclareNational(id: PlayerID): boolean {

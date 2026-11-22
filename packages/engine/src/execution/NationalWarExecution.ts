@@ -60,6 +60,9 @@ const stateSchema = z.object({
     .regex(/^[A-Za-z0-9_-]+$/)
     .nullable(),
   authenticatedClientID: z.string().min(1).max(256).nullable(),
+  /** Optional only for snapshots predating C5 policy-epoch admission. */
+  admissionEmpireId: z.string().nullable().optional(),
+  admissionPolicyVersion: z.number().int().nonnegative().nullable().optional(),
 });
 type State = z.infer<typeof stateSchema>;
 
@@ -79,7 +82,12 @@ type CanonicalWarCommand = (
     }
   | { kind: "propose-peace"; motionId: string; warId: string }
   | { kind: "accept-peace"; motionId: string }
-) & { readonly requestId?: string };
+) & {
+  readonly requestId?: string;
+  /** Server-stamped by this execution; never from browser intent. */
+  readonly admissionEmpireId?: string | null;
+  readonly policyVersion?: number | null;
+};
 
 /**
  * Exactly E1's Round Four canonical Game port, included structurally here
@@ -220,6 +228,8 @@ export function interceptNationalAttack(
 export class NationalWarExecution implements Execution {
   private active = true;
   private game: Game | null = null;
+  private admissionEmpireId: string | null | undefined = undefined;
+  private admissionPolicyVersion: number | null | undefined = undefined;
 
   constructor(
     private actor: Player,
@@ -239,6 +249,12 @@ export class NationalWarExecution implements Execution {
 
   init(game: Game): void {
     this.game = game;
+    // Snapshot admission identity/policy BEFORE any queued political execution
+    // changes the crown or a subordinate's revocable authority this tick.
+    const political = game.nationalPoliticalAuthority();
+    this.admissionEmpireId = political?.empireOf(this.actor.id()) ?? null;
+    this.admissionPolicyVersion =
+      political?.warPolicyVersionFor(this.actor.id()) ?? null;
   }
 
   tick(tick: number): void {
@@ -310,6 +326,17 @@ export class NationalWarExecution implements Execution {
         break;
     }
 
+    // Never let an execution minted before accession, revocation, transfer,
+    // or dissolution inherit the new political regime's permissions.
+    const stampedCommand: CanonicalWarCommand =
+      this.admissionEmpireId === undefined
+        ? command
+        : {
+            ...command,
+            admissionEmpireId: this.admissionEmpireId,
+            policyVersion: this.admissionPolicyVersion ?? null,
+          };
+
     // E1's Game-owned result service is the ONLY authority for accepted and
     // rejected WAR/peace clicks. Request IDs are correlation, not credentials.
     // E3 may project its authenticated journal; E2 never emits an outcome.
@@ -320,8 +347,8 @@ export class NationalWarExecution implements Execution {
           port,
           this.actor,
           this.requestId === null
-            ? command
-            : { ...command, requestId: this.requestId },
+            ? stampedCommand
+            : { ...stampedCommand, requestId: this.requestId },
           this.requestId,
           this.authenticatedClientID ?? undefined,
         );
@@ -375,8 +402,8 @@ export class NationalWarExecution implements Execution {
       port.performNationalWarCommand(
         this.actor,
         this.requestId === null
-          ? command
-          : { ...command, requestId: this.requestId },
+          ? stampedCommand
+          : { ...stampedCommand, requestId: this.requestId },
         this.authenticatedClientID ?? undefined,
       );
     } catch (error) {
@@ -401,6 +428,8 @@ export class NationalWarExecution implements Execution {
       command: this.command,
       requestId: this.requestId,
       authenticatedClientID: this.authenticatedClientID,
+      admissionEmpireId: this.admissionEmpireId,
+      admissionPolicyVersion: this.admissionPolicyVersion,
     });
   }
 
@@ -411,16 +440,19 @@ export class NationalWarExecution implements Execution {
     this.command = state.command;
     this.requestId = state.requestId;
     this.authenticatedClientID = state.authenticatedClientID;
+    this.admissionEmpireId = state.admissionEmpireId;
+    this.admissionPolicyVersion = state.admissionPolicyVersion;
   }
 }
 
 export const NationalWarExecutionSnapshot = execSnapshotType({
   name: "NationalWar",
-  version: 3,
+  version: 4,
   schema: stateSchema,
   migrations: {
     1: (old: object) => ({ ...old, requestId: null }),
     2: (old: object) => ({ ...old, authenticatedClientID: null }),
+    3: (old: object) => ({ ...old }),
   },
   cls: () => NationalWarExecution,
 });
