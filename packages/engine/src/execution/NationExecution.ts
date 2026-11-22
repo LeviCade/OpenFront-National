@@ -757,14 +757,17 @@ export class NationExecution implements Execution {
                   ? null
                   : { ...this.nationalPlannerMemory.lastProcessedEvent },
             },
-      nationalEconomicMemory:
-        this.nationalEconomicMemory === null
-          ? null
-          : {
+      // Omit entirely for legacy games and pre-economics snapshots; an
+      // optional null field would needlessly mutate old snapshot bytes.
+      ...(this.nationalEconomicMemory === null
+        ? {}
+        : {
+            nationalEconomicMemory: {
               observerId: this.nationalEconomicMemory.observerId,
               processedDemandIds: [...this.nationalEconomicMemory.processedDemandIds],
               credibility: this.nationalEconomicMemory.credibility.map((entry) => ({ ...entry })),
             },
+          }),
       nationalSightMemory:
         this.nationalSightMemory === null
           ? null
