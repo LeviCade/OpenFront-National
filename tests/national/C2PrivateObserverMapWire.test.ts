@@ -664,6 +664,21 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
         packedTileUpdates: [9999, 42],
       }),
     ).toThrow();
+    expect(() => fresh.acceptProjection({
+      ...packet,
+      updates: {
+        ...(packet.updates as Record<string, unknown>),
+        [GameUpdateType.Player]: [{ type: GameUpdateType.Player, id: B.id, troops: 12345 }],
+      },
+    })).toThrow();
+    expect(() => fresh.acceptProjection({
+      ...packet,
+      nationalAccessionOffers: { version: 1, recipientId: A.id, offers: [{ recipientId: C.id }] },
+    })).toThrow();
+    expect(() => fresh.accept({
+      ...one.map, ownResources: { ...one.map.ownResources, enemyTreasury: 1234 },
+    }, one.msg.tick)).toThrow();
+    expect(fresh.lastAcceptedTick).toBe(-1);
     const u1 = reader.acceptProjection(packet);
     expect(Number.isNaN(u1.nativeUnits![OFFSET_TARGET_TILE])).toBe(true);
     expect(u1.clearAllUnits).toBe(true);

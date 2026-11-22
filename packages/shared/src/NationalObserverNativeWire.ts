@@ -192,6 +192,7 @@ export function validateNationalObserverNativeLanes(
     }
   }
   const ownUnits = new Set<number>();
+  const maxRef = page.width * page.height - 1;
   for (let i = 0; i < page.units.length; i++) {
     const marker = page.units[i];
     const row = native!.subarray(
@@ -207,14 +208,26 @@ export function validateNationalObserverNativeLanes(
       row[OFFSET_POS] !== marker.tile ||
       unpackAOwnerID(a) !== marker.nativeOwnerSmallId ||
       unpackAUnitType(a) !== marker.nativeType ||
-      (own !== (marker.nativeOwnerSmallId === page.observerSmallId)) ||
+      own !== (marker.nativeOwnerSmallId === page.observerSmallId) ||
+      !uint(marker.tile, maxRef) ||
+      !uint(row[OFFSET_LAST_POS], maxRef) ||
+      !Number.isSafeInteger(row[OFFSET_PACKED_B]) ||
+      row[OFFSET_PACKED_B] < -0x80000000 ||
+      row[OFFSET_PACKED_B] > 0x7fffffff ||
+      !uint(row[OFFSET_LEVEL]) ||
       row[OFFSET_TROOPS] < 0 ||
       (!Number.isNaN(row[OFFSET_MARKED_FOR_DELETION]) &&
         !uint(row[OFFSET_MARKED_FOR_DELETION]))
     )
       invalid();
     if (own) {
-      if (marker.troops !== undefined && row[OFFSET_TROOPS] !== marker.troops)
+      if (
+        (marker.troops !== undefined && row[OFFSET_TROOPS] !== marker.troops) ||
+        [OFFSET_TARGET_TILE, OFFSET_WARSHIP_PATROL_TILE, OFFSET_WARSHIP_RETREAT_PORT].some(
+          (offset) => !Number.isNaN(row[offset]) && !uint(row[offset], maxRef),
+        ) ||
+        (!Number.isNaN(row[OFFSET_TARGET_UNIT_ID]) && !uint(row[OFFSET_TARGET_UNIT_ID]))
+      )
         invalid();
       ownUnits.add(marker.id);
     } else if (
@@ -269,14 +282,36 @@ export function validateNationalObserverNativeLanes(
   if (!record(packet.updates)) invalid();
   const players = packet.updates[GameUpdateType.Player];
   if (!Array.isArray(players)) invalid();
+  const playerIds = new Set<string>();
   for (const player of players) {
     if (
       !record(player) ||
       typeof player.id !== "string" ||
+      player.id.length === 0 ||
+      playerIds.has(player.id) ||
+      player.type !== GameUpdateType.Player ||
+      (player.smallID !== undefined &&
+        (!uint(player.smallID, 0xfff) ||
+          (player.id === page.observerId) !== (player.smallID === page.observerSmallId))) ||
+      (player.tilesOwned !== undefined && !uint(player.tilesOwned, maxRef + 1)) ||
+      (player.name !== undefined && typeof player.name !== "string") ||
+      (player.isAlive !== undefined && typeof player.isAlive !== "boolean") ||
       (player.id !== page.observerId &&
         Object.keys(player).some((field) => !foreignPlayerFields.has(field)))
     )
       invalid();
+    playerIds.add(player.id);
+  }
+  for (const [key, entries] of Object.entries(packet.updates)) {
+    if (!Array.isArray(entries)) invalid();
+    if (Number(key) === GameUpdateType.Player) continue;
+    if (Number(key) === GameUpdateType.GamePaused) {
+      if (entries.some((entry: unknown) => !record(entry) ||
+        entry.type !== GameUpdateType.GamePaused || typeof entry.paused !== "boolean")) invalid();
+    } else if (Number(key) === GameUpdateType.SpawnPhaseEnd) {
+      if (entries.some((entry: unknown) => !record(entry) ||
+        entry.type !== GameUpdateType.SpawnPhaseEnd || !uint(entry.startTick, page.tick))) invalid();
+    } else if (entries.length !== 0) invalid();
   }
   for (const dto of [
     packet.nationalConflicts,
@@ -288,6 +323,12 @@ export function validateNationalObserverNativeLanes(
     )
       invalid();
   }
+  const offers = packet.nationalAccessionOffers;
+  if (offers !== undefined &&
+    (!record(offers) || !Array.isArray(offers.offers) ||
+      offers.offers.some((offer: unknown) => !record(offer) ||
+        offer.recipientId !== page.observerId)))
+    invalid();
   if (
     packet.nationalCommandResults !== undefined &&
     (!Array.isArray(packet.nationalCommandResults) ||

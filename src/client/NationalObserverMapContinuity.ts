@@ -148,8 +148,8 @@ function pageFromWire(
       unit.ownerId.length === 0 ||
       !int(unit.nativeOwnerSmallId, 0, 0xfff) ||
       !PACKED_UNIT_TYPES.includes(unit.nativeType) ||
-      (unit.ownerId === expectedPrincipal &&
-        unit.nativeOwnerSmallId !== raw.observerSmallId) ||
+      (unit.ownerId === expectedPrincipal) !==
+        (unit.nativeOwnerSmallId === raw.observerSmallId) ||
       !["army", "structure", "warship", "transport", "trade-ship"].includes(
         unit.kind,
       ) ||
@@ -170,6 +170,12 @@ function pageFromWire(
       throw new Error("NATIONAL invalid or private unit marker");
     unitIds.add(unit.id);
   }
+  if (
+    Object.keys(base.ownResources).some((key) => !["troops", "treasury"].includes(key)) ||
+    base.visibleBorders.some((border) => Object.keys(border).some((key) => !["targetId", "access"].includes(key))) ||
+    base.countries.some((country) => Object.keys(country).some((key) => !["id", "name", "alive", "landPercent", "status"].includes(key)))
+  )
+    throw new Error("NATIONAL private or unknown nested map field");
   const removed = raw.unitRemovedIds as number[];
   const unique = new Set(removed);
   if (unique.size !== removed.length || removed.some((id) => unitIds.has(id)))

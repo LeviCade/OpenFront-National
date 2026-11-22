@@ -489,7 +489,7 @@ export class NationalOutboundFilter {
                   id: player.id(),
                   name: player.name(),
                   displayName: player.displayName(),
-                  nationFlag: player.nationFlag(),
+                  nationFlag: player.info().nationFlag,
                   playerType: player.type(),
                   smallID: player.smallID(),
                   isAlive: player.isAlive(),

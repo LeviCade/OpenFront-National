@@ -223,7 +223,7 @@ export function encodeNationalRecipientProjection(
   // Political and player DTOs may contain bigint currency fields; only
   // inside this E3-filtered whitelist do we normalize them to JSON strings.
   const json = JSON.stringify(allowed, replacer);
-  if (json.length > MAX_NATIONAL_PROJECTION_BYTES) {
+  if (new TextEncoder().encode(json).byteLength > MAX_NATIONAL_PROJECTION_BYTES) {
     throw new Error("NATIONAL recipient packet exceeds bounded wire limit");
   }
   return json;
