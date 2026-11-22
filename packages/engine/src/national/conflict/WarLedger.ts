@@ -111,13 +111,17 @@ export class WarLedger {
    */
   retireEmpireWars(empireIds: readonly string[], tick: number): void {
     requireTick(tick);
-    if (tick < this.lastTick) throw new Error("nonmonotonic imperial extinction");
+    if (tick < this.lastTick)
+      throw new Error("nonmonotonic imperial extinction");
     const extinct = new Set(empireIds);
     let changed = false;
     for (const layer of this.layers.values()) {
-      if (layer.endedTick === null && [layer.first, layer.second].some(
-        (party) => party.kind === "empire" && extinct.has(party.id),
-      )) {
+      if (
+        layer.endedTick === null &&
+        [layer.first, layer.second].some(
+          (party) => party.kind === "empire" && extinct.has(party.id),
+        )
+      ) {
         layer.endedTick = tick;
         changed = true;
       }
