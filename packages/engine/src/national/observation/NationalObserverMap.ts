@@ -269,8 +269,7 @@ export class NationalObserverMapPager {
       }));
     for (const unit of units) this.emittedUnitIds.add(unit.id);
     const unitNext = unitCursor + unitPageIds.length;
-    const unitNextCursor =
-      unitNext >= this.unitIds.length ? null : unitNext;
+    const unitNextCursor = unitNext >= this.unitIds.length ? null : unitNext;
     this.unitCursor = unitNextCursor ?? 0;
     this.resetPending = false;
     const countries = verified.observation.nations.map(
