@@ -102,7 +102,8 @@ export interface NationalObserverMapV1 {
  */
 export class NationalObserverMapPager {
   private previousVisible: ReadonlySet<number> | null = null;
-  private previousUnits: ReadonlySet<number> | null = null;
+  /** Only IDs actually disclosed on this socket may ever be tombstoned. */
+  private readonly emittedUnitIds = new Set<number>();
   private tileRefs: readonly number[] = [];
   private cursor = 0;
   private sweepId = 0;
@@ -128,7 +129,7 @@ export class NationalObserverMapPager {
 
   close(): void {
     this.previousVisible = null;
-    this.previousUnits = null;
+    this.emittedUnitIds.clear();
     this.tileRefs = [];
     this.cursor = 0;
     this.unitIds = [];
@@ -218,20 +219,24 @@ export class NationalObserverMapPager {
     );
     const nowIds = new Set(currentUnits.keys());
     const removed: number[] = [];
-    if (this.previousUnits !== null) {
-      for (const id of this.previousUnits) {
-        if (!nowIds.has(id)) removed.push(id);
-      }
+    // Never reveal the ID of a previously authorized but NEVER transmitted
+    // unit. This avoids a historical intelligence leak via tombstone pages.
+    for (const id of this.emittedUnitIds) {
+      if (!nowIds.has(id)) removed.push(id);
     }
-    this.previousUnits = nowIds;
     removed.sort((a, b) => a - b);
-    // A mass troop withdrawal must not create an enormous deletion packet.
-    // Instead replace the unit cache, without disturbing authorized tiles.
+    // Mass revocation or an oversized long-lived unit cache is signaled by
+    // an atomic unit-only reset rather than an unbounded deletion packet.
     const unitReset =
-      reset || removed.length > NATIONAL_OBSERVER_MAX_UNITS;
+      reset ||
+      removed.length > NATIONAL_OBSERVER_MAX_UNITS ||
+      this.emittedUnitIds.size > 131_072;
     if (unitReset) {
+      this.emittedUnitIds.clear();
       this.unitCursor = 0;
       this.unitIds = [];
+    } else {
+      for (const id of removed) this.emittedUnitIds.delete(id);
     }
     if (this.unitCursor === 0) {
       this.unitIds = [...nowIds].sort((a, b) => a - b);
@@ -256,6 +261,7 @@ export class NationalObserverMapPager {
           ? { troops: asset.strength }
           : {}),
       }));
+    for (const unit of units) this.emittedUnitIds.add(unit.id);
     const unitNext = unitCursor + unitPageIds.length;
     const unitNextCursor =
       unitNext >= this.unitIds.length ? null : unitNext;
