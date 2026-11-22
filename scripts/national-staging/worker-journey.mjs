@@ -37,7 +37,10 @@ import {
   startIdentity,
   until,
 } from "./operator-harness.mjs";
-import { startNationalWssBridge } from "./wss-bridge.mjs";
+import {
+  nationalHttpsJson,
+  startNationalWssBridge,
+} from "./wss-bridge.mjs";
 
 const fixture = makeEnvironment();
 const durable = process.env.NATIONAL_TEST_DURABLE_RECOVERY === "1";
@@ -445,24 +448,21 @@ function rejoin(p, gameID, token) {
   });
 }
 async function create(token) {
-  const res = await fetch(hostUrl + "/api/create_game", {
+  const res = await nationalHttpsJson(wssBridge, "/api/create_game", {
     method: "POST",
-    headers: {
-      authorization: "Bearer " + token,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ nationalMode: true }),
-    signal: AbortSignal.timeout(5000),
+    token,
+    body: { nationalMode: true },
   });
-  assert.equal(res.status, 200, "Private NATIONAL creation");
-  return res.json();
+  assert.equal(res.status, 200, "Private NATIONAL HTTPS creation");
+  return res.body;
 }
 async function exists(id) {
-  const res = await fetch(hostUrl + "/api/game/" + id + "/exists", {
-    signal: AbortSignal.timeout(5000),
-  });
-  assert.equal(res.status, 200);
-  return (await res.json()).exists;
+  const res = await nationalHttpsJson(
+    wssBridge,
+    "/api/game/" + id + "/exists",
+  );
+  assert.equal(res.status, 200, "Private NATIONAL HTTPS lookup");
+  return res.body.exists;
 }
 const allHealthy = (ps) =>
   ps.every((p) => !p.decodeFailed && p.closeCode === null);
@@ -509,6 +509,7 @@ try {
   assert.equal(created.gameConfig.nationalMode, true);
   assert.equal(await exists(id), true);
   pass("authenticated-private-national-lobby");
+  pass("certificate-verified-HTTPS-API-and-WSS-Worker");
 
   setStage("adversarial real WSS physical Origins cannot acquire seats");
   for (const hostileOrigin of [
