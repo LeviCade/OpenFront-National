@@ -17,6 +17,7 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import type { GameConfig } from "@openfront/engine-api/Schemas";
+import { OFFSET_TARGET_TILE, OFFSET_TROOPS } from "@openfront/engine-lib/game/PackedUnitUpdates";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
@@ -33,6 +34,7 @@ import {
 } from "@openfront/shared/ZbinWire";
 import { describe, expect, it } from "vitest";
 import { NationalObserverMapContinuity } from "../../src/client/NationalObserverMapContinuity";
+import { parseTrustedNationalProjection } from "../../src/client/TrustedNationalSession";
 import { Client } from "../../src/server/Client";
 import {
   encodeNationalRecipientProjection,
@@ -516,8 +518,18 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
       { ...first.map, streamId: "malicious-socket", tick: first.map.tick + 1 },
       { ...first.map, cursor: 0, tick: first.map.tick + 1 },
       { ...first.map, reset: true, tick: first.map.tick + 1 },
-      { ...first.map, cursor: 4096, tilePageSlots: 1, tick: first.map.tick + 1 },
-      { ...first.map, cursor: 4096, sweepId: first.map.sweepId + 2, tick: first.map.tick + 1 },
+      {
+        ...first.map,
+        cursor: 4096,
+        tilePageSlots: 1,
+        tick: first.map.tick + 1,
+      },
+      {
+        ...first.map,
+        cursor: 4096,
+        sweepId: first.map.sweepId + 2,
+        tick: first.map.tick + 1,
+      },
     ]) {
       expect(() => reader.accept(fake, first.msg.tick + 1)).toThrow();
       expect(reader.lastAcceptedTick).toBe(tickBeforeAttack);
@@ -531,12 +543,25 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
       last = view(sockets[0].socket);
       if (steps === 0) {
         const neverDisclosed = last.map.tiles[0][0];
-        expect(() => reader.accept({
-          ...last.map, tileRemovedRefs: [neverDisclosed], tiles: last.map.tiles.slice(1),
-        }, last.msg.tick)).toThrow();
-        expect(() => reader.accept({
-          ...last.map, tilePageSlots: 4097,
-        }, last.msg.tick)).toThrow();
+        expect(() =>
+          reader.accept(
+            {
+              ...last.map,
+              tileRemovedRefs: [neverDisclosed],
+              tiles: last.map.tiles.slice(1),
+            },
+            last.msg.tick,
+          ),
+        ).toThrow();
+        expect(() =>
+          reader.accept(
+            {
+              ...last.map,
+              tilePageSlots: 4097,
+            },
+            last.msg.tick,
+          ),
+        ).toThrow();
         expect(reader.lastAcceptedTick).toBe(tickBeforeAttack);
       }
       const delta = reader.accept(last.map, last.msg.tick);
@@ -583,7 +608,26 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     expect(one.map.unitsTruncated).toBe(true);
     expect(one.map.units).toHaveLength(2048);
     expect(one.map.unitNextCursor).toBe(2048);
-    const u1 = reader.accept(one.map, one.msg.tick);
+    const packet = parseTrustedNationalProjection(one.msg.payload, one.msg.tick);
+    const native = packet.packedUnitUpdates as unknown[];
+    expect(native[OFFSET_TARGET_TILE]).toBeNull();
+    const fresh = new NationalObserverMapContinuity(A.id, one.map.streamId);
+    for (const [offset, value] of [[OFFSET_TARGET_TILE, 123], [OFFSET_TROOPS, 9876543]] as const) {
+      const forged = [...native];
+      forged[offset] = value;
+      expect(() => fresh.acceptProjection({
+        ...packet, packedUnitUpdates: forged,
+      })).toThrow();
+      expect(fresh.lastAcceptedTick).toBe(-1);
+    }
+    expect(() => fresh.acceptProjection({
+      ...packet, nationalCommandResults: [{ actorId: B.id, recipientId: B.id }],
+    })).toThrow();
+    expect(() => fresh.acceptProjection({
+      ...packet, packedTileUpdates: [9999, 42],
+    })).toThrow();
+    const u1 = reader.acceptProjection(packet);
+    expect(Number.isNaN(u1.nativeUnits![OFFSET_TARGET_TILE])).toBe(true);
     expect(u1.clearAllUnits).toBe(true);
     expect(one.msg.payload).not.toContain("8876543");
     expect(one.map.units.every((unit) => unit.troops === undefined)).toBe(true);
@@ -709,7 +753,9 @@ describe("C4 E3 continuous authoritative churn", () => {
   it("makes progress across both frozen streams during repeated real territorial churn", async () => {
     const init = await setup("big_plains", { nationalMode: true }, P);
     const { game, host, sockets, measurements } = await rig("big_plains", [
-      init.ref(20, 100), init.ref(150, 150), init.ref(190, 190),
+      init.ref(20, 100),
+      init.ref(150, 150),
+      init.ref(190, 190),
     ]);
     const a = game.player(A.id);
     const b = game.player(B.id);
@@ -735,7 +781,9 @@ describe("C4 E3 continuous authoritative churn", () => {
     let hostMs = 0;
     let producerMs = 0;
     let reconcileMs = 0;
-    const profilers = P.map((p) => new NationalObserverMapPager(game, p.id, "profile-" + p.id));
+    const profilers = P.map(
+      (p) => new NationalObserverMapPager(game, p.id, "profile-" + p.id),
+    );
     const startHeap = process.memoryUsage().heapUsed;
     let peakHeap = startHeap;
     for (let frame = 0; frame < 8; frame++) {
@@ -747,7 +795,9 @@ describe("C4 E3 continuous authoritative churn", () => {
       for (let i = 0; i < P.length; i++) {
         const v = view(sockets[i].socket);
         const readStarted = performance.now();
-        const delta = readers[i].accept(v.map, v.msg.tick);
+        const delta = readers[i].acceptProjection(
+          parseTrustedNationalProjection(v.msg.payload, v.msg.tick),
+        );
         reconcileMs += performance.now() - readStarted;
         const frames = sockets[i].socket.frames;
         peakBytes = Math.max(peakBytes, frames[frames.length - 1].byteLength);
@@ -755,9 +805,13 @@ describe("C4 E3 continuous authoritative churn", () => {
         const producerStarted = performance.now();
         profilers[i].page(sight);
         producerMs += performance.now() - producerStarted;
-        for (const [ref] of delta.tiles) expect(sight.visibleTiles.has(ref)).toBe(true);
+        for (const [ref] of delta.tiles)
+          expect(sight.visibleTiles.has(ref)).toBe(true);
         if (i !== 0) continue;
-        if (delta.clearAllTiles) { known.clear(); resets++; }
+        if (delta.clearAllTiles) {
+          known.clear();
+          resets++;
+        }
         for (const ref of delta.removedTileRefs) {
           expect(known.delete(ref)).toBe(true);
           expect(readers[i].tileStatus(ref)).toBe("revoked");
@@ -767,8 +821,10 @@ describe("C4 E3 continuous authoritative churn", () => {
         holes += v.map.tilePageSlots - v.map.tiles.length;
         for (const ref of known) expect(sight.visibleTiles.has(ref)).toBe(true);
         expect(delta.usable).toBe(true);
-        if (delta.sweepComplete && firstTileComplete < 0) firstTileComplete = frame;
-        if (delta.unitSweepComplete && firstUnitComplete < 0) firstUnitComplete = frame;
+        if (delta.sweepComplete && firstTileComplete < 0)
+          firstTileComplete = frame;
+        if (delta.unitSweepComplete && firstUnitComplete < 0)
+          firstUnitComplete = frame;
         if (frame === 0) {
           expect(v.map.nextCursor).toBe(4096);
           expect(v.map.unitNextCursor).toBe(2048);
@@ -780,11 +836,24 @@ describe("C4 E3 continuous authoritative churn", () => {
     expect(firstUnitComplete).toBe(1);
     expect(resets).toBe(1);
     expect(units.every((unit) => seen.has(unit.id()))).toBe(true);
-    console.info("C4_E3_CHURN_METRICS", JSON.stringify({
-      observers: 3, frames: 8, firstTileComplete, firstUnitComplete,
-      firstUsableFrame: 0, resets, holes, peakBytes, hostMs, producerMs,
-      wireMs: measurements.wireMs, reconcileMs,
-      peakHeapDelta: peakHeap - startHeap, permanentlyUnseenUnits: 0,
-    }));
+    console.info(
+      "C4_E3_CHURN_METRICS",
+      JSON.stringify({
+        observers: 3,
+        frames: 8,
+        firstTileComplete,
+        firstUnitComplete,
+        firstUsableFrame: 0,
+        resets,
+        holes,
+        peakBytes,
+        hostMs,
+        producerMs,
+        wireMs: measurements.wireMs,
+        reconcileMs,
+        peakHeapDelta: peakHeap - startHeap,
+        permanentlyUnseenUnits: 0,
+      }),
+    );
   });
 });

@@ -7,6 +7,7 @@ on:
       - packages/engine/src/national/observation/**
       - packages/engine-api/src/game/NationalRecipientView.ts
       - src/client/NationalObserverMapContinuity.ts
+      - packages/shared/src/NationalObserverNativeWire.ts
       - src/server/national/NationalRecipientWire.ts
       - tests/national/C2PrivateObserverMapWire.test.ts
       - .github/workflows/national-c4-class1-e3-continuity.yml
@@ -44,10 +45,10 @@ jobs:
             tests/national/NationalServerOutboundClass4.test.ts \
             tests/LayerBoundaries.test.ts
       - name: E3 lint
-        run: npx --no-install oxlint packages/engine-api/src/game/NationalRecipientView.ts packages/engine/src/national/observation/NationalObserverMap.ts src/server/national/NationalRecipientWire.ts src/client/NationalObserverMapContinuity.ts packages/engine/src/national/observation/NationalServerOutbound.ts packages/engine/src/national/observation/NationalOutbound.ts tests/national/C2PrivateObserverMapWire.test.ts
+        run: npx --no-install oxlint packages/engine-api/src/game/NationalRecipientView.ts packages/engine/src/national/observation/NationalObserverMap.ts src/server/national/NationalRecipientWire.ts src/client/NationalObserverMapContinuity.ts packages/engine/src/national/observation/NationalServerOutbound.ts packages/engine/src/national/observation/NationalOutbound.ts tests/national/C2PrivateObserverMapWire.test.ts packages/shared/src/NationalObserverNativeWire.ts
       - name: E3 exact formatter diff
         run: |
-          files=(packages/engine-api/src/game/NationalRecipientView.ts packages/engine/src/national/observation/NationalObserverMap.ts src/server/national/NationalRecipientWire.ts src/client/NationalObserverMapContinuity.ts packages/engine/src/national/observation/NationalServerOutbound.ts packages/engine/src/national/observation/NationalOutbound.ts tests/national/C2PrivateObserverMapWire.test.ts)
+          files=(packages/engine-api/src/game/NationalRecipientView.ts packages/engine/src/national/observation/NationalObserverMap.ts src/server/national/NationalRecipientWire.ts src/client/NationalObserverMapContinuity.ts packages/engine/src/national/observation/NationalServerOutbound.ts packages/engine/src/national/observation/NationalOutbound.ts tests/national/C2PrivateObserverMapWire.test.ts packages/shared/src/NationalObserverNativeWire.ts)
           if ! npx --no-install oxfmt --check "${files[@]}"; then
             npx --no-install oxfmt --write "${files[@]}"
             git -c color.ui=false diff -- "${files[@]}"

@@ -58,3 +58,32 @@ rejects duplicated IDs across pages, and avoids allocating per-cached-tile
 tuple arrays during freshness checks. Sustained adversarial phase-locked
 visibility can still yield partial state; finite stable membership traversal
 is independent of churn.
+
+## Native companion lane
+The active private host's sole tile ownership feed is the map tuple page.
+Its packedUnitUpdates is the native representation of exactly that page's
+markers, checked by shared NationalObserverNativeWire. Native owner small ID
+and UnitType are supplied from the current authoritative Game, not inferred
+from renderer state. The public codec's optional NaN fields become JSON null;
+restore them only at the enumerated optional offsets, never coerce null to 0.
+The shared validator checks both before server serialization and before client
+reconciliation: native marker identity/position/owner/type, foreign private
+lane absence, current public empire sharing, own missile timers/player stats,
+and private receipt/conflict/accession scope.
+E4 should use continuity.acceptProjection(parsedProjection), not the narrow
+map-only accept, for the actual native path. Its nativeUnits result is a
+validated Float64Array with NaN sentinels restored; the materializer must not
+pass it through a finite-only JSON array reader. No renderer mutation is made
+by this module. The security model does not claim to authenticate mutually
+consistent invented facts from a compromised authoritative host.
+
+Second candidate b80e716d2383e26224fc1162746fd4315f388ed4 actual CI run
+44975152018: typecheck PASS, 22/22 targeted tests PASS (including layer
+boundaries), targeted lint PASS, formatter RED. Three real GameRunner seats,
+8 host ticks: first usable frame 0 (zero-indexed), both sweeps complete at
+frame 1, one reset at startup, 20 skipped membership slots, peak encoded
+packet 380187 B, total host time 254.81 ms, independent pager profiling
+31.73 ms, JSON+Zbin encoding 74.82 ms, guard reconciliation 11.49 ms, peak
+observed heap growth 42384712 B (includes fixture and captured packets),
+zero permanently omitted fixture unit IDs. This is neither full-map nor
+native GPU evidence.

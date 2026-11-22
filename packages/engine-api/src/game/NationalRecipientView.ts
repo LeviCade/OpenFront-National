@@ -1,5 +1,6 @@
 /** Public recipient-only NATIONAL protocol. No simulation internals. */
 import type { TileRef } from "./GameMap";
+import type { UnitType } from "./GameTypes";
 
 export type SovereignStatus =
   | "independent"
@@ -35,6 +36,9 @@ export type NationalVisibleTileV1 = readonly [
 export interface NationalVisibleUnitV1 {
   readonly id: number;
   readonly ownerId: string;
+  /** Native page lane identity, not a separate source of authorization. */
+  readonly nativeOwnerSmallId: number;
+  readonly nativeType: UnitType;
   readonly kind: AssetKind;
   readonly tile: TileRef;
   /** Own troops only; never enemy troop, transport load or landing target. */
@@ -45,6 +49,7 @@ export interface NationalObserverMapV1 {
   readonly version: typeof NATIONAL_OBSERVER_MAP_VERSION;
   readonly tick: number;
   readonly observerId: string;
+  readonly observerSmallId: number;
   /** Server-issued original-socket nonce, NOT an authorization credential. */
   readonly streamId: string;
   /** Monotonically increasing tile sweep sequence local to this stream. */
@@ -128,22 +133,60 @@ export interface NationalPublicConflictView {
 
 /** Shared structural continuity checks; the receiver additionally checks history. */
 export function validNationalObserverPageProgress(
-  page: Pick<NationalObserverMapV1,
-    "cursor" | "nextCursor" | "tilePageSlots" | "tiles" |
-    "unitCursor" | "unitNextCursor" | "unitPageSlots" | "units" |
-    "width" | "height" | "tilePartial" | "unitPartial" | "unitOverflow">,
+  page: Pick<
+    NationalObserverMapV1,
+    | "cursor"
+    | "nextCursor"
+    | "tilePageSlots"
+    | "tiles"
+    | "unitCursor"
+    | "unitNextCursor"
+    | "unitPageSlots"
+    | "units"
+    | "width"
+    | "height"
+    | "tilePartial"
+    | "unitPartial"
+    | "unitOverflow"
+  >,
 ): boolean {
-  const valid = (cursor: number, next: number | null, slots: number,
-    emitted: number, limit: number, total: number): boolean =>
-    Number.isSafeInteger(cursor) && cursor >= 0 && cursor <= total &&
-    Number.isSafeInteger(slots) && slots >= emitted && slots <= limit &&
-    cursor + slots <= total && (cursor === 0 || slots > 0) &&
-    (next === null || (slots === limit && next === cursor + slots && next < total));
-  return typeof page.tilePartial === "boolean" &&
+  const valid = (
+    cursor: number,
+    next: number | null,
+    slots: number,
+    emitted: number,
+    limit: number,
+    total: number,
+  ): boolean =>
+    Number.isSafeInteger(cursor) &&
+    cursor >= 0 &&
+    cursor <= total &&
+    Number.isSafeInteger(slots) &&
+    slots >= emitted &&
+    slots <= limit &&
+    cursor + slots <= total &&
+    (cursor === 0 || slots > 0) &&
+    (next === null ||
+      (slots === limit && next === cursor + slots && next < total));
+  return (
+    typeof page.tilePartial === "boolean" &&
     typeof page.unitPartial === "boolean" &&
     (!page.unitOverflow || page.unitPartial) &&
-    valid(page.cursor, page.nextCursor, page.tilePageSlots, page.tiles.length,
-      NATIONAL_OBSERVER_MAX_TILES, page.width * page.height) &&
-    valid(page.unitCursor, page.unitNextCursor, page.unitPageSlots,
-      page.units.length, NATIONAL_OBSERVER_MAX_UNITS, NATIONAL_OBSERVER_MAX_TRACKED_UNITS);
+    valid(
+      page.cursor,
+      page.nextCursor,
+      page.tilePageSlots,
+      page.tiles.length,
+      NATIONAL_OBSERVER_MAX_TILES,
+      page.width * page.height,
+    ) &&
+    valid(
+      page.unitCursor,
+      page.unitNextCursor,
+      page.unitPageSlots,
+      page.units.length,
+      NATIONAL_OBSERVER_MAX_UNITS,
+      NATIONAL_OBSERVER_MAX_TRACKED_UNITS,
+    )
+  );
 }

@@ -46,10 +46,13 @@ export {
 export class NationalObserverMapPager {
   /** Only disclosed facts may be invalidated. Signatures include borders. */
   private readonly emittedTiles = new Map<number, number>();
-  private readonly emittedUnits = new Map<number, {
-    marker: NationalVisibleUnitV1;
-    sharedStrength: number | undefined;
-  }>();
+  private readonly emittedUnits = new Map<
+    number,
+    {
+      marker: NationalVisibleUnitV1;
+      sharedStrength: number | undefined;
+    }
+  >();
   private unitWindowAnchor = -1;
   private tileRefs: readonly number[] = [];
   private cursor = 0;
@@ -133,10 +136,12 @@ export class NationalObserverMapPager {
     };
     const signature = (tile: NationalVisibleTileV1): number =>
       tile[1] | (tile[2] << 16) | (tile[3] << 24);
-    const tiles: NationalVisibleTileV1[] = refs.filter((ref) => visible.has(ref)).map((ref) => {
-      const bits = signatureAt(ref);
-      return [ref, bits & 0xffff, (bits >>> 16) & 0xff, bits >>> 24];
-    });
+    const tiles: NationalVisibleTileV1[] = refs
+      .filter((ref) => visible.has(ref))
+      .map((ref) => {
+        const bits = signatureAt(ref);
+        return [ref, bits & 0xffff, (bits >>> 16) & 0xff, bits >>> 24];
+      });
     const pageRefs = new Set(tiles.map(([ref]) => ref));
     const tileRemovedRefs: number[] = [];
     for (const [ref, prior] of this.emittedTiles) {
@@ -182,9 +187,17 @@ export class NationalObserverMapPager {
         // Rotate the bounded window instead of permanently excluding high IDs.
         let offset = sorted.findIndex((id) => id > this.unitWindowAnchor);
         if (offset < 0) offset = 0;
-        const window = sorted.slice(offset, offset + NATIONAL_OBSERVER_MAX_TRACKED_UNITS);
+        const window = sorted.slice(
+          offset,
+          offset + NATIONAL_OBSERVER_MAX_TRACKED_UNITS,
+        );
         if (window.length < NATIONAL_OBSERVER_MAX_TRACKED_UNITS)
-          window.push(...sorted.slice(0, NATIONAL_OBSERVER_MAX_TRACKED_UNITS - window.length));
+          window.push(
+            ...sorted.slice(
+              0,
+              NATIONAL_OBSERVER_MAX_TRACKED_UNITS - window.length,
+            ),
+          );
         this.unitWindowAnchor = window[window.length - 1];
         this.unitIds = window.sort((a, b) => a - b);
       } else {
@@ -202,40 +215,59 @@ export class NationalObserverMapPager {
       this.unitSweepId += 1;
     }
     const unitCursor = this.unitCursor;
-    const unitPageIds = this.unitIds.slice(unitCursor, unitCursor + NATIONAL_OBSERVER_MAX_UNITS);
-    const marker = (asset: NonNullable<ReturnType<typeof currentUnits.get>>): NationalVisibleUnitV1 => ({
+    const unitPageIds = this.unitIds.slice(
+      unitCursor,
+      unitCursor + NATIONAL_OBSERVER_MAX_UNITS,
+    );
+    const marker = (
+      asset: NonNullable<ReturnType<typeof currentUnits.get>>,
+    ): NationalVisibleUnitV1 => ({
       id: Number(asset.id),
       ownerId: asset.ownerId,
+      nativeOwnerSmallId: this.game.player(asset.ownerId).smallID(),
+      nativeType: this.game.unit(Number(asset.id))!.type(),
       kind: asset.kind,
       tile: map.ref(asset.x, asset.y),
       ...(asset.ownerId === this.principalId &&
-      asset.strength !== undefined && Number.isFinite(asset.strength)
+      asset.strength !== undefined &&
+      Number.isFinite(asset.strength)
         ? { troops: asset.strength }
         : {}),
     });
-    const sharedStrength = (asset: NonNullable<ReturnType<typeof currentUnits.get>>): number | undefined =>
+    const sharedStrength = (
+      asset: NonNullable<ReturnType<typeof currentUnits.get>>,
+    ): number | undefined =>
       asset.source === "empire" && asset.sourceNationId === asset.ownerId
         ? asset.strength
         : undefined;
-    const units = unitPageIds.map((id) => currentUnits.get(id))
-      .filter((asset) => asset !== undefined).map(marker);
+    const units = unitPageIds
+      .map((id) => currentUnits.get(id))
+      .filter((asset) => asset !== undefined)
+      .map(marker);
     const pageUnitIds = new Set(units.map((unit) => unit.id));
     const removed: number[] = [];
     for (const [id, entry] of this.emittedUnits) {
       const prior = entry.marker;
       if (pageUnitIds.has(id)) continue;
       const asset = currentUnits.get(id);
-      if (!asset || asset.ownerId !== prior.ownerId || asset.kind !== prior.kind ||
+      if (
+        !asset ||
+        asset.ownerId !== prior.ownerId ||
+        asset.kind !== prior.kind ||
         map.ref(asset.x, asset.y) !== prior.tile ||
-        (asset.ownerId === this.principalId && asset.strength !== prior.troops) ||
-        sharedStrength(asset) !== entry.sharedStrength) {
+        (asset.ownerId === this.principalId &&
+          asset.strength !== prior.troops) ||
+        sharedStrength(asset) !== entry.sharedStrength
+      ) {
         removed.push(id);
         if (removed.length > NATIONAL_OBSERVER_MAX_UNITS) break;
       }
     }
     let projected = this.emittedUnits.size - removed.length;
     for (const id of pageUnitIds) if (!this.emittedUnits.has(id)) projected++;
-    const unitReset = first || removed.length > NATIONAL_OBSERVER_MAX_UNITS ||
+    const unitReset =
+      first ||
+      removed.length > NATIONAL_OBSERVER_MAX_UNITS ||
       projected > NATIONAL_OBSERVER_MAX_TRACKED_UNITS;
     if (unitReset) {
       this.emittedUnits.clear();
@@ -245,7 +277,10 @@ export class NationalObserverMapPager {
       for (const id of removed) this.emittedUnits.delete(id);
     }
     for (const unit of units) {
-      this.emittedUnits.set(unit.id, { marker: unit, sharedStrength: sharedStrength(currentUnits.get(unit.id)!) });
+      this.emittedUnits.set(unit.id, {
+        marker: unit,
+        sharedStrength: sharedStrength(currentUnits.get(unit.id)!),
+      });
     }
     const unitNext = unitCursor + unitPageIds.length;
     const unitNextCursor = unitNext >= this.unitIds.length ? null : unitNext;
@@ -264,6 +299,7 @@ export class NationalObserverMapPager {
       version: NATIONAL_OBSERVER_MAP_VERSION,
       tick: this.game.ticks(),
       observerId: this.principalId,
+      observerSmallId: this.game.player(this.principalId).smallID(),
       streamId: this.streamId,
       sweepId: this.sweepId,
       sweepTick: this.sweepTick,

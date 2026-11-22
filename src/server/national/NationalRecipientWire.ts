@@ -19,6 +19,7 @@ import {
   type NationalObserverMapV1,
   type NationalPublicConflictView,
 } from "@openfront/engine-api/game/NationalRecipientView";
+import { validateNationalObserverNativeLanes } from "@openfront/shared/NationalObserverNativeWire";
 import { replacer } from "@openfront/shared/SharedUtil";
 
 export const MAX_NATIONAL_PROJECTION_BYTES = 2_000_000;
@@ -61,14 +62,19 @@ export function encodeNationalRecipientProjection(
       !Array.isArray(map.tileRemovedRefs) ||
       map.tileRemovedRefs.length > NATIONAL_OBSERVER_MAX_TILES ||
       (map.reset && map.tileRemovedRefs.length !== 0) ||
-      map.tileRemovedRefs.some((ref, i) => !Number.isSafeInteger(ref) || ref < 0 || ref >= map.width * map.height || (i > 0 && ref <= map.tileRemovedRefs[i - 1])) ||
+      map.tileRemovedRefs.some(
+        (ref, i) =>
+          !Number.isSafeInteger(ref) ||
+          ref < 0 ||
+          ref >= map.width * map.height ||
+          (i > 0 && ref <= map.tileRemovedRefs[i - 1]),
+      ) ||
       !Number.isSafeInteger(map.unitCursor) ||
       map.unitCursor < 0 ||
       !Number.isSafeInteger(map.unitSweepId) ||
       map.unitSweepId < 1 ||
       typeof map.unitReset !== "boolean" ||
       typeof map.unitOverflow !== "boolean" ||
-
       !Array.isArray(map.unitRemovedIds) ||
       map.unitRemovedIds.length > NATIONAL_OBSERVER_MAX_UNITS ||
       map.unitRemovedIds.some(
@@ -95,6 +101,7 @@ export function encodeNationalRecipientProjection(
       )
     )
       throw new Error("NATIONAL invalid bounded observer-map v1");
+    validateNationalObserverNativeLanes(filtered, map);
   }
   const allowed = {
     tick: filtered.tick,
@@ -159,6 +166,7 @@ export function encodeNationalRecipientProjection(
             version: NATIONAL_OBSERVER_MAP_VERSION,
             tick: map.tick,
             observerId: map.observerId,
+            observerSmallId: map.observerSmallId,
             streamId: map.streamId,
             sweepId: map.sweepId,
             sweepTick: map.sweepTick,
@@ -179,6 +187,8 @@ export function encodeNationalRecipientProjection(
             units: map.units.map((unit) => ({
               id: unit.id,
               ownerId: unit.ownerId,
+              nativeOwnerSmallId: unit.nativeOwnerSmallId,
+              nativeType: unit.nativeType,
               kind: unit.kind,
               tile: unit.tile,
               ...(unit.troops === undefined ? {} : { troops: unit.troops }),

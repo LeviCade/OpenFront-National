@@ -251,9 +251,10 @@ export class NationalServerRecipientSession {
       actor === null
         ? new NationalOutboundFilter(this.game, null)
         : this.outbound;
-    const page = actor === null || verified === null || this.observerMap === null
-      ? undefined
-      : this.observerMap.page(verified);
+    const page =
+      actor === null || verified === null || this.observerMap === null
+        ? undefined
+        : this.observerMap.page(verified);
     const outbound = filter.project(this.game, selected, verified, page);
     if (actor !== null) {
       persistNationalHumanSight(

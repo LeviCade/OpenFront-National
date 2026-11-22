@@ -20,7 +20,10 @@ import {
   type PlayerUpdate,
   type UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
-import type { NationalObserverMapV1, NationalPublicConflictView } from "@openfront/engine-api/game/NationalRecipientView";
+import type {
+  NationalObserverMapV1,
+  NationalPublicConflictView,
+} from "@openfront/engine-api/game/NationalRecipientView";
 import {
   packUnitUpdates,
   unpackUnitUpdates,
@@ -507,15 +510,18 @@ export class NationalOutboundFilter {
 
     const unitUpdates: UnitUpdate[] = [];
     const stillVisible = new Set<number>();
-    const orderedVisible = page === undefined
-      ? [...visibleAssetIds].sort((a, b) => a - b)
-      : page.units.map((unit) => unit.id);
+    const orderedVisible =
+      page === undefined
+        ? [...visibleAssetIds].sort((a, b) => a - b)
+        : page.units.map((unit) => unit.id);
     for (const id of orderedVisible) {
       const unit = game.unit(id);
       if (!unit) continue;
       const raw =
-        page !== undefined ? unit.toUpdate() : rawUnits.get(id) ??
-        (this.previousUnits.has(id) ? null : unit.toUpdate());
+        page !== undefined
+          ? unit.toUpdate()
+          : (rawUnits.get(id) ??
+            (this.previousUnits.has(id) ? null : unit.toUpdate()));
       stillVisible.add(id);
       if (raw === null) continue;
       const allied = visibleAssets.get(id);
