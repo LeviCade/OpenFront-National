@@ -71,6 +71,19 @@ export interface TrustedNationalObserverMap {
   }[];
 }
 
+/** Do not unlock Private NATIONAL until the final authorized map page arrives. */
+export function completedTrustedObserverMap(
+  page: TrustedNationalObserverMap | null,
+  actorId: string | null,
+): boolean {
+  return (
+    page !== null &&
+    actorId !== null &&
+    page.observerId === actorId &&
+    page.nextCursor === null
+  );
+}
+
 const safeInteger = (v: unknown, min: number, max: number): v is number =>
   typeof v === "number" && Number.isSafeInteger(v) && v >= min && v <= max;
 const safeNumber = (v: unknown): v is number =>
