@@ -40,6 +40,24 @@ jobs:
           cache: npm
       - run: npm install --global --ignore-scripts npm@12.1.0
       - run: npm run inst
+      - name: Emit pinned oxfmt output for exact-source verification
+        run: |
+          npx --no-install oxfmt --write \
+            packages/engine-api/src/Schemas.ts \
+            packages/engine-api/src/game/GameUpdates.ts \
+            packages/engine/src/execution/NationalUltimatumExecution.ts \
+            packages/engine/src/national/observation/NationalOutbound.ts \
+            tests/national/C5Class2ImperialUltimatum.test.ts
+          node - <<'NODE'
+          const fs = require("node:fs");
+          for (const path of [
+            "packages/engine-api/src/Schemas.ts",
+            "packages/engine-api/src/game/GameUpdates.ts",
+            "packages/engine/src/execution/NationalUltimatumExecution.ts",
+            "packages/engine/src/national/observation/NationalOutbound.ts",
+            "tests/national/C5Class2ImperialUltimatum.test.ts",
+          ]) console.log("E3_FORMAT_JSON=" + JSON.stringify({ path, content: fs.readFileSync(path, "utf8") }));
+          NODE
       - name: Typecheck all workspaces
         run: npm run typecheck
       - name: New real-host imperial ultimatum scenarios
