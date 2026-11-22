@@ -61,10 +61,12 @@ jobs:
               scripts/national-gpu-ci/wait-host-proof.test.mjs \
               scripts/national-gpu-ci/verify-independent-release.mjs \
               scripts/national-gpu-ci/verify-independent-release.test.mjs \
-              scripts/national-gpu-ci/verify-workflow.mjs
+              scripts/national-gpu-ci/verify-workflow.mjs \
+              docs/release/NATIONAL_C3_CLASS1_E6_PHYSICAL_OPERATOR_GATE.md
             git diff -- .github/workflows/national-hardware-acceptance.yml \
               .github/workflows/national-c2-e6-source-acceptance.yml \
-              scripts/national-gpu-ci/
+              scripts/national-gpu-ci/ \
+              docs/release/NATIONAL_C3_CLASS1_E6_PHYSICAL_OPERATOR_GATE.md
             exit 1
           fi
       - name: Shell and exact workflow contract
