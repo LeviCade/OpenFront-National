@@ -1,0 +1,56 @@
+name: C4 Class 2 E3 — M6 actual economic and maritime source
+on:
+  pull_request:
+    branches: [stage3/conductor4-class2-integration-20261122]
+    paths:
+      - ".github/workflows/c4-class2-e3-m6-source.yml"
+      - "tests/national/C4Class2EconomicMaritime.test.ts"
+      - "tests/national/C4Class2EconomicIngress.test.ts"
+      - "packages/engine/src/execution/NationalSanctionExecution.ts"
+permissions:
+  contents: read
+concurrency:
+  group: c4-class2-e3-m6-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  m6:
+    if: github.head_ref == 'feature/c4-class2-e3-economic-maritime-20261122'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Exact source
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "E3_M6_SHA=$EXPECTED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Real engine economics, maritime, replay and AI
+        run: >-
+          npx --no-install vitest run --project node
+          tests/national/C4Class2EconomicMaritime.test.ts
+          tests/national/C4Class2EconomicIngress.test.ts
+      - name: Existing real war and AI behavior
+        if: success() || failure()
+        run: npx --no-install vitest run --project node tests/national/NationalAIRealWar.test.ts tests/national/ConductorThreeAuthoritativeCombat.test.ts
+      - name: Existing legacy train, trade, embargo and naval regressions
+        if: success() || failure()
+        run: >-
+          npx --no-install vitest run --project node
+          tests/core/game/TrainStation.test.ts
+          tests/core/executions/TrainExecution.test.ts
+          tests/core/executions/TradeShipExecution.test.ts
+          tests/core/executions/EmbargoAllExecution.test.ts
+          tests/Warship.test.ts
+          tests/WarshipVeterancy.test.ts
+          tests/TradeTrainGolden.test.ts

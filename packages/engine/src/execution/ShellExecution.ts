@@ -10,6 +10,7 @@ import {
 } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import { Execution, Game, Player, Unit } from "../game/Game";
+import { mayAttackAtSea } from "../national/conflict/NationalMaritime";
 import { PathFinding } from "../pathfinding/PathFinder";
 import { PathStatus, SteppingPathFinder } from "../pathfinding/types";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
@@ -46,6 +47,16 @@ export class ShellExecution implements Execution {
   }
 
   tick(ticks: number): void {
+    // Shells are tactical naval fire, not the D-018 in-flight strategic
+    // missile exception. Recheck current WAR throughout flight.
+    if (
+      this.mg.nationalWarAuthority() !== null &&
+      !mayAttackAtSea(this.mg, this._owner, this.target.owner())
+    ) {
+      if (this.shell?.isActive()) this.shell.delete(false);
+      this.active = false;
+      return;
+    }
     this.shell ??= this._owner.buildUnit(UnitType.Shell, this.spawn, {});
     if (!this.shell.isActive()) {
       this.active = false;
