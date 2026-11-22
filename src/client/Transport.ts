@@ -65,6 +65,7 @@ import {
   type TrustedNationalStartLike,
 } from "./NationalPrivateCapability";
 import { describeSocketClose } from "./SocketClose";
+import { TrustedNationalProjectionRejectedEvent } from "./TrustedNationalSession";
 import { homeHref, translateText } from "./Utils";
 import { PlayerView } from "./view";
 
@@ -481,6 +482,7 @@ export class Transport {
         this.lobbyConfig.gameID,
       );
       this.dropBufferedNationalIntents();
+      this.eventBus.emit(new NationalTransportStatusEvent(false, this.lobbyConfig.gameID));
       this.lobbyConfig.spectator = e.spectator;
       this.sendMsg({
         type: "spectate",
@@ -559,6 +561,7 @@ export class Transport {
     if (this.connectionRefused) {
       return;
     }
+    const hadTrustedSeat = hasTrustedNationalPrivateCapability(this.eventBus, this.lobbyConfig.gameID);
     this.isSessionReady = false;
     this.trustedNationalStart = null;
     revokeTrustedNationalPrivateCapability(
@@ -566,6 +569,7 @@ export class Transport {
       this.lobbyConfig.gameID,
     );
     this.dropBufferedNationalIntents();
+    if (hadTrustedSeat) this.eventBus.emit(new NationalTransportStatusEvent(false, this.lobbyConfig.gameID));
     this.startPing();
     this.killExistingSocket();
     // WS origin comes from ClientEnv, resolved per game: the id's letter
@@ -592,6 +596,7 @@ export class Transport {
     this.socket = socket;
     let openedAt: number | null = null;
     let nationalStartSeen = false;
+    let nationalStreamRejected = false;
     // Every frame is a zbin payload; without this they would arrive as Blobs.
     this.socket.binaryType = "arraybuffer";
     this.onconnect = onconnect;
@@ -606,7 +611,7 @@ export class Transport {
       onconnect();
     };
     this.socket.onmessage = (event: MessageEvent) => {
-      if (this.socket !== socket) return;
+      if (this.socket !== socket || nationalStreamRejected) return;
       // A frame from the server is the proof the connection is real; onopen
       // is not (a proxy can accept and drop us in a loop). It resets the
       // budget and settles any retry the watchdog scheduled while this
@@ -703,6 +708,15 @@ export class Transport {
         this.flushBuffer();
         this.onmessage(msg);
       } catch (e) {
+        if (nationalStartSeen) {
+          nationalStreamRejected = true;
+          this.isSessionReady = false;
+          revokeTrustedNationalPrivateCapability(this.eventBus, this.lobbyConfig.gameID);
+          this.dropBufferedNationalIntents();
+          this.eventBus.emit(new TrustedNationalProjectionRejectedEvent(this.lobbyConfig.gameID));
+          console.warn("NATIONAL wire rejected; fresh admission required");
+          return;
+        }
         // Deliberately NOT the frame. This catch wraps the downstream
         // handler as well as the decode, so it fires on ordinary
         // application errors too — and the desktop shell persists
@@ -724,7 +738,7 @@ export class Transport {
       }
     };
     this.socket.onerror = () => {
-      if (this.socket === null) {
+      if (this.socket !== socket) {
         return;
       }
       this.socket.close();

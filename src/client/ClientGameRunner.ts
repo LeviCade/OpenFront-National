@@ -353,6 +353,10 @@ export function joinLobby(
         .catch((error) => {
           bufferedTrustedProjections = [];
           if (leftTrustedGame) return;
+          if (error instanceof GLUnavailableError) {
+            showGLGate(error.glStatus);
+            return;
+          }
           console.error("Failed to mount trusted NATIONAL map", error);
           showErrorModal(
             "NATIONAL projection map failed to load",
@@ -570,6 +574,13 @@ export function joinLobby(
       }
     }
   };
+  const onAdmissionLost = (event: NationalTransportStatusEvent) => {
+    if (event.gameID !== lobbyConfig.gameID || event.ready) return;
+    trustedAdmission = null;
+    bufferedTrustedProjections = [];
+    rejectedTrustedProjection = true;
+  };
+  eventBus.on(NationalTransportStatusEvent, onAdmissionLost);
   transport.connect(onconnect, onmessage);
   return {
     stop: (force: boolean = false) => {
@@ -579,6 +590,7 @@ export function joinLobby(
       }
       console.log("leaving game");
       leftTrustedGame = true;
+      eventBus.off(NationalTransportStatusEvent, onAdmissionLost);
       bufferedTrustedProjections = [];
       if (currentGameRunner) {
         currentGameRunner.stop();
@@ -1121,6 +1133,9 @@ async function createClientGame(
       trustedStatus,
     );
   } catch (err) {
+    inputOverlay.remove();
+    trustedStatus?.remove();
+    worker.cleanup();
     soundManager.dispose();
     throw err;
   }
@@ -1154,13 +1169,14 @@ export class ClientGameRunner {
   private revokeTrustedSight(): void {
     this.gameView.resetTrustedProjectionSight();
     this.eventBus.emit(new NationalMapTargetSelectedEvent(null));
-    this.trustedMapResetUpload?.();
     // Disconnect/rejection does not deliver another server tick. Push the
     // emptied name/territory view now so stale enemy labels cannot remain
     // cached on the GPU while this browser is disconnected.
     if (this.gameView.updatesSinceLastTick() !== null) {
       this.webglBuilder?.update(this.gameView);
       this.renderer.tick();
+    } else {
+      this.trustedMapResetUpload?.();
     }
   }
 
@@ -1236,11 +1252,13 @@ export class ClientGameRunner {
       // Strip stale or not-yet-paged packed markers, including old-position
       // death tombstones: revocation is not an animated unit death.
       this.gameView.applyTrustedUnitPage(update, delta, this.trustedContinuity);
+      const sweepReady = this.gameView.trustedProjectionReady() || delta.sweepComplete;
+      this.gameView.setTrustedProjectionReady(sweepReady);
       this.gameView.update(update);
       this.myPlayer = this.clientID
         ? this.gameView.playerByClientID(this.clientID)
         : null;
-      const pageComplete = delta.sweepComplete &&
+      const pageComplete = sweepReady &&
         this.myPlayer?.id() === this.trustedPrincipal;
       this.gameView.setTrustedProjectionReady(pageComplete);
       this.trustedLastTick = update.tick;
@@ -1259,7 +1277,7 @@ export class ClientGameRunner {
       this.renderer.tick();
       this.health.recordTurn(performance.now());
       this.updateHealth();
-    } catch (error) {
+    } catch {
       // A malformed or out-of-order packet may never re-enable controls by
       // accident. Fail closed; E2 must resync and provide a fresh trusted start.
       this.trustedProjectionActive = false;
@@ -1271,7 +1289,7 @@ export class ClientGameRunner {
         this.trustedStatus.textContent =
           "NATIONAL · Invalid server projection — controls disabled";
       }
-      console.error("NATIONAL projected view rejected", error);
+      console.warn("NATIONAL projected view rejected; fresh admission required");
     }
   };
   /** A new decoded and admitted national_start is the only recovery boundary. */
@@ -1286,6 +1304,7 @@ export class ClientGameRunner {
     this.revokeTrustedSight();
     try {
       this.trustedPrincipal = trustedNationalPrincipal(event.start);
+      this.gameView.setTrustedPrincipal(this.trustedPrincipal);
       this.trustedContinuity = new NationalObserverMapContinuity(this.trustedPrincipal);
       this.trustedLastTick = -1;
       this.trustedProjectionActive = true;

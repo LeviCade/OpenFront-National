@@ -15,6 +15,7 @@ import {
 import {
   GameUpdateType,
   GameUpdateViewData,
+  PlayerUpdate,
   SpawnPhaseEndUpdate,
   UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
@@ -99,6 +100,11 @@ export class GameView implements GameLike {
   private _nationalAccessionOffers: NationalAccessionView | null = null;
   private _nationalPoliticalResults: readonly NationalPoliticalResult[] = [];
   private _trustedProjectionReady = false;
+  private trustedPrincipal: string | null = null;
+
+  public setTrustedPrincipal(principal: string | null): void {
+    this.trustedPrincipal = principal;
+  }
   private readonly trustedUnitIds = new Set<number>();
   private readonly trustedOriginalTerrain = new Map<TileRef, number>();
 
@@ -150,6 +156,13 @@ export class GameView implements GameLike {
     frame.events.bonusEvents.length = 0;
     frame.attackRings = [];
     frame.nukeTelegraphs = [];
+    frame.playerStatus = new Map();
+    frame.relationMatrix = new Uint8Array(0);
+    frame.relationSize = 0;
+    frame.relationsDirty = true;
+    frame.allianceClusters = new Map();
+    this._relationsDirty = true;
+    this._clustersDirty = true;
     this._firstPopulate = true;
     this._units.clear();
     this._unitStates.clear();
@@ -241,7 +254,7 @@ export class GameView implements GameLike {
    */
   public trustedNameVisible(player: PlayerView): boolean {
     if (!this._trustedNationalProjection) return true;
-    if (!player.nameData) return false;
+    if (!this._trustedProjectionReady || !player.nameData) return false;
     const { x, y } = player.nameData;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     const tileX = Math.floor(x);
@@ -517,7 +530,7 @@ export class GameView implements GameLike {
       this._nationalPoliticsTick =
         this._nationalPolitics === null ? null : gu.tick;
 
-      const currentActorId = this._myPlayer?.id() ?? null;
+      const currentActorId = this.trustedPrincipal ?? this._myPlayer?.id() ?? null;
       this._nationalAccessionOffers = readNationalAccessionOffers(
         nationalPacket.nationalAccessionOffers,
         currentActorId,
@@ -537,7 +550,7 @@ export class GameView implements GameLike {
       // than engine ticks; retain a bounded, principal-scoped receipt buffer
       // until the panel sees it. Old request ticks cannot acknowledge a new
       // click, and disconnect/replay rewind clears all buffered receipts.
-      const myActorId = this._myPlayer?.id() ?? null;
+      const myActorId = this.trustedPrincipal ?? this._myPlayer?.id() ?? null;
       const received =
         myActorId === null
           ? []
@@ -595,8 +608,10 @@ export class GameView implements GameLike {
     for (let i = 0; i + 1 < packed.length; i += 2) {
       const tile = packed[i];
       const state = packed[i + 1];
-      if (this._trustedNationalProjection && !this.trustedOriginalTerrain.has(tile)) {
-        this.trustedOriginalTerrain.set(tile, this._map.terrainByte(tile));
+      if (this._trustedNationalProjection) {
+        const terrain = this._map.terrainByte(tile);
+        if (this._map.tileState(tile) === (state & 0xffff) && terrain === ((state >>> 16) & 0xff)) continue;
+        if (!this.trustedOriginalTerrain.has(tile)) this.trustedOriginalTerrain.set(tile, terrain);
       }
       const terrainChanged = this.updateTile(tile, state);
       this.updatedTiles.push(tile);
@@ -651,10 +666,32 @@ export class GameView implements GameLike {
     // all smallIDs registered before pass 2 can translate embargo PlayerIDs.
     // PlayerUpdate is now partial: only `id` is guaranteed; everything else
     // is present only when its value changed since the last emission.
-    gu.updates[GameUpdateType.Player].forEach((pu) => {
+    gu.updates[GameUpdateType.Player].forEach((wirePlayer) => {
+      let pu = wirePlayer;
       // First-emission (new player) — must have all static fields populated.
       // Subsequent emissions for an existing player carry only changed fields.
       const existing = this._players.get(pu.id);
+      if (this._trustedNationalProjection && pu.id !== this.trustedPrincipal && pu.clientID !== this._myClientID) {
+        // E3 deliberately strips private enemy fields. The legacy constructor
+        // requires arrays and numeric slots; these are inert renderer defaults,
+        // not intelligence about the other player's resources or relationships.
+        if (!existing) {
+          if (pu.smallID === undefined || pu.name === undefined || pu.playerType === undefined) return;
+          const publicView: PlayerUpdate = {
+            clientID: null, clanTag: null, displayName: pu.name,
+            isDisconnected: false, tilesOwned: 0, gold: 0n, troops: 0,
+            allies: [], targets: [], outgoingAllianceRequests: [], alliances: [],
+            outgoingEmojis: [], outgoingAttacks: [], incomingAttacks: [],
+            isTraitor: false, betrayals: 0, lastDeleteUnitTick: 0,
+            isLobbyCreator: false, isAlive: false,
+            ...pu,
+            hasSpawned: (pu.tilesOwned ?? 0) > 0,
+          };
+          pu = publicView;
+        } else if (pu.tilesOwned !== undefined) {
+          pu = { ...pu, hasSpawned: pu.tilesOwned > 0 };
+        }
+      }
 
       // Replace the local player's name/displayName with their own stored values.
       // This way the user does not know they are being censored. clientID is
@@ -722,6 +759,9 @@ export class GameView implements GameLike {
       if (pu.embargoes === undefined) return;
       const player = this._players.get(pu.id);
       if (player === undefined) return;
+      // The JSON wire cannot encode a Set without an explicit representation.
+      // Never interpret the empty serialized object as a private relationship.
+      if (this._trustedNationalProjection && !(Symbol.iterator in Object(pu.embargoes))) return;
       const smallIDs = embargoSmallIDs(pu.embargoes, (id) =>
         this._players.get(id)?.smallID(),
       );
