@@ -207,6 +207,43 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
     expect(restored.nationalPoliticalAuthority()?.empireOf(A)).toBe("c5_growth_crown");
   });
 
+  it("an addressed but hostile live NAP invitation is observed and refused", async () => {
+    const game = await seeded();
+    game.performNationalCommand(game.player(B), {
+      kind: "found-pact",
+      pactId: "c5_hostile_invite",
+      name: "Hostile invitation",
+      pactKind: "NAP",
+      terms: { admission: "leader", expulsion: "forbidden" },
+    });
+    game.performNationalCommand(game.player(B), {
+      kind: "invite-pact",
+      pactId: "c5_hostile_invite",
+      candidateId: A,
+    });
+    const war = game.performNationalWarCommandWithOutcome(game.player(A), {
+      kind: "declare-national",
+      aggressorId: A,
+      targetId: B,
+      warId: "c5_hostile_active_war",
+    });
+    expect(war.accepted).toBe(true);
+    const observer = collectLiveNationalObservation(game, A).observation;
+    expect(observer.coalitions.find(
+      (c) => c.id === "c5_hostile_invite",
+    )?.invited).toBe(true);
+    const dispatch = vi.spyOn(game, "performNationalPoliticalCommandWithOutcome");
+    const runner = runnerFor(game);
+    for (let i = 0; i < 35; i++) humanTurn(runner, game);
+    expect(game.nationalPoliticalAuthority()?.protectedByTreaty(A, B)).toBe(false);
+    expect(dispatch.mock.calls.some(
+      (args) => args[0].id() === A &&
+        args[1].kind === "accept-pact" &&
+        args[1].pactId === "c5_hostile_invite",
+    )).toBe(false);
+    dispatch.mockRestore();
+  });
+
   it("AI Betray is accepted BEFORE any WAR against a formerly protected partner", async () => {
     const game = await seeded(0.6, 0.7);
     const actor = game.player(A);
