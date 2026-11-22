@@ -36,6 +36,7 @@ describe("TrainStation", () => {
     };
     game = {
       ticks: vi.fn().mockReturnValue(123),
+      nationalWarAuthority: vi.fn().mockReturnValue(null),
       config: vi.fn().mockReturnValue({
         trainGold: (rel: string, _tradeStopsVisited: number) =>
           rel !== "other" ? BigInt(1000) : BigInt(500),

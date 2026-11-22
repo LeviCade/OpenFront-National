@@ -66,6 +66,7 @@ import {
   SharedWaterCache,
   SharedWaterCacheSnapshot,
 } from "../execution/nation/SharedWaterCache";
+import { NationalSanctionExecution } from "../execution/NationalSanctionExecution";
 import { NationExecution } from "../execution/NationExecution";
 import { SpawnTimerExecution } from "../execution/SpawnTimerExecution";
 import { TribeExecution } from "../execution/TribeExecution";
@@ -1504,7 +1505,10 @@ export class GameImpl implements Game {
     // Rails are not units, so without this a divergence in which rails got
     // built would only show up through the trains that later run on them.
     hash += this._railNetwork.hash();
-    if (this._national !== null) hash += this._national.stateHash();
+    if (this._national !== null) {
+      hash += this._national.stateHash();
+      hash += NationalSanctionExecution.stateHash(this);
+    }
     if (this._nationalWar !== null)
       hash += simpleHash(JSON.stringify(this._nationalWar.snapshot()));
     if (this._nationalGovernance !== null)
