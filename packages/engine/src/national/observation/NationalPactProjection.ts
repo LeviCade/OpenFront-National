@@ -68,8 +68,8 @@ export function projectNationalPactDisclosure(
     tick,
     ...(streamId === undefined ? {} : { streamId }),
   });
-  if (tick !== game.ticks())
-    throw new Error("NATIONAL stale pact projection tick");
+  // An old/forged outbound tick never obtains fresh private disclosure.
+  if (tick !== game.ticks()) return undefined;
   if (authority.empireOf(observerId))
     return bind({ version: 1, recipientId: observerId, pacts: [] });
   const source = (game as PactGame).nationalPactDisclosure?.(actor);

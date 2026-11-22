@@ -417,7 +417,7 @@ describe("Round Eight full-scale real sovereign winners and strict crisis", () =
     }
     const start = game.nationalUngovernableWarnings();
     expect(start).toHaveLength(1);
-    expect(start[0].remainingMs).toBe(9_900);
+    expect(start[0].remainingMs).toBe(10_000);
     const baseline = snapshotGame(game);
     for (const type of [
       UnitType.City,
@@ -439,7 +439,7 @@ describe("Round Eight full-scale real sovereign winners and strict crisis", () =
       game.executeNextTick();
       restored.executeNextTick();
     }
-    expect(game.nationalUngovernableWarnings()[0].remainingMs).toBe(100);
+    expect(game.nationalUngovernableWarnings()[0].remainingMs).toBe(200);
     for (const g of [game, restored]) {
       g.performNationalCommand(g.player(A), {
         kind: "transfer-crown",

@@ -65,9 +65,18 @@ describe("C4 E4 imperial administration recipient boundary", () => {
         "epoch",
       ),
     ).toMatchObject(military);
+    expect(
+      readNationalImperialAdministration(
+        { ...source, ...military, armyMode: "centralized" },
+        politics,
+        "a",
+        8,
+        "epoch",
+      ),
+    ).toMatchObject({ ...military, armyMode: "centralized" });
     for (const bad of [
       { armyMode: "hybrid" },
-      { ...military, armyMode: "centralized" },
+      { ...military, armyMode: "invalid" },
       { ...military, armyMode: "decentralized" },
       { ...military, imperialTroops: -1 },
       { ...military, hybridThresholdBps: 10001 },

@@ -1347,7 +1347,7 @@ export class NationalDiplomacyPanel extends LitElement {
       const raw = data.get("basisPoints");
       if (
         typeof raw !== "string" ||
-        !/^\\d{1,5}$/.test(raw) ||
+        !/^\d{1,5}$/.test(raw) ||
         Number(raw) > 10000
       )
         return;
@@ -1376,7 +1376,7 @@ export class NationalDiplomacyPanel extends LitElement {
         );
       } else {
         const mode = data.get("armyMode");
-        if (mode !== "decentralized" && mode !== "hybrid") return;
+        if (mode !== "decentralized" && mode !== "hybrid" && mode !== "centralized") return;
         this.sendImperialPolicy(
           { kind, empireId: view.empireId, mode, thresholdBps: bps },
           key,
@@ -1473,6 +1473,12 @@ export class NationalDiplomacyPanel extends LitElement {
                       ?selected=${view.armyMode === "hybrid"}
                     >
                       Hybrid
+                    </option>
+                    <option
+                      value="centralized"
+                      ?selected=${view.armyMode === "centralized"}
+                    >
+                      Centralized
                     </option>
                   </select></label
                 >
