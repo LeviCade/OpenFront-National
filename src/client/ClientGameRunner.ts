@@ -98,6 +98,7 @@ import {
   Transport,
 } from "./Transport";
 import {
+  completedTrustedObserverMap,
   materializeTrustedNationalUpdate,
   parseTrustedNationalProjection,
   readTrustedNationalObserverMap,
@@ -1230,9 +1231,7 @@ export class ClientGameRunner {
       // Only the real E3 current-sight map and a matching human seat can
       // enable a recipient's political and radial controls.
       if (
-        observerMap !== null &&
-        this.myPlayer !== null &&
-        observerMap.nextCursor === null
+        completedTrustedObserverMap(observerMap, this.myPlayer?.id() ?? null)
       ) {
         // A partial E3 page cannot authorize a map-wide military action.
         // Enemy ownership not yet paged in remains unknown, never guessed.
