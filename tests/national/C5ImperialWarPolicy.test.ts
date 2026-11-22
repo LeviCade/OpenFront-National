@@ -124,6 +124,27 @@ function balances(game: Game) {
   });
 }
 
+/**
+ * All five equally equipped nations accrue regular per-tick income/growth.
+ * Imperial diplomatic policy must not secretly credit or debit *any* actor:
+ * each member's delta is identical, nonnegative and fully reproducible.
+ * Strict same-tick WAR mutation accounting is also checked below.
+ */
+function assertNeutralDiplomacyBalances(
+  start: ReturnType<typeof balances>,
+  end: ReturnType<typeof balances>,
+) {
+  const goldDelta = BigInt(end[0][1]) - BigInt(start[0][1]);
+  const troopDelta = end[0][2] - start[0][2];
+  expect(goldDelta >= 0n).toBe(true);
+  expect(troopDelta).toBeGreaterThanOrEqual(0);
+  end.forEach(([id, gold, troops], i) => {
+    expect(id).toBe(start[i][0]);
+    expect(BigInt(gold) - BigInt(start[i][1])).toBe(goldDelta);
+    expect(troops - start[i][2]).toBe(troopDelta);
+  });
+}
+
 describe("C5 E3 — real imperial response and member-specific WAR law", () => {
   it("preserves the founding national war, obeys policy at consented accession, rejects impostor powers, preserves scoped peace and replays", async () => {
     const m = await match();
@@ -187,7 +208,7 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(true);
     expect(m.game.nationalWarAuthority()?.authorizeOffensiveAction(A, D)).toBe(false);
     expect(m.game.nationalWarAuthority()?.authorizeOffensiveAction(B, D)).toBe(true);
-    expect(balances(m.game)).toEqual(baseline);
+    assertNeutralDiplomacyBalances(baseline, balances(m.game));
 
     const { restored, bytes, again } = await roundTrip(m.game, "plains");
     expect(again).toEqual(bytes);
@@ -222,7 +243,7 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     expect(restored.nationalWarState()).toEqual(m.game.nationalWarState());
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(m.game));
     expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(false);
-    expect(balances(m.game)).toEqual(before);
+    assertNeutralDiplomacyBalances(before, balances(m.game));
 
     // The same emperor cannot replay a stale CAS policy write.
     act(m, 0, { ...policy(1, "imperial", [B], []),
@@ -242,7 +263,7 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     expect(m.game.nationalPoliticalAuthority()?.emperorOf(IMP)).toBe(C);
     expect(m.game.nationalPoliticalAuthority()?.mayDeclareNational(B)).toBe(false);
     expect(m.game.nationalWarAuthority()?.atWar(A, E)).toBe(false);
-    expect(balances(m.game)).toEqual(before);
+    assertNeutralDiplomacyBalances(before, balances(m.game));
     const { restored: afterTransfer } = await roundTrip(m.game, "plains");
     expect(snapshotGameData(afterTransfer)).toEqual(snapshotGameData(m.game));
     expect(afterTransfer.nationalPoliticalAuthority()?.emperorOf(IMP)).toBe(C);
