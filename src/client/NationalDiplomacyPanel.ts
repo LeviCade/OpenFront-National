@@ -425,6 +425,8 @@ export class NationalDiplomacyPanel extends LitElement {
   /** A dropped or replaced session must never retain optimistic success. */
   public connectionInterrupted(): void {
     this.pactAttempt = null;
+    this.pactPhase = "unknown";
+    this.pactSession = null;
     this.pactStatus = "Connection interrupted; outcome unconfirmed.";
     this.selectWarTarget("");
     if (this.confirmedDiplomacy !== null) {
@@ -1126,16 +1128,17 @@ export class NationalDiplomacyPanel extends LitElement {
             : "No matching receipt; outcome unknown.";
   }
   private sendPact(action: PactAction, displayedKey: string): void {
+    if (this.pactAttempt) return;
     const context = this.pactContext();
     const game = this.game;
     if (
       !context ||
       !game ||
       !this.eventBus ||
-      this.pactAttempt ||
       !pactActionAllowed(action, context) ||
       pactConsentKey(context, action.pactId) !== displayedKey
     ) {
+      this.pactPhase = "unauthorized";
       this.pactStatus =
         "No longer authorized or terms changed. Review current pact.";
       return;
@@ -1186,7 +1189,7 @@ export class NationalDiplomacyPanel extends LitElement {
             Administrator
           </option>
           <option value="unanimous" ?selected=${t.expulsion === "unanimous"}>
-            Unanimous (voting unavailable)
+            Unanimous (multi-member voting unavailable)
           </option>
           <option value="forbidden" ?selected=${t.expulsion === "forbidden"}>
             Forbidden
@@ -1244,7 +1247,7 @@ export class NationalDiplomacyPanel extends LitElement {
       <p role="status" aria-live="polite" data-national-pact-status
         data-national-pact-phase=${c ? this.pactPhase : "unauthorized"}
         data-national-pact-request-id=${this.pactAttempt?.requestId ?? ""}>
-        ${this.pactStatus || (c ? "Available" : "Private constitutional controls unavailable")}
+        ${c ? (this.pactStatus || "Available") : "Private constitutional controls unavailable"}
       </p>
       ${
         roster === undefined
@@ -1330,9 +1333,9 @@ export class NationalDiplomacyPanel extends LitElement {
                               data-national-pact-action="invite"
                               ?disabled=${!enabled || !candidates.some((candidateId) => allowed({ type: "national_invite_pact", pactId: p.id, candidateId }))}
                             >
-                              Submit invitation
+                              ${d.terms.admission === "unanimous" && p.memberIds.length > 1 ? "Record initial admission vote" : "Submit invitation"}
                             </button>
-                            ${d.terms.admission === "unanimous" ? html`<p>Unanimous admission requires all members' consent; additional admission ballot controls are not available.</p>` : nothing}
+                            ${d.terms.admission === "unanimous" ? html`<p>Unanimous admission requires all members’ consent. With multiple members, this records the first vote, not an authorized invitation; additional admission ballot controls are not available.</p>` : nothing}
                           </form>
                           <form
                             class=${formClass}
@@ -1426,8 +1429,9 @@ export class NationalDiplomacyPanel extends LitElement {
                                 </form>`
                           }
                           ${
-                            d.terms.expulsion === "leader" &&
-                            p.administratorId === c?.actor
+                            (d.terms.expulsion === "leader" &&
+                            p.administratorId === c?.actor) ||
+                            (d.terms.expulsion === "unanimous" && p.memberIds.length === 2)
                               ? html`<form
                                   class=${formClass}
                                   @submit=${(e: SubmitEvent) =>
@@ -1457,7 +1461,7 @@ export class NationalDiplomacyPanel extends LitElement {
                                       required
                                       name="confirm"
                                     />
-                                    Confirm discretionary expulsion</label
+                                    ${d.terms.expulsion === "unanimous" ? "Confirm consent as sole remaining member" : "Confirm discretionary expulsion"}</label
                                   >
                                   <button
                                     class=${button}

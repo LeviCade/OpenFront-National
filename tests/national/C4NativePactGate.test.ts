@@ -57,7 +57,7 @@ describe("C4 E4 recipient pact gate", () => {
   it("binds private lane to exact tick, map epoch and recipient; pre-spawn receives only public", () => {
     expect(readNationalPactWireDisclosure(wire, "a", roster, false, 7, "current-epoch")).toEqual(snapshot);
     for (const args of [[8, "current-epoch"], [7, "old-epoch"], [7, null], [7, undefined]] as const)
-      expect(readNationalPactWireDisclosure(wire, "a", roster, false, ...args)).toBeNull();
+      expect(readNationalPactWireDisclosure(wire, "a", roster, false, args[0], args[1])).toBeNull();
     expect(() => validateNationalPactPacket(politics, wire, "a", 7, "current-epoch")).not.toThrow();
     expect(() => validateNationalPactPacket(politics, undefined, null, 7)).not.toThrow();
     expect(() => validateNationalPactPacket(politics, wire, null, 7)).toThrow();
@@ -85,7 +85,8 @@ describe("C4 E4 recipient pact gate", () => {
     expect(pactConsentKey(c, p.id)).not.toEqual(pactConsentKey(proposed, p.id));
     expect(pactActionAllowed({ type: "national_accept_pact", pactId: p.id }, { ...c, actor: "c", disclosure: { version: 1, recipientId: "c", pacts: [invited] } })).toBe(true);
     for (const expulsion of ["forbidden", "unanimous"] as const)
-      expect(pactActionAllowed({ type: "national_expel_pact", pactId: p.id, memberId: "b" }, { ...c, disclosure: { ...snapshot, pacts: [{ ...member, terms: { ...terms, expulsion } }] } })).toBe(false);
+      expect(pactActionAllowed({ type: "national_expel_pact", pactId: p.id, memberId: "b" }, { ...c, roster: [{ ...p, memberIds: ["a", "b", "c"] }], disclosure: { ...snapshot, pacts: [{ ...member, terms: { ...terms, expulsion } }] } })).toBe(false);
+    expect(pactActionAllowed({ type: "national_expel_pact", pactId: p.id, memberId: "b" }, { ...c, disclosure: { ...snapshot, pacts: [{ ...member, terms: { ...terms, expulsion: "unanimous" } }] } })).toBe(true);
     expect(pactActionAllowed({ type: "national_betray_pact", pactId: p.id }, { ...c, disclosure: { ...snapshot, pacts: [] } })).toBe(false);
   });
   it("correlates all receipt dimensions; unknown stays unknown and contradictory receipts fail closed", () => {

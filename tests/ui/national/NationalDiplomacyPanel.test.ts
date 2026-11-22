@@ -630,7 +630,7 @@ describe("C4 E4 native constitutional controls", () => {
     const { element, eventBus, optionsState } = await mount();
     const requests: SendNationalPactIntentEvent[] = [];
     eventBus.on(SendNationalPactIntentEvent, (e) => requests.push(e));
-    optionsState.politics = { empires: [], warnings: [], pacts: [pact] };
+    optionsState.politics = { empires: [], warnings: [], pacts: [{ ...pact, memberIds: ["nation-a", "nation-b", "nation-c"] }] };
     optionsState.disclosure = { version: 1, recipientId: "nation-a", pacts: [{ pactId: pact.id, relationship: "member", terms: { ...terms, expulsion: "unanimous" }, pendingAmendment: { terms, administratorId: "nation-b", approvedBy: ["nation-b"] } }] };
     element.refresh();
     await element.updateComplete;
