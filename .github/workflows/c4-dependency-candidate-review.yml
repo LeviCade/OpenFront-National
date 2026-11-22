@@ -1,0 +1,44 @@
+name: C4 reviewed dependency candidate (no automatic promotion)
+
+on:
+  push:
+    branches:
+      - stage3/c4-class1-dependency-review-20261121
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Review exact Vitest patch-level upgrade
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-fund --save-dev --save-prefix='^' vitest@4.1.12 @vitest/ui@4.1.12 @vitest/coverage-v8@4.1.12
+          test -z "$(git diff --name-only -- ':!package-lock.json' ':!package.json')"
+          echo C4_VITEST_DIFF_BEGIN
+          git -c color.ui=false diff -- package.json package-lock.json
+          echo C4_VITEST_DIFF_END
+          echo C4_VITEST_HASHES
+          git hash-object package.json package-lock.json
+          npm audit --json > /tmp/c4-after.json || true
+          node --input-type=module -e 'import fs from "node:fs";const r=JSON.parse(fs.readFileSync("/tmp/c4-after.json"));if(r.error||!r.metadata)process.exit(1);console.log("after",JSON.stringify(r.metadata.vulnerabilities));'
+      - run: npm run inst
+      - run: npm run typecheck
+      - name: Verify both advisory trees after install
+        run: node scripts/national-qa/security-audit.mjs --strict-release
+      - name: Candidate build verification
+        if: success() || failure()
+        run: npm run build-prod
