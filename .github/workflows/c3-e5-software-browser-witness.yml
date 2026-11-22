@@ -43,7 +43,7 @@ jobs:
           npm install --global --ignore-scripts npm@12.1.0
           npm run inst
       - name: Real PNG negative controls
-        run: node --test tests/e2e/national/C3ScreenshotEvidence.test.mjs
+        run: npx --no-install vitest run --project node tests/e2e/national/C3ScreenshotEvidence.test.mjs
       - name: Source-only acceptance predicate controls
         run: npx --no-install vitest run --project node tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs
       - name: Require genuine three-session PRIVATE NATIONAL preflight to BLOCK without credentials

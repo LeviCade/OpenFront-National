@@ -56,6 +56,23 @@ jobs:
           npx --no-install vitest run --project node \
             tests/e2e/national/C2IndependentBrowserPlaythrough.test.mjs \
             tests/e2e/national/C3ScreenshotEvidence.test.mjs
+      - name: Check conductor's public wire boundary formatting
+        run: |
+          FILES=(
+            packages/engine-api/src/game/NationalRecipientView.ts
+            packages/engine/src/national/observation/NationalObserverMap.ts
+            packages/engine/src/national/observation/NationalObservation.ts
+            packages/engine/src/national/observation/NationalOutbound.ts
+            src/server/national/NationalRecipientWire.ts
+            tests/e2e/national/C3ScreenshotEvidence.test.mjs
+          )
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            echo C4_FORMAT_REPAIR_BEGIN
+            git -c color.ui=false diff -- "${FILES[@]}"
+            echo C4_FORMAT_REPAIR_END
+            exit 1
+          fi
   full:
     name: Exact integrated full source, legacy regression and build
     runs-on: ubuntu-latest
@@ -85,22 +102,9 @@ jobs:
       - name: Complete lint
         if: success() || failure()
         run: npm run lint
-      - name: Complete format check and diagnostic diff
-        if: success() || failure()
-        run: |
-          if ! npm run format:check; then
-            npx --no-install oxfmt --write \
-              packages/engine-api/src/game/NationalRecipientView.ts \
-              packages/engine/src/national/observation/NationalObserverMap.ts \
-              packages/engine/src/national/observation/NationalObservation.ts \
-              packages/engine/src/national/observation/NationalOutbound.ts \
-              src/server/national/NationalRecipientWire.ts
-            git -c color.ui=false diff -- \
-              packages/engine-api/src/game/NationalRecipientView.ts \
-              packages/engine/src/national/observation \
-              src/server/national/NationalRecipientWire.ts
-            exit 1
-          fi
       - name: Production compile
         if: success() || failure()
         run: npm run build-prod
+      - name: Complete format check
+        if: success() || failure()
+        run: npm run format:check
