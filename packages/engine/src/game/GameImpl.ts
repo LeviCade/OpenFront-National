@@ -94,6 +94,12 @@ import {
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import {
+  NationalReconnaissance,
+  NationalReconnaissanceSnapshotSchema,
+  REGIONAL_RECON_COST,
+  type RegionalReconGrant,
+} from "../national/observation/NationalReconnaissance";
+import {
   NationalGovernanceState,
   NationalGovernanceSnapshotSchema,
   type NationalFoundEmpireResult,
@@ -219,6 +225,7 @@ export class GameImpl implements Game {
   private _isPaused: boolean = false;
   private _winner: Player | Team | null = null;
   private _national: NationalRuntime | null = null;
+  private _nationalRecon: NationalReconnaissance | null = null;
   /** One persisted principal journal + human sight store per NATIONAL Game. */
   private _nationalGovernance: NationalGovernanceState | null = null;
   /** E2 WAR/LEVY is canonically stored here, never in a WeakMap or fork. */
@@ -271,6 +278,7 @@ export class GameImpl implements Game {
           this._playersBySmallID.map((p) => p.id()),
         );
         this._nationalGovernance = new NationalGovernanceState();
+        this._nationalRecon = new NationalReconnaissance();
         this._nationalWar = new NationalWarStateService(
           this.nationalPoliticalAuthority()!,
           this.nationalTroopDebits(),
@@ -1485,6 +1493,57 @@ export class GameImpl implements Game {
   nationalWinner(): PlayerID | null {
     this.synchronizeNationalState();
     return this._national?.winner() ?? null;
+  }
+
+  /**
+   * Authenticate against the SAME original Game principal as diplomacy and
+   * war. Gold is debited from PlayerImpl once; durable lease is the receipt.
+   * No client chooses the payer, effective tick, price, radius or duration.
+   */
+  performNationalReconnaissance(
+    actor: Player,
+    targetId: PlayerID,
+    centerX: number,
+    centerY: number,
+    requestId: string,
+    authenticatedClientID?: ClientID,
+  ): RegionalReconGrant {
+    if (this._nationalRecon === null || !this._config.nationalMode())
+      throw new Error("NATIONAL recon: mode not enabled");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
+    if (
+      this.inSpawnPhase() ||
+      !actor.hasSpawned() ||
+      !actor.isAlive() ||
+      !this._players.has(targetId) ||
+      !this._players.get(targetId)!.isAlive() ||
+      targetId === actor.id() ||
+      !Number.isSafeInteger(centerX) ||
+      !Number.isSafeInteger(centerY) ||
+      !this.isValidCoord(centerX, centerY)
+    )
+      throw new Error("NATIONAL recon: inactive principal or invalid region");
+    return this._nationalRecon.buy(
+      actor.id(),
+      targetId,
+      centerX,
+      centerY,
+      this._ticks,
+      requestId,
+      () => {
+        if (actor.gold() < REGIONAL_RECON_COST)
+          throw new Error("NATIONAL recon: insufficient gold");
+        const spent = actor.removeGold(REGIONAL_RECON_COST);
+        if (spent !== REGIONAL_RECON_COST) {
+          actor.addGold(spent);
+          throw new Error("NATIONAL recon: non-atomic gold debit");
+        }
+      },
+    );
+  }
+
+  nationalReconnaissanceFor(payerId: PlayerID): readonly RegionalReconGrant[] {
+    return this._nationalRecon?.activeFor(payerId, this._ticks) ?? [];
   }
 
   /** Trusted player object from authenticated execution, never caller-supplied ID. */
@@ -2942,6 +3001,7 @@ export class GameImpl implements Game {
       national: this._national?.snapshot() ?? null,
       nationalWar: this._nationalWar?.snapshot() ?? null,
       nationalGovernance: this._nationalGovernance?.snapshot() ?? null,
+      nationalRecon: this._nationalRecon?.snapshot() ?? null,
     };
   }
 
@@ -3007,6 +3067,9 @@ export class GameImpl implements Game {
     if (this._config.nationalMode()) {
       if (s.national === null)
         throw new Error("NATIONAL snapshot state missing");
+      this._nationalRecon = s.nationalRecon === null
+        ? new NationalReconnaissance()
+        : NationalReconnaissance.restore(s.nationalRecon, this._ticks);
       this._national = NationalRuntime.restore(
         s.national,
         this._playersBySmallID.map((p) => p.id()),
@@ -3037,6 +3100,9 @@ export class GameImpl implements Game {
       if (s.national !== null)
         throw new Error("NATIONAL data in legacy snapshot");
       this._national = null;
+      if (s.nationalRecon !== null)
+        throw new Error("NATIONAL recon data in legacy snapshot");
+      this._nationalRecon = null;
       if (s.nationalGovernance !== null)
         throw new Error("NATIONAL governance in legacy game snapshot");
       this._nationalGovernance = null;
@@ -3132,7 +3198,7 @@ export class GameImpl implements Game {
 
 export const GameSnapshot = snapshotType({
   name: "Game",
-  version: 4,
+  version: 5,
   migrations: {
     1: (data: unknown) => ({
       ...(data as Record<string, unknown>),
@@ -3145,6 +3211,10 @@ export const GameSnapshot = snapshotType({
     3: (data: unknown) => ({
       ...(data as Record<string, unknown>),
       nationalGovernance: null,
+    }),
+    4: (data: unknown) => ({
+      ...(data as Record<string, unknown>),
+      nationalRecon: null,
     }),
   },
   schema: z.object({
@@ -3183,6 +3253,7 @@ export const GameSnapshot = snapshotType({
     national: NationalRuntimeSnapshotSchema.nullable(),
     nationalWar: NationalWarStateSnapshotSchema.nullable(),
     nationalGovernance: NationalGovernanceSnapshotSchema.nullable(),
+    nationalRecon: NationalReconnaissanceSnapshotSchema.nullable(),
   }),
 });
 export type GameState = z.infer<typeof GameSnapshot.schema>;
