@@ -499,6 +499,8 @@ export class NationalRuntime {
     const row = administrationSchema.parse({
       empireId,
       workerIncomeBps: previous?.workerIncomeBps ?? 0,
+      // Military mode must not revoke a separately elected commercial split.
+      nonWorkerIncomeBps: previous?.nonWorkerIncomeBps ?? 0,
       allowedConstruction: previous?.allowedConstruction ?? null,
       treasury: previous?.treasury ?? "0",
       military: {
