@@ -1,0 +1,43 @@
+name: C5 Class Two E5 — funded regional intelligence source
+on:
+  push:
+    branches:
+      - feature/c5-class2-e5-funded-recon-intelligence-20261122
+  pull_request:
+    paths:
+      - "packages/engine/src/national/observation/**"
+      - "packages/engine/src/execution/NationalReconExecution.ts"
+      - "tests/national/C5Class2FundedRecon.test.ts"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  funded-recon:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Assert exact tested commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Entire TypeScript workspace
+        run: npm run typecheck
+      - name: Real engine + GameRunner paid reconnaissance test
+        run: npx --no-install vitest run --project node tests/national/C5Class2FundedRecon.test.ts
+      - name: Inherited fog regression
+        run: npx --no-install vitest run --project node tests/national/NationalLiveObservation.test.ts tests/national/C5CoastalVisibility.test.ts
+      - name: Source formatting (strict)
+        run: |
+          npx --no-install oxfmt --write packages/engine/src/national/observation/NationalReconnaissance.ts packages/engine/src/national/observation/LiveObservation.ts packages/engine/src/national/observation/NationalObservation.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/game/Game.ts packages/engine/src/game/GameImpl.ts packages/engine/src/execution/NationalReconExecution.ts packages/engine/src/execution/ExecutionManager.ts packages/engine/src/execution/NationExecution.ts packages/engine/src/snapshot/ExecutionRegistry.ts packages/engine-api/src/Schemas.ts tests/national/C5Class2FundedRecon.test.ts
+          git diff --exit-code -- packages/engine/src/national/observation/NationalReconnaissance.ts packages/engine/src/national/observation/LiveObservation.ts packages/engine/src/national/observation/NationalObservation.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/game/Game.ts packages/engine/src/game/GameImpl.ts packages/engine/src/execution/NationalReconExecution.ts packages/engine/src/execution/ExecutionManager.ts packages/engine/src/execution/NationExecution.ts packages/engine/src/snapshot/ExecutionRegistry.ts packages/engine-api/src/Schemas.ts tests/national/C5Class2FundedRecon.test.ts
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build-prod
