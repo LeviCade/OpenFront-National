@@ -19,6 +19,7 @@ import {
   Unit,
   UnitParams,
 } from "../game/Game";
+import { mayAttackAtSea } from "../national/conflict/NationalMaritime";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathStatus } from "../pathfinding/types";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
@@ -293,7 +294,7 @@ export class WarshipExecution implements Execution {
       if (
         unit === this.warship ||
         unit.owner() === owner ||
-        !owner.canAttackPlayer(unit.owner(), true) ||
+        !mayAttackAtSea(mg, owner, unit.owner()) ||
         this.alreadySentShell.has(unit) ||
         (unit.type() === UnitType.Warship &&
           unit.warshipState().state === "docked")
@@ -324,12 +325,15 @@ export class WarshipExecution implements Execution {
           !hasReachablePort ||
           patrolTile === undefined ||
           unit.isSafeFromPirates() ||
-          unit.targetUnit()?.owner() === owner ||
-          unit.targetUnit()?.owner().isFriendly(owner)
+          (mg.nationalWarAuthority() === null &&
+            (unit.targetUnit()?.owner() === owner ||
+              unit.targetUnit()?.owner().isFriendly(owner)))
         ) {
           continue;
         }
         if (
+          (mg.nationalWarAuthority() !== null &&
+            mg.getWaterComponent(unit.tile()) !== warshipComponent) ||
           mg.euclideanDistSquared(patrolTile, unit.tile()) > patrolRangeSquared!
         ) {
           continue;
@@ -649,6 +653,14 @@ export class WarshipExecution implements Execution {
   }
 
   private shootTarget() {
+    const target = this.warship.targetUnit();
+    if (
+      this.mg.nationalWarAuthority() !== null &&
+      (!target?.isActive() || !mayAttackAtSea(this.mg, this.warship.owner(), target.owner()))
+    ) {
+      this.warship.setTargetUnit(undefined);
+      return;
+    }
     this.warship.updateWarshipState({ isInCombat: true });
     const shellAttackRate = this.mg.config().warshipShellAttackRate();
     if (this.mg.ticks() - this.lastShellAttack > shellAttackRate) {
@@ -677,6 +689,13 @@ export class WarshipExecution implements Execution {
     this.warship.updateWarshipState({ isInCombat: true });
     for (let i = 0; i < 2; i++) {
       const target = this.warship.targetUnit()!;
+      if (
+        this.mg.nationalWarAuthority() !== null &&
+        (!target.isActive() || !mayAttackAtSea(this.mg, this.warship.owner(), target.owner()))
+      ) {
+        this.warship.setTargetUnit(undefined);
+        return;
+      }
       const targetTile = target.tile();
       const dist = this.mg.manhattanDist(this.warship.tile(), targetTile);
 
