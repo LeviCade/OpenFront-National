@@ -15,13 +15,13 @@ import { roundTrip } from "../util/Snapshot";
 
 /** D-011 M5: all actors, structures, gold and authority are actual Game objects. */
 const roster = [
-  new PlayerInfo("North", PlayerType.Human, "C5NORTH1", "c5-north-id"),
-  new PlayerInfo("South", PlayerType.Human, "C5SOUTH1", "c5-south-id"),
-  new PlayerInfo("West", PlayerType.Human, "C5WEST01", "c5-west-id"),
+  new PlayerInfo("North", PlayerType.Human, "C5NORTH1", "C5NORTH01"),
+  new PlayerInfo("South", PlayerType.Human, "C5SOUTH1", "C5SOUTH01"),
+  new PlayerInfo("West", PlayerType.Human, "C5WEST01", "C5WEST001"),
 ];
-const N = "c5-north-id";
-const S = "c5-south-id";
-const W = "c5-west-id";
+const N = "C5NORTH01";
+const S = "C5SOUTH01";
+const W = "C5WEST001";
 const empireId = "c5-empire";
 
 async function liveGame(nationalMode = true): Promise<Game> {
