@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: c3-e5-${{ github.event.pull_request.head.sha || github.sha }}
+  group: c3-e5-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 env:
