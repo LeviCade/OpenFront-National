@@ -3070,6 +3070,16 @@ export class GameImpl implements Game {
       this._nationalRecon = s.nationalRecon === null
         ? new NationalReconnaissance()
         : NationalReconnaissance.restore(s.nationalRecon, this._ticks);
+      // A restored lease must still point to real match participants and
+      // a real coordinate; a forged snapshot must never manufacture intel.
+      for (const grant of this._nationalRecon.snapshot().grants) {
+        if (
+          !this._players.has(grant.payerId) ||
+          !this._players.has(grant.targetId) ||
+          !this.isValidCoord(grant.centerX, grant.centerY)
+        )
+          throw new Error("NATIONAL recon: invalid restored identity or region");
+      }
       this._national = NationalRuntime.restore(
         s.national,
         this._playersBySmallID.map((p) => p.id()),
