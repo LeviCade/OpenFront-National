@@ -4,6 +4,7 @@ import {
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { EmbargoExecution } from "@openfront/engine/execution/EmbargoExecution";
+import { NationalSanctionExecution } from "@openfront/engine/execution/NationalSanctionExecution";
 import { PortExecution } from "@openfront/engine/execution/PortExecution";
 import { ShellExecution } from "@openfront/engine/execution/ShellExecution";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
@@ -26,6 +27,9 @@ const roster = [A, B, C, D].map(
 class MaritimeConfig extends TestConfig {
   warshipPatrolRange(): number {
     return 16;
+  }
+  safeFromPiratesCooldownMax(): number {
+    return 0;
   }
 }
 
@@ -377,6 +381,153 @@ describe("C4 Class 2 E3 real NATIONAL economic and maritime execution", () => {
     expect(afterPeace.owner()).toBe(b);
     expect(neutral.owner()).toBe(c);
     witness(game, "ECON-08/NAV-01", before, ship);
+  });
+
+  it("NAV-01: captured real commercial vessel pays only its lawful captor", async () => {
+    const { game, a, b, c, home, enemy } = await fixture();
+    war(game);
+    const patrol = fleet(game, a, 8, 13);
+    game.addExecution(new WarshipExecution(patrol));
+    const before = balances(game);
+    const voyage = sail(game, b, enemy, home);
+    const ship = b.units(UnitType.TradeShip)[0];
+    expect(ship).toBeDefined();
+    until(game, () => ship.owner() === a);
+    until(game, () => !voyage.isActive());
+    expect(a.piracyGold()).toBeGreaterThan(0n);
+    expect(a.gold() - before[0].gold).toBe(a.piracyGold());
+    expect(b.gold()).toBe(before[1].gold);
+    expect(c.gold()).toBe(before[2].gold);
+    expect(b.tradeGold()).toBe(0n);
+    expect(c.tradeGold()).toBe(0n);
+    witness(game, "NAV-01-piracy-payout", before, ship);
+  });
+
+  it("ECON-02/03: demand is voluntary, actual defiant voyage pays, issuer alone enforces", async () => {
+    const { game, a, b, c, d, home, enemy, other, own } = await fixture();
+    const before = balances(game);
+    game.addExecution(new NationalSanctionExecution(a, {
+      type: "national_issue_sanction",
+      scope: "national",
+      targetId: B,
+      recipientIds: [C, D],
+      durationTicks: 20,
+      requestId: "e3-sanction-issue",
+    }));
+    ticks(game, 2);
+    const rows = NationalSanctionExecution.viewFor(game, a);
+    expect(rows).toHaveLength(1);
+    const id = rows[0].id;
+    expect(c.canTrade(b)).toBe(true);
+    expect(d.canTrade(b)).toBe(true);
+    expect(balances(game)).toEqual(before);
+    expect(NationalSanctionExecution.viewFor(game, b)).toEqual([]);
+
+    game.addExecution(
+      new NationalSanctionExecution(c, {
+        type: "national_respond_sanction",
+        sanctionId: id,
+        decision: "comply",
+        requestId: "e3-comply",
+      }),
+      new NationalSanctionExecution(d, {
+        type: "national_respond_sanction",
+        sanctionId: id,
+        decision: "refuse",
+        requestId: "e3-refuse",
+      }),
+    );
+    ticks(game, 2);
+    expect(c.canTrade(b)).toBe(false);
+    expect(d.canTrade(b)).toBe(true);
+    expect(a.canTrade(d)).toBe(true);
+    expect(sail(game, c, home, enemy).isActive()).toBe(false);
+    expect(balances(game)).toEqual(before);
+
+    const defiant = sail(game, d, other, enemy);
+    until(game, () => !defiant.isActive());
+    expect(d.tradeGold()).toBeGreaterThan(0n);
+    expect(b.tradeGold()).toBe(d.tradeGold());
+    expect(c.tradeGold()).toBe(0n);
+    until(game, () => NationalSanctionExecution.viewFor(game, a)[0].phase === "decision-required");
+
+    // Mid-demand snapshot/restore must preserve the pending issuer choice.
+    const { restored, bytes, again } = await roundTrip(game, MAP);
+    expect(again).toEqual(bytes);
+    for (const g of [game, restored]) {
+      g.addExecution(new NationalSanctionExecution(g.player(C), {
+        type: "national_resolve_sanction",
+        sanctionId: id,
+        decision: "enforce",
+        requestId: "e3-forged-resolution",
+      }));
+      ticks(g, 2);
+      expect(g.player(A).canTrade(g.player(D))).toBe(true);
+      g.addExecution(new NationalSanctionExecution(g.player(A), {
+        type: "national_resolve_sanction",
+        sanctionId: id,
+        decision: "enforce",
+        requestId: "e3-enforce",
+      }));
+      ticks(g, 2);
+      expect(NationalSanctionExecution.viewFor(g, g.player(A))[0].phase).toBe("enforced");
+      expect(g.player(A).canTrade(g.player(D))).toBe(false);
+      expect(g.player(D).canTrade(g.player(B))).toBe(true);
+      expect(g.nationalWarAuthority()?.atWar(A, D)).toBe(false);
+    }
+    expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
+    const after = balances(game);
+    expect(sail(game, a, own, other).isActive()).toBe(false);
+    expect(balances(game)).toEqual(after);
+    witness(game, "ECON-02/03", before, undefined);
+  });
+
+  it("ECON-04: subordinate cannot issue empire sanction; emperor may explicitly withdraw", async () => {
+    const { game, a, b, c, d } = await fixture();
+    game.performNationalCommand(a, {
+      kind: "found-empire",
+      empireId: "e3-sanction-empire",
+    });
+    game.performNationalCommand(a, {
+      kind: "offer-empire",
+      empireId: "e3-sanction-empire",
+      candidateId: D,
+    });
+    game.performNationalCommand(d, {
+      kind: "accept-empire",
+      empireId: "e3-sanction-empire",
+      candidateId: D,
+    });
+    const before = balances(game);
+    const command = {
+      type: "national_issue_sanction",
+      scope: "imperial",
+      targetId: B,
+      recipientIds: [C],
+      durationTicks: 5,
+      requestId: "e3-imperial-sanction",
+    } as const;
+    game.addExecution(new NationalSanctionExecution(d, {...command, recipientIds: [C]}));
+    ticks(game, 2);
+    expect(NationalSanctionExecution.viewFor(game, a)).toEqual([]);
+    expect(NationalSanctionExecution.viewFor(game, c)).toEqual([]);
+    game.addExecution(new NationalSanctionExecution(a, {...command, recipientIds: [C]}));
+    ticks(game, 2);
+    const id = NationalSanctionExecution.viewFor(game, a)[0].id;
+    until(game, () => NationalSanctionExecution.viewFor(game, a)[0].phase === "decision-required");
+    game.addExecution(new NationalSanctionExecution(a, {
+      type: "national_resolve_sanction",
+      sanctionId: id,
+      decision: "back-down",
+      requestId: "e3-back-down",
+    }));
+    ticks(game, 2);
+    expect(NationalSanctionExecution.viewFor(game, c)[0].phase).toBe("backed-down");
+    expect(a.canTrade(c)).toBe(true);
+    expect(d.canTrade(c)).toBe(true);
+    expect(c.canTrade(b)).toBe(true);
+    expect(balances(game)).toEqual(before);
+    witness(game, "ECON-04", before, undefined);
   });
 
   it("tactical shells cannot damage a now-peaceful target; legacy fire is unchanged", async () => {

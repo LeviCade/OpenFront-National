@@ -6,6 +6,7 @@ import {
   NationalResolveSanctionIntentSchema,
 } from "@openfront/engine-api/Schemas";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
+import { simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import type { Execution, Game, Player } from "../game/Game";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
@@ -310,6 +311,13 @@ export class NationalSanctionExecution implements Execution {
     }
   }
 
+  /** Canonical demand state participates in NATIONAL replay hash. */
+  static stateHash(game: Game): number {
+    const records = this.records(game);
+    if (records.length === 0) return 0;
+    return simpleHash(JSON.stringify(records.map((e) => e.demand)));
+  }
+
   /** Host-only read; projection must bind the real authenticated observer. */
   static viewFor(game: Game, observer: Player) {
     if (living(game, observer.id()) !== observer) return [];
@@ -317,7 +325,9 @@ export class NationalSanctionExecution implements Execution {
       const d = e.demand!;
       const isIssuer = e.controllingIssuer() === observer;
       const own = d.recipients.find((row) => row.id === observer.id());
-      if (!isIssuer && !own) return [];
+      if (!isIssuer && (!own || e.recipient(observer.id()) !== observer)) {
+        return [];
+      }
       return [{
         id: d.id,
         issuer: d.issuer,
@@ -343,13 +353,17 @@ export class NationalSanctionExecution implements Execution {
       // live permission, with actual post-deadline transactions as evidence.
       if (game.ticks() < d.deadline) continue;
       e.advance(game.ticks());
-      if (d.phase !== "decision-required") continue;
+      if (
+        (d.phase !== "decision-required" && d.phase !== "satisfied") ||
+        game.ticks() >= d.deadline + RESOLUTION_WINDOW
+      ) continue;
       const other = d.target === a.id() ? b.id() :
         d.target === b.id() ? a.id() : null;
       const row = d.recipients.find((r) => r.id === other);
       if (row && e.recipient(row.id)) {
         row.continuedTrade = true;
         row.noncompliant = true;
+        d.phase = "decision-required";
       }
     }
   }

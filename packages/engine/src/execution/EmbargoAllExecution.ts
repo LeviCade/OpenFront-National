@@ -1,3 +1,4 @@
+import type { ClientID } from "@openfront/engine-api/Schemas";
 import { PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
@@ -9,13 +10,18 @@ import type {
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
 
+import { validEconomicActor } from "./NationalSanctionExecution";
+
 export class EmbargoAllExecution implements Execution {
   constructor(
     private player: Player,
     private action: "start" | "stop",
+    private clientId: ClientID | null = null,
   ) {}
 
   init(mg: Game, _: number): void {
+    const national = mg.nationalWarAuthority() !== null;
+    if (national && !validEconomicActor(mg, this.player, this.clientId)) return;
     if (!this.player.canEmbargoAll()) {
       return;
     }
@@ -27,7 +33,9 @@ export class EmbargoAllExecution implements Execution {
       if (me.isAlliedWith(p)) continue;
 
       if (this.action === "start") {
-        if (!me.hasEmbargoAgainst(p)) me.addEmbargo(p, false);
+        if (national ? !me.hasManualEmbargoAgainst(p) : !me.hasEmbargoAgainst(p)) {
+          me.addEmbargo(p, false);
+        }
       } else {
         if (me.hasEmbargoAgainst(p)) me.stopEmbargo(p);
       }
@@ -49,25 +57,31 @@ export class EmbargoAllExecution implements Execution {
   snapshot(w: SnapshotWriter): ExecRecord {
     return EmbargoAllExecutionSnapshot.write({
       player: w.player(this.player),
+      clientId: this.clientId,
       action: this.action,
     });
   }
 
   restoreSnapshot(s: EmbargoAllState, r: SnapshotReader): void {
     this.player = r.player(s.player);
+    this.clientId = s.clientId;
     this.action = s.action;
   }
 }
 
 const EmbargoAllStateSchema = z.object({
   player: zPlayerRef(),
+  clientId: z.string().nullable(),
   action: z.enum(["start", "stop"]),
 });
 type EmbargoAllState = z.infer<typeof EmbargoAllStateSchema>;
 
 export const EmbargoAllExecutionSnapshot = execSnapshotType({
   name: "EmbargoAll",
-  version: 1,
+  version: 2,
+  migrations: {
+    1: (data: unknown) => ({ ...(data as Record<string, unknown>), clientId: null }),
+  },
   schema: EmbargoAllStateSchema,
   cls: () => EmbargoAllExecution,
 });

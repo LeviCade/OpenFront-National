@@ -52,7 +52,11 @@ export function neutralBlockader(
     return undefined;
   }
   const radius = blockadeRadius(game);
-  const candidates = game.nearbyUnits(merchant.tile(), radius, UnitType.Warship);
+  const candidates = game.nearbyUnits(
+    merchant.tile(),
+    radius,
+    UnitType.Warship,
+  );
   let selected: Unit | undefined;
   for (const { unit } of candidates) {
     if (
@@ -65,7 +69,8 @@ export function neutralBlockader(
       !game.isWater(unit.tile()) ||
       game.getWaterComponent(unit.tile()) !== component ||
       game.euclideanDistSquared(unit.tile(), merchant.tile()) > radius ** 2 ||
-      game.euclideanDistSquared(unit.tile(), destination.tile()) > radius ** 2 ||
+      game.euclideanDistSquared(unit.tile(), destination.tile()) >
+        radius ** 2 ||
       !mayAttackAtSea(game, unit.owner(), destination.owner()) ||
       war.atWar(unit.owner().id(), merchant.owner().id())
     ) {
@@ -102,7 +107,6 @@ export function nearestReturnPort(
     .sort(
       (a, b) =>
         game.manhattanDist(tile, a.tile()) -
-          game.manhattanDist(tile, b.tile()) ||
-        a.id() - b.id(),
+          game.manhattanDist(tile, b.tile()) || a.id() - b.id(),
     )[0];
 }

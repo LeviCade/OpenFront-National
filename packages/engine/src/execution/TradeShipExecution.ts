@@ -64,8 +64,12 @@ export class TradeShipExecution implements Execution {
       if (
         this.mg.nationalWarAuthority() !== null &&
         (!this.srcPort.isActive() ||
+          this.srcPort.isMarkedForDeletion() ||
+          this.srcPort.isUnderConstruction() ||
           this.srcPort.owner() !== this.origOwner ||
           !this._dstPort.isActive() ||
+          this._dstPort.isMarkedForDeletion() ||
+          this._dstPort.isUnderConstruction() ||
           !this.origOwner.canTrade(this._dstPort.owner()))
       ) {
         this.active = false;
@@ -109,15 +113,25 @@ export class TradeShipExecution implements Execution {
       );
     }
 
-    // If a player captures another player's port while trading we should delete
-    // the ship.
+    // Legacy capture logic remains unchanged. In NATIONAL, losing the home
+    // port cancels a commercial voyage but lets the existing hull return
+    // via another eligible owned port instead of paying its new owner.
+    if (
+      national &&
+      !this.returningHome &&
+      !this.wasCaptured &&
+      (!this.srcPort.isActive() ||
+        this.srcPort.isMarkedForDeletion() ||
+        this.srcPort.isUnderConstruction() ||
+        this.srcPort.owner() !== this.origOwner)
+    ) {
+      this.returningHome = true;
+      if (!this.chooseReturnPort()) return;
+    }
     if (
       !this.returningHome &&
       (!national || !this.wasCaptured) &&
-      (dstPortOwner.id() === this.srcPort.owner().id() ||
-        (national &&
-          (!this.srcPort.isActive() ||
-            this.srcPort.owner() !== this.origOwner)))
+      dstPortOwner.id() === this.srcPort.owner().id()
     ) {
       this.tradeShip.delete(false);
       this.active = false;
@@ -127,7 +141,11 @@ export class TradeShipExecution implements Execution {
     if (
       !this.returningHome &&
       !this.wasCaptured &&
-      (!this._dstPort.isActive() || !tradeShipOwner.canTrade(dstPortOwner))
+      (!this._dstPort.isActive() ||
+        (national &&
+          (this._dstPort.isMarkedForDeletion() ||
+            this._dstPort.isUnderConstruction())) ||
+        !tradeShipOwner.canTrade(dstPortOwner))
     ) {
       this.tradeShip.delete(false);
       this.active = false;
@@ -216,6 +234,12 @@ export class TradeShipExecution implements Execution {
         this.tilesTraveled++;
         break;
       case PathStatus.COMPLETE:
+        if (this.returningHome && result.node !== dst) {
+          this.failedReturnPorts.push(this._dstPort.id());
+          this.chooseReturnPort();
+          return;
+        }
+        if (this.returningHome && curTile !== dst) this.tradeShip.move(dst);
         this.complete();
         return;
       case PathStatus.NOT_FOUND:
@@ -263,6 +287,8 @@ export class TradeShipExecution implements Execution {
       this.mg.nationalWarAuthority() !== null &&
       !this.wasCaptured &&
       (!this.srcPort.isActive() ||
+          this.srcPort.isMarkedForDeletion() ||
+          this.srcPort.isUnderConstruction() ||
         this.srcPort.owner() !== this.origOwner ||
         !this._dstPort.isActive() ||
         !this.origOwner.canTrade(this._dstPort.owner()))
@@ -300,7 +326,11 @@ export class TradeShipExecution implements Execution {
       this._dstPort.owner().addGold(gold, this._dstPort.tile());
       this.srcPort.owner().addTradeGold(gold);
       this._dstPort.owner().addTradeGold(gold);
-      NationalSanctionExecution.paidTrade(this.mg, this.srcPort.owner(), this._dstPort.owner());
+      NationalSanctionExecution.paidTrade(
+        this.mg,
+        this.srcPort.owner(),
+        this._dstPort.owner(),
+      );
       // Record stats
       this.mg
         .stats()
