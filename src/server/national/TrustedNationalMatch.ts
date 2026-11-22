@@ -27,6 +27,12 @@ import { GameRunner } from "@openfront/engine/WinnerReplay";
 import { createHash, randomUUID } from "node:crypto";
 import WebSocket from "ws";
 import type { Client } from "../Client";
+import {
+  type DurableNationalCheckpoint,
+  type DurableNationalState,
+  MAX_NATIONAL_REQUEST_IDS,
+  initialNationalReplayDigest,
+} from "./DurableNationalCheckpoint";
 
 export interface NationalTickReceipt {
   readonly tick: number;
@@ -50,7 +56,10 @@ export class TrustedNationalMatch {
   private readonly requestIds = new Map<ClientID, Set<string>>();
   /** A command token belongs to exactly one original principal for this game. */
   private readonly requestOwners = new Map<string, ClientID>();
-  private readonly committed: Turn[] = [];
+  private replayCommitment: string;
+  private readonly kicked = new Set<ClientID>();
+  private paused = false;
+  private deliveryQueue: Array<() => void> | null = null;
   private intents: StampedIntent[] = [];
 
   constructor(
@@ -61,7 +70,11 @@ export class TrustedNationalMatch {
       client: Client,
       packet: GameUpdateViewData,
     ) => void,
+    private readonly checkpoint?: DurableNationalCheckpoint,
+    recovered = false,
   ) {
+    this.replayCommitment = checkpoint?.state.replayDigest ?? initialNationalReplayDigest(gameID);
+    if (recovered && !checkpoint) throw new Error("NATIONAL recovery requires durable checkpoint");
     const config = runner.game.config().gameConfig();
     if (
       config.nationalMode !== true ||
@@ -86,7 +99,8 @@ export class TrustedNationalMatch {
       // client.publicId was resolved by Worker's authenticated /users/@me,
       // not accepted from a lobby message, username, or intent body.
       if (
-        !client.claims ||
+        (!recovered && !client.claims) ||
+        (recovered && client.claims !== null) ||
         !client.publicId ||
         !client.persistentID ||
         client.spectator ||
@@ -111,7 +125,56 @@ export class TrustedNationalMatch {
     }
     // Register projections only after validating every seat. The GameRunner
     // itself verifies clientID -> real PlayerID on each subsequent tick.
-    for (const client of admittedPlayers) this.registerSeat(client);
+    if (checkpoint) {
+      if (checkpoint.seats.length !== admittedPlayers.length ||
+          checkpoint.seats.some((seat) => {
+            const client = this.seats.get(seat.clientID);
+            return !client || client.persistentID !== seat.subject ||
+              client.publicId !== seat.accountId ||
+              runner.game.playerByClientID(seat.clientID)?.id() !== seat.playerID;
+          })) throw new Error("NATIONAL durable seat binding mismatch");
+      for (const [requestId, owner] of checkpoint.state.requestOwners) {
+        this.requestOwners.set(requestId, owner);
+        this.requestIds.get(owner)!.add(requestId);
+      }
+      for (const owner of checkpoint.state.kicked) this.kicked.add(owner);
+      this.paused = checkpoint.state.paused;
+    }
+    if (!recovered) {
+      for (const client of admittedPlayers) this.registerSeat(client);
+    }
+  }
+
+  private durableState(): DurableNationalState {
+    return {
+      replayDigest: this.replayCommitment,
+      requestOwners: [...this.requestOwners],
+      kicked: [...this.kicked],
+      paused: this.paused,
+    };
+  }
+
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    this.checkpoint?.reserve(this.durableState());
+  }
+
+  recordKick(clientID: ClientID): void {
+    if (!this.seats.has(clientID)) return;
+    this.kicked.add(clientID);
+    this.checkpoint?.reserve(this.durableState());
+  }
+
+  retire(): void {
+    this.checkpoint?.retire();
+  }
+
+  durableTick(): number | null {
+    return this.checkpoint?.tick ?? null;
+  }
+
+  stateCommitment(): string | null {
+    return this.checkpoint?.commitment ?? null;
   }
 
   /** E2's verified Client and original physical socket are authoritative.
@@ -122,6 +185,7 @@ export class TrustedNationalMatch {
     const sessionId = randomUUID();
     const active = () =>
       this.seats.get(client.clientID) === client &&
+      !this.kicked.has(client.clientID) &&
       client.ws === admittedSocket &&
       admittedSocket.readyState === WebSocket.OPEN &&
       !client.spectator &&
@@ -165,12 +229,16 @@ export class TrustedNationalMatch {
           update.id === identity.id ? { ...update, ...identity } : update,
         );
         if (!ownPresent) bound.push(identity);
-        this.deliver(client, {
+        if (this.deliveryQueue === null) throw new Error("NATIONAL projection outside authoritative tick");
+        const projected = {
           ...packet,
           updates: {
             ...packet.updates,
             [GameUpdateType.Player]: bound,
           },
+        };
+        this.deliveryQueue.push(() => {
+          if (active()) this.deliver(client, projected);
         });
       },
     );
@@ -184,6 +252,8 @@ export class TrustedNationalMatch {
   submit(sender: Client, candidate: unknown): boolean {
     if (
       this.seats.get(sender.clientID) !== sender ||
+      this.kicked.has(sender.clientID) ||
+      this.intents.length >= 4096 ||
       this.activeSocket.get(sender.clientID)?.() !== true ||
       sender.spectator ||
       !sender.claims ||
@@ -209,9 +279,11 @@ export class TrustedNationalMatch {
     if ("requestId" in stamped && stamped.requestId !== undefined) {
       const seen = this.requestIds.get(sender.clientID)!;
       const owner = this.requestOwners.get(stamped.requestId);
-      if (seen.has(stamped.requestId) || owner !== undefined) return false;
+      if (seen.has(stamped.requestId) || owner !== undefined || this.requestOwners.size >= MAX_NATIONAL_REQUEST_IDS) return false;
       seen.add(stamped.requestId);
       this.requestOwners.set(stamped.requestId, sender.clientID);
+      // The ID is reserved durably even if its socket disconnects before the tick.
+      this.checkpoint?.reserve(this.durableState());
     }
     this.intents.push(stamped);
     return true;
@@ -224,11 +296,23 @@ export class TrustedNationalMatch {
       intents: this.intents,
     };
     this.intents = [];
-    this.runner.addTurn(turn);
-    if (!this.runner.executeNextTick()) {
-      throw new Error("NATIONAL authoritative GameRunner refused tick");
+    const queue: Array<() => void> = [];
+    this.deliveryQueue = queue;
+    try {
+      this.runner.addTurn(turn);
+      if (!this.runner.executeNextTick()) {
+        throw new Error("NATIONAL authoritative GameRunner refused tick");
+      }
+      this.replayCommitment = createHash("sha256")
+        .update(this.replayCommitment)
+        .update(JSON.stringify(turn))
+        .digest("hex");
+      // Capture AFTER recipient filtering, BEFORE any network output.
+      this.checkpoint?.commit(this.runner, this.durableState());
+    } finally {
+      this.deliveryQueue = null;
     }
-    this.committed.push(turn);
+    for (const deliver of queue) deliver();
     return {
       tick: this.runner.game.ticks(),
       committedIntents: turn.intents.length,
@@ -236,14 +320,9 @@ export class TrustedNationalMatch {
     };
   }
 
-  /** Deterministic transcript commitment; never transmit raw hidden state. */
+  /** Bounded digest chain; never transmit raw hidden state. */
   replayDigest(): string {
-    return createHash("sha256")
-      .update("trusted-national-v1\n")
-      .update(this.gameID)
-      .update("\n")
-      .update(JSON.stringify(this.committed))
-      .digest("hex");
+    return this.replayCommitment;
   }
 
   /** E2 GameServer host-only disconnect status; never client admin intent. */
@@ -281,6 +360,7 @@ export class TrustedNationalMatch {
   resumeRecipient(client: Client): boolean {
     if (
       this.seats.get(client.clientID) !== client ||
+      this.kicked.has(client.clientID) ||
       !client.claims ||
       !client.publicId ||
       client.spectator ||
