@@ -23,6 +23,7 @@ import { EmojiExecution } from "./EmojiExecution";
 import { MarkDisconnectedExecution } from "./MarkDisconnectedExecution";
 import { MoveWarshipExecution } from "./MoveWarshipExecution";
 import { NationalFoundEmpireExecution } from "./NationalFoundEmpireExecution";
+import { NationalSanctionExecution } from "./NationalSanctionExecution";
 import { NationalWarExecution } from "./NationalWarExecution";
 import { NationExecution } from "./NationExecution";
 import { NoOpExecution } from "./NoOpExecution";
@@ -214,6 +215,10 @@ export class Executor {
           intent.requestId ?? null,
           intent.clientID,
         );
+      case "national_issue_sanction":
+      case "national_respond_sanction":
+      case "national_resolve_sanction":
+        return new NationalSanctionExecution(player, intent, intent.clientID);
       case "national_declare_war":
         return new NationalWarExecution(
           player,

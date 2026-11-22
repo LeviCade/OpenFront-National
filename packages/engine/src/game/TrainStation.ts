@@ -8,6 +8,7 @@ import {
   zRef,
 } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
+import { NationalSanctionExecution } from "../execution/NationalSanctionExecution";
 import { TrainExecution } from "../execution/TrainExecution";
 import type {
   SnapshotReader,
@@ -31,6 +32,7 @@ class TradeStationStopHandler implements TrainStopHandler {
   ): void {
     const stationOwner = station.unit.owner();
     const trainOwner = trainExecution.owner();
+    if (mg.nationalWarAuthority() !== null && !station.tradeAvailable(trainOwner)) return;
     const gold = mg
       .config()
       .trainGold(
@@ -43,6 +45,7 @@ class TradeStationStopHandler implements TrainStopHandler {
       stationOwner.addGold(gold, station.tile());
       stationOwner.addTrainGold(gold);
       mg.stats().trainExternalTrade(stationOwner, gold);
+      NationalSanctionExecution.paidTrade(mg, trainOwner, stationOwner);
     }
     trainOwner.addGold(gold, station.tile());
     trainOwner.addTrainGold(gold);

@@ -28,6 +28,8 @@ import type {
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
 
+import { NationalSanctionExecution } from "./NationalSanctionExecution";
+
 export class TradeShipExecution implements Execution {
   private active = true;
   private mg: Game;
@@ -298,6 +300,7 @@ export class TradeShipExecution implements Execution {
       this._dstPort.owner().addGold(gold, this._dstPort.tile());
       this.srcPort.owner().addTradeGold(gold);
       this._dstPort.owner().addTradeGold(gold);
+      NationalSanctionExecution.paidTrade(this.mg, this.srcPort.owner(), this._dstPort.owner());
       // Record stats
       this.mg
         .stats()
