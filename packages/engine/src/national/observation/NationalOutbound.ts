@@ -20,7 +20,7 @@ import {
   type PlayerUpdate,
   type UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
-import type { NationalPublicConflictView } from "@openfront/engine-api/game/NationalRecipientView";
+import type { NationalObserverMapV1, NationalPublicConflictView } from "@openfront/engine-api/game/NationalRecipientView";
 import {
   packUnitUpdates,
   unpackUnitUpdates,
@@ -423,6 +423,7 @@ export class NationalOutboundFilter {
     game: Game,
     data: GameUpdateViewData,
     verified: LiveNationalObservation | null,
+    page?: NationalObserverMapV1,
   ): GameUpdateViewData {
     if (!game.config().nationalMode()) {
       throw new Error("NATIONAL packet projection used in legacy mode");
@@ -490,7 +491,8 @@ export class NationalOutboundFilter {
     const packedTile: number[] = [];
     for (let i = 0; i + 1 < data.packedTileUpdates.length; i += 2) {
       const tile = data.packedTileUpdates[i];
-      if (!visibleTiles.has(tile)) continue;
+      // Private host map tuples are the only ownership lane; Solo retains deltas.
+      if (page !== undefined || !visibleTiles.has(tile)) continue;
       packedTile.push(tile, data.packedTileUpdates[i + 1]);
     }
 
@@ -505,12 +507,14 @@ export class NationalOutboundFilter {
 
     const unitUpdates: UnitUpdate[] = [];
     const stillVisible = new Set<number>();
-    const orderedVisible = [...visibleAssetIds].sort((a, b) => a - b);
+    const orderedVisible = page === undefined
+      ? [...visibleAssetIds].sort((a, b) => a - b)
+      : page.units.map((unit) => unit.id);
     for (const id of orderedVisible) {
       const unit = game.unit(id);
       if (!unit) continue;
       const raw =
-        rawUnits.get(id) ??
+        page !== undefined ? unit.toUpdate() : rawUnits.get(id) ??
         (this.previousUnits.has(id) ? null : unit.toUpdate());
       stillVisible.add(id);
       if (raw === null) continue;
@@ -529,12 +533,14 @@ export class NationalOutboundFilter {
                 : {}),
             };
       unitUpdates.push(outgoing);
-      this.previousUnits.set(id, outgoing);
+      if (page === undefined) this.previousUnits.set(id, outgoing);
     }
 
     // Revoke sight using the LAST VISIBLE position, never the now-hidden
     // authoritative position/strength. A loss of empire membership is
     // reflected immediately by absence from the fresh verified sight set.
+    // Private host deletion is exclusively the disclosed map tombstone/clear.
+    if (page !== undefined) this.previousUnits.clear();
     for (const [id, prior] of this.previousUnits) {
       if (stillVisible.has(id)) continue;
       unitUpdates.push({

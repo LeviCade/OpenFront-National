@@ -53,12 +53,18 @@ export interface NationalObserverMapV1 {
   readonly sweepTick: number;
   readonly width: number;
   readonly height: number;
-  /** All previous E4-owned map/visibility/unit caches must be discarded. */
+  /** Clear previous tile caches before applying this page, without rewinding the sweep. */
   readonly reset: boolean;
-  /** Offset in sorted CURRENT authorized visible tiles. Never client chosen. */
+  /** Offset in frozen authorized membership slots. Never client chosen. */
   readonly cursor: number;
-  /** Null means a complete current-sight map sweep. */
+  /** Null completes frozen membership traversal, not necessarily current sight. */
   readonly nextCursor: number | null;
+  /** Consumed membership slots, including IDs revoked before emission. */
+  readonly tilePageSlots: number;
+  /** Previously disclosed refs only; clear ownership and border overlays first. */
+  readonly tileRemovedRefs: readonly number[];
+  /** True if some presently authorized tuples are not represented in the cache. */
+  readonly tilePartial: boolean;
   readonly tiles: readonly NationalVisibleTileV1[];
   /** Current sightings, not E1 sight-memory or hidden enemy asset catalog. */
   readonly units: readonly NationalVisibleUnitV1[];
@@ -66,6 +72,9 @@ export interface NationalObserverMapV1 {
   readonly unitCursor: number;
   readonly unitNextCursor: number | null;
   readonly unitSweepId: number;
+  readonly unitPageSlots: number;
+  /** True if some presently authorized markers are not represented in the cache. */
+  readonly unitPartial: boolean;
   /** Discard all prior unit markers before adding this page. */
   readonly unitReset: boolean;
   /** Immediately delete these formerly sighted IDs, without their coordinates. */
@@ -115,4 +124,26 @@ export interface NationalPublicConflictView {
     readonly acceptedTick: number | null;
     readonly acceptedBy: string | null;
   }[];
+}
+
+/** Shared structural continuity checks; the receiver additionally checks history. */
+export function validNationalObserverPageProgress(
+  page: Pick<NationalObserverMapV1,
+    "cursor" | "nextCursor" | "tilePageSlots" | "tiles" |
+    "unitCursor" | "unitNextCursor" | "unitPageSlots" | "units" |
+    "width" | "height" | "tilePartial" | "unitPartial" | "unitOverflow">,
+): boolean {
+  const valid = (cursor: number, next: number | null, slots: number,
+    emitted: number, limit: number, total: number): boolean =>
+    Number.isSafeInteger(cursor) && cursor >= 0 && cursor <= total &&
+    Number.isSafeInteger(slots) && slots >= emitted && slots <= limit &&
+    cursor + slots <= total && (cursor === 0 || slots > 0) &&
+    (next === null || (slots === limit && next === cursor + slots && next < total));
+  return typeof page.tilePartial === "boolean" &&
+    typeof page.unitPartial === "boolean" &&
+    (!page.unitOverflow || page.unitPartial) &&
+    valid(page.cursor, page.nextCursor, page.tilePageSlots, page.tiles.length,
+      NATIONAL_OBSERVER_MAX_TILES, page.width * page.height) &&
+    valid(page.unitCursor, page.unitNextCursor, page.unitPageSlots,
+      page.units.length, NATIONAL_OBSERVER_MAX_UNITS, NATIONAL_OBSERVER_MAX_TRACKED_UNITS);
 }

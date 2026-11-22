@@ -16,23 +16,21 @@ import {
   type TrustedNationalObserverMap,
 } from "./TrustedNationalSession";
 
+import {
+  NATIONAL_OBSERVER_MAX_TILES,
+  NATIONAL_OBSERVER_MAX_UNITS,
+  NATIONAL_OBSERVER_MAX_TRACKED_UNITS,
+  validNationalObserverPageProgress,
+  type NationalObserverMapV1,
+} from "@openfront/engine-api/game/NationalRecipientView";
+
 const MAX_MAP_TILES = 32_000_000;
-const MAX_VISIBLE_UNIT_MARKERS = 131_072;
-const MAX_UNIT_PAGE = 2048;
+const MAX_VISIBLE_UNIT_MARKERS = NATIONAL_OBSERVER_MAX_TRACKED_UNITS;
+const MAX_UNIT_PAGE = NATIONAL_OBSERVER_MAX_UNITS;
 
 export type NationalObserverTileStatus = "unknown" | "observed" | "revoked";
 
-interface ContinuityPage extends TrustedNationalObserverMap {
-  readonly streamId: string;
-  readonly sweepId: number;
-  readonly sweepTick: number;
-  readonly unitCursor: number;
-  readonly unitNextCursor: number | null;
-  readonly unitSweepId: number;
-  readonly unitReset: boolean;
-  readonly unitOverflow: boolean;
-  readonly unitRemovedIds: readonly number[];
-}
+type ContinuityPage = NationalObserverMapV1;
 
 export interface NationalObserverMapDelta {
   readonly tick: number;
@@ -44,6 +42,11 @@ export interface NationalObserverMapDelta {
   readonly clearAllTiles: boolean;
   readonly clearAllUnits: boolean;
   readonly removedUnitIds: readonly number[];
+  readonly removedTileRefs: readonly number[];
+  readonly tilePartial: boolean;
+  readonly unitPartial: boolean;
+  /** At least one presently authorized tile is represented; not command authority. */
+  readonly usable: boolean;
   readonly tiles: TrustedNationalObserverMap["tiles"];
   readonly units: TrustedNationalObserverMap["units"];
   /** True means the current page is part of a larger unit sweep. */
@@ -81,11 +84,12 @@ function pageFromWire(
     !Array.isArray(raw.unitRemovedIds) ||
     raw.unitRemovedIds.length > MAX_UNIT_PAGE ||
     raw.unitRemovedIds.some((id: unknown) => !int(id, 0, 0xffffffff)) ||
-    (base.reset && (base.cursor !== 0 || raw.unitReset !== true)) ||
-    (raw.unitReset &&
-      (raw.unitCursor !== 0 || raw.unitRemovedIds.length > 0)) ||
-    (base.nextCursor !== null &&
-      base.nextCursor !== base.cursor + base.tiles.length)
+    !Array.isArray(raw.tileRemovedRefs) ||
+    raw.tileRemovedRefs.length > NATIONAL_OBSERVER_MAX_TILES ||
+    raw.tileRemovedRefs.some((ref: unknown) => !int(ref, 0, base.width * base.height - 1)) ||
+    (base.reset && raw.tileRemovedRefs.length !== 0) ||
+    (raw.unitReset && raw.unitRemovedIds.length > 0) ||
+    !validNationalObserverPageProgress(base as unknown as ContinuityPage)
   )
     throw new Error("NATIONAL invalid observer-map continuity metadata");
   // No duplicate unit markers, no foreign troop statistics, no ambiguous
@@ -103,7 +107,11 @@ function pageFromWire(
   const unique = new Set(removed);
   if (unique.size !== removed.length || removed.some((id) => unitIds.has(id)))
     throw new Error("NATIONAL ambiguous unit revocation");
-  return base as ContinuityPage;
+  const tileRefs = new Set(base.tiles.map(([ref]) => ref));
+  const removedTiles = raw.tileRemovedRefs as number[];
+  if (removedTiles.some((ref, i) => tileRefs.has(ref) || (i > 0 && ref <= removedTiles[i - 1])))
+    throw new Error("NATIONAL ambiguous tile revocation");
+  return base as unknown as ContinuityPage;
 }
 
 /**
@@ -119,6 +127,7 @@ export class NationalObserverMapContinuity {
   private nextCursor: number | null = null;
   private unitSweepId = 0;
   private nextUnitCursor: number | null = null;
+  private knownCount = 0;
   private width = 0;
   private height = 0;
   /** Compact bitsets: at most 64 MB for a 32-million-tile map. */
@@ -129,7 +138,7 @@ export class NationalObserverMapContinuity {
     TrustedNationalObserverMap["units"][number]
   >();
 
-  constructor(private readonly expectedPrincipal: string) {
+  constructor(private readonly expectedPrincipal: string, private readonly expectedStreamId?: string) {
     if (expectedPrincipal.length === 0 || expectedPrincipal.length > 128)
       throw new Error("NATIONAL expected authenticated principal required");
   }
@@ -160,60 +169,37 @@ export class NationalObserverMapContinuity {
     const page = pageFromWire(untrusted, packetTick, this.expectedPrincipal);
     if (page.tick <= this.lastTick)
       throw new Error("NATIONAL replayed/backward observer page");
-    if (this.streamId !== null && page.streamId !== this.streamId)
+    if ((this.expectedStreamId !== undefined && page.streamId !== this.expectedStreamId) || (this.streamId !== null && page.streamId !== this.streamId))
       throw new Error("NATIONAL mixed authenticated observer streams");
     if (
       this.lastTick >= 0 &&
       (page.width !== this.width || page.height !== this.height)
     )
       throw new Error("NATIONAL map dimensions changed without new start");
-    if (this.lastTick < 0 && !page.reset)
-      throw new Error("NATIONAL first observer page must reset");
-    if (!page.reset && this.lastTick >= 0) {
+    if (this.lastTick < 0) {
+      if (!page.reset || !page.unitReset || page.cursor !== 0 ||
+        page.unitCursor !== 0 || page.sweepId !== 1 || page.unitSweepId !== 1 ||
+        page.sweepTick !== page.tick)
+        throw new Error("NATIONAL first observer page must reset");
+    } else {
       if (page.sweepId === this.sweepId) {
-        if (
-          this.nextCursor === null ||
-          page.cursor !== this.nextCursor ||
-          page.sweepTick !== this.sweepTick
-        )
+        if (this.nextCursor === null || page.cursor !== this.nextCursor ||
+          page.sweepTick !== this.sweepTick)
           throw new Error("NATIONAL missing/out-of-order tile page");
-      } else if (
-        page.sweepId <= this.sweepId ||
-        this.nextCursor !== null ||
-        page.cursor !== 0 ||
-        page.sweepTick !== page.tick
-      ) {
+      } else if (page.sweepId !== this.sweepId + 1 ||
+        this.nextCursor !== null || page.cursor !== 0 || page.sweepTick !== page.tick)
         throw new Error("NATIONAL incomplete/inconsistent map sweep");
-      }
-    } else if (
-      page.cursor !== 0 ||
-      page.sweepTick !== page.tick ||
-      (this.lastTick >= 0 && page.sweepId <= this.sweepId)
-    ) {
-      throw new Error("NATIONAL invalid tile sweep reset");
-    }
-
-    if (!page.unitReset && this.lastTick >= 0) {
       if (page.unitSweepId === this.unitSweepId) {
-        if (
-          this.nextUnitCursor === null ||
-          page.unitCursor !== this.nextUnitCursor
-        )
+        if (this.nextUnitCursor === null || page.unitCursor !== this.nextUnitCursor)
           throw new Error("NATIONAL missing/out-of-order unit page");
-      } else if (
-        page.unitSweepId <= this.unitSweepId ||
-        this.nextUnitCursor !== null ||
-        page.unitCursor !== 0
-      ) {
+      } else if (page.unitSweepId !== this.unitSweepId + 1 ||
+        this.nextUnitCursor !== null || page.unitCursor !== 0)
         throw new Error("NATIONAL incomplete/inconsistent unit sweep");
-      }
-    } else if (
-      page.unitCursor !== 0 ||
-      (this.lastTick >= 0 && page.unitSweepId <= this.unitSweepId)
-    ) {
-      throw new Error("NATIONAL invalid unit sweep reset");
     }
-
+    // Tombstones are valid only for currently disclosed cache entries.
+    if (page.tileRemovedRefs.some((ref) => this.known[ref] !== 1) ||
+      page.unitRemovedIds.some((id) => !this.unitCache.has(id)))
+      throw new Error("NATIONAL undisclosed revocation");
     // Calculate the projected size BEFORE mutating the cache, so oversized
     // hostile packets never partially apply.
     let projectedUnitCount = page.unitReset ? 0 : this.unitCache.size;
@@ -241,13 +227,23 @@ export class NationalObserverMapContinuity {
       this.height = page.height;
     }
     if (page.reset) {
-      this.revoked.set(this.known);
+      for (let ref = 0; ref < this.known.length; ref++) {
+        if (this.known[ref]) this.revoked[ref] = 1;
+      }
       this.known.fill(0);
+      this.knownCount = 0;
+    } else {
+      for (const ref of page.tileRemovedRefs) {
+        this.known[ref] = 0;
+        this.revoked[ref] = 1;
+        this.knownCount--;
+      }
     }
     if (page.unitReset) this.unitCache.clear();
     else for (const id of page.unitRemovedIds) this.unitCache.delete(id);
     for (const unit of page.units) this.unitCache.set(unit.id, unit);
     for (const tile of page.tiles) {
+      if (!this.known[tile[0]]) this.knownCount++;
       this.known[tile[0]] = 1;
       this.revoked[tile[0]] = 0;
     }
@@ -268,6 +264,10 @@ export class NationalObserverMapContinuity {
       clearAllTiles: page.reset,
       clearAllUnits: page.unitReset,
       removedUnitIds: [...page.unitRemovedIds],
+      removedTileRefs: [...page.tileRemovedRefs],
+      tilePartial: page.tilePartial,
+      unitPartial: page.unitPartial,
+      usable: this.knownCount > 0,
       tiles: page.tiles,
       units: page.units,
       unitsTruncated: page.unitsTruncated,

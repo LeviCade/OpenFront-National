@@ -6,8 +6,8 @@
  * never be used to serialize the Game, its GameSnapshot or canonical turns.
  *
  * A browser reconstructs its own permitted map from bounded successive
- * pages. Any loss of sight (including empire separation) sends reset=true
- * BEFORE the next page; stale ownership/units must be deleted by the client.
+ * pages. Revocation invalidates disclosed facts independently of cursor progress.
+ * Mass revocation clears the affected cache, not the traversal.
  */
 import {
   NATIONAL_OBSERVER_MAP_VERSION,
@@ -37,17 +37,17 @@ export {
  *
  * Tile and unit membership for each sweep is frozen as a list of ID numbers,
  * NOT as past owner/terrain/unit state. Every emitted item is rechecked against
- * current sight, and its data is read from the current Game. A removed tile
- * invalidates the entire private tile cache. A lost unit ID is deleted
- * immediately even while another unit page is in flight.
+ * current sight, and its data is read from the current Game. Disclosed stale
+ * facts are removed immediately; no never-disclosed ID is tombstoned.
  *
  * A sweep is a bounded, temporally annotated sequence, not an atomic Game
  * snapshot. Consumers must never promote an omitted page to known ownership.
  */
 export class NationalObserverMapPager {
-  private previousVisible: ReadonlySet<number> | null = null;
-  /** Only IDs actually disclosed on this socket may ever be tombstoned. */
-  private readonly emittedUnitIds = new Set<number>();
+  /** Only disclosed facts may be invalidated. Signatures include borders. */
+  private readonly emittedTiles = new Map<number, number>();
+  private readonly emittedUnits = new Map<number, NationalVisibleUnitV1>();
+  private unitWindowAnchor = -1;
   private tileRefs: readonly number[] = [];
   private cursor = 0;
   private sweepId = 0;
@@ -72,8 +72,9 @@ export class NationalObserverMapPager {
   }
 
   close(): void {
-    this.previousVisible = null;
-    this.emittedUnitIds.clear();
+    this.emittedTiles.clear();
+    this.emittedUnits.clear();
+    this.unitWindowAnchor = -1;
     this.tileRefs = [];
     this.cursor = 0;
     this.unitIds = [];
@@ -93,24 +94,7 @@ export class NationalObserverMapPager {
     if (map.width() * map.height() > 32_000_000 || visible.size > 32_000_000) {
       throw new Error("NATIONAL observer-map exceeds bounded world limit");
     }
-    if (this.previousVisible !== null) {
-      for (const former of this.previousVisible) {
-        if (!visible.has(former)) {
-          // Never retain even one formerly authorized owner/border tile.
-          this.resetPending = true;
-          break;
-        }
-      }
-    }
-    // The verified sight set was freshly derived for this tick by E1.
-    // Tracking its membership is O(visible); do not sort all visible tiles
-    // each tick merely to send a 4096-tile page.
-    this.previousVisible = visible;
-    const reset = this.resetPending;
-    if (reset) {
-      this.cursor = 0;
-      this.tileRefs = [];
-    }
+    const first = this.resetPending;
     if (this.cursor === 0) {
       // The ID list is fixed until completion, but tile contents are live.
       // Newly visible tiles join the next sweep, never an arbitrary offset.
@@ -126,23 +110,44 @@ export class NationalObserverMapPager {
       cursor + NATIONAL_OBSERVER_MAX_TILES,
     );
     const neighbors = new Array<number>(4);
-    const tiles: NationalVisibleTileV1[] = refs
-      .filter((ref) => visible.has(ref))
-      .map((ref) => {
-        const count = map.neighbors4(ref, neighbors);
-        const owner = map.ownerID(ref);
-        const x = map.x(ref);
-        const y = map.y(ref);
-        let mask = 0;
-        for (let i = 0; i < count; i++) {
-          const other = neighbors[i];
-          if (!visible.has(other) || owner === map.ownerID(other)) continue;
-          const dx = map.x(other) - x;
-          const dy = map.y(other) - y;
-          mask |= dy === -1 ? 1 : dy === 1 ? 2 : dx === -1 ? 4 : 8;
-        }
-        return [ref, map.tileState(ref), map.terrainByte(ref), mask];
-      });
+    const tuple = (ref: number): NationalVisibleTileV1 => {
+      const count = map.neighbors4(ref, neighbors);
+      const owner = map.ownerID(ref);
+      const x = map.x(ref);
+      const y = map.y(ref);
+      let mask = 0;
+      for (let i = 0; i < count; i++) {
+        const other = neighbors[i];
+        if (!visible.has(other) || owner === map.ownerID(other)) continue;
+        const dx = map.x(other) - x;
+        const dy = map.y(other) - y;
+        mask |= dy === -1 ? 1 : dy === 1 ? 2 : dx === -1 ? 4 : 8;
+      }
+      return [ref, map.tileState(ref), map.terrainByte(ref), mask];
+    };
+    const signature = (tile: NationalVisibleTileV1): number =>
+      tile[1] | (tile[2] << 16) | (tile[3] << 24);
+    const tiles = refs.filter((ref) => visible.has(ref)).map(tuple);
+    const pageRefs = new Set(tiles.map(([ref]) => ref));
+    const tileRemovedRefs: number[] = [];
+    for (const [ref, prior] of this.emittedTiles) {
+      if (pageRefs.has(ref)) continue;
+      // Never read owner/terrain of a now-hidden cell. A still-visible cell
+      // whose tuple changed is also invalidated unless refreshed in this page.
+      if (!visible.has(ref) || signature(tuple(ref)) !== prior) {
+        tileRemovedRefs.push(ref);
+        if (tileRemovedRefs.length > NATIONAL_OBSERVER_MAX_TILES) break;
+      }
+    }
+    const reset = first || tileRemovedRefs.length > NATIONAL_OBSERVER_MAX_TILES;
+    if (reset) {
+      this.emittedTiles.clear();
+      tileRemovedRefs.length = 0;
+    } else {
+      tileRemovedRefs.sort((a, b) => a - b);
+      for (const ref of tileRemovedRefs) this.emittedTiles.delete(ref);
+    }
+    for (const tile of tiles) this.emittedTiles.set(tile[0], signature(tile));
     const next = cursor + refs.length;
     const nextCursor = next >= this.tileRefs.length ? null : next;
     this.cursor = nextCursor ?? 0;
@@ -162,52 +167,61 @@ export class NationalObserverMapPager {
         .map((asset) => [Number(asset.id), asset] as const),
     );
     const nowIds = new Set(currentUnits.keys());
-    const removed: number[] = [];
-    // Never reveal the ID of a previously authorized but NEVER transmitted
-    // unit. This avoids a historical intelligence leak via tombstone pages.
-    for (const id of this.emittedUnitIds) {
-      if (!nowIds.has(id)) removed.push(id);
-    }
-    removed.sort((a, b) => a - b);
-    // Mass revocation or an oversized long-lived unit cache is signaled by
-    // an atomic unit-only reset rather than an unbounded deletion packet.
-    const unitReset =
-      reset ||
-      removed.length > NATIONAL_OBSERVER_MAX_UNITS ||
-      this.emittedUnitIds.size > NATIONAL_OBSERVER_MAX_TRACKED_UNITS;
-    if (unitReset) {
-      this.emittedUnitIds.clear();
-      this.unitCursor = 0;
-      this.unitIds = [];
-    } else {
-      for (const id of removed) this.emittedUnitIds.delete(id);
-    }
     if (this.unitCursor === 0) {
-      this.unitIds = [...nowIds]
-        .sort((a, b) => a - b)
-        .slice(0, NATIONAL_OBSERVER_MAX_TRACKED_UNITS);
+      const sorted = [...nowIds].sort((a, b) => a - b);
+      if (sorted.length > NATIONAL_OBSERVER_MAX_TRACKED_UNITS) {
+        // Rotate the bounded window instead of permanently excluding high IDs.
+        let offset = sorted.findIndex((id) => id > this.unitWindowAnchor);
+        if (offset < 0) offset = 0;
+        const window = sorted.slice(offset, offset + NATIONAL_OBSERVER_MAX_TRACKED_UNITS);
+        if (window.length < NATIONAL_OBSERVER_MAX_TRACKED_UNITS)
+          window.push(...sorted.slice(0, NATIONAL_OBSERVER_MAX_TRACKED_UNITS - window.length));
+        this.unitWindowAnchor = window[window.length - 1];
+        this.unitIds = window.sort((a, b) => a - b);
+      } else {
+        this.unitWindowAnchor = -1;
+        this.unitIds = sorted;
+      }
       this.unitSweepId += 1;
     }
     const unitCursor = this.unitCursor;
-    const unitPageIds = this.unitIds.slice(
-      unitCursor,
-      unitCursor + NATIONAL_OBSERVER_MAX_UNITS,
-    );
-    const units: NationalVisibleUnitV1[] = unitPageIds
-      .map((id) => currentUnits.get(id))
-      .filter((asset) => asset !== undefined)
-      .map((asset) => ({
-        id: Number(asset.id),
-        ownerId: asset.ownerId,
-        kind: asset.kind,
-        tile: map.ref(asset.x, asset.y),
-        ...(asset.ownerId === this.principalId &&
-        asset.strength !== undefined &&
-        Number.isFinite(asset.strength)
-          ? { troops: asset.strength }
-          : {}),
-      }));
-    for (const unit of units) this.emittedUnitIds.add(unit.id);
+    const unitPageIds = this.unitIds.slice(unitCursor, unitCursor + NATIONAL_OBSERVER_MAX_UNITS);
+    const marker = (asset: NonNullable<ReturnType<typeof currentUnits.get>>): NationalVisibleUnitV1 => ({
+      id: Number(asset.id),
+      ownerId: asset.ownerId,
+      kind: asset.kind,
+      tile: map.ref(asset.x, asset.y),
+      ...(asset.ownerId === this.principalId &&
+      asset.strength !== undefined && Number.isFinite(asset.strength)
+        ? { troops: asset.strength }
+        : {}),
+    });
+    const units = unitPageIds.map((id) => currentUnits.get(id))
+      .filter((asset) => asset !== undefined).map(marker);
+    const pageUnitIds = new Set(units.map((unit) => unit.id));
+    const removed: number[] = [];
+    for (const [id, prior] of this.emittedUnits) {
+      if (pageUnitIds.has(id)) continue;
+      const asset = currentUnits.get(id);
+      if (!asset || asset.ownerId !== prior.ownerId || asset.kind !== prior.kind ||
+        map.ref(asset.x, asset.y) !== prior.tile ||
+        (asset.ownerId === this.principalId && asset.strength !== prior.troops)) {
+        removed.push(id);
+        if (removed.length > NATIONAL_OBSERVER_MAX_UNITS) break;
+      }
+    }
+    let projected = this.emittedUnits.size - removed.length;
+    for (const id of pageUnitIds) if (!this.emittedUnits.has(id)) projected++;
+    const unitReset = first || removed.length > NATIONAL_OBSERVER_MAX_UNITS ||
+      projected > NATIONAL_OBSERVER_MAX_TRACKED_UNITS;
+    if (unitReset) {
+      this.emittedUnits.clear();
+      removed.length = 0;
+    } else {
+      removed.sort((a, b) => a - b);
+      for (const id of removed) this.emittedUnits.delete(id);
+    }
+    for (const unit of units) this.emittedUnits.set(unit.id, unit);
     const unitNext = unitCursor + unitPageIds.length;
     const unitNextCursor = unitNext >= this.unitIds.length ? null : unitNext;
     this.unitCursor = unitNextCursor ?? 0;
@@ -233,11 +247,16 @@ export class NationalObserverMapPager {
       reset,
       cursor,
       nextCursor,
+      tilePageSlots: refs.length,
+      tileRemovedRefs,
+      tilePartial: this.emittedTiles.size !== visible.size,
       tiles,
       units,
       unitCursor,
       unitNextCursor,
       unitSweepId: this.unitSweepId,
+      unitPageSlots: unitPageIds.length,
+      unitPartial: this.emittedUnits.size !== nowIds.size,
       unitReset,
       unitRemovedIds: unitReset ? [] : removed,
       unitsTruncated: nowIds.size > NATIONAL_OBSERVER_MAX_UNITS,

@@ -628,7 +628,7 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     expect(reader.observedUnitCount).toBeGreaterThan(2000);
   });
 
-  it("revocation of genuine empire-contributed tiles causes a full map reset and discards cached visible ownership", async () => {
+  it("revocation of genuine empire-contributed tiles discards cached visible ownership without forced rewind", async () => {
     const init = await setup("big_plains", { nationalMode: true }, P);
     const { game, host, sockets } = await rig("big_plains", [
       init.ref(20, 20),
@@ -678,17 +678,90 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     ).toBe(false);
     host.tick();
     const after = view(sockets[0].socket);
-    expect(after.map.reset).toBe(true);
-    expect(after.map.cursor).toBe(0);
-    expect(after.map.unitReset).toBe(true);
     const d = reader.accept(after.map, after.msg.tick);
-    expect(d.clearAllTiles).toBe(true);
-    expect(d.clearAllUnits).toBe(true);
+    expect(d.clearAllTiles || d.removedTileRefs.includes(allyRef)).toBe(true);
     expect(reader.tileStatus(allyRef)).toBe("revoked");
     expect(
       after.map.tiles.every(([ref]) =>
         collectLiveNationalObservation(game, A.id).visibleTiles.has(ref),
       ),
     ).toBe(true);
+  });
+});
+
+describe("C4 E3 continuous authoritative churn", () => {
+  it("makes progress across both frozen streams during repeated real territorial churn", async () => {
+    const init = await setup("big_plains", { nationalMode: true }, P);
+    const { game, host, sockets } = await rig("big_plains", [
+      init.ref(20, 100), init.ref(150, 150), init.ref(190, 190),
+    ]);
+    const a = game.player(A.id);
+    const b = game.player(B.id);
+    for (let y = 5; y < 86; y++) {
+      for (let x = 5; x < 86; x++) {
+        const ref = game.ref(x, y);
+        if (game.isLand(ref) && game.owner(ref) !== a) a.conquer(ref);
+      }
+    }
+    const remote = game.ref(115, 115);
+    const units = [];
+    for (let i = 0; i < 2055; i++)
+      units.push(a.buildUnit(UnitType.City, game.ref(20, 20), {}));
+    a.conquer(remote);
+    const readers = P.map((p) => new NationalObserverMapContinuity(p.id));
+    const seen = new Set<number>();
+    const known = new Set<number>();
+    let firstTileComplete = -1;
+    let firstUnitComplete = -1;
+    let peakBytes = 0;
+    let resets = 0;
+    let holes = 0;
+    let hostMs = 0;
+    let reconcileMs = 0;
+    const startHeap = process.memoryUsage().heapUsed;
+    let peakHeap = startHeap;
+    for (let frame = 0; frame < 8; frame++) {
+      if (frame % 2 === 1) b.conquer(remote);
+      else if (frame > 0) a.conquer(remote);
+      const started = performance.now();
+      host.tick();
+      hostMs += performance.now() - started;
+      for (let i = 0; i < P.length; i++) {
+        const v = view(sockets[i].socket);
+        const readStarted = performance.now();
+        const delta = readers[i].accept(v.map, v.msg.tick);
+        reconcileMs += performance.now() - readStarted;
+        peakBytes = Math.max(peakBytes, sockets[i].socket.frames.at(-1)!.byteLength);
+        const sight = collectLiveNationalObservation(game, P[i].id);
+        for (const [ref] of delta.tiles) expect(sight.visibleTiles.has(ref)).toBe(true);
+        if (i !== 0) continue;
+        if (delta.clearAllTiles) { known.clear(); resets++; }
+        for (const ref of delta.removedTileRefs) {
+          expect(known.delete(ref)).toBe(true);
+          expect(readers[i].tileStatus(ref)).toBe("revoked");
+        }
+        for (const [ref] of delta.tiles) known.add(ref);
+        for (const unit of delta.units) seen.add(unit.id);
+        holes += v.map.tilePageSlots - v.map.tiles.length;
+        for (const ref of known) expect(sight.visibleTiles.has(ref)).toBe(true);
+        expect(delta.usable).toBe(true);
+        if (delta.sweepComplete && firstTileComplete < 0) firstTileComplete = frame;
+        if (delta.unitSweepComplete && firstUnitComplete < 0) firstUnitComplete = frame;
+        if (frame === 0) {
+          expect(v.map.nextCursor).toBe(4096);
+          expect(v.map.unitNextCursor).toBe(2048);
+        }
+      }
+      peakHeap = Math.max(peakHeap, process.memoryUsage().heapUsed);
+    }
+    expect(firstTileComplete).toBe(1);
+    expect(firstUnitComplete).toBe(1);
+    expect(resets).toBe(1);
+    expect(units.every((unit) => seen.has(unit.id()))).toBe(true);
+    console.info("C4_E3_CHURN_METRICS", JSON.stringify({
+      observers: 3, frames: 8, firstTileComplete, firstUnitComplete,
+      firstUsableFrame: 0, resets, holes, peakBytes, hostMs, reconcileMs,
+      peakHeapDelta: peakHeap - startHeap, permanentlyUnseenUnits: 0,
+    }));
   });
 });
