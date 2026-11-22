@@ -42,6 +42,7 @@ import {
   proposeEmpireAccession,
   proposePactAmendment,
   setNationalPeaceDelegation,
+  setImperialWarPolicy,
   transferCrown,
   validatePolitics,
   type LastSovereignResult,
@@ -106,6 +107,9 @@ const politicsSchema = z.object({
       crisisDeadlineMs: counter.nullable(),
       // Older GameSnapshot v1 politics omit this; absent means DENY.
       delegatedNationalPeace: z.array(z.string()).optional(),
+      delegatedNationalDeclarations: z.array(z.string()).optional(),
+      accessionWarResponse: z.enum(["none", "imperial"]).optional(),
+      warPolicyVersion: counter.optional(),
     }),
   ),
   accessionOffers: z.array(
@@ -193,6 +197,14 @@ export type NationalImperialAdministrationCommand =
       memberId: PlayerID;
       targetId: PlayerID;
       amount: number;
+    }
+  | {
+      kind: "set-war-policy";
+      empireId: string;
+      expectedVersion: number;
+      response: "none" | "imperial";
+      declarationDelegates: PlayerID[];
+      peaceDelegates: PlayerID[];
     };
 
 export interface NationalImperialAdministrationView extends Omit<
@@ -208,6 +220,10 @@ export interface NationalImperialAdministrationView extends Omit<
   readonly imperialTroops: string;
   readonly imperialTroopCapacity: string;
   readonly troopContributions: readonly { memberId: string; total: string }[];
+  readonly warPolicyVersion: number;
+  readonly accessionWarResponse: "none" | "imperial";
+  readonly nationalDeclarationDelegates: readonly PlayerID[];
+  readonly nationalPeaceDelegates: readonly PlayerID[];
 }
 
 type ImperialDisposition = (
@@ -475,6 +491,10 @@ export class NationalRuntime {
           Object.freeze({ ...c }),
         ),
       ),
+      warPolicyVersion: empire.warPolicyVersion ?? 0,
+      accessionWarResponse: empire.accessionWarResponse ?? "none",
+      nationalDeclarationDelegates: Object.freeze([...(empire.delegatedNationalDeclarations ?? [])]),
+      nationalPeaceDelegates: Object.freeze([...(empire.delegatedNationalPeace ?? [])]),
     });
   }
 
@@ -878,6 +898,38 @@ export class NationalRuntime {
         e.leaderId !== memberId &&
         e.memberIds.includes(memberId) &&
         (e.delegatedNationalPeace ?? []).includes(memberId),
+    );
+  }
+
+  warPolicyVersionFor(memberId: PlayerID): number | null {
+    const empire = this.politics.empires.find((e) =>
+      e.memberIds.includes(memberId),
+    );
+    return empire ? (empire.warPolicyVersion ?? 0) : null;
+  }
+
+  accessionWarResponseFor(empireId: string): "none" | "imperial" {
+    return (
+      this.politics.empires.find((e) => e.id === empireId)
+        ?.accessionWarResponse ?? "none"
+    );
+  }
+
+  setWarPolicy(
+    actorId: PlayerID,
+    command: Extract<
+      NationalImperialAdministrationCommand,
+      { kind: "set-war-policy" }
+    >,
+  ): void {
+    this.politics = setImperialWarPolicy(
+      this.politics,
+      command.empireId,
+      actorId,
+      command.expectedVersion,
+      command.response,
+      command.declarationDelegates,
+      command.peaceDelegates,
     );
   }
 

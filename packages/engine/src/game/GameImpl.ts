@@ -698,6 +698,36 @@ export class GameImpl implements Game {
       throw new Error("NATIONAL: stale authenticated actor session");
   }
 
+  private assertWarPolicyAdmission(
+    actorId: PlayerID,
+    command: {
+      readonly admissionEmpireId?: string | null;
+      readonly policyVersion?: number | null;
+    },
+  ): void {
+    // Only the trusted executor adds membership and epoch fields together.
+    // Legacy trusted direct Game port calls are allowed to remain unversioned.
+    if (command.admissionEmpireId === undefined) {
+      if (command.policyVersion !== undefined)
+        throw new Error("NATIONAL WAR: unbound imperial policy epoch");
+      return;
+    }
+    const currentEmpire = this._national?.authority().empireOf(actorId) ?? null;
+    const currentVersion = this._national?.warPolicyVersionFor(actorId) ?? null;
+    if (
+      (command.admissionEmpireId !== null &&
+        (typeof command.admissionEmpireId !== "string" ||
+          command.admissionEmpireId.length === 0)) ||
+      (command.policyVersion !== null &&
+        (typeof command.policyVersion !== "number" ||
+          !Number.isSafeInteger(command.policyVersion) ||
+          command.policyVersion < 0)) ||
+      currentEmpire !== command.admissionEmpireId ||
+      currentVersion !== (command.policyVersion ?? null)
+    )
+      throw new Error("NATIONAL WAR: stale or invalid imperial policy epoch");
+  }
+
   /** Legacy direct Game WAR port: preserves real WarLedger rule exceptions. */
   performNationalWarCommand(
     actor: Player,
@@ -716,6 +746,7 @@ export class GameImpl implements Game {
       throw new Error("NATIONAL war: unauthenticated or inactive actor");
     }
     this.synchronizeNationalState();
+    this.assertWarPolicyAdmission(actor.id(), command);
     this._nationalWar.perform(actor.id(), command, this._ticks);
   }
 
@@ -769,6 +800,8 @@ export class GameImpl implements Game {
           : command.kind === "propose-peace"
             ? { kind: command.kind, warId: command.warId }
             : { kind: command.kind, motionId: command.motionId };
+    // The admission stamp is authority, not part of the client's action identity.
+    // Preserve legacy retry fingerprints; validate stamp separately on replay.
     const fingerprint = JSON.stringify(intent);
     if (typeof fingerprint !== "string" || fingerprint.length > 4096)
       throw new Error("NATIONAL war: invalid command payload");
@@ -818,6 +851,7 @@ export class GameImpl implements Game {
         if (!hasSafeCommandIds) return "invalid-war-command";
         try {
           this.synchronizeNationalState();
+          this.assertWarPolicyAdmission(actor.id(), command);
           this._nationalWar!.perform(actor.id(), command, this._ticks);
           return "accepted";
         } catch {
@@ -825,9 +859,21 @@ export class GameImpl implements Game {
           return "war-rule";
         }
       },
-      () =>
-        this._nationalWar?.mayReplayAsCurrentSovereign(actor.id(), command) ===
-        true,
+      () => {
+        // A historical accepted receipt is not permission to replay a stale
+        // grant after revocation + regrant under the same sovereign identity.
+        try {
+          this.assertWarPolicyAdmission(actor.id(), command);
+          return (
+            this._nationalWar?.mayReplayAsCurrentSovereign(
+              actor.id(),
+              command,
+            ) === true
+          );
+        } catch {
+          return false;
+        }
+      },
     );
   }
 
@@ -1153,6 +1199,9 @@ export class GameImpl implements Game {
           command.policy,
         );
         break;
+      case "set-war-policy":
+        this._national.setWarPolicy(actor.id(), command);
+        break;
       case "transfer-troops": {
         const source = this._players.get(command.sourceId);
         const destination = this._players.get(command.destinationId);
@@ -1461,7 +1510,23 @@ export class GameImpl implements Game {
       );
       return;
     }
+    // Legal war with a current member MUST be negotiated away first.
+    // Otherwise accession would silently create an internal national war.
+    if (command.kind === "accept-empire")
+      this._nationalWar?.assertAccessionCompatible(
+        command.empireId,
+        command.candidateId,
+      );
     this._national.perform(actor.id(), command);
+    if (
+      command.kind === "accept-empire" &&
+      this._national.accessionWarResponseFor(command.empireId) === "imperial"
+    )
+      this._nationalWar?.escalateAccessionWars(
+        command.empireId,
+        command.candidateId,
+        this._ticks,
+      );
     this.revokeNationalObserverMemory();
   }
 

@@ -250,6 +250,63 @@ export class WarLedger {
     );
   }
 
+  escalateAccessionWars(
+    empireId: string,
+    candidateId: string,
+    tick: number,
+  ): string[] {
+    this.validateClock(tick);
+    if (this.politics.empireOf(candidateId) !== empireId)
+      throw new Error("NATIONAL WAR: accession not committed");
+    const emperor = this.politics.emperorOf(empireId);
+    if (emperor === null) throw new Error("NATIONAL WAR: no incumbent emperor");
+    const members = this.politics.membersOf(empireId);
+    const outsiders = new Set<string>();
+    for (const layer of this.layers.values()) {
+      if (layer.endedTick !== null || layer.scope !== "national") continue;
+      const other =
+        layer.first.id === candidateId
+          ? layer.second.id
+          : layer.second.id === candidateId
+            ? layer.first.id
+            : null;
+      if (
+        other !== null &&
+        this.politics.nationAlive(other) &&
+        this.politics.empireOf(other) === null
+      )
+        outsiders.add(other);
+    }
+    const opened: string[] = [];
+    for (const target of [...outsiders].sort(idCompare)) {
+      // Treaty protection is NOT silently betrayed by accession.
+      if (
+        members.some((member) => this.politics.treatyProtects(member, target))
+      )
+        continue;
+      const aggressor = { kind: "empire" as const, id: empireId };
+      const opponent = { kind: "nation" as const, id: target };
+      const pair = this.pairKey("imperial", aggressor, opponent);
+      if (
+        [...this.layers.values()].some(
+          (layer) =>
+            layer.endedTick === null &&
+            this.pairKey(layer.scope, layer.first, layer.second) === pair,
+        )
+      )
+        continue;
+      let index = 0;
+      let warId = `accession-${tick}-${index}`;
+      while (this.layers.has(warId)) {
+        index++;
+        warId = `accession-${tick}-${index}`;
+      }
+      this.declareImperial(warId, emperor, aggressor, opponent, tick);
+      opened.push(warId);
+    }
+    return opened;
+  }
+
   /** WAR-01/02: a nation may declare only its own scoped national war. */
   declareNational(
     id: string,

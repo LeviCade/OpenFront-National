@@ -839,6 +839,15 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       targetId: MappedID,
       amount: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }),
     }),
+    // Append only: no existing intent or administration command index moves.
+    z.object({
+      kind: z.literal("set-war-policy"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      response: z.enum(["none", "imperial"]),
+      declarationDelegates: z.array(MappedID).max(64),
+      peaceDelegates: z.array(MappedID).max(64),
+    }),
   ],
 );
 
