@@ -1,3 +1,7 @@
+import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import { unpackUnitUpdates } from "@openfront/engine-lib/game/PackedUnitUpdates";
+import { Executor } from "@openfront/engine/execution/ExecutionManager";
+import { GameRunner } from "@openfront/engine/GameRunner";
 import {
   PlayerInfo,
   PlayerType,
@@ -178,6 +182,7 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
 
   it("FOG-04/05/06 real-world coastal ship exit, revocation, fresh reacquisition, reconnect and hostile packet rejection", async () => {
     const started = performance.now();
+    const initialHeap = process.memoryUsage().heapUsed;
     const game = await setup("world", { nationalMode: true }, [
       VIEWER,
       OUTSIDER,
@@ -338,6 +343,40 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     expect(sensorLostPage.unitRemovedIds).toContain(ship.id());
     recipient.accept(sensorLostPage, game.ticks());
     expect(recipient.units().map((unit) => unit.id)).not.toContain(ship.id());
+
+    // The *normal native GameRunner* must also disclose and revoke this
+    // moving coastal transport, not just the paged observer-map path.
+    const nativePackets: GameUpdateViewData[] = [];
+    const nativeRunner = new GameRunner(
+      game,
+      new Executor(game, "c5-e6-native", VIEWER.clientID!),
+      (packet) => {
+        if ("updates" in packet) nativePackets.push(packet);
+      },
+      VIEWER.clientID!,
+    );
+    ship.move(returnSea!);
+    game.queueViewResync();
+    nativeRunner.addTurn({ turnNumber: game.ticks(), intents: [] });
+    expect(nativeRunner.executeNextTick()).toBe(true);
+    const nativeSeen = unpackUnitUpdates(
+      nativePackets[0].packedUnitUpdates,
+      nativePackets[0].packedMissileTimers,
+    ).find((unit) => unit.id === ship.id());
+    expect(nativeSeen?.pos).toBe(returnSea);
+    expect(nativeSeen?.troops).toBe(0);
+    ship.move(farSea!);
+    nativeRunner.addTurn({ turnNumber: game.ticks(), intents: [] });
+    expect(nativeRunner.executeNextTick()).toBe(true);
+    const nativeRevoked = unpackUnitUpdates(
+      nativePackets[1].packedUnitUpdates,
+      nativePackets[1].packedMissileTimers,
+    ).find((unit) => unit.id === ship.id());
+    expect(nativeRevoked?.pos).toBe(returnSea);
+    expect(nativeRevoked?.pos).not.toBe(farSea);
+    expect(nativeRevoked?.troops).toBe(0);
+    expect(nativeRevoked?.markedForDeletion).not.toBe(false);
+    const observedHeapDeltaBytes = process.memoryUsage().heapUsed - initialHeap;
     const maxPageBytes = Math.max(
       ...[firstPage, hiddenPage, reconnectPage, returnPage, warshipPage, sensorLostPage].map((page) =>
         Buffer.byteLength(JSON.stringify(page), "utf8"),
@@ -361,7 +400,11 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
         " reconnaissanceWarshipId=" +
         sensor.id() +
         " reacquiredTile=" +
-        returnSea,
+        returnSea +
+        " observedHeapDeltaBytes=" +
+        observedHeapDeltaBytes +
+        " nativePackets=" +
+        nativePackets.length,
     );
     expect(maxPageBytes).toBeLessThan(2_000_000);
   });
