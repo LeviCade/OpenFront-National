@@ -463,6 +463,12 @@ describe("C5 Class Two E6 sovereign coercion — AI-01/04/05/06/07, ECON-06/07",
     expect(proposeCanonicalImperialUltimatumIntent(issuer,[],issuing,"e6_new"))
       .toEqual({type:"national_issue_ultimatum",empireId:"crown",targetId:A,threat:"imperial-war",durationTicks:30,requestId:"e6_new"});
     expect(proposeCanonicalImperialUltimatumIntent(issuer,[{...view,phase:"pending",role:"issuer"}],issuing,"e6_duplicate")).toBeNull();
+    const terminal={...view,phase:"backed-down" as const,deadlineTick:issuer.tick-10};
+    expect(planObservedImperialCoercion(issuer,[terminal],initialNationalCoercionMemory(C))?.kind).not.toBe("issue");
+    expect(proposeCanonicalImperialUltimatumIntent(issuer,[terminal],issuing,"e6_cooldown")).toBeNull();
+    const later={...issuer,tick:issuer.tick+250};
+    expect(proposeCanonicalImperialUltimatumIntent(later,[terminal],issuing,"e6_cooldown_over")?.type)
+      .toBe("national_issue_ultimatum");
   });
 
   it("imperial issuer distinguishes legitimate reachable enforcement from an actual backdown", () => {
