@@ -630,13 +630,13 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     const empire = "c3_e3_reset_empire";
     const a = game.player(A.id);
     const b = game.player(B.id);
-    game.performNationalCommand(a, { kind: "found-empire", empireId: empire });
+    game.performNationalCommand(a, { kind: "found-empire", empireId: empire }, A.clientID!);
     game.performNationalCommand(a, {
       kind: "offer-empire", empireId: empire, candidateId: B.id,
-    });
+    }, A.clientID!);
     game.performNationalCommand(b, {
       kind: "accept-empire", empireId: empire, candidateId: B.id,
-    });
+    }, B.clientID!);
     const allyRef = b.spawnTile()!;
     expect(collectLiveNationalObservation(game, A.id).visibleTiles.has(allyRef)).toBe(true);
     host.tick();
