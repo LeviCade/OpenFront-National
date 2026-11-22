@@ -212,12 +212,16 @@ export async function createTrustedNationalGameRunnerFromSnapshot(
   ) {
     throw new Error("NATIONAL snapshot identity incompatible");
   }
-  if (JSON.stringify(header.gameConfig) !==
-      JSON.stringify(GameConfigSchema.parse(gameStart.config))) {
+  if (
+    JSON.stringify(header.gameConfig) !==
+    JSON.stringify(GameConfigSchema.parse(gameStart.config))
+  ) {
     throw new Error("NATIONAL snapshot configuration incompatible");
   }
-  if (header.humans.length !== gameStart.players.length ||
-      header.humans.some((h, i) => h.clientID !== gameStart.players[i]?.clientID)) {
+  if (
+    header.humans.length !== gameStart.players.length ||
+    header.humans.some((h, i) => h.clientID !== gameStart.players[i]?.clientID)
+  ) {
     throw new Error("NATIONAL snapshot human roster incompatible");
   }
   return restoreRunner(gameStart, snapshot, undefined, map, () => {}, true);
@@ -675,8 +679,11 @@ export class GameRunner {
   /** Trusted hosts with an exact durable tick no longer need consumed
    * turns in the runner. Browser/replay behavior is unchanged. */
   discardTrustedNationalConsumedTurns(): void {
-    if (this.isExecuting || !this.game.config().nationalMode() ||
-        this.game.config().gameConfig().gameType !== GameType.Private) {
+    if (
+      this.isExecuting ||
+      !this.game.config().nationalMode() ||
+      this.game.config().gameConfig().gameType !== GameType.Private
+    ) {
       throw new Error("NATIONAL cannot compact nontrusted turn history");
     }
     this.turns.splice(0, this.currTurn);

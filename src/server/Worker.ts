@@ -62,7 +62,10 @@ import { resolveVerifiedJoin } from "./Privilege";
 
 import { loadGatekeeper } from "./Gatekeeper";
 import { MapPlaylist } from "./MapPlaylist";
-import { assertDurableNationalRoot, DurableNationalStore } from "./national/DurableNationalStore";
+import {
+  assertDurableNationalRoot,
+  DurableNationalStore,
+} from "./national/DurableNationalStore";
 import { isNationalSignedInAccount } from "./national/NationalAccountGate";
 import { watchNationalAccount } from "./national/NationalAccountLease";
 import { setNoStoreHeaders } from "./NoStoreHeaders";
@@ -314,7 +317,15 @@ export async function startWorker() {
       nationalStore = new DurableNationalStore(recoveryRoot, workerId);
     }
   } catch (error) {
-    log.error("NATIONAL durable recovery refused", { stage: "ownership-or-root", reason: error instanceof Error && error.message === "NATIONAL worker shard already owned or lock unavailable" ? "shard-already-owned" : "root-or-database-unavailable" });
+    log.error("NATIONAL durable recovery refused", {
+      stage: "ownership-or-root",
+      reason:
+        error instanceof Error &&
+        error.message ===
+          "NATIONAL worker shard already owned or lock unavailable"
+          ? "shard-already-owned"
+          : "root-or-database-unavailable",
+    });
     throw new Error("NATIONAL durable ownership or storage root unavailable");
   }
   const gm = new GameManager(log, gatekeeper, nationalStore);
@@ -324,22 +335,26 @@ export async function startWorker() {
     // Fixed reason classes only; never log private row payloads or identity.
     log.error("NATIONAL durable recovery refused", {
       stage: "record-or-snapshot",
-      reason: error instanceof Error && [
-        "NATIONAL invalid checkpoint integrity",
-        "NATIONAL incompatible durable checkpoint",
-        "NATIONAL durable map mismatch",
-        "NATIONAL trusted snapshot header incompatible",
-        "NATIONAL durable engine roundtrip mismatch",
-        "NATIONAL durable engine seat or tick mismatch",
-        "NATIONAL invalid disconnected roster restore",
-        "NATIONAL invalid durable roster or start info",
-        "NATIONAL durable seat binding mismatch",
-        "NATIONAL durable shard mismatch",
-        "NATIONAL invalid recovery lifecycle",
-        "NATIONAL snapshot identity incompatible",
-        "NATIONAL snapshot configuration incompatible",
-        "NATIONAL snapshot human roster incompatible",
-      ].includes(error.message) ? error.message : "invalid durable record or snapshot",
+      reason:
+        error instanceof Error &&
+        [
+          "NATIONAL invalid checkpoint integrity",
+          "NATIONAL incompatible durable checkpoint",
+          "NATIONAL durable map mismatch",
+          "NATIONAL trusted snapshot header incompatible",
+          "NATIONAL durable engine roundtrip mismatch",
+          "NATIONAL durable engine seat or tick mismatch",
+          "NATIONAL invalid disconnected roster restore",
+          "NATIONAL invalid durable roster or start info",
+          "NATIONAL durable seat binding mismatch",
+          "NATIONAL durable shard mismatch",
+          "NATIONAL invalid recovery lifecycle",
+          "NATIONAL snapshot identity incompatible",
+          "NATIONAL snapshot configuration incompatible",
+          "NATIONAL snapshot human roster incompatible",
+        ].includes(error.message)
+          ? error.message
+          : "invalid durable record or snapshot",
     });
     throw new Error("NATIONAL durable record or snapshot refused");
   }

@@ -351,7 +351,9 @@ export class TrustedNationalMatch {
     if (!this.seats.has(clientID)) return;
     // Only the final physical status for a seat in this turn is relevant.
     // Bound churn even while the simulation is paused.
-    this.intents = this.intents.filter(i => i.type !== "mark_disconnected" || i.clientID !== clientID);
+    this.intents = this.intents.filter(
+      (i) => i.type !== "mark_disconnected" || i.clientID !== clientID,
+    );
     this.intents.push(
       StampedIntentSchema.parse({
         type: "mark_disconnected",
