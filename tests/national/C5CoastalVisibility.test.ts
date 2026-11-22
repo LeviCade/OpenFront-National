@@ -8,6 +8,7 @@ import { collectLiveNationalObservation } from "@openfront/engine/national/obser
 import { NationalObserverMapPager } from "@openfront/engine/national/observation/NationalObserverMap";
 import { NationalObserverMapContinuity } from "../../src/client/NationalObserverMapContinuity";
 import { setup } from "../util/Setup";
+import { roundTrip } from "../util/Snapshot";
 
 const VIEWER = new PlayerInfo(
   "C5 Viewer",
@@ -158,6 +159,13 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
         VIEWER.id,
       ).observation.visibleAssets.some((asset) => asset.id === cityId),
     ).toBe(false);
+    const { restored, bytes, again } = await roundTrip(game, "big_plains");
+    expect(again).toEqual(bytes);
+    expect(
+      collectLiveNationalObservation(restored, VIEWER.id).observation.visibleAssets.some(
+        (asset) => asset.id === cityId,
+      ),
+    ).toBe(false);
     console.info(
       "[C5 FOG-03] structureId=" +
         cityId +
@@ -279,7 +287,13 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     reconnect.accept(reconnectPage, game.ticks());
     expect(reconnect.units().map((unit) => unit.id)).not.toContain(ship.id());
 
-    ship.move(nearSea!);
+    let returnSea: number | undefined;
+    game.forEachNeighbor(nearSea!, (neighbor) => {
+      if (returnSea === undefined && !game.isLand(neighbor)) returnSea = neighbor;
+    });
+    expect(returnSea).toBeDefined();
+    expect(returnSea).not.toBe(nearSea);
+    ship.move(returnSea!);
     game.executeNextTick();
     const returned = collectLiveNationalObservation(game, VIEWER.id);
     expect(
@@ -299,10 +313,33 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     expect(recipient.units().map((unit) => unit.id)).not.toContain(ship.id());
     recipient.accept(returnPage, game.ticks());
     expect(recipient.units().find((unit) => unit.id === ship.id())?.tile).toBe(
-      nearSea,
+      returnSea,
     );
+    // Test a second legitimate sensor: a real owned warship, far beyond
+    // the nation's coastline. Moving that sensor must independently revoke.
+    const sensor = game.player(VIEWER.id).buildUnit(UnitType.Warship, farSea!, {});
+    ship.move(farSea!);
+    game.executeNextTick();
+    const shipborne = collectLiveNationalObservation(game, VIEWER.id);
+    expect(
+      shipborne.observation.visibleAssets.find((asset) => asset.id === shipId)
+        ?.source,
+    ).toBe("warship");
+    const warshipPage = pager.page(shipborne);
+    recipient.accept(warshipPage, game.ticks());
+    expect(recipient.units().find((unit) => unit.id === ship.id())?.tile).toBe(
+      farSea,
+    );
+    sensor.move(nearSea!);
+    game.executeNextTick();
+    const sensorLost = collectLiveNationalObservation(game, VIEWER.id);
+    expect(sensorLost.observation.visibleAssets.map((asset) => asset.id)).not.toContain(shipId);
+    const sensorLostPage = pager.page(sensorLost);
+    expect(sensorLostPage.unitRemovedIds).toContain(ship.id());
+    recipient.accept(sensorLostPage, game.ticks());
+    expect(recipient.units().map((unit) => unit.id)).not.toContain(ship.id());
     const maxPageBytes = Math.max(
-      ...[firstPage, hiddenPage, reconnectPage, returnPage].map((page) =>
+      ...[firstPage, hiddenPage, reconnectPage, returnPage, warshipPage, sensorLostPage].map((page) =>
         Buffer.byteLength(JSON.stringify(page), "utf8"),
       ),
     );
@@ -320,7 +357,11 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
         " elapsedMs=" +
         (performance.now() - started).toFixed(2) +
         " recipientUnits=" +
-        recipient.units().length,
+        recipient.units().length +
+        " reconnaissanceWarshipId=" +
+        sensor.id() +
+        " reacquiredTile=" +
+        returnSea,
     );
     expect(maxPageBytes).toBeLessThan(2_000_000);
   });
