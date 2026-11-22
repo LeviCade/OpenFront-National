@@ -108,7 +108,11 @@ export function updateNationalCoercionMemory(
   for (const view of [...views].sort(
     (a, b) => a.deadlineTick - b.deadlineTick || compare(a.id, b.id),
   )) {
-    if (view.role !== "recipient" || view.targetId !== observation.observerId || processed.has(view.id))
+    if (
+      view.role !== "recipient" ||
+      view.targetId !== observation.observerId ||
+      processed.has(view.id)
+    )
       continue;
     if (view.phase !== "enforced" && view.phase !== "backed-down") continue;
     const empire = observation.coalitions.find(
@@ -363,9 +367,10 @@ export function planObservedImperialCoercion(
       const recipient = observation.nations.find((n) => n.id === v.targetId);
       const reach =
         recipient?.alive &&
-        (v.threat === "embargo" || observation.frontiers.some(
-          (f) => f.targetId === v.targetId && f.access === "land",
-        ) ||
+        (v.threat === "embargo" ||
+          observation.frontiers.some(
+            (f) => f.targetId === v.targetId && f.access === "land",
+          ) ||
           (observation.frontiers.some(
             (f) => f.targetId === v.targetId && f.access === "naval",
           ) &&
@@ -393,11 +398,18 @@ export function planObservedImperialCoercion(
       .filter((n): n is NonNullable<typeof n> => n !== undefined)
       .sort((a, b) => compare(a.id, b.id))[0];
     if (
-      target && target.landPercent < own.landPercent * 0.5 &&
-      !views.some((v) =>
-        v.role === "issuer" && v.issuerId === self &&
-        v.empireId === empire.id && v.targetId === target.id &&
-        (v.phase === "pending" || v.phase === "consented" || v.phase === "decision-required"))
+      target &&
+      target.landPercent < own.landPercent * 0.5 &&
+      !views.some(
+        (v) =>
+          v.role === "issuer" &&
+          v.issuerId === self &&
+          v.empireId === empire.id &&
+          v.targetId === target.id &&
+          (v.phase === "pending" ||
+            v.phase === "consented" ||
+            v.phase === "decision-required"),
+      )
     )
       return { kind: "issue", candidateId: target.id, empireId: empire.id };
   }

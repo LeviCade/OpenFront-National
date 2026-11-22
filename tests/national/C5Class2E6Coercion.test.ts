@@ -237,7 +237,11 @@ describe("C5 Class Two E6 sovereign coercion — AI-01/04/05/06/07, ECON-06/07",
       independentRoute: false,
     });
     expect(
-      planObservedImperialCoercion(obs,[demand()],initialNationalCoercionMemory(A))?.kind,
+      planObservedImperialCoercion(
+        obs,
+        [demand()],
+        initialNationalCoercionMemory(A),
+      )?.kind,
     ).toBe("acknowledge-consent");
     expect(
       planObservedImperialCoercion(
