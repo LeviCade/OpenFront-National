@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { chmodSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { chmodSync, mkdtempSync, renameSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -88,6 +88,20 @@ try {
   symlinkSync(rawPath, join(dir, "worker-1.sqlite"));
   assert.throws(() => new DurableNationalStore(dir, 1), /unsafe/);
   console.log("PASS unsafe permissions and symlink rejected");
+  const limited = new DurableNationalStore(dir, 2, 16);
+  const before = limited.write("quota", 0, 0, "init");
+  assert.throws(() => limited.write("quota", 1, 1, "x".repeat(200000)), /full/i);
+  assert.throws(() => limited.read("quota"), /writer failed/);
+  const independent = new DatabaseSync(join(dir, "worker-2.sqlite"), { readOnly: true });
+  assert.equal(independent.prepare("SELECT digest FROM checkpoints WHERE gameID='quota'").get().digest, before.digest);
+  independent.close();
+  console.log("PASS SQLITE_FULL transaction rolls back and writer fences");
+  const fenced = new DurableNationalStore(dir, 3);
+  fenced.write("inode", 0, 0, "init");
+  renameSync(join(dir, "worker-3.lock"), join(dir, "detached.lock"));
+  assert.throws(() => fenced.write("inode", 1, 1, "unsafe"), /ENOENT|ownership path/);
+  assert.throws(() => fenced.write("inode", 1, 1, "unsafe"), /writer failed/);
+  console.log("PASS lock pathname loss fences old writer");
 } finally {
   if (child) await kill(child);
   rmSync(dir, { recursive: true, force: true });

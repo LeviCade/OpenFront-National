@@ -663,6 +663,17 @@ export class GameRunner {
     return true;
   }
 
+  /** Trusted hosts with an exact durable tick no longer need consumed
+   * turns in the runner. Browser/replay behavior is unchanged. */
+  discardTrustedNationalConsumedTurns(): void {
+    if (this.isExecuting || !this.game.config().nationalMode() ||
+        this.game.config().gameConfig().gameType !== GameType.Private) {
+      throw new Error("NATIONAL cannot compact nontrusted turn history");
+    }
+    this.turns.splice(0, this.currTurn);
+    this.currTurn = 0;
+  }
+
   public pendingTurns(): number {
     return Math.max(0, this.turns.length - this.currTurn);
   }

@@ -3,9 +3,11 @@ import { createHash } from "node:crypto";
 import {
   constants,
   closeSync,
+  fstatSync,
   lstatSync,
   openSync,
   realpathSync,
+  statfsSync,
 } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -90,14 +92,20 @@ function checked(row: Record<string, unknown>): DurableNationalRecord {
  * Only a private, local, operator-owned filesystem is supported. */
 export class DurableNationalStore {
   private readonly lockFD: number;
+  private readonly lockPath: string;
+  private readonly dbPath: string;
+  private readonly dbIdentity: { dev: number; ino: number };
   private readonly db: DatabaseSync;
   private failed = false;
 
-  constructor(root: string, worker: number) {
+  constructor(root: string, worker: number, maxPages = MAX_PAGES) {
     if (
       process.platform !== "linux" ||
       !Number.isSafeInteger(worker) ||
       worker < 0 ||
+      !Number.isSafeInteger(maxPages) ||
+      maxPages < 16 ||
+      maxPages > MAX_PAGES ||
       !isAbsolute(root) ||
       resolve(root) !== root ||
       realpathSync(root) !== root
@@ -110,8 +118,15 @@ export class DurableNationalStore {
       st.uid !== process.getuid?.()
     )
       throw new Error("NATIONAL recovery directory must be private");
+    // Explicit local Linux filesystem families only. The operator must also
+    // ensure the underlying block storage honors fsync (including overlays).
+    const localTypes = [0xef53, 0x58465342, 0x9123683e, 0x794c7630, 0xf2f52010];
+    if (!localTypes.includes(statfsSync(root).type))
+      throw new Error("NATIONAL unsupported recovery filesystem");
     const lockPath = join(root, `worker-${worker}.lock`);
     const dbPath = join(root, `worker-${worker}.sqlite`);
+    this.lockPath = lockPath;
+    this.dbPath = dbPath;
     privateFile(lockPath);
     privateFile(dbPath);
     this.lockFD = openSync(lockPath, constants.O_RDWR | constants.O_NOFOLLOW);
@@ -126,13 +141,18 @@ export class DurableNationalStore {
           "NATIONAL worker shard already owned or lock unavailable",
         );
       db = new DatabaseSync(dbPath);
+      const dbIdentity = lstatSync(dbPath);
+      this.dbIdentity = { dev: dbIdentity.dev, ino: dbIdentity.ino };
       db.exec(
-        `PRAGMA busy_timeout=0; PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA secure_delete=ON; PRAGMA max_page_count=${MAX_PAGES};`,
+        `PRAGMA busy_timeout=0; PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA secure_delete=ON; PRAGMA max_page_count=${maxPages};`,
       );
       db.exec(
         "CREATE TABLE IF NOT EXISTS checkpoints (gameID TEXT PRIMARY KEY, generation INTEGER NOT NULL, tick INTEGER NOT NULL, payload TEXT NOT NULL, digest TEXT NOT NULL) STRICT",
       );
+      if (db.prepare("PRAGMA page_size").get()?.page_size !== 4096)
+        throw new Error("NATIONAL unsupported database page size");
       this.db = db;
+      this.assertAvailable();
     } catch (error) {
       db?.close();
       closeSync(this.lockFD);
@@ -143,6 +163,18 @@ export class DurableNationalStore {
   private assertAvailable(): void {
     if (this.lockFD < 0 || this.failed)
       throw new Error("NATIONAL durable writer failed");
+    try {
+      const lock = fstatSync(this.lockFD);
+      const path = lstatSync(this.lockPath);
+      const db = lstatSync(this.dbPath);
+      if (lock.dev !== path.dev || lock.ino !== path.ino || path.nlink !== 1 ||
+          db.dev !== this.dbIdentity.dev || db.ino !== this.dbIdentity.ino || db.nlink !== 1 ||
+          (path.mode & 0o777) !== 0o600 || (db.mode & 0o777) !== 0o600)
+        throw new Error("NATIONAL durable ownership path replaced");
+    } catch (error) {
+      this.failed = true;
+      throw error;
+    }
   }
 
   list(): string[] {
@@ -187,6 +219,10 @@ export class DurableNationalStore {
       Buffer.byteLength(payload) > MAX_NATIONAL_RECORD_BYTES
     )
       throw new Error("NATIONAL checkpoint exceeds bounds");
+    // All writes are synchronous under the shard lock. Reject capacity
+    // exhaustion for a new world without fencing the existing worlds.
+    if (expected === 0 && this.list().length >= MAX_MATCHES)
+      throw new Error("NATIONAL match quota exceeded");
     try {
       this.db.exec("BEGIN IMMEDIATE");
       const old = this.read(gameID);
@@ -196,8 +232,6 @@ export class DurableNationalStore {
         (!old && tick !== 0)
       )
         throw new Error("NATIONAL stale checkpoint generation or tick");
-      if (!old && this.list().length >= MAX_MATCHES)
-        throw new Error("NATIONAL match quota exceeded");
       const generation = expected + 1;
       const digest = commitment(gameID, generation, tick, payload);
       this.db
@@ -206,6 +240,7 @@ export class DurableNationalStore {
         )
         .run(gameID, generation, tick, payload, digest);
       this.db.exec("COMMIT");
+      this.assertAvailable();
       return { gameID, generation, tick, payload, digest };
     } catch (error) {
       try {
@@ -226,6 +261,7 @@ export class DurableNationalStore {
         .prepare("DELETE FROM checkpoints WHERE gameID=? AND generation=?")
         .run(gameID, expected);
       if (result.changes !== 1) throw new Error("NATIONAL stale retirement");
+      this.assertAvailable();
     } catch (error) {
       this.failed = true;
       throw error;

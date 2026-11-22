@@ -329,6 +329,7 @@ export class TrustedNationalMatch {
         .digest("hex");
       // Capture AFTER recipient filtering, BEFORE any network output.
       this.checkpoint?.commit(this.runner, this.durableState());
+      if (this.checkpoint) this.runner.discardTrustedNationalConsumedTurns();
     } finally {
       this.deliveryQueue = null;
     }
@@ -348,6 +349,9 @@ export class TrustedNationalMatch {
   /** E2 GameServer host-only disconnect status; never client admin intent. */
   recordServerDisconnect(clientID: ClientID, disconnected: boolean): void {
     if (!this.seats.has(clientID)) return;
+    // Only the final physical status for a seat in this turn is relevant.
+    // Bound churn even while the simulation is paused.
+    this.intents = this.intents.filter(i => i.type !== "mark_disconnected" || i.clientID !== clientID);
     this.intents.push(
       StampedIntentSchema.parse({
         type: "mark_disconnected",
