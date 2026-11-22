@@ -8,7 +8,9 @@ import type {
   NationalFoundingResult,
   NationalPublicPolitics,
 } from "../../../src/client/NationalDiplomacyState";
-import { SendNationalFoundEmpireIntentEvent } from "../../../src/client/Transport";
+import type { NationalPactDisclosureViewData } from "@openfront/engine-api/game/NationalPactView";
+import type { PactReceipt } from "../../../src/client/NationalPactState";
+import { SendNationalPactIntentEvent, SendNationalFoundEmpireIntentEvent } from "../../../src/client/Transport";
 import type { GameView } from "../../../src/client/view";
 
 const remove: HTMLElement[] = [];
@@ -36,6 +38,8 @@ async function mount(
     tick: 10,
     paused: false,
     results: [] as NationalFoundingResult[],
+    disclosure: null as NationalPactDisclosureViewData | null,
+    pactReceipts: [] as PactReceipt[],
   };
   const player = {
     id: () => "nation-a",
@@ -56,12 +60,15 @@ async function mount(
       optionsState.spectator || !optionsState.alive || optionsState.replay,
     inSpawnPhase: () => !optionsState.spawned,
     nationalPolitics: () => optionsState.politics,
+    nationalPoliticsTick: () => optionsState.tick,
+    nationalPactDisclosure: () => optionsState.disclosure,
+    nationalPactReceipts: () => optionsState.pactReceipts,
     nationalFoundingOutcome: () => null,
     nationalFoundingResults: () => optionsState.results,
     ticks: () => optionsState.tick,
     isPaused: () => optionsState.paused,
     gameID: () => "national-test",
-    players: () => [player],
+    players: () => [player, { ...player, id: () => "nation-b", name: () => "B Nation" }, { ...player, id: () => "nation-c", name: () => "C Nation" }],
   } as unknown as GameView;
   const eventBus = new EventBus();
   const requests: SendNationalFoundEmpireIntentEvent[] = [];
@@ -580,5 +587,68 @@ describe("NATIONAL player-facing founding", () => {
         .querySelector("[data-national-phase]")
         ?.getAttribute("data-national-phase"),
     ).toBe("unknown");
+  });
+});
+
+describe("C4 E4 native constitutional controls", () => {
+  const terms = { admission: "leader", expulsion: "leader" } as const;
+  const pact = { id: "pact", name: "North Sea", kind: "MDA", memberIds: ["nation-a", "nation-b"], administratorId: "nation-a" } as const;
+  it("invited candidate reads terms, stale consent cannot dispatch, rejection is not membership", async () => {
+    const { element, eventBus, optionsState } = await mount();
+    const requests: SendNationalPactIntentEvent[] = [];
+    eventBus.on(SendNationalPactIntentEvent, (e) => requests.push(e));
+    optionsState.politics = { empires: [], warnings: [], pacts: [{ ...pact, memberIds: ["nation-b"], administratorId: "nation-b" }] };
+    optionsState.disclosure = { version: 1, recipientId: "nation-a", pacts: [{ pactId: pact.id, relationship: "invited", terms }] };
+    element.refresh();
+    await element.updateComplete;
+    expect(element.querySelector("[data-national-pact-terms]")?.textContent).toContain("expulsion leader");
+    const old = element.querySelector<HTMLButtonElement>('[data-national-pact-action="accept"]')!;
+    optionsState.disclosure = { ...optionsState.disclosure, pacts: [{ pactId: pact.id, relationship: "invited", terms: { ...terms, expulsion: "forbidden" } }] };
+    old.click();
+    expect(requests).toHaveLength(0);
+    element.refresh();
+    await element.updateComplete;
+    element.querySelector<HTMLButtonElement>('[data-national-pact-action="accept"]')!.click();
+    await element.updateComplete;
+    expect(requests).toHaveLength(1);
+    expect(requests[0].intent).toMatchObject({ type: "national_accept_pact", pactId: pact.id, requestId: /^np_[0-9a-f]{32}$/ });
+    expect(element.querySelector('[data-national-pact-action="betray"]')).toBeNull();
+    expect(element.querySelector("[data-national-pact-status]")?.textContent).toContain("Pending");
+    optionsState.pactReceipts = [{ type: "national_accept_pact", requestId: requests[0].intent.requestId, actorId: "nation-a", recipientId: "nation-a", commandTargetId: pact.id, tick: 11, sequence: 1, accepted: false, reason: "political-rule" }];
+    optionsState.tick = 11;
+    element.refresh();
+    await element.updateComplete;
+    expect(element.querySelector("[data-national-pact-status]")?.textContent).toContain("rejected");
+    optionsState.disclosure = { ...optionsState.disclosure, pacts: [] };
+    element.refresh();
+    await element.updateComplete;
+    expect(element.querySelector("[data-national-pact-terms]")).toBeNull();
+    expect(element.querySelector('[data-national-pact-action="accept"]')).toBeNull();
+    expect(element.querySelector("[data-national-pact-id]")?.textContent).toContain("North Sea");
+  });
+  it("member sees actual proposal, cannot expel by unanimous rule, confirms betrayal, and Escape returns focus", async () => {
+    const { element, eventBus, optionsState } = await mount();
+    const requests: SendNationalPactIntentEvent[] = [];
+    eventBus.on(SendNationalPactIntentEvent, (e) => requests.push(e));
+    optionsState.politics = { empires: [], warnings: [], pacts: [pact] };
+    optionsState.disclosure = { version: 1, recipientId: "nation-a", pacts: [{ pactId: pact.id, relationship: "member", terms: { ...terms, expulsion: "unanimous" }, pendingAmendment: { terms, administratorId: "nation-b", approvedBy: ["nation-b"] } }] };
+    element.refresh();
+    await element.updateComplete;
+    expect(element.querySelector("[data-national-pact-amendment]")?.textContent).toContain("Proposed constitution");
+    expect(element.querySelector('[data-national-pact-action="expel"]')).toBeNull();
+    const leave = element.querySelector<HTMLButtonElement>('[data-national-pact-action="betray"]')!;
+    leave.click();
+    expect(requests).toHaveLength(0);
+    const confirm = leave.closest("form")!.querySelector<HTMLInputElement>('input[name="confirm"]')!;
+    confirm.checked = true;
+    leave.click();
+    await element.updateComplete;
+    expect(requests[0].intent.type).toBe("national_betray_pact");
+    element.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    // Keyboard event on the actual panel section, rather than the custom host.
+    element.querySelector("section")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await element.updateComplete;
+    expect(element.querySelector("#national-diplomacy-content")).toBeNull();
+    expect(document.activeElement).toBe(element.querySelector('[aria-controls="national-diplomacy-content"]'));
   });
 });
