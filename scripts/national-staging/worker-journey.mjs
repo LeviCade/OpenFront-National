@@ -110,14 +110,30 @@ async function peer() {
           msg.tick,
         );
         phase = "recipient-binding";
-        if (map && map.observerId !== state.seat)
+        // ClientID is the lobby/transport seat; Player.id is the distinct
+        // engine principal. The actual browser resolves the same mapping
+        // through GameView.playerByClientID, not by equating the two IDs.
+        const updates = packet.updates[String(GameUpdateType.Player)] ?? [];
+        const own = updates.find((player) => player.clientID === state.seat);
+        if (own) {
+          if (state.actor && own.id !== state.actor)
+            throw new Error("own engine identity changed");
+          state.actor = own.id;
+        }
+        if (map && (!state.actor || map.observerId !== state.actor))
           throw new Error("wrong recipient");
+        if (map) {
+          if (state.streamId && state.streamId !== map.streamId)
+            throw new Error("stream changed");
+          if (!state.streamId && !map.reset)
+            throw new Error("initial stream did not reset");
+          state.streamId = map.streamId;
+        }
         if (msg.tick <= state.lastProjectionTick)
           throw new Error("non-advancing projection");
         state.lastProjectionTick = msg.tick;
         phase = "private-dto";
         // Keep summaries, not raw private projection bodies.
-        const updates = packet.updates[String(GameUpdateType.Player)] ?? [];
         if (
           (packet.updates[String(GameUpdateType.SpawnPhaseEnd)] ?? []).length >
           0
@@ -125,7 +141,8 @@ async function peer() {
           state.spawnEnded = true;
         if (
           updates.some(
-            (p) => p.clientID === state.seat && p.hasSpawned === true,
+            (p) => (p.clientID === state.seat || p.id === state.actor) &&
+              p.hasSpawned === true,
           )
         )
           state.spawned = true;
@@ -136,6 +153,8 @@ async function peer() {
         )
           state.visibleOwnLand = true;
         for (const result of packet.nationalCommandResults ?? []) {
+          if (result.actorId !== state.actor || result.recipientId !== state.actor)
+            throw new Error("wrong receipt recipient");
           state.receipts ??= new Map();
           state.receipts.set(result.requestId, {
             accepted: result.accepted,
@@ -160,10 +179,15 @@ async function peer() {
         "NATIONAL invalid visible border",
         "NATIONAL invalid public country",
         "wrong recipient",
+        "wrong receipt recipient",
+        "own engine identity changed",
+        "stream changed",
+        "initial stream did not reset",
         "non-advancing projection",
         "legacy authority frame",
       ]);
-      state.decodeReason ??= phase + ":" + (allowed.has(message) ? message : "unclassified");
+      state.decodeReason ??=
+        phase + ":" + (allowed.has(message) ? message : "unclassified");
     }
   });
   await until(() => ws.readyState === WebSocket.OPEN, "real socket open");
@@ -350,6 +374,11 @@ try {
     "three authoritative spawns",
     30_000,
   );
+  assert(allHealthy(players));
+  assert.equal(new Set(players.map((p) => p.actor)).size, 3);
+  assert(players.every((p) => p.actor && p.streamId));
+  assert.equal(new Set(players.map((p) => p.streamId)).size, 3);
+  pass("three-engine-principals-three-bound-private-streams");
   await until(
     () => players.every((p) => p.spawnEnded),
     "server-authored spawn phase end",
@@ -400,7 +429,7 @@ try {
     120_000,
   );
   for (let i = 0; i < 3; i++) {
-    assert.equal(players[i].receipts.get(requests[i]).actorId, seatIds[i]);
+    assert.equal(players[i].receipts.get(requests[i]).actorId, players[i].actor);
     for (let j = 0; j < 3; j++)
       if (i !== j) assert(!players[j].receipts?.has(requests[i]));
   }
@@ -409,6 +438,7 @@ try {
   setStage("refresh rotation and same-seat socket replacement");
   const renewed = await refresh(auth[1].cookie);
   const replacement = await peer();
+  replacement.actor = players[1].actor;
   const previousTick = players[0].lastProjectionTick;
   rejoin(replacement, id, renewed.jwt);
   await until(
@@ -422,6 +452,10 @@ try {
   );
   assert.equal(replacement.seat, seatIds[1]);
   assert.equal(replacement.match, id);
+  assert.equal(replacement.actor, players[1].actor);
+  await until(() => Boolean(replacement.streamId), "fresh private stream");
+  assert.notEqual(replacement.streamId, players[1].streamId);
+  assert(!replacement.decodeFailed);
   assert(
     players[0].lastProjectionTick > previousTick &&
       players[2].lastProjectionTick > previousTick,
@@ -454,6 +488,7 @@ try {
   assert(!banned.starts);
   const recoveredAuth = await login(fixture.dir, emails[1]);
   const recovered = await peer();
+  recovered.actor = players[1].actor;
   rejoin(recovered, id, recoveredAuth.jwt);
   await until(
     () => recovered.starts === 1 && recovered.lastProjectionTick >= 1,
