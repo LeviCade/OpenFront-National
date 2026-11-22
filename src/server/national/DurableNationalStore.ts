@@ -152,6 +152,8 @@ export class DurableNationalStore {
         );
       db = new DatabaseSync(dbPath);
       const dbIdentity = lstatSync(dbPath);
+      if (dbIdentity.size > maxPages * 4096)
+        throw new Error("NATIONAL existing database exceeds bound");
       this.dbIdentity = { dev: dbIdentity.dev, ino: dbIdentity.ino };
       db.exec(
         `PRAGMA busy_timeout=0; PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA secure_delete=ON; PRAGMA max_page_count=${maxPages};`,
@@ -220,8 +222,8 @@ export class DurableNationalStore {
     this.assertAvailable();
     validID(gameID);
     const row = this.db
-      .prepare("SELECT * FROM checkpoints WHERE gameID = ?")
-      .get(gameID);
+      .prepare("SELECT gameID, generation, tick, digest, CASE WHEN length(CAST(payload AS BLOB)) <= ? THEN payload ELSE NULL END AS payload FROM checkpoints WHERE gameID = ?")
+      .get(MAX_NATIONAL_RECORD_BYTES, gameID);
     return row ? checked(row) : null;
   }
 
@@ -308,6 +310,8 @@ export function assertDurableNationalRoot(root: string, workers: number): void {
   )
     throw new Error("NATIONAL recovery directory must be private");
   privateFile(path, false);
+  if (lstatSync(path).size > 128)
+    throw new Error("NATIONAL recovery manifest exceeds bound");
   const metadata = readFileSync(path, "utf8");
   if (metadata !== JSON.stringify({ format: 1, workers }))
     throw new Error("NATIONAL recovery manifest or worker count incompatible");
