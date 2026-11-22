@@ -25,6 +25,7 @@ export interface NationalEconomicMemory {
 export type EconomicDecision =
   | {
       readonly kind: "issue";
+      readonly decision?: never;
       readonly scope: "national" | "imperial";
       readonly targetId: string;
       readonly recipientIds: readonly string[];
