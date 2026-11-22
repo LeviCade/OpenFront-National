@@ -16,6 +16,7 @@ export class Roster {
   // still appear in the host's post-game reconciliation.
   private everyone = new Map<ClientID, Client>();
   private sockets = new Set<WebSocket>();
+  private readonly restoredShells = new WeakSet<WebSocket>();
   // persistentID -> clientID for reconnection. Cleared by forgetReconnect (a
   // lobby-phase leave) so the seat is free again.
   private reconnectable = new Map<string, ClientID>();
@@ -81,6 +82,7 @@ export class Roster {
     this.reconnectable.set(client.persistentID, client.clientID);
     this.admitted.add(client.persistentID);
     this.disconnected.set(client.clientID, true);
+    this.restoredShells.add(client.ws);
     if (kicked) this.kicked.add(client.persistentID);
   }
 
@@ -90,7 +92,8 @@ export class Roster {
     this.sockets.add(ws);
     if (client.ws !== ws) {
       // Restored seats have an inert, never-registered socket shell.
-      if (this.sockets.delete(client.ws)) {
+      this.sockets.delete(client.ws);
+      if (!this.restoredShells.delete(client.ws)) {
         client.ws.removeAllListeners();
         client.ws.close();
       }

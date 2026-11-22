@@ -73,6 +73,11 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
           node --import tsx scripts/national-staging/worker-journey.mjs
+      - name: Durable store faults and real SIGKILL recovery journey
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types scripts/national-staging/durable-store.test.mjs
+          NATIONAL_TEST_DURABLE_RECOVERY=1 node --import tsx scripts/national-staging/worker-journey.mjs
       - name: Owned source formatter and lint (independent of journey)
         if: always()
         run: |
