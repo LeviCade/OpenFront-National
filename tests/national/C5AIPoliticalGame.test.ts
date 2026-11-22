@@ -17,7 +17,7 @@ import { GameRunner } from "@openfront/engine/GameRunner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import { describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
-import { roundTrip } from "../util/Snapshot";
+import { diffSnapshots, roundTrip } from "../util/Snapshot";
 
 const A = "C5AIBOTAL";
 const B = "C5AIBOTBR";
@@ -98,6 +98,9 @@ function runnerFor(game: Game): GameRunner {
 describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () => {
   it("two actual bots create, invite, accept and defend a lawful treaty; snapshot replays exactly", async () => {
     const game = await seeded();
+    // Low-resource sovereigns choose a treaty rather than an elective war.
+    game.player(A).setTroops(400);
+    game.player(B).setTroops(400);
     const runner = runnerFor(game);
     const observed = collectLiveNationalObservation(game, A).observation;
     expect(observed.frontiers.some((f) => f.targetId === B)).toBe(true);
@@ -127,7 +130,7 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
     }
     const left = await roundTrip(game, "plains");
     const right = await roundTrip(restored, "plains");
-    expect([...left.bytes]).toEqual([...right.bytes]);
+    expect(diffSnapshots(left.bytes, right.bytes)).toEqual([]);
   });
 
   it("a threatened bot accepts a human-offered empire through real validator and serves its victory", async () => {
