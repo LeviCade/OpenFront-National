@@ -33,9 +33,9 @@ const cases = [
   {
     id: "leak-foreign-player",
     file: "packages/engine/src/national/observation/NationalOutbound.ts",
-    before:
-      "updates[GameUpdateType.Player] = players;",
-    after: "updates[GameUpdateType.Player] = [...players, ...rawPlayer.filter((u) => u.id !== ownID)];",
+    before: "updates[GameUpdateType.Player] = players;",
+    after:
+      "updates[GameUpdateType.Player] = [...players, ...rawPlayer.filter((u) => u.id !== ownID)];",
     suite: "tests/qa/national/PacketCanaries.test.ts",
     name: "does not emit hidden troops, ships, diplomatic text",
     expectedFailure: "NATIONAL unauthorized packet disclosure: 8765432",
@@ -96,7 +96,8 @@ for (const entry of cases) {
     );
     const target = assertions.filter(
       (test) =>
-        test.title?.includes(entry.name) || test.fullName?.includes(entry.name),
+        test.title?.includes(entry.name) === true ||
+        test.fullName?.includes(entry.name) === true,
     );
     const valid =
       !result.error &&
