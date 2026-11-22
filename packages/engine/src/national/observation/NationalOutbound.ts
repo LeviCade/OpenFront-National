@@ -20,6 +20,7 @@ import {
   type PlayerUpdate,
   type UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
+import type { NationalPublicConflictView } from "@openfront/engine-api/game/NationalRecipientView";
 import {
   packUnitUpdates,
   unpackUnitUpdates,
@@ -32,6 +33,8 @@ import {
   type NationalSightMemory,
 } from "./NationalObservation";
 import type { OutboundNationalResult } from "./NationalPoliticalPacket";
+
+export type { NationalPublicConflictView } from "@openfront/engine-api/game/NationalRecipientView";
 
 /**
  * Explicit PUBLIC political whitelist. Even an accidentally extended E1
@@ -74,36 +77,6 @@ function publicPolitics(
             ),
           },
   };
-}
-
-/** Safe, detached WAR projection for E4. Never forward raw WAR/LEVY snapshots.
- * E2 owns the engine-api typed wire schema. Pending diplomacy is only visible
- * to current participants, while WAR declarations/cessations are public. */
-export interface NationalPublicConflictView {
-  readonly version: 1;
-  /** Empty for spectators, never interpreted as an authenticated principal. */
-  readonly recipientId: string;
-  readonly layers: readonly {
-    readonly id: string;
-    readonly scope: "national" | "imperial";
-    readonly first: { readonly kind: "nation" | "empire"; readonly id: string };
-    readonly second: {
-      readonly kind: "nation" | "empire";
-      readonly id: string;
-    };
-    readonly declaredBy: string;
-    readonly startedTick: number;
-    readonly endedTick: number | null;
-  }[];
-  readonly motions: readonly {
-    readonly id: string;
-    readonly layerId: string;
-    readonly proposedBy: string;
-    readonly proposingSide: 0 | 1;
-    readonly proposedTick: number;
-    readonly acceptedTick: number | null;
-    readonly acceptedBy: string | null;
-  }[];
 }
 
 const publicId = (value: unknown): value is string =>

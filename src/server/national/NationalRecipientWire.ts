@@ -16,8 +16,8 @@ import {
   NATIONAL_OBSERVER_MAX_UNITS,
   NATIONAL_OBSERVER_MAP_VERSION,
   type NationalObserverMapV1,
-} from "@openfront/engine/national/observation/NationalObserverMap";
-import type { NationalPublicConflictView } from "@openfront/engine/national/observation/NationalOutbound";
+  type NationalPublicConflictView,
+} from "@openfront/engine-api/game/NationalRecipientView";
 import { replacer } from "@openfront/shared/SharedUtil";
 
 export const MAX_NATIONAL_PROJECTION_BYTES = 2_000_000;

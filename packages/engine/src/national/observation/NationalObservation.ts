@@ -7,19 +7,15 @@
  *
  * Integration awaits the conductor's M0 political/wire/snapshot contracts.
  */
+import type {
+  AssetKind,
+  SovereignStatus,
+} from "@openfront/engine-api/game/NationalRecipientView";
+
+export type { AssetKind, SovereignStatus } from "@openfront/engine-api/game/NationalRecipientView";
+
 export type NationId = string;
 export type CoalitionKind = "nap" | "mda" | "empire";
-export type SovereignStatus =
-  | "independent"
-  | "imperial"
-  | "member"
-  | "eliminated";
-export type AssetKind =
-  | "army"
-  | "structure"
-  | "warship"
-  | "transport"
-  | "trade-ship";
 export type SightSource = "border" | "coast" | "warship" | "recon";
 
 export interface NationalNation {

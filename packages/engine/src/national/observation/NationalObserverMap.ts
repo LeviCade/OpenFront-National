@@ -9,88 +9,28 @@
  * pages. Any loss of sight (including empire separation) sends reset=true
  * BEFORE the next page; stale ownership/units must be deleted by the client.
  */
-import type { TileRef } from "@openfront/engine-api/game/GameMap";
+import {
+  NATIONAL_OBSERVER_MAP_VERSION,
+  NATIONAL_OBSERVER_MAX_TILES,
+  NATIONAL_OBSERVER_MAX_TRACKED_UNITS,
+  NATIONAL_OBSERVER_MAX_UNITS,
+  type NationalObserverMapV1,
+  type NationalVisibleTileV1,
+  type NationalVisibleUnitV1,
+} from "@openfront/engine-api/game/NationalRecipientView";
 import type { Game } from "../../game/Game";
 import type { LiveNationalObservation } from "./LiveObservation";
-import type {
-  AssetKind,
-  PublicNation,
-  SovereignStatus,
-} from "./NationalObservation";
+import type { PublicNation } from "./NationalObservation";
 
-export const NATIONAL_OBSERVER_MAP_VERSION = 1 as const;
-/** 4 integers per tile, 4096 tiles: bounded per-recipient initial sync. */
-export const NATIONAL_OBSERVER_MAX_TILES = 4096;
-/** Full currently-visible unit markers; flag if too many to fit one frame. */
-export const NATIONAL_OBSERVER_MAX_UNITS = 2048;
-/** Explicit producer/receiver memory ceiling: overflow must be visible. */
-export const NATIONAL_OBSERVER_MAX_TRACKED_UNITS = 131_072;
-
-/** All owner+terrain fields refer to THIS principal's currently visible tile.
- * The final uint mask has N=1, S=2, W=4, E=8, only when both tiles are visible
- * and their authoritative current ownerID values differ.
- */
-export type NationalVisibleTileV1 = readonly [
-  tileRef: number,
-  packedState: number,
-  terrainByte: number,
-  visibleBorderMask: number,
-];
-
-export interface NationalVisibleUnitV1 {
-  readonly id: number;
-  readonly ownerId: string;
-  readonly kind: AssetKind;
-  readonly tile: TileRef;
-  /** Own troops only; never enemy troop, transport load or landing target. */
-  readonly troops?: number;
-}
-
-export interface NationalObserverMapV1 {
-  readonly version: typeof NATIONAL_OBSERVER_MAP_VERSION;
-  readonly tick: number;
-  readonly observerId: string;
-  /** Server-issued original-socket nonce, NOT an authorization credential. */
-  readonly streamId: string;
-  /** Monotonically increasing tile sweep sequence local to this stream. */
-  readonly sweepId: number;
-  /** Authoritative tick when the membership of this sweep was frozen. */
-  readonly sweepTick: number;
-  readonly width: number;
-  readonly height: number;
-  /** All previous E4-owned map/visibility/unit caches must be discarded. */
-  readonly reset: boolean;
-  /** Offset in sorted CURRENT authorized visible tiles. Never client chosen. */
-  readonly cursor: number;
-  /** Null means a complete current-sight map sweep. */
-  readonly nextCursor: number | null;
-  readonly tiles: readonly NationalVisibleTileV1[];
-  /** Current sightings, not E1 sight-memory or hidden enemy asset catalog. */
-  readonly units: readonly NationalVisibleUnitV1[];
-  /** Server-only unit page offset and end marker; never from a browser. */
-  readonly unitCursor: number;
-  readonly unitNextCursor: number | null;
-  readonly unitSweepId: number;
-  /** Discard all prior unit markers before adding this page. */
-  readonly unitReset: boolean;
-  /** Immediately delete these formerly sighted IDs, without their coordinates. */
-  readonly unitRemovedIds: readonly number[];
-  readonly unitsTruncated: boolean;
-  /** More currently visible units than can be tracked in bounded memory. */
-  readonly unitOverflow: boolean;
-  readonly visibleBorders: readonly {
-    readonly targetId: string;
-    readonly access: "land" | "naval";
-  }[];
-  readonly ownResources: { readonly troops: number; readonly treasury: number };
-  readonly countries: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly alive: boolean;
-    readonly landPercent: number;
-    readonly status: SovereignStatus;
-  }[];
-}
+export {
+  NATIONAL_OBSERVER_MAP_VERSION,
+  NATIONAL_OBSERVER_MAX_TILES,
+  NATIONAL_OBSERVER_MAX_TRACKED_UNITS,
+  NATIONAL_OBSERVER_MAX_UNITS,
+  type NationalObserverMapV1,
+  type NationalVisibleTileV1,
+  type NationalVisibleUnitV1,
+} from "@openfront/engine-api/game/NationalRecipientView";
 
 /**
  * One pager per original authenticated socket.
