@@ -29,6 +29,7 @@ import {
   unpackUnitUpdates,
 } from "@openfront/engine-lib/game/PackedUnitUpdates";
 import type { Game } from "../../game/Game";
+import { NationalUltimatumExecution } from "../../execution/NationalUltimatumExecution";
 import type { NationalPublicPoliticalView } from "../NationalRuntime";
 import type { LiveNationalObservation } from "./LiveObservation";
 import {
@@ -41,6 +42,28 @@ import {
   projectNationalImperialAdministration,
 } from "./NationalPactProjection";
 import type { OutboundNationalResult } from "./NationalPoliticalPacket";
+
+/** Host-derived private observation for E6 and authenticated human recipients.
+ * The caller may not choose a browser-supplied observer identity.
+ */
+export function projectNationalUltimatums(
+  game: Game,
+  observerId: string | null,
+): import("@openfront/engine-api/game/GameUpdates").NationalUltimatumViewData | undefined {
+  if (!game.config().nationalMode() || observerId === null ||
+      !game.hasPlayer(observerId)) return undefined;
+  const actor = game.player(observerId);
+  if (actor.type() !== PlayerType.Human || !actor.hasSpawned() || !actor.isAlive())
+    return undefined;
+  return {
+    version: 1,
+    recipientId: actor.id(),
+    items: NationalUltimatumExecution.viewFor(game, actor).map((row) => ({
+      ...row,
+      imposedMembers: [...row.imposedMembers],
+    })),
+  };
+}
 
 export type { NationalPublicConflictView } from "@openfront/engine-api/game/NationalRecipientView";
 
@@ -720,6 +743,7 @@ export class NationalOutboundFilter {
       game,
       this.observerId,
     );
+    const privateUltimatums = projectNationalUltimatums(game, this.observerId);
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
     return {
@@ -749,6 +773,7 @@ export class NationalOutboundFilter {
       ...(privateAccessionOffers === undefined
         ? {}
         : { nationalAccessionOffers: privateAccessionOffers }),
+      ...(privateUltimatums === undefined ? {} : { nationalUltimatums: privateUltimatums }),
       tick: data.tick,
       updates,
       packedTileUpdates: new Uint32Array(packedTile),
