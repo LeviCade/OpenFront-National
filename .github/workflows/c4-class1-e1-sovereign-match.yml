@@ -81,11 +81,17 @@ jobs:
           set -eu
           git show 7ba909572739bd0778c9cf34074008f1bf244124:packages/engine/src/execution/AttackExecution.ts > packages/engine/src/execution/AttackExecution.ts
           git show 7ba909572739bd0778c9cf34074008f1bf244124:packages/engine/src/execution/PlayerExecution.ts > packages/engine/src/execution/PlayerExecution.ts
-          if npx --no-install vitest run --project node tests/national/ConductorFourSovereignMatch.test.ts -t 'tiny defender' > /tmp/c4-e1-founding.log 2>&1; then
-            cat /tmp/c4-e1-founding.log
-            echo '::error::Founding source unexpectedly passes regression'
-            exit 1
-          fi
-          cat /tmp/c4-e1-founding.log
-          grep -E 'AssertionError|AssertionError:' /tmp/c4-e1-founding.log
-          echo C4_E1_FOUNDING_TARGETED_REGRESSION_FAILED=1
+          for defect in tiny enclosure; do
+            if NO_COLOR=1 FORCE_COLOR=0 npx --no-install vitest run --project node tests/national/ConductorFourSovereignMatch.test.ts -t "$defect" > "/tmp/c4-e1-$defect.log" 2>&1; then
+              cat "/tmp/c4-e1-$defect.log"
+              echo "::error::Founding source unexpectedly passes $defect regression"
+              exit 1
+            fi
+            cat "/tmp/c4-e1-$defect.log"
+            if [ "$defect" = tiny ]; then
+              grep 'AssertionError: NATIONAL_SMALL_SOVEREIGN_MUST_SURVIVE' "/tmp/c4-e1-$defect.log"
+            else
+              grep 'AssertionError: NATIONAL_PEACETIME_ENCLOSURE_MUST_NOT_ANNEX' "/tmp/c4-e1-$defect.log"
+            fi
+          done
+          echo C4_E1_FOUNDING_TARGETED_REGRESSIONS_FAILED=2

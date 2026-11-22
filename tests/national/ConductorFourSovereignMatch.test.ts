@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
@@ -8,6 +7,7 @@ import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import type { NationalCommand } from "@openfront/engine/national/NationalRuntime";
 import { snapshotGame } from "@openfront/engine/snapshot/GameSnapshot";
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
@@ -190,9 +190,12 @@ function declare(
 
 function stopExpansion(m: Match, actors: readonly string[]) {
   const cancels = actors.flatMap((actor) =>
-    m.game.player(actor).outgoingAttacks().map((army) =>
-      stamped(actor, { type: "cancel_attack", attackID: army.id() }),
-    ),
+    m.game
+      .player(actor)
+      .outgoingAttacks()
+      .map((army) =>
+        stamped(actor, { type: "cancel_attack", attackID: army.id() }),
+      ),
   );
   if (cancels.length > 0) clicks(m, ...cancels);
   wait(m, 25);
@@ -242,7 +245,7 @@ describe("C4 E1 actual last-sovereign engine", () => {
     const neutralTiles = [...c.tiles()].sort((x, y) => x - y);
     const defendingTiles = b.numTilesOwned();
     clicks(m, attack(A, B, 5_000));
-    expect(b.isAlive()).toBe(true);
+    expect(b.isAlive(), "NATIONAL_SMALL_SOVEREIGN_MUST_SURVIVE").toBe(true);
     expect(b.numTilesOwned()).toBe(defendingTiles - 1);
     expect([...c.tiles()].sort((x, y) => x - y)).toEqual(neutralTiles);
     expect(m.game.nationalWarAuthority()?.atWar(C, B)).toBe(false);
@@ -250,7 +253,109 @@ describe("C4 E1 actual last-sovereign engine", () => {
     expect(m.errors).toEqual([]);
     console.info(
       "C4_E1_SMALL_SOVEREIGN_JSON=" +
-        JSON.stringify({ before, after: balances(m.game), digest: digest(m.game) }),
+        JSON.stringify({
+          before,
+          after: balances(m.game),
+          digest: digest(m.game),
+        }),
+    );
+  });
+
+
+  it("WAR-01: peaceful enclosure preserves NATIONAL land but permits legacy FFA capture", async () => {
+    for (const nationalMode of [true, false]) {
+      const m = await spawned(
+        TestConfig,
+        [
+          [40, 50],
+          [50, 50],
+          [75, 75],
+          [20, 75],
+        ],
+        nationalMode,
+      );
+      const a = m.game.player(A);
+      const b = m.game.player(B);
+      wait(m, 25);
+      // Isolated map-topology fixture only. The complete-match scenario
+      // below never constructs territories or troop balances this way.
+      for (let y = 45; y <= 55; y++) {
+        for (let x = 45; x <= 55; x++) {
+          const edge = x === 45 || x === 55 || y === 45 || y === 55;
+          (edge ? a : b).conquer(m.game.ref(x, y));
+        }
+      }
+      const before = b.numTilesOwned();
+      expect(before).toBe(81);
+      wait(m, 30);
+      if (nationalMode) {
+        expect(
+          b.numTilesOwned(),
+          "NATIONAL_PEACETIME_ENCLOSURE_MUST_NOT_ANNEX",
+        ).toBe(before);
+        expect(m.game.nationalWarAuthority()?.atWar(A, B)).toBe(false);
+        expect(winner(m.game)).toBeNull();
+      } else {
+        expect(b.numTilesOwned()).toBe(0);
+      }
+      expect(m.errors).toEqual([]);
+      console.info(
+        "C4_E1_ENCLOSURE_JSON=" +
+          JSON.stringify({ nationalMode, before, after: b.numTilesOwned() }),
+      );
+    }
+  });
+
+  it("SOV: defeating the reigning monarch dissolves his empire; independent victory requires all rivals to fall", async () => {
+    const m = await spawned(TestConfig, [
+      [28, 20],
+      [36, 20],
+      [44, 20],
+      [20, 20],
+    ]);
+    const { game } = m;
+    clicks(
+      m,
+      stamped(A, {
+        type: "national_found_empire",
+        empireId: EMPIRE,
+        requestId: "fallen-crown-found",
+      }),
+    );
+    join(m, A, B);
+    join(m, A, C);
+    expect(game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(A);
+    expect(game.nationalVictoryRoster()).toBeNull();
+
+    for (const target of [A, B, C]) {
+      expect(game.player(D).sharesBorderWith(game.player(target))).toBe(true);
+      declare(m, D, D, target, "national", "defeat-" + target);
+      clicks(m, attack(D, target, 5_000));
+      for (let i = 0; i < 100 && game.player(target).isAlive(); i++) {
+        tick(m);
+      }
+      expect(game.player(target).numTilesOwned()).toBe(0);
+      wait(m, 12);
+      if (target === A) {
+        expect(game.nationalPoliticalAuthority()?.empireOf(B)).toBeNull();
+        expect(game.nationalPoliticalAuthority()?.empireOf(C)).toBeNull();
+      }
+      if (target !== C) {
+        expect(winner(game)).toBeNull();
+        expect(game.nationalVictoryRoster()).toBeNull();
+      }
+    }
+    expect(winner(game)).toBe(D);
+    expect(m.errors).toEqual([]);
+    console.info(
+      "C4_E1_INDEPENDENT_VICTOR_JSON=" +
+        JSON.stringify({
+          winner: winner(game),
+          prizes: game.nationalVictoryRoster()?.prizes,
+          ticks: game.ticks(),
+          after: balances(game),
+          digest: digest(game),
+        }),
     );
   });
 
@@ -345,15 +450,18 @@ describe("C4 E1 actual last-sovereign engine", () => {
     const levy = game.nationalWarState()!.levy;
     const receipts = levy.processed.map((row) => row.result);
     expect(receipts).toHaveLength(2);
-    const debits = receipts.reduce((sum, receipt) => sum + receipt.intercepted, 0);
+    const debits = receipts.reduce(
+      (sum, receipt) => sum + receipt.intercepted,
+      0,
+    );
     expect(debits).toBeGreaterThan(0);
     for (const receipt of receipts) {
       expect(receipt.intercepted + receipt.remainingAttackingTroops).toBe(
         receipt.attackTroopsBefore,
       );
-      expect(receipt.contributions.reduce((sum, x) => sum + x.troopsDebited, 0)).toBe(
-        receipt.intercepted,
-      );
+      expect(
+        receipt.contributions.reduce((sum, x) => sum + x.troopsDebited, 0),
+      ).toBe(receipt.intercepted);
       expect(receipt.contributions.every((x) => x.nationId === D)).toBe(true);
     }
     expect(twin.game.player(D).troops() - d.troops()).toBe(debits);
@@ -372,7 +480,9 @@ describe("C4 E1 actual last-sovereign engine", () => {
     const peace = military(m, C, "rival-peace");
     expect(peace.accepted).toBe(true);
     expect(c.isAlive()).toBe(true);
-    expect(a.outgoingAttacks().length + b.outgoingAttacks().length).toBeGreaterThan(0);
+    expect(
+      a.outgoingAttacks().length + b.outgoingAttacks().length,
+    ).toBeGreaterThan(0);
 
     const active = await roundTrip(game, "plains");
     expect(active.again).toEqual(active.bytes);
@@ -383,7 +493,9 @@ describe("C4 E1 actual last-sovereign engine", () => {
       tick(restored);
       expect(balances(restored.game)).toEqual(balances(game));
       expect(restored.game.nationalWarState()).toEqual(game.nationalWarState());
-      expect(restored.game.nationalPublicPoliticalView()).toEqual(game.nationalPublicPoliticalView());
+      expect(restored.game.nationalPublicPoliticalView()).toEqual(
+        game.nationalPublicPoliticalView(),
+      );
       const current = digest(game);
       expect(digest(restored.game)).toBe(current);
       commitments.push(current);

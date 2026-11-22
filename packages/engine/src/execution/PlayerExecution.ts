@@ -986,7 +986,10 @@ export class PlayerExecution implements Execution {
 
       if (tiles.length > 0) {
         const componentCaptor = knownCaptor ?? this.getCapturingPlayer(tiles);
-        if (componentCaptor === null || !this.mayCaptureTerritory(componentCaptor)) {
+        if (
+          componentCaptor === null ||
+          !this.mayCaptureTerritory(componentCaptor)
+        ) {
           continue;
         }
         anyRemoved = true;
