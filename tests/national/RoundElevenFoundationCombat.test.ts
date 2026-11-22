@@ -19,6 +19,7 @@ import { GameRunner } from "@openfront/engine/GameRunner";
 import {
   initialNationalPlannerMemory,
   planNationalInterest,
+  recordNationalWarOutcome,
   type NationalPlannerMemory,
 } from "@openfront/engine/national/ai/NationalPlanner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
@@ -293,6 +294,15 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
       commandTargetId: BOT_B,
       reason: "war-rule",
     });
+    const witnessedCooldown = recordNationalWarOutcome(
+      collectLiveNationalObservation(game, BOT_A).observation,
+      initialNationalPlannerMemory(BOT_A),
+      deliberatelyRejected,
+    );
+    expect(
+      witnessedCooldown.rejectedWarTargets?.find((entry) => entry.targetId === BOT_B)
+        ?.retryAfterTick,
+    ).toBe(deliberatelyRejected.tick + 180);
     const beforeTroops = game.player(BOT_A).troops();
     const human = authenticatedRunner(game, humanInfo.clientID!);
     tick(game, human.runner, {
@@ -386,13 +396,15 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
     }
     expect([...snapshotGame(restored)]).toEqual([...snapshotGame(game)]);
 
-    // The bot waits out its genuine 180-tick rejected-target cooldown. Do
-    // not cause the result by injecting a fake acknowledgment or memory.
+    // The real rejected Game receipt was already tested through the planner's
+    // 180-tick cooldown bridge above. The informed bot itself now protects
+    // known pact members without making a prohibited declaration.
     const replayedCalls = vi.spyOn(
       game,
       "performNationalWarCommandWithOutcome",
     );
-    while (game.ticks() < blocked!.retryAfterTick) game.executeNextTick();
+    while (game.ticks() < deliberatelyRejected.tick + 180)
+      game.executeNextTick();
     const earlyRetries = replayedCalls.mock.calls.filter(
       ([actor, cmd]) =>
         actor.id() === BOT_A &&
