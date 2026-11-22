@@ -28,8 +28,13 @@ type BattleCommand = {
 async function spawned(): Promise<Game> {
   const game = await setup("plains", { nationalMode: true }, roster);
   for (const [i, p] of roster.entries()) {
-    game.addExecution(new SpawnExecution("c5-imperial", p,
-      game.map().ref(30 + i * 20, 30 + i * 20)));
+    game.addExecution(
+      new SpawnExecution(
+        "c5-imperial",
+        p,
+        game.map().ref(30 + i * 20, 30 + i * 20),
+      ),
+    );
   }
   game.executeNextTick();
   game.executeNextTick();
@@ -37,19 +42,28 @@ async function spawned(): Promise<Game> {
   const south = game.player(S);
   game.performNationalCommand(north, { kind: "found-empire", empireId });
   game.performNationalCommand(north, {
-    kind: "offer-empire", empireId, candidateId: S,
+    kind: "offer-empire",
+    empireId,
+    candidateId: S,
   });
   game.performNationalCommand(south, {
-    kind: "accept-empire", empireId, candidateId: S,
+    kind: "accept-empire",
+    empireId,
+    candidateId: S,
   });
   return game;
 }
 function pool(game: Game): bigint {
-  return BigInt(game.nationalImperialAdministrationFor(game.player(N))!.imperialTroops);
+  return BigInt(
+    game.nationalImperialAdministrationFor(game.player(N))!.imperialTroops,
+  );
 }
 function centralize(game: Game): void {
   game.performNationalImperialAdministration(game.player(N), {
-    kind: "set-army-mode", empireId, mode: "centralized", thresholdBps: 0,
+    kind: "set-army-mode",
+    empireId,
+    mode: "centralized",
+    thresholdBps: 0,
   });
 }
 function makeRealBorder(game: Game): void {
@@ -60,9 +74,11 @@ function makeRealBorder(game: Game): void {
     const length = game.map().neighbors4(westTile, nbuf);
     for (let i = 0; i < length; i++) {
       const candidate = nbuf[i];
-      if (!game.map().isWater(candidate) &&
-          !game.map().isImpassable(candidate) &&
-          game.owner(candidate) === game.terraNullius()) {
+      if (
+        !game.map().isWater(candidate) &&
+        !game.map().isImpassable(candidate) &&
+        game.owner(candidate) === game.terraNullius()
+      ) {
         south.conquer(candidate);
         expect(south.sharesBorderWith(west)).toBe(true);
         return;
@@ -78,12 +94,17 @@ function declareImperialWar(game: Game): void {
     aggressor: { kind: "empire", id: empireId },
     target: { kind: "nation", id: W },
   });
-  expect(game.nationalWarAuthority()?.authorizeOffensiveAction(S, W)).toBe(true);
+  expect(game.nationalWarAuthority()?.authorizeOffensiveAction(S, W)).toBe(
+    true,
+  );
 }
 function tickRunner(game: Game, count: number): void {
-  const runner = new GameRunner(game,
+  const runner = new GameRunner(
+    game,
     new Executor(game, "c5-imperial", game.player(N).clientID()!),
-    () => undefined, game.player(N).clientID()!);
+    () => undefined,
+    game.player(N).clientID()!,
+  );
   for (let i = 0; i < count; i++) {
     runner.addTurn({ turnNumber: game.ticks(), intents: [] });
     expect(runner.executeNextTick()).toBe(true);
@@ -93,42 +114,64 @@ function tickRunner(game: Game, count: number): void {
 describe("C5 M5 centralized real imperial combat", () => {
   it("conserves live member armies, rejects subordinate commands and survives exact mode changes", async () => {
     const game = await spawned();
-    const n = game.player(N), s = game.player(S), w = game.player(W);
-    n.setTroops(120); s.setTroops(180); w.setTroops(50);
+    const n = game.player(N),
+      s = game.player(S),
+      w = game.player(W);
+    n.setTroops(120);
+    s.setTroops(180);
+    w.setTroops(50);
     game.nationalVictoryRoster(); // synchronize live PlayerImpl troop facts
     const before = snapshotGameData(game).game;
-    expect(() => game.performNationalImperialAdministration(s, {
-      kind: "set-army-mode", empireId, mode: "centralized", thresholdBps: 0,
-    })).toThrow(/emperor/);
+    expect(() =>
+      game.performNationalImperialAdministration(s, {
+        kind: "set-army-mode",
+        empireId,
+        mode: "centralized",
+        thresholdBps: 0,
+      }),
+    ).toThrow(/emperor/);
     expect(snapshotGameData(game).game).toEqual(before);
     centralize(game);
     expect([n.troops(), s.troops(), w.troops()]).toEqual([0, 0, 50]);
     expect(pool(game)).toBe(300n);
-    expect(game.nationalImperialAdministrationFor(n)?.troopContributions)
-      .toEqual([{ memberId: N, total: "120" }, { memberId: S, total: "180" }]);
+    expect(
+      game.nationalImperialAdministrationFor(n)?.troopContributions,
+    ).toEqual([
+      { memberId: N, total: "120" },
+      { memberId: S, total: "180" },
+    ]);
     expect(() => centralize(game)).toThrow(/already centralized/);
     expect(pool(game)).toBe(300n);
     const { restored } = await roundTrip(game, "plains");
-    expect(restored.nationalImperialAdministrationFor(restored.player(N)))
-      .toEqual(game.nationalImperialAdministrationFor(n));
+    expect(
+      restored.nationalImperialAdministrationFor(restored.player(N)),
+    ).toEqual(game.nationalImperialAdministrationFor(n));
     for (const g of [game, restored]) {
       g.performNationalImperialAdministration(g.player(N), {
-        kind: "set-army-mode", empireId, mode: "decentralized", thresholdBps: 0,
+        kind: "set-army-mode",
+        empireId,
+        mode: "decentralized",
+        thresholdBps: 0,
       });
-      const total = BigInt(g.player(N).troops() + g.player(S).troops()) +
+      const total =
+        BigInt(g.player(N).troops() + g.player(S).troops()) +
         BigInt(g.nationalDeferredTroopsFor(g.player(N)) ?? "0") +
         BigInt(g.nationalDeferredTroopsFor(g.player(S)) ?? "0");
       expect(total).toBe(300n);
       expect(pool(g)).toBe(0n);
     }
-    expect(snapshotGameData(restored).game).toEqual(snapshotGameData(game).game);
+    expect(snapshotGameData(restored).game).toEqual(
+      snapshotGameData(game).game,
+    );
   });
 
   it("executes emperor-funded pooled battle through actual GameRunner, member debit, WAR and defender loss", async () => {
     const game = await spawned();
     makeRealBorder(game);
     declareImperialWar(game);
-    const n = game.player(N), s = game.player(S), w = game.player(W);
+    const n = game.player(N),
+      s = game.player(S),
+      w = game.player(W);
     n.setTroops(100);
     s.setTroops(20000);
     w.setTroops(1);
@@ -136,13 +179,21 @@ describe("C5 M5 centralized real imperial combat", () => {
     centralize(game);
     expect(pool(game)).toBe(20100n);
     const attack: BattleCommand = {
-      kind: "imperial-attack", empireId, memberId: S, targetId: W, amount: 12000,
+      kind: "imperial-attack",
+      empireId,
+      memberId: S,
+      targetId: W,
+      amount: 12000,
     };
     const untouched = snapshotGameData(game).game;
-    expect(() => game.performNationalImperialAdministration(s, attack)).toThrow(/emperor/);
+    expect(() => game.performNationalImperialAdministration(s, attack)).toThrow(
+      /emperor/,
+    );
     expect(snapshotGameData(game).game).toEqual(untouched);
     const outsider: BattleCommand = { ...attack, memberId: W };
-    expect(() => game.performNationalImperialAdministration(n, outsider)).toThrow();
+    expect(() =>
+      game.performNationalImperialAdministration(n, outsider),
+    ).toThrow();
     expect(pool(game)).toBe(20100n);
     game.performNationalImperialAdministration(n, attack);
     expect(pool(game)).toBe(8100n);
@@ -155,8 +206,13 @@ describe("C5 M5 centralized real imperial combat", () => {
     expect(pool(game)).toBeGreaterThanOrEqual(8100n);
     tickRunner(game, 25);
     expect(w.numTilesOwned()).toBeLessThan(initialTiles);
-    expect(game.nationalWarState()?.wars.layers.some(l =>
-      l.id === "c5-e1-war" && l.scope === "imperial")).toBe(true);
+    expect(
+      game
+        .nationalWarState()
+        ?.wars.layers.some(
+          (l) => l.id === "c5-e1-war" && l.scope === "imperial",
+        ),
+    ).toBe(true);
   });
 
   it("does not mint in-flight pooled strength on crown change, dissolution or replay", async () => {
@@ -167,27 +223,39 @@ describe("C5 M5 centralized real imperial combat", () => {
     game.player(S).setTroops(800);
     centralize(game);
     const attack: BattleCommand = {
-      kind: "imperial-attack", empireId, memberId: S, targetId: W, amount: 100,
+      kind: "imperial-attack",
+      empireId,
+      memberId: S,
+      targetId: W,
+      amount: 100,
     };
     game.performNationalImperialAdministration(game.player(N), attack);
     expect(pool(game)).toBe(1300n);
     const { restored } = await roundTrip(game, "plains");
     for (const g of [game, restored]) {
       g.performNationalCommand(g.player(N), {
-        kind: "transfer-crown", empireId, successorId: S,
+        kind: "transfer-crown",
+        empireId,
+        successorId: S,
       });
-      expect(() => g.performNationalImperialAdministration(g.player(N), attack))
-        .toThrow(/emperor/);
+      expect(() =>
+        g.performNationalImperialAdministration(g.player(N), attack),
+      ).toThrow(/emperor/);
       expect(pool(g)).toBe(1300n);
       g.performNationalImperialAdministration(g.player(S), {
-        kind: "dissolve", empireId,
+        kind: "dissolve",
+        empireId,
       });
       expect(g.nationalPoliticalAuthority()?.empireOf(S)).toBeNull();
       tickRunner(g, 1);
-      expect(g.nationalWarState()?.wars.layers.find(l =>
-        l.id === "c5-e1-war")?.endedTick).not.toBeNull();
+      expect(
+        g.nationalWarState()?.wars.layers.find((l) => l.id === "c5-e1-war")
+          ?.endedTick,
+      ).not.toBeNull();
     }
-    expect(snapshotGameData(restored).game).toEqual(snapshotGameData(game).game);
+    expect(snapshotGameData(restored).game).toEqual(
+      snapshotGameData(game).game,
+    );
   });
 
   it("rejects unauthorized stamped subordinate attack with no side effects", async () => {
@@ -198,19 +266,31 @@ describe("C5 M5 centralized real imperial combat", () => {
     game.player(S).setTroops(400);
     centralize(game);
     const command = {
-      kind: "imperial-attack", empireId, memberId: S, targetId: W, amount: 100,
+      kind: "imperial-attack",
+      empireId,
+      memberId: S,
+      targetId: W,
+      amount: 100,
     } as const;
     const baseline = pool(game);
     const executor = new Executor(game, "c5-imperial", undefined);
-    game.addExecution(executor.createExec(StampedIntentSchema.parse({
-      type: "national_imperial_administration",
-      clientID: game.player(S).clientID(), requestId: "c5-subordinate-denied", command,
-    })));
+    game.addExecution(
+      executor.createExec(
+        StampedIntentSchema.parse({
+          type: "national_imperial_administration",
+          clientID: game.player(S).clientID(),
+          requestId: "c5-subordinate-denied",
+          command,
+        }),
+      ),
+    );
     tickRunner(game, 1);
     expect(pool(game)).toBeGreaterThanOrEqual(baseline);
     expect(game.nationalPoliticalCommandResults(game.player(S))).toContainEqual(
       expect.objectContaining({
-        requestId: "c5-subordinate-denied", accepted: false, reason: "political-rule",
+        requestId: "c5-subordinate-denied",
+        accepted: false,
+        reason: "political-rule",
       }),
     );
   });
