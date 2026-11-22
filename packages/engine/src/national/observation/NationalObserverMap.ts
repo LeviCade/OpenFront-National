@@ -23,6 +23,8 @@ export const NATIONAL_OBSERVER_MAP_VERSION = 1 as const;
 export const NATIONAL_OBSERVER_MAX_TILES = 4096;
 /** Full currently-visible unit markers; flag if too many to fit one frame. */
 export const NATIONAL_OBSERVER_MAX_UNITS = 2048;
+/** Explicit producer/receiver memory ceiling: overflow must be visible. */
+export const NATIONAL_OBSERVER_MAX_TRACKED_UNITS = 131_072;
 
 /** All owner+terrain fields refer to THIS principal's currently visible tile.
  * The final uint mask has N=1, S=2, W=4, E=8, only when both tiles are visible
@@ -74,6 +76,8 @@ export interface NationalObserverMapV1 {
   /** Immediately delete these formerly sighted IDs, without their coordinates. */
   readonly unitRemovedIds: readonly number[];
   readonly unitsTruncated: boolean;
+  /** More currently visible units than can be tracked in bounded memory. */
+  readonly unitOverflow: boolean;
   readonly visibleBorders: readonly {
     readonly targetId: string;
     readonly access: "land" | "naval";
@@ -146,7 +150,7 @@ export class NationalObserverMapPager {
     }
     const visible = verified.visibleTiles;
     const map = this.game.map();
-    if (visible.size > 32_000_000) {
+    if (map.width() * map.height() > 32_000_000 || visible.size > 32_000_000) {
       throw new Error("NATIONAL observer-map exceeds bounded world limit");
     }
     if (this.previousVisible !== null) {
@@ -230,7 +234,7 @@ export class NationalObserverMapPager {
     const unitReset =
       reset ||
       removed.length > NATIONAL_OBSERVER_MAX_UNITS ||
-      this.emittedUnitIds.size > 131_072;
+      this.emittedUnitIds.size > NATIONAL_OBSERVER_MAX_TRACKED_UNITS;
     if (unitReset) {
       this.emittedUnitIds.clear();
       this.unitCursor = 0;
@@ -239,7 +243,9 @@ export class NationalObserverMapPager {
       for (const id of removed) this.emittedUnitIds.delete(id);
     }
     if (this.unitCursor === 0) {
-      this.unitIds = [...nowIds].sort((a, b) => a - b);
+      this.unitIds = [...nowIds]
+        .sort((a, b) => a - b)
+        .slice(0, NATIONAL_OBSERVER_MAX_TRACKED_UNITS);
       this.unitSweepId += 1;
     }
     const unitCursor = this.unitCursor;
@@ -295,7 +301,8 @@ export class NationalObserverMapPager {
       unitSweepId: this.unitSweepId,
       unitReset,
       unitRemovedIds: unitReset ? [] : removed,
-      unitsTruncated: this.unitIds.length > NATIONAL_OBSERVER_MAX_UNITS,
+      unitsTruncated: nowIds.size > NATIONAL_OBSERVER_MAX_UNITS,
+      unitOverflow: nowIds.size > NATIONAL_OBSERVER_MAX_TRACKED_UNITS,
       visibleBorders: verified.observation.frontiers.map((frontier) => ({
         targetId: frontier.targetId,
         access: frontier.access,
