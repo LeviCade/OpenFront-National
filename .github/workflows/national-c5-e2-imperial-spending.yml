@@ -1,0 +1,130 @@
+name: NATIONAL C5 E2 - imperial spending authoritative source
+on:
+  push:
+    branches:
+      - feature/c5-class1-e2-imperial-spending-20261122
+  pull_request:
+    branches:
+      - stage3/conductor5-class1-integration-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c5-e2-imperial-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: E2 exact source TypeScript
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: npm run typecheck
+
+  gameplay:
+    name: E2 authoritative Game and revenue scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: E2 source scenarios and inherited gameplay regressions
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/ImperialSpendingClassFive.test.ts \
+            tests/national/LiveSovereignty.test.ts \
+            tests/national/NationalFoundEmpireRequestId.test.ts \
+            tests/LiveTradeRevenue.test.ts \
+            tests/core/executions/UpgradeStructureExecution.test.ts \
+            tests/DeleteUnitExecution.test.ts
+      - name: Legacy economy regression
+        if: success() || failure()
+        run: |
+          npx --no-install vitest run --project node \
+            tests/economy/ConstructionGold.test.ts \
+            tests/GoldDonationStats.test.ts
+
+  full-source:
+    name: E2 whole repository tests, lint, build and format
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: All repository unit and source tests
+        run: npm test
+      - name: Whole-repository lint
+        if: success() || failure()
+        run: npm run lint
+      - name: Full production bundle
+        if: success() || failure()
+        run: npm run build-prod
+      - name: Whole-repository oxfmt
+        if: success() || failure()
+        run: |
+          if ! npm run format:check; then
+            npx --no-install oxfmt --write .
+            git -c color.ui=false diff --
+            exit 1
+          fi
+
+  format:
+    name: E2 touched-source format check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Exact changed TypeScript format diagnostic
+        run: |
+          FILES=(
+            packages/engine-api/src/Schemas.ts
+            packages/engine/src/national/NationalRuntime.ts
+            packages/engine/src/game/Game.ts
+            packages/engine/src/game/GameImpl.ts
+            packages/engine/src/game/PlayerImpl.ts
+            packages/engine/src/execution/TradeShipExecution.ts
+            packages/engine/src/game/TrainStation.ts
+            tests/national/ImperialSpendingClassFive.test.ts
+          )
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            git -c color.ui=false diff -- "${FILES[@]}"
+            exit 1
+          fi

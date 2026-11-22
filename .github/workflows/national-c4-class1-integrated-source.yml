@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - stage3/conductor4-class1-integration-20261121
+      - stage3/conductor4-class2-integration-20261122
   pull_request:
     branches:
       - stage3/conductor4-class1-integration-20261121
+      - stage3/conductor4-class2-integration-20261122
   workflow_dispatch:
 
 permissions:
@@ -56,7 +58,8 @@ jobs:
             tests/server/NationalAccountLease.test.ts \
             tests/national/TrustedNationalServerAuthority.test.ts \
             tests/national/ClassFivePrincipalWireFanout.test.ts \
-            tests/server/ServerEnv.test.ts
+            tests/server/ServerEnv.test.ts \
+            tests/server/RenderHtml.test.ts
       - name: Independent witness regressions
         run: |
           npx --no-install vitest run --project node \
@@ -113,12 +116,18 @@ jobs:
       - run: npm run typecheck
       - name: Complete project tests
         run: npm test
+      - name: Strict dependency audit
+        if: success() || failure()
+        run: node scripts/national-qa/security-audit.mjs --strict-release
       - name: Complete lint
         if: success() || failure()
         run: npm run lint
       - name: Production compile
         if: success() || failure()
         run: npm run build-prod
+      - name: Render real app shell after production build
+        if: success() || failure()
+        run: npx --no-install vitest run --project node tests/server/RenderHtml.test.ts
       - name: Complete format check
         if: success() || failure()
         run: npm run format:check

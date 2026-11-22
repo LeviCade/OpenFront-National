@@ -16,6 +16,7 @@ export class Roster {
   // still appear in the host's post-game reconciliation.
   private everyone = new Map<ClientID, Client>();
   private sockets = new Set<WebSocket>();
+  private readonly restoredShells = new WeakSet<WebSocket>();
   // persistentID -> clientID for reconnection. Cleared by forgetReconnect (a
   // lobby-phase leave) so the seat is free again.
   private reconnectable = new Map<string, ClientID>();
@@ -71,14 +72,35 @@ export class Roster {
     this.everyone.set(client.clientID, client);
   }
 
+  /** Restore only immutable seat metadata, never an authenticated socket. */
+  restoreDisconnected(client: Client, kicked: boolean): void {
+    if (
+      client.claims !== null ||
+      client.spectator ||
+      this.everyone.has(client.clientID) ||
+      this.reconnectable.has(client.persistentID)
+    ) {
+      throw new Error("NATIONAL invalid disconnected roster restore");
+    }
+    this.everyone.set(client.clientID, client);
+    this.reconnectable.set(client.persistentID, client.clientID);
+    this.admitted.add(client.persistentID);
+    this.disconnected.set(client.clientID, true);
+    this.restoredShells.add(client.ws);
+    if (kicked) this.kicked.add(client.persistentID);
+  }
+
   // Hands the client a new socket. The old one is closed and forgotten, and
   // the client moves to the end of the connected order.
   reconnect(client: Client, ws: WebSocket): void {
     this.sockets.add(ws);
     if (client.ws !== ws) {
+      // Restored seats have an inert, never-registered socket shell.
       this.sockets.delete(client.ws);
-      client.ws.removeAllListeners();
-      client.ws.close();
+      if (!this.restoredShells.delete(client.ws)) {
+        client.ws.removeAllListeners();
+        client.ws.close();
+      }
     }
     client.ws = ws;
     this.connected = this.connected.filter(

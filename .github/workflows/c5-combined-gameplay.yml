@@ -1,0 +1,47 @@
+name: C5 final-action — exact combined GameRunner acceptance
+on:
+  push:
+    branches:
+      - stage3/conductor5-class1-integration-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  combined-functional:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Pin exact candidate
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Typecheck all packages
+        run: npm run typecheck
+      - name: Execute real Fifth and inherited gameplay acceptance
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/C5ImperialCentralCombat.test.ts \
+            tests/national/ImperialSpendingClassFive.test.ts \
+            tests/national/C5ImperialWarPolicy.test.ts \
+            tests/national/C5Class1E5EconomicAI.test.ts \
+            tests/national/C5CoastalVisibility.test.ts \
+            tests/national/C5AIPoliticalGame.test.ts \
+            tests/national/C4NativeImperialGate.test.ts \
+            tests/national/C4NativePactHost.test.ts \
+            tests/national/C4Class2EconomicMaritime.test.ts \
+            tests/national/C4Class2EconomicIngress.test.ts \
+            tests/national/NationalAccessionPacketsR11.test.ts \
+            tests/national/LiveWarPoliticalState.test.ts \
+            tests/national/RoundEightSovereigntyGame.test.ts \
+            tests/national/RoundElevenFoundationCombat.test.ts \
+            tests/national/NationalLiveObservation.test.ts \
+            tests/core/game/TrainStation.test.ts \
+            tests/ui/national/NationalDiplomacyPanel.test.ts \
+            tests/qa/national/RoundFiveFogRevocation.test.ts

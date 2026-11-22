@@ -18,7 +18,7 @@ concurrency:
 jobs:
   gpu-browser:
     name: Four real game scenarios on one trusted GPU guest
-    if: github.event_name == 'workflow_dispatch' && github.repository == 'LeviCade/OpenFront-National' && startsWith(github.ref, 'refs/heads/stage3/conductor')
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'LeviCade/OpenFront-National' && github.ref == 'refs/heads/stage3/conductor4-class2-integration-20261122'
     runs-on: skybot-ci-gpu
     timeout-minutes: 55
     env:
@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = LeviCade/OpenFront-National
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
-          [[ "$GITHUB_REF" =~ ^refs/heads/stage3/conductor[1-9][0-9]*-class[1-9][0-9]*-integration-[0-9]{8}$ ]]
+          test "$GITHUB_REF" = refs/heads/stage3/conductor4-class2-integration-20261122
           test "$GITHUB_SHA" = "$NATIONAL_GPU_CANDIDATE_SHA"
           [[ "$NATIONAL_GPU_CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
             echo 'REFUSED: candidate must be an immutable lowercase 40-character SHA' >&2
@@ -134,7 +134,7 @@ jobs:
           echo 'HOST_PROOF_GATE=DEFERRED_TO_PER_MODE_SIGNED_VERIFIER'
 
       - name: Set up pinned Node 24
-        uses: actions/setup-node@49933ea5288ca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24.15.0"
           cache: npm
@@ -151,7 +151,11 @@ jobs:
       - name: Run four independent E5 scenarios / release-signed lane
         id: scenarios
         shell: bash
-        run: bash scripts/national-gpu-ci/run-four-modes.sh release
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$NATIONAL_GPU_CANDIDATE_SHA"
+          git diff --exit-code HEAD --
+          bash scripts/national-gpu-ci/run-four-modes.sh release
 
       - name: Upload bounded GPU evidence even on failure
         if: always()

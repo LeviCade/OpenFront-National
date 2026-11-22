@@ -19,6 +19,7 @@ import { GameRunner } from "@openfront/engine/GameRunner";
 import {
   initialNationalPlannerMemory,
   planNationalInterest,
+  recordNationalWarOutcome,
   type NationalPlannerMemory,
 } from "@openfront/engine/national/ai/NationalPlanner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
@@ -250,8 +251,9 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
         .decision?.targetId,
     ).toBe(BOT_B);
 
-    // Real, legally approved treaty protection: the AI does NOT know hidden
-    // terms in its filtered observation, so E1 rejects the first declaration.
+    // D-017 makes membership public, while the treaty constitution is secret.
+    // The new E4 AI must avoid attacking a known pact partner. An explicit
+    // Game command still proves the original E1 prohibition is enforceable.
     game.performNationalCommand(game.player(BOT_A), {
       kind: "found-pact",
       pactId: "r11_protected",
@@ -275,6 +277,33 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
     // This real human acts in the same match via authenticated execution.
     const calls = vi.spyOn(game, "performNationalWarCommandWithOutcome");
     const outgoing = vi.spyOn(game, "addExecution");
+    const deliberatelyRejected = game.performNationalWarCommandWithOutcome(
+      game.player(BOT_A),
+      {
+        kind: "declare-national",
+        warId: "r11_protected_prohibited",
+        aggressorId: BOT_A,
+        targetId: BOT_B,
+      },
+    );
+    expect(deliberatelyRejected).toMatchObject({
+      accepted: false,
+      actorId: BOT_A,
+      recipientId: BOT_A,
+      commandKind: "national_declare_war",
+      commandTargetId: BOT_B,
+      reason: "war-rule",
+    });
+    const witnessedCooldown = recordNationalWarOutcome(
+      collectLiveNationalObservation(game, BOT_A).observation,
+      initialNationalPlannerMemory(BOT_A),
+      deliberatelyRejected,
+    );
+    expect(
+      witnessedCooldown.rejectedWarTargets?.find(
+        (entry) => entry.targetId === BOT_B,
+      )?.retryAfterTick,
+    ).toBe(deliberatelyRejected.tick + 180);
     const beforeTroops = game.player(BOT_A).troops();
     const human = authenticatedRunner(game, humanInfo.clientID!);
     tick(game, human.runner, {
@@ -292,7 +321,7 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
 
     let rejected:
       | ReturnType<Game["performNationalWarCommandWithOutcome"]>
-      | undefined;
+      | undefined = deliberatelyRejected;
     let alternative:
       | ReturnType<Game["performNationalWarCommandWithOutcome"]>
       | undefined;
@@ -330,11 +359,13 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
     expect(game.nationalWarAuthority()?.atWar(BOT_A, HUMAN)).toBe(true);
     const remembered = memory(botFor(game, BOT_A));
     expect(remembered?.lastWarOutcomeSequence).toBe(alternative!.sequence);
+    // The AI now knows its own public treaty membership and does not need
+    // a rejected AI-authored declaration to cool down; the *direct* invalid
+    // Game-issued attempt above remains a mandatory negative witness.
     const blocked = remembered?.rejectedWarTargets?.find(
       (target) => target.targetId === BOT_B,
     );
-    expect(blocked?.retryAfterTick).toBe(rejected!.tick + 180);
-    expect(blocked!.retryAfterTick).toBeGreaterThan(game.ticks());
+    expect(blocked).toBeUndefined();
     expect(
       outgoing.mock.calls
         .flat()
@@ -366,13 +397,15 @@ describe("R11 E2 real founding / AI rejection / bilateral peace", () => {
     }
     expect([...snapshotGame(restored)]).toEqual([...snapshotGame(game)]);
 
-    // The bot waits out its genuine 180-tick rejected-target cooldown. Do
-    // not cause the result by injecting a fake acknowledgment or memory.
+    // The real rejected Game receipt was already tested through the planner's
+    // 180-tick cooldown bridge above. The informed bot itself now protects
+    // known pact members without making a prohibited declaration.
     const replayedCalls = vi.spyOn(
       game,
       "performNationalWarCommandWithOutcome",
     );
-    while (game.ticks() < blocked!.retryAfterTick) game.executeNextTick();
+    while (game.ticks() < deliberatelyRejected.tick + 180)
+      game.executeNextTick();
     const earlyRetries = replayedCalls.mock.calls.filter(
       ([actor, cmd]) =>
         actor.id() === BOT_A &&

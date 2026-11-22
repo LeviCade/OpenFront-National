@@ -40,6 +40,8 @@ export interface NationalCoalition {
   readonly members: readonly NationId[];
   /** These primitive terms NEVER appear in an outsider's projection. */
   readonly terms: Readonly<Record<string, string | number | boolean>>;
+  /** Member-private outgoing invites, never supplied to outsiders. */
+  readonly pendingInvitees?: readonly NationId[];
 }
 
 /** M0 public scoped active-war view; see docs/19-stage3-m0-interface.md. */
@@ -115,6 +117,13 @@ export interface NationalWorld {
   readonly coalitions: readonly NationalCoalition[];
   readonly wars: readonly NationalWar[];
   readonly invitations: readonly NationalInvitation[];
+  /** Solely receiver-addressed Game-owned imperial invitations. */
+  readonly imperialOffers?: readonly {
+    readonly empireId: string;
+    readonly candidateId: NationId;
+    readonly proposerId: NationId;
+    readonly recipientId: NationId;
+  }[];
   readonly assets: readonly NationalAsset[];
   readonly sightGrants: readonly NationalSightGrant[];
   readonly frontiers: readonly NationalFrontier[];
@@ -139,6 +148,8 @@ export interface CoalitionObservation {
   /** Only members and current, addressed invitees receive the terms. */
   readonly terms?: Readonly<Record<string, string | number | boolean>>;
   readonly invited?: true;
+  /** Member-only outgoing invites; unavailable to an outside viewer. */
+  readonly pendingInvitees?: readonly NationId[];
 }
 
 export interface VisibleAsset {
@@ -158,6 +169,12 @@ export interface NationalObservation {
   readonly tick: number;
   readonly nations: readonly PublicNation[];
   readonly coalitions: readonly CoalitionObservation[];
+  readonly imperialOffers?: readonly {
+    readonly empireId: string;
+    readonly candidateId: NationId;
+    readonly proposerId: NationId;
+    readonly recipientId: NationId;
+  }[];
   readonly wars: readonly NationalWar[];
   readonly ownResources: { readonly troops: number; readonly treasury: number };
   readonly visibleAssets: readonly VisibleAsset[];
@@ -236,6 +253,9 @@ export function projectNationalObservation(
       return {
         ...base,
         terms: { ...c.terms },
+        ...(admitted && c.pendingInvitees !== undefined
+          ? { pendingInvitees: [...c.pendingInvitees].sort() }
+          : {}),
         ...(invited ? { invited: true as const } : {}),
       };
     },
@@ -328,6 +348,26 @@ export function projectNationalObservation(
       }))
       .sort(byId),
     coalitions: coalitionObservations.sort(byId),
+    ...(world.imperialOffers === undefined
+      ? {}
+      : {
+          imperialOffers: world.imperialOffers
+            .filter((offer) => offer.recipientId === observerId)
+            .map((offer) => ({ ...offer }))
+            .sort(
+              (a, b) =>
+                (a.empireId < b.empireId
+                  ? -1
+                  : a.empireId > b.empireId
+                    ? 1
+                    : 0) ||
+                (a.candidateId < b.candidateId
+                  ? -1
+                  : a.candidateId > b.candidateId
+                    ? 1
+                    : 0),
+            ),
+        }),
     // Copy only M0-approved public fields. Never serialize raw war records.
     wars: world.wars
       .map((w): NationalWarView => ({

@@ -55,6 +55,7 @@ const STAGES = new Set([
   "accept-peace",
   "save-restore",
   "sovereign-victory",
+  "solo-playability-complete",
 ]);
 const SCREENSHOTS = new Set([
   "home",
@@ -82,6 +83,7 @@ const SCREENSHOTS = new Set([
   "saved-confirmed",
   "restored-roster",
   "sovereign-victory",
+  "solo-battle-authoritative",
 ]);
 // E5 R11's real browser steps supersede R10's synthetic end-of-game labels.
 // Require all checked-in gameplay steps and authoritative receipt checkpoints;
@@ -111,6 +113,73 @@ const R11_NATIONAL_RECEIPTS = [
   "authoritative-peace-proposal",
   "authoritative-peace-accepted",
 ];
+export const SOLO_STAGES = [
+  "home",
+  "solo",
+  "national-mode",
+  "start",
+  "spawn",
+  "found-empire",
+  "declare-war",
+  "map-assault",
+  "combat-impact",
+  "solo-playability-complete",
+];
+export const LEGACY_STAGES = [
+  "home",
+  "solo",
+  "legacy-configuration",
+  "legacy-ffa",
+  "legacy-player-action",
+];
+export function physicalGameplayContract(raw, mode) {
+  const legacy = mode.startsWith("legacy-");
+  if (
+    raw?.scenarioKind !== (legacy ? "legacy" : "national-solo") ||
+    raw.stage !==
+      (legacy ? "legacy-player-action" : "solo-playability-complete") ||
+    !Array.isArray(raw.errors) ||
+    raw.errors.length !== 0 ||
+    !Array.isArray(raw.events)
+  )
+    return false;
+  const events = raw.events;
+  const complete = (legacy ? LEGACY_STAGES : SOLO_STAGES).every(
+    (stage) =>
+      events.filter((e) => e?.name === "stage-complete" && e.stage === stage)
+        .length === 1,
+  );
+  if (!complete) return false;
+  const unique = (name) => {
+    const entries = events.filter((e) => e?.name === name);
+    return entries.length === 1 ? entries[0] : null;
+  };
+  if (legacy)
+    return !!(
+      unique("legacy-ffa-verified") &&
+      unique("legacy-actual-map-interaction-authoritative-update")
+    );
+  const end = unique("authoritative-solo-playability-complete");
+  const battle = unique("solo-real-battle-engine-correlated");
+  return !!(
+    unique("authoritative-empire-accepted")?.verified === true &&
+    unique("authoritative-war-declared")?.uiConfirmed === true &&
+    unique("authoritative-combat-impact") &&
+    battle?.opponentDamaged === true &&
+    (battle.troopLoss === true || battle.territoryLoss === true) &&
+    [
+      "founded",
+      "spawned",
+      "warDeclared",
+      "realRadialAttack",
+      "opponentDamaged",
+    ].every((name) => end?.[name] === true) &&
+    Number.isSafeInteger(end.liveTick) &&
+    end.liveTick > 0 &&
+    Number.isSafeInteger(end.workerPacketCount) &&
+    end.workerPacketCount > 0
+  );
+}
 const PNG_MAGIC = Buffer.from("89504e470d0a1a0a", "hex");
 const PNG_IEND = Buffer.from("0000000049454e44ae426082", "hex");
 const screenshotName = (value) => {
@@ -291,14 +360,18 @@ export function publishEvidence(root, expectedSha, kind = "release") {
     const historicalEvents = Array.isArray(raw?.events) ? raw.events : [];
     const hasEvent = (name) =>
       historicalEvents.some((event) => event?.name === name);
-    const stageComplete = mode.startsWith("legacy-")
-      ? ["legacy-ffa", "legacy-player-action"].every((s) =>
-          summary.completedStages.includes(s),
-        ) &&
-        hasEvent("legacy-ffa-verified") &&
-        hasEvent("legacy-actual-map-interaction-authoritative-update")
-      : R11_NATIONAL_STAGES.every((s) => summary.completedStages.includes(s)) &&
-        R11_NATIONAL_RECEIPTS.every(hasEvent);
+    const stageComplete =
+      kind === "release"
+        ? physicalGameplayContract(raw, mode)
+        : mode.startsWith("legacy-")
+          ? ["legacy-ffa", "legacy-player-action"].every((s) =>
+              summary.completedStages.includes(s),
+            ) &&
+            hasEvent("legacy-ffa-verified") &&
+            hasEvent("legacy-actual-map-interaction-authoritative-update")
+          : R11_NATIONAL_STAGES.every((s) =>
+              summary.completedStages.includes(s),
+            ) && R11_NATIONAL_RECEIPTS.every(hasEvent);
     const gl1 = raw?.actualHardware?.webgl1;
     const gl2 = raw?.actualHardware?.webgl;
     const physicalDiagnostic =
@@ -399,13 +472,26 @@ export function publishEvidence(root, expectedSha, kind = "release") {
         screenshotSha256[name] = createHash("sha256").update(png).digest("hex");
       }
     }
-    if (reportedPass && scenarioAccepted && images.length === 0) {
+    const requiredScreenshot = mode.startsWith("legacy-")
+      ? "legacy-player-action.png"
+      : "solo-battle-authoritative.png";
+    const screenshotReady =
+      images.length > 0 &&
+      (kind !== "release" || images.includes(requiredScreenshot));
+    if (reportedPass && scenarioAccepted && !screenshotReady) {
       valid = false;
       outcome = "UNVERIFIED";
       reason = "SCREENSHOT_MISSING";
     }
     result.modes[mode] = {
       scenario: mode,
+      scenarioKind: [
+        "legacy",
+        "national-solo",
+        "national-three-player",
+      ].includes(raw?.scenarioKind)
+        ? raw.scenarioKind
+        : null,
       reportPath: REPORT_FOLDERS[mode] + "/acceptance.json",
       outcome,
       reason,
@@ -418,7 +504,7 @@ export function publishEvidence(root, expectedSha, kind = "release") {
         kind === "release" &&
         reportedPass &&
         scenarioAccepted &&
-        images.length > 0,
+        screenshotReady,
       reportPresent: raw !== null,
       expectedViewport,
       actualViewport,
@@ -433,7 +519,7 @@ export function publishEvidence(root, expectedSha, kind = "release") {
       JSON.stringify(result.modes[mode], null, 2) + "\n",
     );
   }
-  result.schema = 3;
+  result.schema = 4;
   result.lane = kind;
   result.exactCandidateSha = SHA.test(expectedSha ?? "") ? expectedSha : null;
   result.allModesPass =

@@ -57,7 +57,15 @@ export type Intent =
   | NationalAcceptPeaceIntent
   | NationalFoundPactIntent
   | NationalInvitePactIntent
-  | NationalAcceptPactIntent;
+  | NationalAcceptPactIntent
+  | NationalBetrayPactIntent
+  | NationalProposePactAmendmentIntent
+  | NationalApprovePactAmendmentIntent
+  | NationalExpelPactIntent
+  | NationalImperialAdministrationIntent
+  | NationalIssueSanctionIntent
+  | NationalRespondSanctionIntent
+  | NationalResolveSanctionIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -130,6 +138,34 @@ export type NationalInvitePactIntent = z.infer<
 >;
 export type NationalAcceptPactIntent = z.infer<
   typeof NationalAcceptPactIntentSchema
+>;
+
+export type NationalBetrayPactIntent = z.infer<
+  typeof NationalBetrayPactIntentSchema
+>;
+
+export type NationalProposePactAmendmentIntent = z.infer<
+  typeof NationalProposePactAmendmentIntentSchema
+>;
+export type NationalApprovePactAmendmentIntent = z.infer<
+  typeof NationalApprovePactAmendmentIntentSchema
+>;
+export type NationalExpelPactIntent = z.infer<
+  typeof NationalExpelPactIntentSchema
+>;
+
+export type NationalImperialAdministrationIntent = z.infer<
+  typeof NationalImperialAdministrationIntentSchema
+>;
+
+export type NationalIssueSanctionIntent = z.infer<
+  typeof NationalIssueSanctionIntentSchema
+>;
+export type NationalRespondSanctionIntent = z.infer<
+  typeof NationalRespondSanctionIntentSchema
+>;
+export type NationalResolveSanctionIntent = z.infer<
+  typeof NationalResolveSanctionIntentSchema
 >;
 
 export type Turn = z.infer<typeof TurnSchema>;
@@ -731,6 +767,132 @@ export const NationalAcceptPactIntentSchema = z.object({
   requestId: NationalPoliticalRequestId,
 });
 
+export const NationalBetrayPactIntentSchema = z.object({
+  type: z.literal("national_betray_pact"),
+  pactId: NationalPoliticalId,
+  requestId: NationalPoliticalRequestId,
+});
+
+export const NationalProposePactAmendmentIntentSchema = z.object({
+  type: z.literal("national_propose_pact_amendment"),
+  pactId: NationalPoliticalId,
+  terms: NationalFoundPactIntentSchema.shape.terms,
+  administratorId: MappedID.nullable(),
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalApprovePactAmendmentIntentSchema = z.object({
+  type: z.literal("national_approve_pact_amendment"),
+  pactId: NationalPoliticalId,
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalExpelPactIntentSchema = z.object({
+  type: z.literal("national_expel_pact"),
+  pactId: NationalPoliticalId,
+  memberId: MappedID,
+  requestId: NationalPoliticalRequestId,
+});
+
+/** Class Two M5: append only; client identity is never an action field. */
+export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
+  "kind",
+  [
+    z.object({
+      kind: z.literal("set-policy"),
+      empireId: NationalPoliticalId,
+      policy: z.object({
+        workerIncomeBps: zb.uint({ min: 0, max: 10_000 }),
+        nonWorkerIncomeBps: zb.uint({ min: 0, max: 10_000 }).optional(),
+        allowedConstruction: z.array(z.enum(UnitType)).max(16).nullable(),
+      }),
+    }),
+    z.object({
+      kind: z.literal("transfer-troops"),
+      empireId: NationalPoliticalId,
+      sourceId: MappedID,
+      destinationId: MappedID,
+      amount: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }),
+    }),
+    z.object({
+      kind: z.literal("build-structure"),
+      empireId: NationalPoliticalId,
+      memberId: MappedID,
+      type: z.enum(UnitType),
+      tile: zb.uint(),
+    }),
+    // Append new kinds; never renumber or reinterpret existing intents.
+    z.object({
+      kind: z.literal("upgrade-structure"),
+      empireId: NationalPoliticalId,
+      memberId: MappedID,
+      unitId: zb.uint(),
+    }),
+    z.object({
+      kind: z.literal("demolish-structure"),
+      empireId: NationalPoliticalId,
+      memberId: MappedID,
+      unitId: zb.uint(),
+    }),
+    z.object({ kind: z.literal("dissolve"), empireId: NationalPoliticalId }),
+    z.object({
+      kind: z.literal("set-army-mode"),
+      empireId: NationalPoliticalId,
+      mode: z.enum(["decentralized", "hybrid", "centralized"]),
+      thresholdBps: zb.uint({ min: 0, max: 10_000 }),
+    }),
+    z.object({
+      kind: z.literal("release-imperial-troops"),
+      empireId: NationalPoliticalId,
+      memberId: MappedID,
+      amount: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }),
+    }),
+    z.object({
+      kind: z.literal("imperial-attack"),
+      empireId: NationalPoliticalId,
+      memberId: MappedID,
+      targetId: MappedID,
+      amount: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }),
+    }),
+    // Append only: no existing intent or administration command index moves.
+    z.object({
+      kind: z.literal("set-war-policy"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      response: z.enum(["none", "imperial"]),
+      declarationDelegates: z.array(MappedID).max(64),
+      peaceDelegates: z.array(MappedID).max(64),
+    }),
+  ],
+);
+
+export const NationalImperialAdministrationIntentSchema = z.object({
+  type: z.literal("national_imperial_administration"),
+  command: NationalImperialAdministrationCommandSchema,
+  requestId: NationalPoliticalRequestId,
+});
+
+// D-016: issuer comes from the original authenticated stamp; no client
+// authority, reputation, transaction amounts or member lists for the issuer.
+export const NationalIssueSanctionIntentSchema = z.object({
+  type: z.literal("national_issue_sanction"),
+  scope: z.enum(["national", "imperial"]),
+  targetId: NationalWarId,
+  recipientIds: z.array(NationalWarId).min(1).max(16),
+  durationTicks: zb.uint({ min: 1, max: 6000 }),
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalRespondSanctionIntentSchema = z.object({
+  type: z.literal("national_respond_sanction"),
+  sanctionId: NationalPoliticalId,
+  decision: z.enum(["comply", "refuse"]),
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalResolveSanctionIntentSchema = z.object({
+  type: z.literal("national_resolve_sanction"),
+  sanctionId: NationalPoliticalId,
+  decision: z.enum(["enforce", "back-down"]),
+  requestId: NationalPoliticalRequestId,
+});
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -768,6 +930,14 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalFoundPactIntentSchema,
   NationalInvitePactIntentSchema,
   NationalAcceptPactIntentSchema,
+  NationalBetrayPactIntentSchema,
+  NationalProposePactAmendmentIntentSchema,
+  NationalApprovePactAmendmentIntentSchema,
+  NationalExpelPactIntentSchema,
+  NationalImperialAdministrationIntentSchema,
+  NationalIssueSanctionIntentSchema,
+  NationalRespondSanctionIntentSchema,
+  NationalResolveSanctionIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

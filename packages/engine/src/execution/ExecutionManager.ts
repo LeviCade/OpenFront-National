@@ -23,6 +23,7 @@ import { EmojiExecution } from "./EmojiExecution";
 import { MarkDisconnectedExecution } from "./MarkDisconnectedExecution";
 import { MoveWarshipExecution } from "./MoveWarshipExecution";
 import { NationalFoundEmpireExecution } from "./NationalFoundEmpireExecution";
+import { NationalSanctionExecution } from "./NationalSanctionExecution";
 import { NationalWarExecution } from "./NationalWarExecution";
 import { NationExecution } from "./NationExecution";
 import { NoOpExecution } from "./NoOpExecution";
@@ -78,6 +79,55 @@ export class Executor {
           intent.clientID,
         );
       }
+      case "national_imperial_administration":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          { kind: "imperial-administration", command: intent.command },
+          intent.requestId,
+          intent.clientID,
+        );
+      case "national_propose_pact_amendment":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          {
+            kind: "propose-pact-amendment",
+            pactId: intent.pactId,
+            terms: intent.terms,
+            administratorId: intent.administratorId,
+          },
+          intent.requestId,
+          intent.clientID,
+        );
+      case "national_approve_pact_amendment":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          { kind: "approve-pact-amendment", pactId: intent.pactId },
+          intent.requestId,
+          intent.clientID,
+        );
+      case "national_expel_pact":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          {
+            kind: "expel-pact",
+            pactId: intent.pactId,
+            memberId: intent.memberId,
+          },
+          intent.requestId,
+          intent.clientID,
+        );
+      case "national_betray_pact":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          { kind: "betray-pact", pactId: intent.pactId },
+          intent.requestId,
+          intent.clientID,
+        );
       case "national_found_pact":
         return new NationalFoundEmpireExecution(
           player,
@@ -173,6 +223,10 @@ export class Executor {
           intent.requestId ?? null,
           intent.clientID,
         );
+      case "national_issue_sanction":
+      case "national_respond_sanction":
+      case "national_resolve_sanction":
+        return new NationalSanctionExecution(player, intent, intent.clientID);
       case "national_declare_war":
         return new NationalWarExecution(
           player,
@@ -240,9 +294,14 @@ export class Executor {
       case "donate_gold":
         return new DonateGoldExecution(player, intent.recipient, intent.gold);
       case "embargo":
-        return new EmbargoExecution(player, intent.targetID, intent.action);
+        return new EmbargoExecution(
+          player,
+          intent.targetID,
+          intent.action,
+          intent.clientID,
+        );
       case "embargo_all":
-        return new EmbargoAllExecution(player, intent.action);
+        return new EmbargoAllExecution(player, intent.action, intent.clientID);
       case "build_unit":
         return new ConstructionExecution(
           player,

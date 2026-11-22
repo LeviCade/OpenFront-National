@@ -37,6 +37,7 @@ function proof(mode) {
     runnerName: expected.runnerName,
     runnerId: "26",
     challenge: NONCE,
+    runGrantSha256: "c".repeat(64),
     issuedAtMs: NOW - 1000,
     expiresAtMs: NOW + 118000,
     host: {
@@ -164,6 +165,9 @@ test("independent public GitHub control plane binds actual numeric job and runne
         runner_name: expected.runnerName,
         runner_id: 26,
         status: "in_progress",
+        head_sha: SOURCE,
+        name: "Four real game scenarios on one trusted GPU guest",
+        labels: ["skybot-ci-gpu"],
       },
     ],
   };
@@ -226,6 +230,9 @@ test("independent public GitHub control plane binds actual numeric job and runne
     { ...authoritative.jobs[0], run_attempt: 2 },
     { ...authoritative.jobs[0], status: "completed" },
     { ...authoritative.jobs[0], run_id: 1234 },
+    { ...authoritative.jobs[0], head_sha: "f".repeat(40) },
+    { ...authoritative.jobs[0], name: "different workflow job" },
+    { ...authoritative.jobs[0], labels: ["ubuntu-latest"] },
   ]) {
     refuse("HOST_PROOF_GITHUB_JOB_RUNNER_MISMATCH", () =>
       verifyGitHubJobBinding(
@@ -249,6 +256,27 @@ test("validly signed wrong-phase proof cannot masquerade as GPU preflight", () =
     verifyPublicModeProof(
       "national-desktop",
       signed,
+      pem,
+      NONCE,
+      enrolled,
+      expected,
+      NOW,
+    ),
+  );
+});
+
+test("a valid Ed25519 signature without a digest-bound independent grant is refused", () => {
+  const p = proof("national-desktop");
+  delete p.payload.runGrantSha256;
+  p.signature = sign(
+    null,
+    Buffer.from(JSON.stringify(p.payload)),
+    privateKey,
+  ).toString("base64");
+  refuse("HOST_PROOF_RUN_OR_MODE_MISMATCH", () =>
+    verifyPublicModeProof(
+      "national-desktop",
+      p,
       pem,
       NONCE,
       enrolled,

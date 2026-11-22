@@ -70,6 +70,13 @@ export class TransportShipExecution implements Execution {
   }
 
   init(mg: Game, ticks: number) {
+    // Do not allow a subordinate to bypass central military control by sea.
+    // Boats that already launched keep their existing, paid in-flight state.
+    const military = mg.nationalImperialAdministrationFor(this.attacker);
+    if (military?.armyMode === "centralized" && !military.canAmend) {
+      this.active = false;
+      return;
+    }
     if (!mg.isValidRef(this.ref)) {
       console.warn(`TransportShipExecution: ref ${this.ref} not valid`);
       this.active = false;

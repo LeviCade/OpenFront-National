@@ -60,6 +60,35 @@ describe("snapshot codec", () => {
     expect(encodeSnapshotValue(v)).toEqual(encodeSnapshotValue(v));
   });
 
+  test("restores typed arrays from an offset Node Buffer without aliasing", () => {
+    const value = {
+      pri: new Float32Array([1.25, -4.75]),
+      bytes: new Uint8Array([5, 9]),
+    };
+    const encoded = encodeSnapshotValue(value);
+    const backing = Buffer.alloc(encoded.length + 19, 0x7f);
+    Buffer.from(encoded).copy(backing, 11);
+    const slice = backing.subarray(11, 11 + encoded.length);
+    const restored = decodeSnapshotValue(slice);
+    expect(restored).toEqual(value);
+    expect(encodeSnapshotValue(restored)).toEqual(encoded);
+    backing.fill(0);
+    expect(restored).toEqual(value);
+  });
+
+  test("canonicalizes scalar NaN payloads without changing signed zero", () => {
+    const view = new DataView(new ArrayBuffer(8));
+    view.setBigUint64(0, 0xfff8000000000123n, true);
+    const negativeNaN = view.getFloat64(0, true);
+    view.setBigUint64(0, 0x7ff8000000000456n, true);
+    const positiveNaN = view.getFloat64(0, true);
+    expect(Number.isNaN(negativeNaN)).toBe(true);
+    expect(Number.isNaN(positiveNaN)).toBe(true);
+    expect(encodeSnapshotValue(negativeNaN)).toEqual(encodeSnapshotValue(NaN));
+    expect(encodeSnapshotValue(positiveNaN)).toEqual(encodeSnapshotValue(NaN));
+    expect(encodeSnapshotValue(-0)).not.toEqual(encodeSnapshotValue(0));
+  });
+
   test("rejects class instances", () => {
     expect(() => encodeSnapshotValue({ m: new Map() })).toThrow(/plain/);
     expect(() => encodeSnapshotValue({ s: new Set() })).toThrow(/plain/);

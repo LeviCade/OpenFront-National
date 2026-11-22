@@ -35,6 +35,11 @@ import {
   advanceLastKnown,
   type NationalSightMemory,
 } from "./NationalObservation";
+import {
+  projectNationalPublicPacts,
+  projectNationalPactDisclosure,
+  projectNationalImperialAdministration,
+} from "./NationalPactProjection";
 import type { OutboundNationalResult } from "./NationalPoliticalPacket";
 
 export type { NationalPublicConflictView } from "@openfront/engine-api/game/NationalRecipientView";
@@ -46,7 +51,7 @@ export type { NationalPublicConflictView } from "@openfront/engine-api/game/Nati
  */
 function publicPolitics(
   packet: GameUpdateViewData,
-): NationalPublicPoliticalView | undefined {
+): GameUpdateViewData["nationalPolitics"] {
   const source = (
     "nationalPolitics" in packet ? packet.nationalPolitics : undefined
   ) as NationalPublicPoliticalView | null | undefined;
@@ -107,6 +112,7 @@ const resultTypes = new Set([
   "national_approve_pact_amendment",
   "national_betray_pact",
   "national_expel_pact",
+  "national_imperial_administration",
 ]);
 const politicalReason = new Set([
   "accepted",
@@ -684,6 +690,27 @@ export class NationalOutboundFilter {
             }));
 
     const publicPoliticalView = publicPolitics(data);
+    const publicPacts = projectNationalPublicPacts(game);
+    const privatePacts =
+      publicPoliticalView && verified
+        ? projectNationalPactDisclosure(
+            game,
+            this.observerId,
+            publicPacts,
+            data.tick,
+            page?.streamId,
+          )
+        : undefined;
+    const administration =
+      publicPoliticalView && verified
+        ? projectNationalImperialAdministration(
+            game,
+            this.observerId,
+            publicPoliticalView,
+            data.tick,
+            page?.streamId,
+          )
+        : undefined;
     const publicConflictView = projectNationalPublicConflict(
       game,
       this.observerId,
@@ -704,7 +731,18 @@ export class NationalOutboundFilter {
       // outbound private PlayerUpdate fields.
       ...(publicPoliticalView === undefined
         ? {}
-        : { nationalPolitics: publicPoliticalView }),
+        : {
+            nationalPolitics: {
+              ...publicPoliticalView,
+              ...(publicPacts === undefined ? {} : { pacts: publicPacts }),
+            },
+          }),
+      ...(administration === undefined
+        ? {}
+        : { nationalImperialAdministration: administration }),
+      ...(privatePacts === undefined
+        ? {}
+        : { nationalPactDisclosure: privatePacts }),
       ...(publicConflictView === undefined
         ? {}
         : { nationalConflicts: publicConflictView }),

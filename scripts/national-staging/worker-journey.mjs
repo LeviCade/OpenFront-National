@@ -4,11 +4,19 @@ import { GameMapSize, GameMapType } from "@openfront/engine-api/game/GameTypes";
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import { loadTerrainMap } from "@openfront/engine-lib/game/TerrainMapLoader";
 import {
+  decodeSnapshotValue,
+  encodeSnapshotValue,
+} from "@openfront/engine/snapshot/SnapshotCodec";
+import {
   createGameWireContext,
   decodeServerMessage,
   encodeClientMessage,
 } from "@openfront/shared/ZbinWire";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { join as joinPath } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { setTimeout as delay } from "node:timers/promises";
 import { WebSocket } from "ws";
 import { NationalObserverMapContinuity } from "../../src/client/NationalObserverMapContinuity.ts";
@@ -31,6 +39,168 @@ import {
 } from "./operator-harness.mjs";
 
 const fixture = makeEnvironment();
+const durable = process.env.NATIONAL_TEST_DURABLE_RECOVERY === "1";
+const worldRoot = joinPath(fixture.dir, "world");
+if (durable) {
+  execFileSync(
+    process.execPath,
+    [
+      "--experimental-strip-types",
+      "scripts/national-staging/init-durable-world.mjs",
+      worldRoot,
+      "1",
+    ],
+    { env: fixture.env, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  fixture.env.NATIONAL_RECOVERY_ROOT = worldRoot;
+}
+
+function durableRow(id) {
+  const db = new DatabaseSync(joinPath(worldRoot, "worker-0.sqlite"), {
+    readOnly: true,
+  });
+  try {
+    const row = db
+      .prepare("SELECT * FROM checkpoints WHERE gameID = ?")
+      .get(id);
+    assert(row, "durable world not found");
+    const digest = createHash("sha256")
+      .update(JSON.stringify([1, id, row.generation, row.tick, row.payload]))
+      .digest("hex");
+    assert(digest === row.digest, "independent durable checksum");
+    const data = JSON.parse(row.payload);
+    assert(data.format === 1 && data.source === fixture.env.GIT_COMMIT);
+    assert(data.info.gameID === id && data.seats.length === 3);
+    assert(
+      data.seats.every(
+        (s) =>
+          Object.keys(s).sort().join(",") ===
+          "accountId,clientID,playerID,subject",
+      ),
+    );
+    const snap = decodeSnapshotValue(Buffer.from(data.snapshot, "base64"));
+    assert.equal(snap.tick, row.tick);
+    const people = data.seats.map((seat) => {
+      const player = snap.players.find((p) => p.d.info.id === seat.playerID)?.d;
+      assert(
+        player &&
+          typeof player.troops === "bigint" &&
+          typeof player.gold === "bigint",
+      );
+      return [seat.playerID, player.troops.toString(), player.gold.toString()];
+    });
+    const wars = snap.game.d.nationalWar.wars;
+    const activeWarScopes = wars.layers
+      .filter((w) => w.endedTick === null)
+      .map((w) => w.scope)
+      .sort();
+    return {
+      resourceCommitment: createHash("sha256")
+        .update(JSON.stringify(people))
+        .digest("hex"),
+      activeWarScopes,
+      pendingMotionIds: wars.motions
+        .filter((m) => m.acceptedTick === null)
+        .map((m) => m.id),
+      activeAttacks: snap.execs.filter(
+        (e) => e.t === "Attack" && e.d.active && e.d.initialized,
+      ).length,
+      tick: row.tick,
+      commitment: digest,
+      replayDigest: data.state.replayDigest,
+      generation: row.generation,
+    };
+  } finally {
+    db.close();
+  }
+}
+async function assertWorkerRefusal(root, reason) {
+  const child = launch(
+    [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "-e",
+      "import { startWorker } from './src/server/Worker.ts'; await startWorker();",
+    ],
+    { ...fixture.env, NATIONAL_RECOVERY_ROOT: root, WORKER_ID: "0" },
+  );
+  try {
+    await until(
+      () =>
+        child.messages.some(
+          (m) => m.message === "NATIONAL durable recovery refused",
+        ),
+      "explicit competing or incompatible Worker refusal",
+      20_000,
+    );
+    const refusal = child.messages.find(
+      (m) => m.message === "NATIONAL durable recovery refused",
+    );
+    assert.equal(refusal.reason, reason);
+    assert(
+      !child.messages.some(
+        (m) =>
+          m.message === "NATIONAL durable match restored" ||
+          m.message.startsWith("running on http://localhost:"),
+      ),
+    );
+  } finally {
+    await child.stop();
+  }
+}
+
+async function assertCorruptWorkerRefusal(
+  id,
+  name,
+  alter,
+  reason,
+  recalculate = true,
+) {
+  const root = joinPath(fixture.dir, "fault-" + name);
+  execFileSync(
+    process.execPath,
+    [
+      "--experimental-strip-types",
+      "scripts/national-staging/init-durable-world.mjs",
+      root,
+      "1",
+    ],
+    { env: fixture.env, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  const original = new DatabaseSync(joinPath(worldRoot, "worker-0.sqlite"), {
+    readOnly: true,
+  });
+  let row;
+  try {
+    row = original
+      .prepare("SELECT * FROM checkpoints WHERE gameID = ?")
+      .get(id);
+  } finally {
+    original.close();
+  }
+  assert(row);
+  const data = JSON.parse(row.payload);
+  alter(data);
+  const payload = JSON.stringify(data);
+  const digest = recalculate
+    ? createHash("sha256")
+        .update(JSON.stringify([1, id, row.generation, row.tick, payload]))
+        .digest("hex")
+    : row.digest;
+  const clone = new DatabaseSync(joinPath(root, "worker-0.sqlite"));
+  try {
+    clone
+      .prepare(
+        "INSERT INTO checkpoints(gameID, generation, tick, payload, digest) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(id, row.generation, row.tick, payload, digest);
+  } finally {
+    clone.close();
+  }
+  await assertWorkerRefusal(root, reason);
+}
+
 const hostUrl = "http://localhost:3001";
 const peers = [];
 let identity;
@@ -53,6 +223,21 @@ async function startHost() {
     await until(
       () => {
         assert(process.alive(), "Master exited before Worker ready");
+        const refusal = process.messages.find(
+          (m) => m.message === "NATIONAL durable recovery refused",
+        );
+        if (refusal) {
+          console.error(
+            "SAFE_RECOVERY_REFUSAL " +
+              JSON.stringify({
+                stage: refusal.stage,
+                reason: refusal.reason,
+                diagnostic: refusal.diagnostic,
+                errorType: refusal.errorType,
+              }),
+          );
+          throw new Error("explicit Worker recovery refusal");
+        }
         return (
           process.messages.some((m) =>
             m.message.startsWith("Master HTTP server listening"),
@@ -103,6 +288,7 @@ async function peer() {
         state.context = createGameWireContext(msg.gameStartInfo.players);
         state.seat = msg.myClientID;
         state.match = msg.gameStartInfo.gameID;
+        state.startTick = msg.tick;
         state.actor = trustedNationalPrincipal(msg);
         state.continuity = new NationalObserverMapContinuity(state.actor);
       }
@@ -130,6 +316,9 @@ async function peer() {
           if (state.actor && own.id !== state.actor)
             throw new Error("own engine identity changed");
           state.actor = own.id;
+          state.activeOwnAttack =
+            own.outgoingAttacks?.some((a) => !a.retreating && a.troops > 0) ??
+            false;
         }
         if (map && (!state.actor || map.observerId !== state.actor))
           throw new Error("wrong recipient");
@@ -149,6 +338,10 @@ async function peer() {
         if (msg.tick <= state.lastProjectionTick)
           throw new Error("non-advancing projection");
         state.lastProjectionTick = msg.tick;
+        if (packet.nationalPolitics)
+          state.empireIds = packet.nationalPolitics.empires
+            .map((e) => e.id)
+            .sort();
         phase = "private-dto";
         // Keep summaries, not raw private projection bodies.
         if (
@@ -181,6 +374,8 @@ async function peer() {
             accepted: result.accepted,
             actorId: result.actorId,
             type: result.type,
+            warId: result.warId,
+            motionId: result.motionId,
           });
         }
         return;
@@ -475,6 +670,34 @@ try {
     true,
   );
   pass("real-worker-pact-founding-invitation-consent-and-outsider-denial");
+  await pactReceipt(
+    2,
+    {
+      type: "national_betray_pact",
+      pactId,
+      requestId: "c4c2-pact-outsider-exit",
+    },
+    false,
+  );
+  await pactReceipt(
+    1,
+    {
+      type: "national_betray_pact",
+      pactId,
+      requestId: "c4c2-pact-sovereign-exit",
+    },
+    true,
+  );
+  await pactReceipt(
+    1,
+    {
+      type: "national_betray_pact",
+      pactId,
+      requestId: "c4c2-pact-double-exit",
+    },
+    false,
+  );
+  pass("real-worker-nonwaivable-pact-exit-and-repeated-exit-denial");
 
   const requests = ["e2-local-alpha", "e2-local-bravo", "e2-local-charlie"];
   send(players[0], {
@@ -529,6 +752,52 @@ try {
       if (i !== j) assert(!players[j].receipts?.has(requests[i]));
   }
   pass("three-authoritative-spawns-three-private-lawful-receipts");
+
+  let pendingPeaceMotion;
+  if (durable) {
+    await pactReceipt(
+      0,
+      {
+        type: "national_declare_war",
+        scope: "imperial",
+        nationId: players[0].actor,
+        targetId: "e2-empire-1",
+        targetKind: "empire",
+        requestId: "e2-durable-war",
+      },
+      true,
+    );
+    const warId = players[0].receipts.get("e2-durable-war").warId;
+    assert(typeof warId === "string" && warId.length > 0);
+    await pactReceipt(
+      0,
+      {
+        type: "national_propose_peace",
+        warId,
+        requestId: "e2-durable-pending-peace",
+      },
+      true,
+    );
+    pendingPeaceMotion = players[0].receipts.get(
+      "e2-durable-pending-peace",
+    ).motionId;
+    assert(
+      typeof pendingPeaceMotion === "string" && pendingPeaceMotion.length > 0,
+    );
+    await pactReceipt(
+      0,
+      {
+        type: "national_declare_war",
+        scope: "national",
+        nationId: players[0].actor,
+        targetId: players[2].actor,
+        targetKind: "nation",
+        requestId: "e2-durable-national-war",
+      },
+      true,
+    );
+    pass("durable-national-and-imperial-war-and-pending-peace");
+  }
 
   const beforeModeAttempt = players[0].lastProjectionTick;
   send(players[0], {
@@ -652,25 +921,293 @@ try {
     "live-identity-outage-fails-closed-same-session-seats-resume-one-runner",
   );
 
-  setStage("host loss and terminal old match");
-  await server.stop();
-  await until(
-    () => liveA.closeCode !== null && liveB.closeCode !== null,
-    "old Worker sockets died",
-  );
-  server = await startHost();
-  assert.equal(await exists(id), false, "dead match reappeared after restart");
-  const stale = await peer();
-  rejoin(stale, id, renewedA.jwt);
-  await until(() => stale.closeCode !== null, "stale match reconnect denial");
-  assert.equal(stale.closeCode, 4004);
-  assert(!stale.starts);
-  const next = await create(renewedA.jwt);
-  assert.notEqual(next.gameID ?? next.id, id);
-  pass("host-restart-ends-old-match-new-game-has-new-id");
-  console.log(
-    "LOCAL_STAGING_WORKER_PASS automated_protocol_accounts=3 humans=0 upstream_oauth=0 gpu=0 restart_recovery=0",
-  );
+  if (!durable) {
+    setStage("host loss and terminal old match");
+    await server.stop();
+    await until(
+      () => liveA.closeCode !== null && liveB.closeCode !== null,
+      "old Worker sockets died",
+    );
+    server = await startHost();
+    assert.equal(
+      await exists(id),
+      false,
+      "dead match reappeared after restart",
+    );
+    const stale = await peer();
+    rejoin(stale, id, renewedA.jwt);
+    await until(() => stale.closeCode !== null, "stale match reconnect denial");
+    assert.equal(stale.closeCode, 4004);
+    assert(!stale.starts);
+    const next = await create(renewedA.jwt);
+    assert.notEqual(next.gameID ?? next.id, id);
+    pass("host-restart-ends-old-match-new-game-has-new-id");
+    console.log(
+      "LOCAL_STAGING_WORKER_PASS automated_protocol_accounts=3 humans=0 upstream_oauth=0 gpu=0 restart_recovery=0",
+    );
+  } else {
+    setStage("actual troop debit and in-flight execution before kill");
+    send(liveA, {
+      type: "intent",
+      intent: { type: "attack", targetID: null, troops: null },
+    });
+    await until(() => liveA.activeOwnAttack, "real in-flight attack", 20_000);
+    pass("actual-in-flight-military-execution");
+    setStage("SIGKILL actual Master and all authoritative Workers");
+    const oldStreams = new Set([
+      liveA.streamId,
+      liveB.streamId,
+      players[2].streamId,
+    ]);
+    const old = server;
+    const startedRecovery = performance.now();
+    await server.hardKill();
+    await until(
+      () => liveA.closeCode !== null && liveB.closeCode !== null,
+      "old physical sockets closed",
+    );
+    assert.equal(liveA.closeCode, 1006);
+    assert.equal(liveB.closeCode, 1006);
+    const lastAcknowledged = Math.max(
+      liveA.lastProjectionTick,
+      liveB.lastProjectionTick,
+    );
+    const oldTicks = old.messages.filter(
+      (m) => m.gameID === id && m.message === "NATIONAL authoritative tick",
+    );
+    const lastCommitted = oldTicks.at(-1)?.tick;
+    assert(Number.isInteger(lastCommitted));
+    server = await startHost();
+    const restored = server.messages.filter(
+      (m) => m.gameID === id && m.message === "NATIONAL durable match restored",
+    );
+    assert.equal(restored.length, 1);
+    assert.equal(restored[0].authenticatedSeats, 0);
+    assert.equal(restored[0].authoritativeRunners, 1);
+    assert.equal(await exists(id), true);
+    const disk = durableRow(id);
+    assert(disk.tick >= lastAcknowledged && disk.tick >= lastCommitted);
+    assert.equal(restored[0].tick, disk.tick);
+    assert.equal(restored[0].durableTick, disk.tick);
+    assert.equal(restored[0].stateCommitment, disk.commitment);
+    assert.equal(restored[0].replayDigest, disk.replayDigest);
+    assert.deepEqual(disk.activeWarScopes, ["imperial", "national"]);
+    assert(disk.pendingMotionIds.includes(pendingPeaceMotion));
+    assert(
+      disk.activeAttacks > 0,
+      "no in-flight attack in exact durable state",
+    );
+    const restoreElapsedMs = Math.round(performance.now() - startedRecovery);
+    pass("same-game-restored-exact-independent-disk-commitment");
+
+    setStage("actual competing Worker and semantic fault clones");
+    await assertWorkerRefusal(worldRoot, "shard-already-owned");
+    await assertCorruptWorkerRefusal(
+      id,
+      "checksum",
+      (d) => {
+        d.state.replayDigest = "0".repeat(64);
+      },
+      "NATIONAL invalid checkpoint integrity",
+      false,
+    );
+    await assertCorruptWorkerRefusal(
+      id,
+      "source",
+      (d) => {
+        d.source = "0".repeat(40);
+      },
+      "NATIONAL incompatible durable checkpoint",
+    );
+    await assertCorruptWorkerRefusal(
+      id,
+      "map",
+      (d) => {
+        d.mapDigest = "0".repeat(64);
+      },
+      "NATIONAL durable map mismatch",
+    );
+    await assertCorruptWorkerRefusal(
+      id,
+      "version",
+      (d) => {
+        const snap = decodeSnapshotValue(Buffer.from(d.snapshot, "base64"));
+        snap.format = 999;
+        d.snapshot = Buffer.from(encodeSnapshotValue(snap)).toString("base64");
+      },
+      "NATIONAL trusted snapshot header incompatible",
+    );
+    assert.equal(durableRow(id).commitment, disk.commitment);
+    pass("actual-competing-worker-checksum-source-map-snapshot-rejections");
+
+    setStage(
+      "foreign, banned, spectator and unavailable identity recovery denial",
+    );
+    const foreign = await peer();
+    rejoin(foreign, id, auth[3].jwt);
+    const revoked = await peer();
+    rejoin(revoked, id, auth[2].jwt);
+    const spectator = await peer();
+    join(spectator, id, renewedA.jwt, 0, true);
+    await until(
+      () => [foreign, revoked, spectator].every((p) => p.closeCode !== null),
+      "recovery denials",
+    );
+    assert(
+      [foreign, revoked, spectator].every(
+        (p) => !p.starts && p.lastProjectionTick === -1 && !p.decodeFailed,
+      ),
+    );
+    assert([foreign, revoked, spectator].every((p) => p.closeCode !== 1006));
+    await identity.stop();
+    identity = undefined;
+    const unavailable = await peer();
+    rejoin(unavailable, id, renewedA.jwt);
+    await until(
+      () => unavailable.closeCode !== null,
+      "identity unavailable recovery denial",
+      30_000,
+    );
+    assert(
+      !unavailable.starts &&
+        unavailable.lastProjectionTick === -1 &&
+        unavailable.closeCode !== 1006,
+    );
+    assert.equal(
+      durableRow(id).commitment,
+      disk.commitment,
+      "world advanced before any verified seat",
+    );
+    pass("recovered-seats-remain-inert-until-live-account-validation");
+
+    setStage(
+      "three fresh independent account sessions recover original engine seats",
+    );
+    identity = await startIdentity(fixture.env);
+    accountCommand(fixture.env, "unban", emails[2]);
+    const fresh = await Promise.all(
+      emails.slice(0, 3).map((email) => login(fixture.dir, email)),
+    );
+    const seated = await Promise.all([peer(), peer(), peer()]);
+    for (let i = 0; i < 3; i++) rejoin(seated[i], id, fresh[i].jwt);
+    await until(
+      () =>
+        seated.every(
+          (p) =>
+            p.starts === 1 && p.lastProjectionTick > disk.tick && p.streamId,
+        ),
+      "three restored native recipient streams",
+      60_000,
+    );
+    assert(allHealthy(seated));
+    assert(
+      seated.every(
+        (p, i) =>
+          p.match === id &&
+          p.seat === seatIds[i] &&
+          p.actor === players[i].actor,
+      ),
+    );
+    assert(
+      seated.every(
+        (p) => p.startTick >= disk.tick && !oldStreams.has(p.streamId),
+      ),
+    );
+    assert.equal(new Set(seated.map((p) => p.streamId)).size, 3);
+    assert(seated.every((p) => !p.receipts?.size));
+    assert(
+      seated.every(
+        (p) =>
+          JSON.stringify(p.empireIds) ===
+          JSON.stringify(["e2-empire-0", "e2-empire-1", "e2-empire-2"]),
+      ),
+    );
+    pass("three-fresh-engine-seats-no-historical-private-receipts");
+
+    setStage(
+      "prior request replay denied and pending political motion survives",
+    );
+    for (let i = 0; i < 2; i++)
+      send(seated[i], {
+        type: "intent",
+        intent: {
+          type: "national_found_empire",
+          empireId: "replay-after-crash",
+          requestId: requests[0],
+        },
+      });
+    const beforeReplay = Math.max(...seated.map((p) => p.lastProjectionTick));
+    await until(
+      () => seated.every((p) => p.lastProjectionTick > beforeReplay + 2),
+      "continued canonical turns",
+    );
+    assert(seated.every((p) => !p.receipts?.has(requests[0])));
+    send(seated[1], {
+      type: "intent",
+      intent: {
+        type: "national_accept_peace",
+        motionId: pendingPeaceMotion,
+        requestId: "e2-durable-accept-peace-after-crash",
+      },
+    });
+    await until(
+      () =>
+        seated[1].receipts?.get("e2-durable-accept-peace-after-crash")
+          ?.accepted === true,
+      "restored peace motion accepted",
+      30_000,
+    );
+    assert(
+      seated
+        .filter((_, i) => i !== 1)
+        .every((p) => !p.receipts?.has("e2-durable-accept-peace-after-crash")),
+    );
+    assert(allHealthy(seated));
+    assert.equal(
+      server.messages.filter(
+        (m) =>
+          m.gameID === id && m.message === "NATIONAL authoritative host ready",
+      ).length,
+      0,
+    );
+    assert.equal(
+      server.messages.filter(
+        (m) =>
+          m.gameID === id && m.message === "NATIONAL durable match restored",
+      ).length,
+      1,
+    );
+    pass("stale-request-denied-pending-peace-executed-on-restored-authority");
+    console.log(
+      "DURABLE_RECOVERY_EVIDENCE " +
+        JSON.stringify({
+          originalGameID: id,
+          recoveredGameID: seated[0].match,
+          lastCommittedTick: lastCommitted,
+          lastAcknowledgedTick: lastAcknowledged,
+          lastDurableTick: disk.tick,
+          restoredTick: restored[0].tick,
+          subsequentTick: Math.min(...seated.map((p) => p.lastProjectionTick)),
+          stateCommitment: disk.commitment,
+          replayDigest: disk.replayDigest,
+          generation: disk.generation,
+          resourceCommitment: disk.resourceCommitment,
+          activeWarScopes: disk.activeWarScopes,
+          activeAttacks: disk.activeAttacks,
+          restoreElapsedMs,
+          recoveryElapsedMs: Math.round(performance.now() - startedRecovery),
+          observedAcknowledgedLossTicks: Math.max(
+            0,
+            lastAcknowledged - disk.tick,
+          ),
+          authenticatedRecoveredSeats: seated.length,
+          duplicateTimelineObserved: false,
+        }),
+    );
+    console.log(
+      "LOCAL_STAGING_WORKER_PASS automated_protocol_accounts=3 humans=0 upstream_oauth=0 gpu=0 restart_recovery=1",
+    );
+  }
 } catch (error) {
   // Only own source line numbers and enumerated peer state; no JWT or payload.
   const line =

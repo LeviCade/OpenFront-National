@@ -110,6 +110,7 @@ import {
   TrustedNationalProjectionRejectedEvent,
   TrustedNationalStartedEvent,
   TrustedNationalSightRevokedEvent,
+  NationalPoliticalAffordanceChangedEvent,
   trustedNationalPrincipal,
 } from "./TrustedNationalSession";
 import {
@@ -1181,6 +1182,13 @@ export class ClientGameRunner {
   private trustedContinuity: NationalObserverMapContinuity | null = null;
   private trustedPrincipal: string | null = null;
   /** Drop pointer-transparent enemy markers in the same event turn as sight loss. */
+  private updatePoliticalAffordances(update: GameUpdateViewData): void {
+    const before = this.gameView.nationalAttackEligibilityKey?.();
+    this.gameView.update(update);
+    if (before !== this.gameView.nationalAttackEligibilityKey?.())
+      this.eventBus.emit(new NationalPoliticalAffordanceChangedEvent());
+  }
+
   private revokeTrustedSight(): void {
     this.trustedHadPrivatePage = false;
     this.gameView.resetTrustedProjectionSight();
@@ -1258,7 +1266,7 @@ export class ClientGameRunner {
           throw new Error("NATIONAL active seat lost mandatory private map");
         // Independent unit pages may still be present when no tile is usable.
         if (this.trustedHadPrivatePage) this.revokeTrustedSight();
-        this.gameView.update(update);
+        this.updatePoliticalAffordances(update);
         this.myPlayer = this.clientID
           ? this.gameView.playerByClientID(this.clientID)
           : null;
@@ -1336,7 +1344,7 @@ export class ClientGameRunner {
       // Partial pages are useful, not proof of unrestricted command authority.
       const sweepReady = delta.usable;
       this.gameView.setTrustedProjectionReady(sweepReady);
-      this.gameView.update(update);
+      this.updatePoliticalAffordances(update);
       this.myPlayer = this.clientID
         ? this.gameView.playerByClientID(this.clientID)
         : null;
@@ -1628,7 +1636,7 @@ export class ClientGameRunner {
       gu.updates[GameUpdateType.Hash].forEach((hu: HashUpdate) => {
         this.eventBus.emit(new SendHashEvent(hu.tick, hu.hash));
       });
-      this.gameView.update(gu);
+      this.updatePoliticalAffordances(gu);
       const pauseUpdates = gu.updates[GameUpdateType.GamePaused];
       if (pauseUpdates?.length) {
         this.healthPaused = pauseUpdates[pauseUpdates.length - 1].paused;
@@ -1891,6 +1899,7 @@ export class ClientGameRunner {
       if (myPlayer === null) return;
       this.myPlayer = myPlayer;
     }
+    const politicalKey = this.gameView.nationalAttackEligibilityKey?.();
     const clickedOwner = this.trustedNationalProjection
       ? this.gameView.trustedAttackTarget(this.myPlayer.id(), tile)
       : undefined;
@@ -1898,6 +1907,8 @@ export class ClientGameRunner {
     this.myPlayer
       .actions(tile, [UnitType.TransportShip])
       .then((actions) => {
+        if (politicalKey !== this.gameView.nationalAttackEligibilityKey?.())
+          return;
         if (
           this.trustedNationalProjection &&
           (!this.myPlayer ||
@@ -2080,6 +2091,7 @@ export class ClientGameRunner {
       this.myPlayer = myPlayer;
     }
 
+    const politicalKey = this.gameView.nationalAttackEligibilityKey?.();
     const clickedOwner = this.trustedNationalProjection
       ? this.gameView.trustedAttackTarget(this.myPlayer.id(), tile)
       : undefined;
@@ -2087,6 +2099,8 @@ export class ClientGameRunner {
     this.myPlayer
       .actions(tile, null)
       .then((actions) => {
+        if (politicalKey !== this.gameView.nationalAttackEligibilityKey?.())
+          return;
         if (
           this.trustedNationalProjection &&
           (!this.myPlayer ||

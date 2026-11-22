@@ -20,6 +20,14 @@ import {
   UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
 import {
+  readNationalImperialAdministration,
+  type NationalImperialAdministrationView,
+} from "@openfront/engine-api/game/NationalImperialView";
+import {
+  readNationalPactWireDisclosure,
+  type NationalPactDisclosureViewData,
+} from "@openfront/engine-api/game/NationalPactView";
+import {
   GameLike,
   ReadonlyTileSet,
   UnitPredicate,
@@ -57,6 +65,11 @@ import type {
   NationalObserverMapContinuity,
   NationalObserverMapDelta,
 } from "../NationalObserverMapContinuity";
+import {
+  readPactReceipts,
+  retainPactReceipts,
+  type PactReceipt,
+} from "../NationalPactState";
 import { computeAllianceClusters } from "../render/frame/derive/AllianceClusters";
 import { extractAttackRings } from "../render/frame/derive/AttackRings";
 import { extractNukeTelegraphs } from "../render/frame/derive/NukeTelegraphs";
@@ -94,6 +107,10 @@ export class GameView implements GameLike {
   private lastUpdate: GameUpdateViewData | null;
   // Authoritative, viewer-filtered worker values only. Never reconstruct
   // sovereignty from local intents or speculative client player data.
+  private _nationalImperialAdministration: NationalImperialAdministrationView | null =
+    null;
+  private _nationalPactReceipts: PactReceipt[] = [];
+  private _nationalPactDisclosure: NationalPactDisclosureViewData | null = null;
   private _nationalPolitics: NationalPublicPolitics | null = null;
   private _nationalFoundingOutcome: NationalFoundingResult | null = null;
   private _nationalFoundingResults: readonly NationalFoundingResult[] = [];
@@ -108,6 +125,11 @@ export class GameView implements GameLike {
   private trustedSight: NationalObserverMapContinuity | null = null;
 
   public setTrustedPrincipal(principal: string | null): void {
+    if (this.trustedPrincipal !== principal) {
+      this._nationalPactDisclosure = null;
+      this._nationalImperialAdministration = null;
+      this._nationalPactReceipts = [];
+    }
     this.trustedPrincipal = principal;
   }
   private readonly trustedUnitMarkers = new Map<
@@ -213,6 +235,9 @@ export class GameView implements GameLike {
    */
   public resetTrustedProjectionSight(): void {
     if (!this._trustedNationalProjection) return;
+    this._nationalPactDisclosure = null;
+    this._nationalImperialAdministration = null;
+    this._nationalPactReceipts = [];
     this._trustedProjectionReady = false;
     this._trustedSpawnReady = false;
     this.trustedPendingTiles = [];
@@ -417,6 +442,12 @@ export class GameView implements GameLike {
       return undefined;
     const empireOf = (id: PlayerID) =>
       politics.empires.find((empire) => empire.memberIds.includes(id))?.id;
+    if (
+      politics.pacts?.some(
+        (p) => p.memberIds.includes(playerID) && p.memberIds.includes(targetID),
+      )
+    )
+      return undefined;
     const actorEmpire = empireOf(playerID);
     const targetEmpire = empireOf(targetID);
     if (actorEmpire !== undefined && actorEmpire === targetEmpire)
@@ -453,6 +484,29 @@ export class GameView implements GameLike {
     if (!this.hasOwner(tile)) return false;
     const owner = this.owner(tile);
     return owner.isPlayer() && owner.id() === player.id();
+  }
+
+  public nationalImperialAdministration(): NationalImperialAdministrationView | null {
+    return this._nationalImperialAdministration;
+  }
+
+  public nationalPactReceipts(): readonly PactReceipt[] {
+    return this._nationalPactReceipts;
+  }
+
+  public nationalPactDisclosure(): NationalPactDisclosureViewData | null {
+    return this._nationalPactDisclosure;
+  }
+
+  /** A UI invalidation key, not an engine authorization decision. */
+  public nationalAttackEligibilityKey(): string | null {
+    if (this._config.gameConfig?.().nationalMode !== true) return null;
+    return JSON.stringify([
+      this.myPlayer()?.id(),
+      this._nationalPolitics?.empires,
+      this._nationalPolitics?.pacts?.map((p) => [p.id, p.memberIds]),
+      this._nationalConflicts?.layers.filter((l) => l.endedTick === null),
+    ]);
   }
 
   public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
@@ -498,6 +552,9 @@ export class GameView implements GameLike {
 
   /** Invalidate an old roster on disconnect; await a new GameRunner packet. */
   public invalidateNationalPoliticalView(): void {
+    this._nationalPactDisclosure = null;
+    this._nationalImperialAdministration = null;
+    this._nationalPactReceipts = [];
     this._nationalPolitics = null;
     this._nationalPoliticsTick = null;
     this._nationalFoundingResults = [];
@@ -697,7 +754,14 @@ export class GameView implements GameLike {
     this.toDelete.clear();
 
     const previousTick = this.lastUpdate?.tick ?? -1;
-    this.lastUpdate = gu;
+    // Never keep an unvalidated or revoked constitutional snapshot in the raw renderer cache.
+    this.lastUpdate =
+      gu.nationalPactDisclosure === undefined &&
+      gu.nationalImperialAdministration === undefined
+        ? gu
+        : { ...gu };
+    delete this.lastUpdate.nationalPactDisclosure;
+    delete this.lastUpdate.nationalImperialAdministration;
 
     // Legacy/replay test adapters can provide a partial Config without
     // gameConfig(). Keep ordinary FFA view updates entirely unchanged.
@@ -721,6 +785,47 @@ export class GameView implements GameLike {
 
       const currentActorId =
         this.trustedPrincipal ?? this._myPlayer?.id() ?? null;
+      this._nationalImperialAdministration =
+        gu.tick < previousTick
+          ? null
+          : readNationalImperialAdministration(
+              gu.nationalImperialAdministration,
+              this._nationalPolitics,
+              currentActorId,
+              gu.tick,
+              this._trustedNationalProjection
+                ? (this.trustedSight?.lastAcceptedStreamId ?? null)
+                : undefined,
+            );
+      this._nationalPactDisclosure =
+        gu.tick < previousTick
+          ? null
+          : readNationalPactWireDisclosure(
+              gu.nationalPactDisclosure,
+              currentActorId,
+              this._nationalPolitics?.pacts ?? null,
+              this._nationalPolitics?.empires.some((e) =>
+                e.memberIds.includes(currentActorId ?? ""),
+              ) ?? false,
+              gu.tick,
+              this._trustedNationalProjection
+                ? (this.trustedSight?.lastAcceptedStreamId ?? null)
+                : undefined,
+            );
+      this._nationalPactReceipts =
+        gu.tick < previousTick ||
+        (this._nationalPactDisclosure === null &&
+          this._nationalImperialAdministration === null)
+          ? []
+          : retainPactReceipts(
+              this._nationalPactReceipts,
+              readPactReceipts(
+                gu.nationalCommandResults,
+                currentActorId,
+                gu.tick,
+              ),
+              gu.tick,
+            );
       this._nationalAccessionOffers = readNationalAccessionOffers(
         nationalPacket.nationalAccessionOffers,
         currentActorId,

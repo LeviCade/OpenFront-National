@@ -39,6 +39,20 @@ export class ConstructionExecution implements Execution {
     private amount?: number,
   ) {}
 
+  /** Resume normal construction lifecycle for an already purchased structure. */
+  static forImperialPurchase(mg: Game, structure: Unit): ConstructionExecution {
+    const execution = new ConstructionExecution(
+      structure.owner(),
+      structure.type(),
+      structure.tile(),
+    );
+    execution.structure = structure;
+    execution.ticksUntilComplete =
+      mg.unitInfo(structure.type()).constructionDuration ?? 0;
+    structure.setUnderConstruction(execution.ticksUntilComplete > 0);
+    return execution;
+  }
+
   init(mg: Game, ticks: number): void {
     this.mg = mg;
 

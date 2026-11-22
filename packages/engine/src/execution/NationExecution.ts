@@ -21,12 +21,24 @@ import { assertNever, simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
 import {
+  initialNationalEconomicMemory,
+  planNationalEconomicDecision,
+  updateNationalEconomicMemory,
+  type NationalEconomicMemory,
+} from "../national/ai/NationalEconomicPlanner";
+import {
   deriveNationalWarSides,
   initialNationalPlannerMemory,
   planNationalInterest,
   recordNationalWarOutcome,
   type NationalPlannerMemory,
 } from "../national/ai/NationalPlanner";
+import {
+  initialAIPoliticalMemory,
+  planAIPoliticalInterest,
+  recordAIPoliticalOutcome,
+  type AIPoliticalMemory,
+} from "../national/ai/NationalPoliticalStrategy";
 import {
   collectLiveNationalObservation,
   liveNationalWarAuthority,
@@ -57,6 +69,7 @@ import { NationStructureBehavior } from "./nation/NationStructureBehavior";
 import { NationWarshipBehavior } from "./nation/NationWarshipBehavior";
 import { tutorialCollapse } from "./nation/TutorialCollapse";
 import { tutorialSilo, tutorialWarship } from "./nation/TutorialSilo";
+import { NationalSanctionExecution } from "./NationalSanctionExecution";
 import { SpawnExecution } from "./SpawnExecution";
 
 /**
@@ -71,6 +84,7 @@ type NationalExecutionPlannerMemory = NationalPlannerMemory & {
     readonly retryAfterTick: number;
   }[];
   readonly lastWarOutcomeSequence?: number;
+  readonly political?: AIPoliticalMemory;
 };
 
 export class NationExecution implements Execution {
@@ -100,6 +114,8 @@ export class NationExecution implements Execution {
   // access to an unrestricted Game/Player observation.
   private nationalPlannerMemory: NationalExecutionPlannerMemory | null = null;
   private nationalSightMemory: NationalSightMemory | null = null;
+  // Economic memory is principal-local, bounded and persisted for replay.
+  private nationalEconomicMemory: NationalEconomicMemory | null = null;
 
   constructor(
     private gameID: GameID,
@@ -342,6 +358,79 @@ export class NationExecution implements Execution {
       return;
     const verified = collectLiveNationalObservation(this.mg, player.id());
     const observation = verified.observation;
+    // Both AI and humans have access to identical authenticated observations
+    // and own trading permissions. No global foreign route or balance scan.
+    const demands = NationalSanctionExecution.viewFor(this.mg, player);
+    const partners = new Set(
+      demands.flatMap((d) => [
+        d.target,
+        ...(d.authorityId === null ? [] : [d.authorityId]),
+        ...d.recipientIds,
+        ...(observation.coalitions.find((c) => c.id === d.empire)?.members ??
+          []),
+      ]),
+    );
+    const voyages = new Map<string, number>();
+    for (const ship of player.units(UnitType.TradeShip)) {
+      if (ship.owner() !== player || !ship.isActive()) continue;
+      const id = ship.targetUnit()?.owner().id();
+      if (id === undefined || id === player.id()) continue;
+      partners.add(id);
+      voyages.set(id, (voyages.get(id) ?? 0) + 1);
+    }
+    partners.delete(player.id());
+    const ties = [...partners].sort().map((partnerId) => ({
+      partnerId,
+      tradePermitted:
+        this.mg.hasPlayer(partnerId) &&
+        player.canTrade(this.mg.player(partnerId)),
+      activeOwnVoyages: voyages.get(partnerId) ?? 0,
+    }));
+    const priorEconomic =
+      this.nationalEconomicMemory ?? initialNationalEconomicMemory(player.id());
+    this.nationalEconomicMemory = updateNationalEconomicMemory(
+      observation,
+      demands,
+      priorEconomic,
+    );
+    const economic = planNationalEconomicDecision(
+      observation,
+      demands,
+      ties,
+      this.nationalEconomicMemory,
+    );
+    if (economic) {
+      const identity =
+        economic.kind === "issue"
+          ? economic.targetId + ":" + economic.recipientIds.join(",")
+          : economic.sanctionId;
+      const requestId =
+        "ai-econ-" + simpleHash(player.id() + ":" + identity + ":" + ticks);
+      const command =
+        economic.kind === "issue"
+          ? {
+              type: "national_issue_sanction" as const,
+              scope: economic.scope,
+              targetId: economic.targetId,
+              recipientIds: [...economic.recipientIds],
+              durationTicks: economic.durationTicks,
+              requestId,
+            }
+          : economic.kind === "respond"
+            ? {
+                type: "national_respond_sanction" as const,
+                sanctionId: economic.sanctionId,
+                decision: economic.decision,
+                requestId,
+              }
+            : {
+                type: "national_resolve_sanction" as const,
+                sanctionId: economic.sanctionId,
+                decision: economic.decision,
+                requestId,
+              };
+      this.mg.addExecution(new NationalSanctionExecution(player, command));
+    }
     const remembered = advanceLastKnown(
       observation,
       this.nationalSightMemory,
@@ -353,7 +442,61 @@ export class NationExecution implements Execution {
       this.nationalPlannerMemory ?? initialNationalPlannerMemory(player.id()),
       30,
     );
-    this.nationalPlannerMemory = result.memory;
+    // Strategy sees the same human-filtered observation; only GameImpl may
+    // accept a proposed political command. Keep outcomes in THIS snapshotted
+    // NationExecution, not a second global AI political ledger.
+    const political = planAIPoliticalInterest(
+      observation,
+      this.nationalPlannerMemory?.political ?? initialAIPoliticalMemory(),
+      25,
+      result.memory.reputation,
+    );
+    this.nationalPlannerMemory = {
+      ...result.memory,
+      political: political.memory,
+    };
+    if (
+      political.decision?.command !== null &&
+      political.decision?.command !== undefined
+    ) {
+      try {
+        const outcome = this.mg.performNationalPoliticalCommandWithOutcome(
+          player,
+          political.decision.command,
+        );
+        this.nationalPlannerMemory = {
+          ...this.nationalPlannerMemory,
+          political: recordAIPoliticalOutcome(
+            observation,
+            this.nationalPlannerMemory.political!,
+            political.decision.command,
+            outcome,
+          ),
+        };
+        if (outcome.accepted) {
+          // Fresh projection is mandatory after Betray, pact admission or
+          // imperial accession. Never act militarily on the pre-command view.
+          this.nationalPlannerMemory = {
+            ...this.nationalPlannerMemory,
+            nextPlanningTick: Math.min(
+              this.nationalPlannerMemory.nextPlanningTick,
+              ticks + 5,
+            ),
+          };
+          return;
+        }
+      } catch {
+        // Absent authority or exhausted canonical command journal fails
+        // closed; never reroute the AI through direct political mutation.
+        this.nationalPlannerMemory = {
+          ...this.nationalPlannerMemory,
+          political: {
+            ...this.nationalPlannerMemory.political!,
+            nextPlanningTick: ticks + 180,
+          },
+        };
+      }
+    }
     // A small nation under an observed active-war threat must still defend.
     // The old branch discarded every "defend" decision and left a real
     // front idle. Both attack and defense use the same E2 validator.
@@ -665,19 +808,66 @@ export class NationExecution implements Execution {
         this.nationalPlannerMemory === null
           ? null
           : {
-              ...this.nationalPlannerMemory,
-              reputation: this.nationalPlannerMemory.reputation.map(
-                (entry) => ({ ...entry }),
-              ),
-              rejectedWarTargets:
-                this.nationalPlannerMemory.rejectedWarTargets?.map((entry) => ({
-                  ...entry,
-                })),
+              // Stable explicit snapshot key order, irrespective of which
+              // legal planner transition last spread the mutable memory.
+              // Snapshot -> restore -> snapshot must be byte-identical.
+              observerId: this.nationalPlannerMemory.observerId,
+              objective: this.nationalPlannerMemory.objective,
+              targetId: this.nationalPlannerMemory.targetId,
+              nextPlanningTick: this.nationalPlannerMemory.nextPlanningTick,
               lastProcessedEvent:
                 this.nationalPlannerMemory.lastProcessedEvent === null
                   ? null
                   : { ...this.nationalPlannerMemory.lastProcessedEvent },
+              reputation: this.nationalPlannerMemory.reputation.map(
+                (entry) => ({ ...entry }),
+              ),
+              ...(this.nationalPlannerMemory.rejectedWarTargets === undefined
+                ? {}
+                : {
+                    rejectedWarTargets:
+                      this.nationalPlannerMemory.rejectedWarTargets.map(
+                        (entry) => ({ ...entry }),
+                      ),
+                  }),
+              ...(this.nationalPlannerMemory.lastWarOutcomeSequence ===
+              undefined
+                ? {}
+                : {
+                    lastWarOutcomeSequence:
+                      this.nationalPlannerMemory.lastWarOutcomeSequence,
+                  }),
+              ...(this.nationalPlannerMemory.political === undefined
+                ? {}
+                : {
+                    political: {
+                      ...this.nationalPlannerMemory.political,
+                      completedCommands: [
+                        ...this.nationalPlannerMemory.political
+                          .completedCommands,
+                      ],
+                      rejectedCommands:
+                        this.nationalPlannerMemory.political.rejectedCommands.map(
+                          (entry) => ({ ...entry }),
+                        ),
+                    },
+                  }),
             },
+      // Omit entirely for legacy games and pre-economics snapshots; an
+      // optional null field would needlessly mutate old snapshot bytes.
+      ...(this.nationalEconomicMemory === null
+        ? {}
+        : {
+            nationalEconomicMemory: {
+              observerId: this.nationalEconomicMemory.observerId,
+              processedDemandIds: [
+                ...this.nationalEconomicMemory.processedDemandIds,
+              ],
+              credibility: this.nationalEconomicMemory.credibility.map(
+                (entry) => ({ ...entry }),
+              ),
+            },
+          }),
       nationalSightMemory:
         this.nationalSightMemory === null
           ? null
@@ -727,6 +917,7 @@ export class NationExecution implements Execution {
     this.spawnExecAdded = s.spawnExecAdded;
     this.nationalPlannerMemory = s.nationalPlannerMemory;
     this.nationalSightMemory = s.nationalSightMemory;
+    this.nationalEconomicMemory = s.nationalEconomicMemory ?? null;
     this.behaviorsInitialized = s.behaviors !== null;
     const b = s.behaviors;
     const player = this.player;
@@ -810,8 +1001,39 @@ const NationStateSchema = z.object({
         .max(16)
         .optional(),
       lastWarOutcomeSequence: z.number().int().min(-1).optional(),
+      political: z
+        .object({
+          nextPlanningTick: z.number().int().nonnegative(),
+          lastOutcomeSequence: z.number().int().min(-1),
+          completedCommands: z.array(z.string()).max(64),
+          rejectedCommands: z
+            .array(
+              z.object({
+                key: z.string(),
+                retryAfterTick: z.number().int().nonnegative(),
+              }),
+            )
+            .max(64),
+        })
+        .optional(),
     })
     .nullable(),
+  nationalEconomicMemory: z
+    .object({
+      observerId: z.string(),
+      processedDemandIds: z.array(z.string()).max(128),
+      credibility: z
+        .array(
+          z.object({
+            issuerId: z.string(),
+            score: z.number().int().min(-6).max(6),
+            lastObservedTick: z.number().int().nonnegative(),
+          }),
+        )
+        .max(16),
+    })
+    .nullable()
+    .optional(),
   nationalSightMemory: z
     .object({
       observerId: z.string(),

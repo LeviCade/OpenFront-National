@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { verifyRunGrant } from "./host-run-grant.mjs";
 /**
  * E6 external release verifier. MUST execute outside the Skybot GPU guest.
  * A guest-written JSON report is never a host attestation or a cleanup receipt.
@@ -75,6 +76,7 @@ export function verifyIndependentRelease({
     ) ||
     !DECIMAL.test(String(expected.runnerId ?? "")) ||
     !HEX64.test(expected.challenge ?? "") ||
+    !HEX64.test(expected.runGrantSha256 ?? "") ||
     !Number.isSafeInteger(expected.runStartedAtMs) ||
     !Number.isSafeInteger(expected.jobCompletedAtMs) ||
     expected.jobCompletedAtMs <= expected.runStartedAtMs ||
@@ -144,7 +146,8 @@ export function verifyIndependentRelease({
     String(p.jobId) === String(expected.jobId) &&
     same(p.runnerName, expected.runnerName) &&
     String(p.runnerId) === String(expected.runnerId) &&
-    same(p.challenge, expected.challenge);
+    same(p.challenge, expected.challenge) &&
+    p.runGrantSha256 === expected.runGrantSha256;
   const before = preflight.payload;
   const after = postflight.payload;
   if (
@@ -210,6 +213,7 @@ export function verifyIndependentRelease({
   if (
     !isObject(summary) ||
     summary.lane !== "release" ||
+    summary.schema !== 4 ||
     summary.exactCandidateSha !== expected.sourceSha ||
     summary.expectedSourceSha !== expected.sourceSha ||
     summary.releaseCertified !== false ||
@@ -283,6 +287,13 @@ export function verifyIndependentRelease({
     if (
       !isObject(report) ||
       report.scenario !== mode ||
+      report.scenarioKind !==
+        (mode.startsWith("legacy-") ? "legacy" : "national-solo") ||
+      report.stageReached !==
+        (mode.startsWith("legacy-")
+          ? "legacy-player-action"
+          : "solo-playability-complete") ||
+      report.errorCount !== 0 ||
       // A postflight signer must not transform a guest-declared FAIL into PASS.
       // Guest release outcomes are deliberately UNVERIFIED until this gate;
       // failed/partial gameplay has a different reason, even if exitCode is 0.
@@ -309,6 +320,11 @@ export function verifyIndependentRelease({
       !pixel(report.hardware.webgl2ShaderPixel) ||
       !Array.isArray(report.screenshotNames) ||
       report.screenshotNames.length === 0 ||
+      !report.screenshotNames.includes(
+        mode.startsWith("legacy-")
+          ? "legacy-player-action.png"
+          : "solo-battle-authoritative.png",
+      ) ||
       report.screenshotNames.length > 30 ||
       report.screenshotCount !== report.screenshotNames.length ||
       !isObject(report.screenshotSha256)
@@ -375,10 +391,28 @@ if (
   const dir = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(dir, "../..");
   const rootDir = "/etc/skybot-ci/national-gpu-release";
-  const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
+  const readJson = (path) => {
+    const st = lstatSync(path);
+    if (
+      !st.isFile() ||
+      st.uid !== 0 ||
+      st.gid !== 0 ||
+      (st.mode & 0o777) !== 0o600
+    )
+      throw Error("ROOT_EVIDENCE_FILE_UNTRUSTED");
+    return JSON.parse(readFileSync(path, "utf8"));
+  };
   let output;
   try {
-    if (process.env.GITHUB_ACTIONS === "true")
+    const rootStat = lstatSync(rootDir);
+    if (
+      process.getuid?.() !== 0 ||
+      !rootStat.isDirectory() ||
+      rootStat.uid !== 0 ||
+      rootStat.gid !== 0 ||
+      (rootStat.mode & 0o777) !== 0o700 ||
+      process.env.GITHUB_ACTIONS === "true"
+    )
       throw Error("REFUSED_IN_GITHUB_ACTIONS_GUEST");
     const ctx = readJson(join(rootDir, "trusted-github-run-context.json"));
     const receipt = readJson(
@@ -398,6 +432,18 @@ if (
       join(repoRoot, "scripts/national-qa/trusted-gpu-keys.json"),
     );
     const hosted = readJson(join(rootDir, "host-trust-policy.json"));
+    const postflight = readJson(join(rootDir, "controller-postflight.json"));
+    const grantSha = verifyRunGrant(
+      readJson(join(rootDir, "approved-physical-run.json")),
+      ctx,
+      {
+        runStartedAtMs: receipt.runStartedAtMs,
+        jobCompletedAtMs: receipt.jobCompletedAtMs,
+      },
+      "postflight",
+      undefined,
+      postflight.payload?.observedAtMs,
+    );
     const checked = verifyIndependentRelease({
       summaryBytes: readFileSync(
         join(rootDir, "verified-artifacts", "summary.json"),
@@ -407,7 +453,7 @@ if (
       modePreflights: MODES.map((mode) =>
         readJson(join(rootDir, "controller-preflight-" + mode + ".json")),
       ),
-      postflight: readJson(join(rootDir, "controller-postflight.json")),
+      postflight,
       trustedPublicKeyPem: readFileSync(
         join(rootDir, "host-public-key.pem"),
         "utf8",
@@ -416,6 +462,7 @@ if (
       hostTrustedFingerprints: hosted.trustedEd25519PublicKeySha256,
       expected: {
         ...ctx,
+        runGrantSha256: grantSha,
         runStartedAtMs: receipt.runStartedAtMs,
         jobCompletedAtMs: receipt.jobCompletedAtMs,
       },
