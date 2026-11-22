@@ -42,9 +42,10 @@ jobs:
         run: |
           npm install --global --ignore-scripts npm@12.1.0
           npm ci --ignore-scripts
-      - name: Check E4 changed source format
+      - name: Produce exact E4 formatter diff (must be applied to branch)
         run: |
-          npx --no-install oxfmt --check             src/client/controllers/NationalMapTargetController.ts             src/client/ClientGameRunner.ts             src/client/TrustedNationalSession.ts             tests/ui/national/NationalHumanMapInputR11.test.ts             tests/ui/national/TrustedNationalProjectionMapC2.test.ts
+          npx --no-install oxfmt --write             src/client/controllers/NationalMapTargetController.ts             src/client/ClientGameRunner.ts             src/client/TrustedNationalSession.ts             tests/ui/national/NationalHumanMapInputR11.test.ts             tests/ui/national/TrustedNationalProjectionMapC2.test.ts
+          git -c color.ui=false diff -- src/client/ClientGameRunner.ts tests/ui/national/NationalHumanMapInputR11.test.ts
       - name: Targeted E4 real-code regressions
         run: |
           npx --no-install vitest run             tests/ui/national/NationalHumanMapInputR11.test.ts             tests/ui/national/TrustedNationalProjectionMapC2.test.ts             tests/ui/national/NationalPrivateCapabilityClass5.test.ts             tests/ui/national/NationalPrivatePanelClass5.test.ts             tests/ui/national/NationalFoundingWire.test.ts             tests/ui/national/NationalWarWire.test.ts
@@ -55,3 +56,5 @@ jobs:
           npx --no-install oxlint             src/client/controllers/NationalMapTargetController.ts             src/client/ClientGameRunner.ts             src/client/TrustedNationalSession.ts             tests/ui/national/NationalHumanMapInputR11.test.ts             tests/ui/national/TrustedNationalProjectionMapC2.test.ts
       - name: Production build
         run: npm run build-prod
+      - name: Assert checked-in source is fully formatted
+        run: git diff --exit-code -- src/client/ClientGameRunner.ts tests/ui/national/NationalHumanMapInputR11.test.ts
