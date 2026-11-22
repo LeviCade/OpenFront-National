@@ -17,9 +17,9 @@ import {
   snapshotGameData,
 } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it, vi } from "vitest";
+import { TrustedNationalSaveStore } from "../../src/server/national/TrustedNationalSaveStore";
 import { setup } from "../util/Setup";
 import { restoreTestGame, roundTrip } from "../util/Snapshot";
-import { TrustedNationalSaveStore } from "../../src/server/national/TrustedNationalSaveStore";
 
 /** D-011 M5: all actors, structures, gold and authority are actual Game objects. */
 const roster = [
@@ -343,9 +343,7 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     // ownership and tick. Its storage is in memory, NOT a disk-restart claim.
     const store = new TrustedNationalSaveStore<Game>(
       (session, id) =>
-        session === "c5-authorized-session" && id === "c5-host"
-          ? owner
-          : null,
+        session === "c5-authorized-session" && id === "c5-host" ? owner : null,
       (g, id) => snapshotGame(g, { gameID: id }),
     );
     expect(() => store.save("c5-host", "forged-session", game)).toThrow(
@@ -353,10 +351,8 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     );
     const saved = store.save("c5-host", "c5-authorized-session", game);
     await expect(
-      store.restore(
-        saved.id,
-        "forged-session",
-        (bytes) => restoreTestGame(bytes, "plains"),
+      store.restore(saved.id, "forged-session", (bytes) =>
+        restoreTestGame(bytes, "plains"),
       ),
     ).rejects.toThrow(/unauthorized/);
     const restored = await store.restore(
@@ -394,7 +390,10 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     reloaded.executeNextTick();
     expect(reloaded.player(S).units(UnitType.City)[0].level()).toBe(2);
     expect(
-      BigInt(reloaded.nationalImperialAdministrationFor(reloaded.player(N))!.treasury),
+      BigInt(
+        reloaded.nationalImperialAdministrationFor(reloaded.player(N))!
+          .treasury,
+      ),
     ).toBe(3n);
     expect(
       reloaded
