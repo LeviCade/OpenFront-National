@@ -145,10 +145,7 @@ export function validateJourney(mode, browser, authority, trusted) {
         a.claimedActor !== b.claimedActor)
     )
       return fail("CROSS_PRINCIPAL_PROBE_MISSING");
-    if (
-      phase === "spectator" &&
-      (a.spectator !== true || b.spectator !== true)
-    )
+    if (phase === "spectator" && (a.spectator !== true || b.spectator !== true))
       return fail("SPECTATOR_PROBE_MISSING");
     if (
       phase === "stale-socket" &&
@@ -163,12 +160,14 @@ export function validateJourney(mode, browser, authority, trusted) {
     requests.set(a.requestId, a);
     if (
       phase === "start" &&
-      !(before.mapReady === false &&
+      !(
+        before.mapReady === false &&
         after.mapReady === true &&
         count(after.mapTiles) &&
         after.mapTiles > 0 &&
         after.nationalAuthority === !isLegacy &&
-        after.gameType === (privateMode ? "private" : "solo"))
+        after.gameType === (privateMode ? "private" : "solo")
+      )
     )
       return fail("REAL_MODE_AND_MAP_UNPROVEN");
     if (
