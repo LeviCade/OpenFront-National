@@ -1144,6 +1144,13 @@ export class ClientGameRunner {
     this.gameView.resetTrustedProjectionSight();
     this.eventBus.emit(new NationalMapTargetSelectedEvent(null));
     this.trustedMapResetUpload?.();
+    // Disconnect/rejection does not deliver another server tick. Push the
+    // emptied name/territory view now so stale enemy labels cannot remain
+    // cached on the GPU while this browser is disconnected.
+    if (this.gameView.updatesSinceLastTick() !== null) {
+      this.webglBuilder?.update(this.gameView);
+      this.renderer.tick();
+    }
   }
 
   private readonly onTrustedProjectionRejected = (
