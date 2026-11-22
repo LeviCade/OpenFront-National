@@ -124,7 +124,7 @@ export function planNationalEconomicDecision(
       return {
         kind: "resolve",
         sanctionId: d.id,
-        decision: cost <= strategicReach ? "enforce" : "back-down",
+        decision: strategicReach > 0 && cost <= strategicReach ? "enforce" : "back-down",
       };
     }
     if (
