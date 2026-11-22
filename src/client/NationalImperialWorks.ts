@@ -1,4 +1,4 @@
-import { Structures } from "@openfront/engine-api/game/GameTypes";
+import { Structures, type UnitType } from "@openfront/engine-api/game/GameTypes";
 import type { NationalImperialAdministrationView } from "@openfront/engine-api/game/NationalImperialView";
 import type { GameView } from "./view";
 
@@ -36,6 +36,7 @@ export function imperialStructureChoices(
   if (!empire || !empire.memberIds.includes(actor.id())) return [];
 
   const members = new Set(empire.memberIds);
+  const structureTypes = new Set<UnitType>(Structures.types);
   const choices: ImperialStructureChoice[] = [];
   for (const player of game.players()) {
     if (
@@ -50,7 +51,7 @@ export function imperialStructureChoices(
         unit.isUnderConstruction() ||
         !Number.isSafeInteger(unit.id()) ||
         unit.id() < 0 ||
-        !Structures.types.includes(unit.type())
+        !structureTypes.has(unit.type())
       )
         continue;
       choices.push({
