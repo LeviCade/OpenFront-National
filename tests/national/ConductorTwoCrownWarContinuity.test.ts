@@ -447,13 +447,21 @@ describe("Conductor Two E1 — WAR-12 incumbent succession and hostile host auth
     const receiptCount = m.game.nationalWarCommandResults(
       m.game.player(D),
     ).length;
-    act(m, 3, {
-      type: "national_propose_peace",
-      warId: imperialId,
-      requestId: "c2_imperial_e_d",
-    });
+    // E2's trusted ingress rejects cross-principal request IDs BEFORE
+    // creating an execution. No command journal entry or WAR mutation exists.
+    const warLayersBeforeForeignReplay = m.game.nationalWarState()?.wars.layers;
+    expect(
+      m.host.submit(m.clients[3], {
+        type: "national_propose_peace",
+        warId: imperialId,
+        requestId: "c2_imperial_e_d",
+      }),
+    ).toBe(false);
     expect(m.game.nationalWarCommandResults(m.game.player(D))).toHaveLength(
       receiptCount,
+    );
+    expect(m.game.nationalWarState()?.wars.layers).toEqual(
+      warLayersBeforeForeignReplay,
     );
 
     act(m, 3, {
