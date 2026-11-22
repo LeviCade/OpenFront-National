@@ -1,0 +1,91 @@
+name: C3 E4 - Real Chrome software gameplay diagnostics (never GPU certified)
+
+on:
+  push:
+    branches:
+      - feature/c3-class1-e4-native-playability-20261121
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c3-e4-software-chrome-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  chrome:
+    name: Diagnostic ${{ matrix.mode }} (gameplay may FAIL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        mode:
+          - national-solo-desktop
+          - national-solo-mobile
+          - legacy-desktop
+          - legacy-mobile
+    env:
+      NATIONAL_QA_SOFTWARE_CDP: "1"
+      NATIONAL_REQUIRE_HARDWARE_GPU: "0"
+      CHROME_BIN: /usr/bin/google-chrome
+      NATIONAL_GPU_CANDIDATE_SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Assert source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$NATIONAL_GPU_CANDIDATE_SHA"
+          echo "E4_CHROME_EXACT_SHA=$NATIONAL_GPU_CANDIDATE_SHA"
+      - name: Node 24.15.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - name: Install pinned dependencies
+        run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm ci --ignore-scripts
+      - name: Run real CDP software Chrome, preserve failure
+        id: gameplay
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          "$CHROME_BIN" --version
+          echo "SOFTWARE_DIAGNOSTIC_ONLY=true"
+          echo "PHYSICAL_GPU_CERTIFIED=false"
+          set +e
+          timeout --kill-after=10s 215s node scripts/national-qa/browser-c2-run.mjs --mode "$MODE"
+          code=$?
+          set -e
+          echo "diagnostic_exit=$code" >> "$GITHUB_OUTPUT"
+          test -f "national-qa-artifacts/c2/$MODE.json"
+          MODE="$MODE" node --input-type=module -e '
+            import fs from "node:fs";
+            const v = JSON.parse(fs.readFileSync("national-qa-artifacts/c2/"+process.env.MODE+".json"));
+            if(v.exactSource!==process.env.GITHUB_SHA || v.hardware!=="BLOCKED") process.exit(3);
+            console.log("E4_REAL_CHROME_VERDICT", JSON.stringify({
+              mode:v.mode,gameplay:v.gameplay,firstFailure:v.firstFailure,
+              firstFailedStage:v.firstFailedStage,workerPacketCount:v.workerPacketCount,
+              screenshotCount:v.screenshotCount,consoleErrorCount:v.consoleErrorCount,
+              networkErrorCount:v.networkErrorCount,hardware:v.hardware,
+              exactSource:v.exactSource
+            }));
+          '
+      - name: Upload sanitized verdict only (not screenshot/private logs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c3-e4-software-${{ matrix.mode }}-${{ github.sha }}
+          path: national-qa-artifacts/c2/${{ matrix.mode }}.json
+          retention-days: 7
+          if-no-files-found: warn

@@ -31,6 +31,9 @@ function mapFixture() {
     rivalAlive: true,
     replay: false,
     national: true,
+    gameType: GameType.Singleplayer as GameType,
+    trusted: false,
+    trustedReady: false,
   };
   const actor = {
     id: () => "nation-a",
@@ -52,7 +55,7 @@ function mapFixture() {
   const game = {
     config: () => ({
       gameConfig: () => ({
-        gameType: GameType.Singleplayer,
+        gameType: state.gameType,
         nationalMode: state.national,
       }),
       isReplay: () => state.replay,
@@ -61,6 +64,8 @@ function mapFixture() {
     height: () => 200,
     gameID: () => "r11-map-input",
     myPlayer: () => actor,
+    isTrustedNationalProjection: () => state.trusted,
+    trustedProjectionReady: () => state.trustedReady,
     players: () => [actor, rival],
     inSpawnPhase: () => !state.spawned,
     isSpectator: () => false,
@@ -250,6 +255,55 @@ describe("R11 actual NATIONAL map input and target-aware radial projection", () 
     pointer(window, "pointerup", x, y);
     expect(radialTouches).toHaveLength(1);
     expect(radialTouches[0]).toMatchObject({ x, y });
+  });
+
+  it("exposes a genuine private NATIONAL marker only during current authenticated sight", () => {
+    const { game, bus, canvas, transform, state } = mapFixture();
+    state.gameType = GameType.Private;
+    state.trusted = true;
+    const locator = new NationalMapTargetController(
+      game,
+      bus,
+      transform,
+      canvas,
+    );
+    locator.init();
+    disposals.push(() => locator.dispose());
+    bus.emit(new NationalMapTargetSelectedEvent("nation-b"));
+    expect(document.querySelector("[data-national-map-target-id]")).toBeNull();
+    state.trustedReady = true;
+    locator.tick();
+    const marker = document.querySelector<HTMLDivElement>(
+      '[data-national-map-target-id="nation-b"]',
+    );
+    expect(marker).not.toBeNull();
+    expect(marker?.hidden).toBe(false);
+    const x = Number.parseFloat(marker!.style.left);
+    const y = Number.parseFloat(marker!.style.top);
+    expect(isNationalOpponentTile(game, transform, "nation-b", x, y)).toBe(
+      true,
+    );
+    state.trustedReady = false; // E3 revoked sight or socket disconnected.
+    locator.tick();
+    expect(isNationalOpponentTile(game, transform, "nation-b", x, y)).toBe(
+      false,
+    );
+    expect(document.querySelector("[data-national-map-target-id]")).toBeNull();
+  });
+
+  it("never mounts private target markers in ordinary legacy FFA", () => {
+    const { game, bus, canvas, transform, state } = mapFixture();
+    state.gameType = GameType.Private;
+    const locator = new NationalMapTargetController(
+      game,
+      bus,
+      transform,
+      canvas,
+    );
+    locator.init();
+    disposals.push(() => locator.dispose());
+    bus.emit(new NationalMapTargetSelectedEvent("nation-b"));
+    expect(document.querySelector("[data-national-map-target-id]")).toBeNull();
   });
 
   it("radial target label comes from the real clicked owner and revokes on wrong target or replay", () => {

@@ -127,6 +127,10 @@ export class GameView implements GameLike {
     this._unitsByOwner.clear();
     this._unitsByOwnerStale = true;
     this.toDelete.clear();
+    // Names are renderer state too: retain no former ally/enemy placement
+    // after E3 withdraws sight, even if the same browser view survives.
+    this._names.clear();
+    this._namesDirty = true;
     this.unitGrid = new UnitGrid<UnitView>(this._map);
     this.invalidateNationalPoliticalView();
   }
@@ -160,6 +164,24 @@ export class GameView implements GameLike {
       target.isPlayer() &&
       target.id() !== playerID
     );
+  }
+
+  /**
+   * A stale nameLocation from a previous E3 sight lease must not be drawn.
+   * Public roster membership is NOT permission to reveal map coordinates.
+   */
+  public trustedNameVisible(player: PlayerView): boolean {
+    if (!this._trustedNationalProjection) return true;
+    if (!this._trustedProjectionReady || !player.nameData) return false;
+    const { x, y } = player.nameData;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const tileX = Math.floor(x);
+    const tileY = Math.floor(y);
+    if (!this.isValidCoord(tileX, tileY)) return false;
+    const tile = this.ref(tileX, tileY);
+    if (!this.hasOwner(tile)) return false;
+    const owner = this.owner(tile);
+    return owner.isPlayer() && owner.id() === player.id();
   }
 
   public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
@@ -746,6 +768,10 @@ export class GameView implements GameLike {
       this._trailIdsScratch,
     );
 
+    // Trusted E3 page visibility may change every tick without nameData
+    // changing. Re-evaluate each placement against current *sighted* tiles.
+    // Ordinary FFA keeps its existing change-driven fast path.
+    if (this._trustedNationalProjection) this._namesDirty = true;
     // Names map — rebuilt only when a placement record arrived or a player
     // was added (nameData values cannot change between those ticks). Entry
     // order is irrelevant for the renderer.
@@ -753,6 +779,7 @@ export class GameView implements GameLike {
       this._namesDirty = false;
       this._names.clear();
       for (const p of this._players.values()) {
+        if (!this.trustedNameVisible(p)) continue;
         this._names.set(p.id(), {
           playerID: p.id(),
           x: p.nameData?.x ?? 0,
