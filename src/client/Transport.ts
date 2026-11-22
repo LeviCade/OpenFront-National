@@ -400,7 +400,11 @@ export class Transport {
     this.subscribe(SetIntentGateEvent, (e) => (this.intentGate = e.gate));
     this.subscribe(TrustedNationalProjectionRejectedEvent, (e) => {
       if (e.gameID !== this.lobbyConfig.gameID || this.isLocal) return;
-      if (!this.trustedNationalStart && !hasTrustedNationalPrivateCapability(this.eventBus, e.gameID)) return;
+      if (
+        !this.trustedNationalStart &&
+        !hasTrustedNationalPrivateCapability(this.eventBus, e.gameID)
+      )
+        return;
       this.rejectNationalStream();
     });
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
@@ -1077,7 +1081,10 @@ export class Transport {
     this.nationalStreamRejected = true;
     this.isSessionReady = false;
     this.trustedNationalStart = null;
-    revokeTrustedNationalPrivateCapability(this.eventBus, this.lobbyConfig.gameID);
+    revokeTrustedNationalPrivateCapability(
+      this.eventBus,
+      this.lobbyConfig.gameID,
+    );
     this.dropBufferedNationalIntents();
   }
 

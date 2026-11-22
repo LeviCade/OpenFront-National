@@ -134,7 +134,11 @@ export class GameView implements GameLike {
   private _trustedSpawnReady = false;
 
   public trustedSpawnReady(): boolean {
-    return this._trustedNationalProjection && this._trustedSpawnReady && this.inSpawnPhase();
+    return (
+      this._trustedNationalProjection &&
+      this._trustedSpawnReady &&
+      this.inSpawnPhase()
+    );
   }
 
   public setTrustedSpawnReady(ready: boolean): void {
@@ -148,7 +152,8 @@ export class GameView implements GameLike {
     this._trustedSpawnReady = false;
     this.trustedPendingTiles = [];
     for (const [tile, terrain] of this.trustedOriginalTerrain) {
-      if (this._map.updateTile(tile, terrain << 16)) this.trustedPendingTerrain.push(tile);
+      if (this._map.updateTile(tile, terrain << 16))
+        this.trustedPendingTerrain.push(tile);
     }
     this.trustedOriginalTerrain.clear();
     this._map.tileStateBuffer().fill(0);
@@ -163,14 +168,19 @@ export class GameView implements GameLike {
     if (!this._trustedNationalProjection || !removed.length) return;
     const removedSet = new Set(removed);
     for (const tile of removed) {
-      const terrain = this.trustedOriginalTerrain.get(tile) ?? this._map.terrainByte(tile);
-      if (this._map.updateTile(tile, terrain << 16)) this.trustedPendingTerrain.push(tile);
+      const terrain =
+        this.trustedOriginalTerrain.get(tile) ?? this._map.terrainByte(tile);
+      if (this._map.updateTile(tile, terrain << 16))
+        this.trustedPendingTerrain.push(tile);
       this.trustedOriginalTerrain.delete(tile);
       this.trustedPendingTiles.push(tile);
     }
     for (const player of this._players.values()) {
       const name = player.nameData;
-      if (name && removedSet.has(this._map.ref(Math.floor(name.x), Math.floor(name.y)))) {
+      if (
+        name &&
+        removedSet.has(this._map.ref(Math.floor(name.x), Math.floor(name.y)))
+      ) {
         player.nameData = undefined;
         this._namesDirty = true;
       }
@@ -305,7 +315,9 @@ export class GameView implements GameLike {
     }
     if (!update.packedUnitUpdates) return;
     const kept: number[] = [];
-    const currentMarkers = new Map(delta.units.map((marker) => [marker.id, marker]));
+    const currentMarkers = new Map(
+      delta.units.map((marker) => [marker.id, marker]),
+    );
     const buffer = update.packedUnitUpdates;
     for (let offset = 0; offset < buffer.length; offset += UNIT_UPDATE_STRIDE) {
       const decoded = new PackedUnitUpdateDecoder(buffer, offset);
@@ -373,30 +385,54 @@ export class GameView implements GameLike {
       !this.isValidRef(tile) ||
       !this.isLand(tile) ||
       this.trustedSight?.tileStatus(tile) !== "observed"
-    ) return undefined;
+    )
+      return undefined;
     const actor = this.myPlayer();
-    if (!actor || actor.id() !== playerID || !actor.isAlive() || !actor.hasSpawned() || actor.troops() <= 0)
+    if (
+      !actor ||
+      actor.id() !== playerID ||
+      !actor.isAlive() ||
+      !actor.hasSpawned() ||
+      actor.troops() <= 0
+    )
       return undefined;
     const smallID = this.ownerID(tile);
     if (smallID === 0) return null;
     const targetID = this.smallIDToID.get(smallID);
-    if (!targetID || targetID === playerID || !this._players.get(targetID)?.isAlive())
+    if (
+      !targetID ||
+      targetID === playerID ||
+      !this._players.get(targetID)?.isAlive()
+    )
       return undefined;
     const politics = this.nationalPolitics();
     const conflicts = this.nationalConflicts();
-    if (!politics || !conflicts || conflicts.recipientId !== playerID ||
-        this._nationalConflictsTick !== this.ticks() || this._nationalPoliticsTick !== this.ticks())
+    if (
+      !politics ||
+      !conflicts ||
+      conflicts.recipientId !== playerID ||
+      this._nationalConflictsTick !== this.ticks() ||
+      this._nationalPoliticsTick !== this.ticks()
+    )
       return undefined;
-    const empireOf = (id: PlayerID) => politics.empires.find((empire) => empire.memberIds.includes(id))?.id;
+    const empireOf = (id: PlayerID) =>
+      politics.empires.find((empire) => empire.memberIds.includes(id))?.id;
     const actorEmpire = empireOf(playerID);
     const targetEmpire = empireOf(targetID);
-    if (actorEmpire !== undefined && actorEmpire === targetEmpire) return undefined;
-    const contains = (side: { kind: "nation" | "empire"; id: string }, id: PlayerID, empire: string | undefined) =>
-      side.kind === "nation" ? side.id === id : side.id === empire;
-    const opposed = conflicts.layers.some((layer) =>
-      layer.endedTick === null &&
-      ((contains(layer.first, playerID, actorEmpire) && contains(layer.second, targetID, targetEmpire)) ||
-        (contains(layer.second, playerID, actorEmpire) && contains(layer.first, targetID, targetEmpire))),
+    if (actorEmpire !== undefined && actorEmpire === targetEmpire)
+      return undefined;
+    const contains = (
+      side: { kind: "nation" | "empire"; id: string },
+      id: PlayerID,
+      empire: string | undefined,
+    ) => (side.kind === "nation" ? side.id === id : side.id === empire);
+    const opposed = conflicts.layers.some(
+      (layer) =>
+        layer.endedTick === null &&
+        ((contains(layer.first, playerID, actorEmpire) &&
+          contains(layer.second, targetID, targetEmpire)) ||
+          (contains(layer.second, playerID, actorEmpire) &&
+            contains(layer.first, targetID, targetEmpire))),
     );
     return opposed ? targetID : undefined;
   }
@@ -838,8 +874,13 @@ export class GameView implements GameLike {
       // Public-only pre-spawn self identity has no private/static client header.
       // Wait for the first full authenticated own update, rather than creating
       // a fake local player which cannot later be promoted by a partial diff.
-      if (this._trustedNationalProjection && !existing &&
-          pu.id === this.trustedPrincipal && pu.clientID !== this._myClientID) return;
+      if (
+        this._trustedNationalProjection &&
+        !existing &&
+        pu.id === this.trustedPrincipal &&
+        pu.clientID !== this._myClientID
+      )
+        return;
       if (
         this._trustedNationalProjection &&
         (pu.id !== this.trustedPrincipal || pu.troops === undefined)
@@ -1059,7 +1100,11 @@ export class GameView implements GameLike {
     // Trail update: walk active trail-type units and stamp/decay.
     this._trailIdsScratch.length = 0;
     for (const u of this._units.values()) {
-      if (!this._trustedNationalProjection && u.isActive() && TRAIL_TYPES.has(u.type())) {
+      if (
+        !this._trustedNationalProjection &&
+        u.isActive() &&
+        TRAIL_TYPES.has(u.type())
+      ) {
         this._trailIdsScratch.push(u.id());
       }
     }
@@ -1489,7 +1534,9 @@ export class GameView implements GameLike {
   }
   isSpectator(): boolean {
     return (
-      (this._trustedNationalProjection && !this._trustedProjectionReady && !this.trustedSpawnReady()) ||
+      (this._trustedNationalProjection &&
+        !this._trustedProjectionReady &&
+        !this.trustedSpawnReady()) ||
       !this.myPlayer()?.isAlive() ||
       this._config.isReplay()
     );

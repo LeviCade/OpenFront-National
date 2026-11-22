@@ -1,8 +1,8 @@
-import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
-import { decodeNationalObserverNativeUnits } from "@openfront/shared/NationalObserverNativeWire";
 import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
+import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { simpleHash } from "@openfront/engine-lib/Util";
+import { decodeNationalObserverNativeUnits } from "@openfront/shared/NationalObserverNativeWire";
 /**
  * Reader for E3's authenticated per-recipient NATIONAL view ONLY.
  * This module never runs a GameRunner, simulates turns or loads private state.
@@ -226,46 +226,105 @@ export function parseTrustedNationalProjection(
  */
 /** E3 intentionally omits the private map for unspawned or eliminated seats.
  * This restricted public frame MUST NOT authorize a private map or commands. */
-export function assertTrustedPublicProjection(packet: TrustedNationalProjection, actor?: string, clientID?: string): void {
-  if (packet.nationalObserverMap !== undefined ||
-      !Array.isArray(packet.packedTileUpdates) || packet.packedTileUpdates.length !== 0 ||
-      ["packedUnitUpdates", "packedPlayerUpdates", "packedMissileTimers", "playerNameViewData",
-       "nationalCommandResults", "nationalAccessionOffers"].some((key) => packet[key] !== undefined) ||
-      !record(packet.updates))
+export function assertTrustedPublicProjection(
+  packet: TrustedNationalProjection,
+  actor?: string,
+  clientID?: string,
+): void {
+  if (
+    packet.nationalObserverMap !== undefined ||
+    !Array.isArray(packet.packedTileUpdates) ||
+    packet.packedTileUpdates.length !== 0 ||
+    [
+      "packedUnitUpdates",
+      "packedPlayerUpdates",
+      "packedMissileTimers",
+      "playerNameViewData",
+      "nationalCommandResults",
+      "nationalAccessionOffers",
+    ].some((key) => packet[key] !== undefined) ||
+    !record(packet.updates)
+  )
     throw new Error("NATIONAL unauthorized public-only projection");
-  const allowed = new Set(["type", "id", "name", "displayName", "nationFlag", "playerType", "smallID", "isAlive", "tilesOwned"]);
+  const allowed = new Set([
+    "type",
+    "id",
+    "name",
+    "displayName",
+    "nationFlag",
+    "playerType",
+    "smallID",
+    "isAlive",
+    "tilesOwned",
+  ]);
   const players = packet.updates[GameUpdateType.Player];
   const seen = new Set<string>();
-  if (!Array.isArray(players)) throw new Error("NATIONAL malformed public roster");
+  if (!Array.isArray(players))
+    throw new Error("NATIONAL malformed public roster");
   for (const player of players) {
-    if (!record(player) || player.type !== GameUpdateType.Player ||
-        typeof player.id !== "string" || seen.has(player.id))
+    if (
+      !record(player) ||
+      player.type !== GameUpdateType.Player ||
+      typeof player.id !== "string" ||
+      seen.has(player.id)
+    )
       throw new Error("NATIONAL invalid public roster");
     seen.add(player.id);
-    const ownIdentity = actor !== undefined && clientID !== undefined &&
-      player.id === actor && player.clientID === clientID;
-    if (Object.keys(player).some((key) => !allowed.has(key) &&
-      !(ownIdentity && (key === "clientID" || key === "hasSpawned"))) ||
-      (ownIdentity && typeof player.hasSpawned !== "boolean"))
-      throw new Error("NATIONAL public roster contains unauthorized player fields");
+    const ownIdentity =
+      actor !== undefined &&
+      clientID !== undefined &&
+      player.id === actor &&
+      player.clientID === clientID;
+    if (
+      Object.keys(player).some(
+        (key) =>
+          !allowed.has(key) &&
+          !(ownIdentity && (key === "clientID" || key === "hasSpawned")),
+      ) ||
+      (ownIdentity && typeof player.hasSpawned !== "boolean")
+    )
+      throw new Error(
+        "NATIONAL public roster contains unauthorized player fields",
+      );
   }
   const conflict = packet.nationalConflicts;
-  if (conflict !== undefined && (!record(conflict) || conflict.recipientId !== "" ||
-      !Array.isArray(conflict.motions) || conflict.motions.length !== 0))
+  if (
+    conflict !== undefined &&
+    (!record(conflict) ||
+      conflict.recipientId !== "" ||
+      !Array.isArray(conflict.motions) ||
+      conflict.motions.length !== 0)
+  )
     throw new Error("NATIONAL private conflict data without active sight");
 }
 
 /** Only the explicit E1 public terminal result may be displayed as victory. */
-export function readTrustedVictory(packet: TrustedNationalProjection, actor: string): "victory" | "defeat" | "unresolved" {
+export function readTrustedVictory(
+  packet: TrustedNationalProjection,
+  actor: string,
+): "victory" | "defeat" | "unresolved" {
   const politics = packet.nationalPolitics;
   if (!record(politics) || !record(politics.victory)) return "unresolved";
   const victory = politics.victory;
-  if (victory.resolved !== true || victory.sovereignPowerCount !== 1 ||
-      !Array.isArray(victory.prizes) || !victory.prizes.length ||
-      victory.prizes.some((p) => !record(p) || typeof p.nationId !== "string" ||
-        (p.kind !== "SovereignVictor" && p.kind !== "ImperialVictor" && p.kind !== "EmpireVictor") ||
-        (p.kind !== "SovereignVictor" && typeof p.empireId !== "string"))) return "unresolved";
-  return victory.prizes.some((p) => p.nationId === actor) ? "victory" : "defeat";
+  if (
+    victory.resolved !== true ||
+    victory.sovereignPowerCount !== 1 ||
+    !Array.isArray(victory.prizes) ||
+    !victory.prizes.length ||
+    victory.prizes.some(
+      (p) =>
+        !record(p) ||
+        typeof p.nationId !== "string" ||
+        (p.kind !== "SovereignVictor" &&
+          p.kind !== "ImperialVictor" &&
+          p.kind !== "EmpireVictor") ||
+        (p.kind !== "SovereignVictor" && typeof p.empireId !== "string"),
+    )
+  )
+    return "unresolved";
+  return victory.prizes.some((p) => p.nationId === actor)
+    ? "victory"
+    : "defeat";
 }
 
 export function materializeTrustedNationalUpdate(
@@ -312,9 +371,7 @@ export function materializeTrustedNationalUpdate(
     tick: packet.tick,
     updates: safeUpdates,
     packedTileUpdates: Uint32Array.from(visibleTilePairs),
-    ...(units === undefined
-      ? {}
-      : { packedUnitUpdates: units }),
+    ...(units === undefined ? {} : { packedUnitUpdates: units }),
     ...(players === undefined
       ? {}
       : { packedPlayerUpdates: Float64Array.from(players) }),

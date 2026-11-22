@@ -30,7 +30,14 @@ const self = "nation-a";
 const enemy = "nation-b";
 const ownTile = 22;
 const enemyTile = 33;
-const marker = { id: 19, ownerId: enemy, nativeOwnerSmallId: 2, nativeType: UnitType.Warship, kind: "warship", tile: enemyTile };
+const marker = {
+  id: 19,
+  ownerId: enemy,
+  nativeOwnerSmallId: 2,
+  nativeType: UnitType.Warship,
+  kind: "warship",
+  tile: enemyTile,
+};
 const land = 128;
 
 function page(tick: number, overrides: Record<string, unknown> = {}) {
@@ -67,13 +74,21 @@ function page(tick: number, overrides: Record<string, unknown> = {}) {
     visibleBorders: [],
     ...overrides,
   };
-  return { ...result, tilePageSlots: result.tiles.length, unitPageSlots: result.units.length,
-    tileSweepSlots: result.tiles.length, unitSweepSlots: result.units.length };
+  return {
+    ...result,
+    tilePageSlots: result.tiles.length,
+    unitPageSlots: result.units.length,
+    tileSweepSlots: result.tiles.length,
+    unitSweepSlots: result.units.length,
+  };
 }
 
 function setup() {
   const config = stubConfig({
-    gameConfig: () => ({ nationalMode: true }) as ReturnType<ReturnType<typeof stubConfig>["gameConfig"]>,
+    gameConfig: () =>
+      ({ nationalMode: true }) as ReturnType<
+        ReturnType<typeof stubConfig>["gameConfig"]
+      >,
   });
   const view = makeGameView({
     trustedProjection: true,
@@ -87,12 +102,17 @@ function setup() {
     nationalConflicts: {
       version: 1,
       recipientId: self,
-      layers: [{
-        id: "war-a-b", scope: "national",
-        first: { kind: "nation", id: self },
-        second: { kind: "nation", id: enemy },
-        declaredBy: self, startedTick: 1, endedTick: null,
-      }],
+      layers: [
+        {
+          id: "war-a-b",
+          scope: "national",
+          first: { kind: "nation", id: self },
+          second: { kind: "nation", id: enemy },
+          declaredBy: self,
+          startedTick: 1,
+          endedTick: null,
+        },
+      ],
       motions: [],
     },
   });
@@ -117,19 +137,64 @@ function setup() {
 
 describe("C4 E4: native recipient view revocation", () => {
   it("accepts public-only pre-spawn data, rejects private lanes, and requires explicit victory", () => {
-    const packet = { tick: 1, packedTileUpdates: [], updates: { [GameUpdateType.Player]: [] },
+    const packet = {
+      tick: 1,
+      packedTileUpdates: [],
+      updates: { [GameUpdateType.Player]: [] },
       nationalPolitics: { empires: [], victory: null },
-      nationalConflicts: { recipientId: "", motions: [], layers: [] } };
+      nationalConflicts: { recipientId: "", motions: [], layers: [] },
+    };
     expect(() => assertTrustedPublicProjection(packet)).not.toThrow();
-    const own = { type: GameUpdateType.Player, id: self, clientID: "client-a", smallID: 1, name: "Self", playerType: PlayerType.Human, hasSpawned: false };
+    const own = {
+      type: GameUpdateType.Player,
+      id: self,
+      clientID: "client-a",
+      smallID: 1,
+      name: "Self",
+      playerType: PlayerType.Human,
+      hasSpawned: false,
+    };
     const bound = { ...packet, updates: { [GameUpdateType.Player]: [own] } };
-    expect(() => assertTrustedPublicProjection(bound, self, "client-a")).not.toThrow();
-    expect(() => assertTrustedPublicProjection(bound, enemy, "client-b")).toThrow();
-    expect(() => assertTrustedPublicProjection({ ...bound, updates: { [GameUpdateType.Player]: [{ ...own, troops: 100 }] } }, self, "client-a")).toThrow();
-    expect(() => assertTrustedPublicProjection({ ...packet, packedPlayerUpdates: [1, 2, 3, 4, 5] })).toThrow();
-    expect(() => assertTrustedPublicProjection({ ...packet, nationalConflicts: { recipientId: self, motions: [], layers: [] } })).toThrow();
+    expect(() =>
+      assertTrustedPublicProjection(bound, self, "client-a"),
+    ).not.toThrow();
+    expect(() =>
+      assertTrustedPublicProjection(bound, enemy, "client-b"),
+    ).toThrow();
+    expect(() =>
+      assertTrustedPublicProjection(
+        {
+          ...bound,
+          updates: { [GameUpdateType.Player]: [{ ...own, troops: 100 }] },
+        },
+        self,
+        "client-a",
+      ),
+    ).toThrow();
+    expect(() =>
+      assertTrustedPublicProjection({
+        ...packet,
+        packedPlayerUpdates: [1, 2, 3, 4, 5],
+      }),
+    ).toThrow();
+    expect(() =>
+      assertTrustedPublicProjection({
+        ...packet,
+        nationalConflicts: { recipientId: self, motions: [], layers: [] },
+      }),
+    ).toThrow();
     expect(readTrustedVictory(packet, self)).toBe("unresolved");
-    const resolved = { ...packet, nationalPolitics: { empires: [], victory: { resolved: true, sovereignPowerCount: 1, prizes: [{ kind: "SovereignVictor", nationId: self }] } } };
+    const resolved = {
+      ...packet,
+      nationalPolitics: {
+        empires: [],
+        victory: {
+          resolved: true,
+          sovereignPowerCount: 1,
+          prizes: [{ kind: "SovereignVictor", nationId: self }],
+        },
+      },
+    };
     expect(readTrustedVictory(resolved, self)).toBe("victory");
     expect(readTrustedVictory(resolved, enemy)).toBe("defeat");
     const { view, update } = setup();
@@ -149,10 +214,32 @@ describe("C4 E4: native recipient view revocation", () => {
 
   it("draws authorized ownership and packed native units, deletes a unit without fake death, and refuses stale attack dispatch", () => {
     const { view, update, receiver } = setup();
-    const packed = packUnitUpdates([makeUnitUpdate({ id: marker.id, ownerID: 2, pos: enemyTile, lastPos: enemyTile, unitType: UnitType.Warship, targetable: false, level: 0 })]).packedUnitUpdates;
-    const packet = parseTrustedNationalProjection(JSON.stringify({ tick: 1, updates: { [GameUpdateType.Player]: [] }, packedTileUpdates: [], packedUnitUpdates: Array.from(packed), nationalObserverMap: page(1) }), 1);
+    const packed = packUnitUpdates([
+      makeUnitUpdate({
+        id: marker.id,
+        ownerID: 2,
+        pos: enemyTile,
+        lastPos: enemyTile,
+        unitType: UnitType.Warship,
+        targetable: false,
+        level: 0,
+      }),
+    ]).packedUnitUpdates;
+    const packet = parseTrustedNationalProjection(
+      JSON.stringify({
+        tick: 1,
+        updates: { [GameUpdateType.Player]: [] },
+        packedTileUpdates: [],
+        packedUnitUpdates: Array.from(packed),
+        nationalObserverMap: page(1),
+      }),
+      1,
+    );
     const first = receiver.acceptProjection(packet);
-    view.reconcileTrustedUnitVisibility(first.clearAllUnits, first.removedUnitIds);
+    view.reconcileTrustedUnitVisibility(
+      first.clearAllUnits,
+      first.removedUnitIds,
+    );
     update.packedTileUpdates = new Uint32Array([
       ownTile,
       1 | (land << 16),
@@ -233,11 +320,24 @@ describe("C4 E4: native recipient view revocation", () => {
   it("publishes sparse tile revocation without erasing independently sighted units or unchanged tiles", () => {
     const { view, update, receiver } = setup();
     const first = receiver.accept(page(1), 1);
-    update.packedTileUpdates = new Uint32Array([ownTile, 1 | (land << 16), enemyTile, 2 | (land << 16)]);
+    update.packedTileUpdates = new Uint32Array([
+      ownTile,
+      1 | (land << 16),
+      enemyTile,
+      2 | (land << 16),
+    ]);
     view.applyTrustedUnitPage(update, first, receiver);
     view.markTrustedProjectionReady();
     view.update(update);
-    const next = receiver.accept(page(2, { tiles: [[ownTile, 1, land, 0]], units: [marker], tileRemovedRefs: [enemyTile], tilePartial: true }), 2);
+    const next = receiver.accept(
+      page(2, {
+        tiles: [[ownTile, 1, land, 0]],
+        units: [marker],
+        tileRemovedRefs: [enemyTile],
+        tilePartial: true,
+      }),
+      2,
+    );
     expect(next.usable).toBe(true);
     expect(next.tilePartial).toBe(true);
     view.reconcileTrustedTileVisibility(next.removedTileRefs);
@@ -258,12 +358,25 @@ describe("C4 E4: native recipient view revocation", () => {
 
   it("offers neutral expansion only on observed land and prevents attacking before WAR or after peace", async () => {
     const { view, update, receiver } = setup();
-    const first = receiver.accept(page(1, {
-      tiles: [[ownTile, 1, land, 0], [enemyTile, 2, land, 0], [34, 0, land, 0]],
-    }), 1);
+    const first = receiver.accept(
+      page(1, {
+        tiles: [
+          [ownTile, 1, land, 0],
+          [enemyTile, 2, land, 0],
+          [34, 0, land, 0],
+        ],
+      }),
+      1,
+    );
     update.packedTileUpdates = new Uint32Array([
-      ownTile, 1 | (land << 16), enemyTile, 2 | (land << 16),
-      34, land << 16, 35, land << 16,
+      ownTile,
+      1 | (land << 16),
+      enemyTile,
+      2 | (land << 16),
+      34,
+      land << 16,
+      35,
+      land << 16,
     ]);
     // The underlying static terrain may include an unseen land tile (35).
     view.applyTrustedUnitPage(update, first, receiver);
@@ -276,11 +389,18 @@ describe("C4 E4: native recipient view revocation", () => {
     const peace = makeEmptyGu(2);
     Object.assign(peace, {
       nationalPolitics: { empires: [], warnings: [] },
-      nationalConflicts: { version: 1, recipientId: self, layers: [], motions: [] },
+      nationalConflicts: {
+        version: 1,
+        recipientId: self,
+        layers: [],
+        motions: [],
+      },
     });
     view.update(peace);
     expect(view.trustedAttackTarget(self, enemyTile)).toBeUndefined();
-    expect((await view.player(self).actions(enemyTile, null)).canAttack).toBe(false);
+    expect((await view.player(self).actions(enemyTile, null)).canAttack).toBe(
+      false,
+    );
     expect(view.trustedAttackTarget(self, 34)).toBeNull();
   });
 

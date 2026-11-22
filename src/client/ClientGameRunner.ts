@@ -1230,27 +1230,57 @@ export class ClientGameRunner {
       if (observerMap === null) {
         // The authoritative host emits public-only frames before spawn and after
         // elimination. Missing geography during an active life remains fatal.
-        assertTrustedPublicProjection(event.projection, this.trustedPrincipal ?? undefined, this.clientID ?? undefined);
-        const update = materializeTrustedNationalUpdate(event.projection, this.trustedLastTick);
-        const actor = update.updates[GameUpdateType.Player].find((p) => p.id === this.trustedPrincipal);
-        const victory = readTrustedVictory(event.projection, this.trustedPrincipal!);
-        const eliminated = actor?.isAlive === false || this.myPlayer?.isAlive() === false;
-        if (this.myPlayer?.hasSpawned() && !eliminated && victory === "unresolved")
+        assertTrustedPublicProjection(
+          event.projection,
+          this.trustedPrincipal ?? undefined,
+          this.clientID ?? undefined,
+        );
+        const update = materializeTrustedNationalUpdate(
+          event.projection,
+          this.trustedLastTick,
+        );
+        const actor = update.updates[GameUpdateType.Player].find(
+          (p) => p.id === this.trustedPrincipal,
+        );
+        const victory = readTrustedVictory(
+          event.projection,
+          this.trustedPrincipal!,
+        );
+        const eliminated =
+          actor?.isAlive === false || this.myPlayer?.isAlive() === false;
+        if (
+          this.myPlayer?.hasSpawned() &&
+          !eliminated &&
+          victory === "unresolved"
+        )
           throw new Error("NATIONAL active seat lost mandatory private map");
         const hadPrivate = this.gameView.trustedProjectionReady();
         if (hadPrivate) this.revokeTrustedSight();
         this.gameView.update(update);
-        this.myPlayer = this.clientID ? this.gameView.playerByClientID(this.clientID) : null;
-        const spawn = this.gameView.inSpawnPhase() && victory === "unresolved" && actor?.hasSpawned !== true;
+        this.myPlayer = this.clientID
+          ? this.gameView.playerByClientID(this.clientID)
+          : null;
+        const spawn =
+          this.gameView.inSpawnPhase() &&
+          victory === "unresolved" &&
+          actor?.hasSpawned !== true;
         this.gameView.setTrustedSpawnReady(spawn);
         this.trustedLastTick = update.tick;
         if (this.trustedStatus) {
-          this.trustedStatus.dataset.trustedNationalMap = spawn ? "spawn" : "public";
-          this.trustedStatus.dataset.trustedNationalLife = spawn ? "unspawned" : "inactive";
+          this.trustedStatus.dataset.trustedNationalMap = spawn
+            ? "spawn"
+            : "public";
+          this.trustedStatus.dataset.trustedNationalLife = spawn
+            ? "unspawned"
+            : "inactive";
           this.trustedStatus.dataset.trustedNationalVictory = victory;
-          this.trustedStatus.textContent = spawn ? "NATIONAL · Choose a spawn location" :
-            victory === "unresolved" ? "NATIONAL · No active nation — observing public state" :
-            victory === "victory" ? "NATIONAL · Victory confirmed" : "NATIONAL · Defeat confirmed";
+          this.trustedStatus.textContent = spawn
+            ? "NATIONAL · Choose a spawn location"
+            : victory === "unresolved"
+              ? "NATIONAL · No active nation — observing public state"
+              : victory === "victory"
+                ? "NATIONAL · Victory confirmed"
+                : "NATIONAL · Defeat confirmed";
         }
         this.webglBuilder?.update(this.gameView);
         this.renderer.tick();
@@ -1285,7 +1315,12 @@ export class ClientGameRunner {
       }
       if (delta.clearAllTiles) this.gameView.resetTrustedTileSight();
       this.gameView.reconcileTrustedTileVisibility(delta.removedTileRefs);
-      if (delta.clearAllTiles || delta.removedTileRefs.length || delta.clearAllUnits || delta.removedUnitIds.length) {
+      if (
+        delta.clearAllTiles ||
+        delta.removedTileRefs.length ||
+        delta.clearAllUnits ||
+        delta.removedUnitIds.length
+      ) {
         this.eventBus.emit(new TrustedNationalSightRevokedEvent());
         this.eventBus.emit(new NationalMapTargetSelectedEvent(null));
       }
@@ -1306,29 +1341,53 @@ export class ClientGameRunner {
       const pageComplete =
         sweepReady && this.myPlayer?.id() === this.trustedPrincipal;
       this.gameView.setTrustedProjectionReady(pageComplete);
-      const spawnReady = this.myPlayer?.id() === this.trustedPrincipal && this.gameView.inSpawnPhase();
+      const spawnReady =
+        this.myPlayer?.id() === this.trustedPrincipal &&
+        this.gameView.inSpawnPhase();
       this.gameView.setTrustedSpawnReady(spawnReady);
       this.trustedLastTick = update.tick;
       if (this.trustedStatus) {
         this.trustedStatus.dataset.trustedNationalMap = pageComplete
           ? "visible"
-          : spawnReady ? "spawn" : "paging";
-        this.trustedStatus.dataset.trustedNationalTiles = delta.tilePartial ? "partial" : "synchronized";
-        this.trustedStatus.dataset.trustedNationalUnits = delta.unitPartial || delta.unitOverflow ? "partial" : "synchronized";
-        this.trustedStatus.dataset.trustedNationalTileSweep = delta.sweepComplete ? "complete" : "paging";
-        this.trustedStatus.dataset.trustedNationalUnitSweep = delta.unitSweepComplete ? "complete" : "paging";
-        const victory = readTrustedVictory(event.projection, this.trustedPrincipal!);
+          : spawnReady
+            ? "spawn"
+            : "paging";
+        this.trustedStatus.dataset.trustedNationalTiles = delta.tilePartial
+          ? "partial"
+          : "synchronized";
+        this.trustedStatus.dataset.trustedNationalUnits =
+          delta.unitPartial || delta.unitOverflow ? "partial" : "synchronized";
+        this.trustedStatus.dataset.trustedNationalTileSweep =
+          delta.sweepComplete ? "complete" : "paging";
+        this.trustedStatus.dataset.trustedNationalUnitSweep =
+          delta.unitSweepComplete ? "complete" : "paging";
+        const victory = readTrustedVictory(
+          event.projection,
+          this.trustedPrincipal!,
+        );
         this.trustedStatus.dataset.trustedNationalVictory = victory;
-        const defeated = pageComplete && !this.gameView.inSpawnPhase() &&
+        const defeated =
+          pageComplete &&
+          !this.gameView.inSpawnPhase() &&
           this.myPlayer?.isAlive() === false;
-        this.trustedStatus.dataset.trustedNationalLife = defeated ? "inactive" : pageComplete ? "active" : "unverified";
-        const observedAttacks = pageComplete ? (this.myPlayer?.outgoingAttacks().length ?? 0) : 0;
+        this.trustedStatus.dataset.trustedNationalLife = defeated
+          ? "inactive"
+          : pageComplete
+            ? "active"
+            : "unverified";
+        const observedAttacks = pageComplete
+          ? (this.myPlayer?.outgoingAttacks().length ?? 0)
+          : 0;
         this.trustedStatus.textContent =
           "NATIONAL · Tick " +
           update.tick +
           (pageComplete
-            ? (delta.tilePartial ? " · Authorized partial terrain" : " · Visible terrain synchronized")
-            : spawnReady ? " · Choose a spawn location" : " · Loading visible terrain…") +
+            ? delta.tilePartial
+              ? " · Authorized partial terrain"
+              : " · Visible terrain synchronized"
+            : spawnReady
+              ? " · Choose a spawn location"
+              : " · Loading visible terrain…") +
           (delta.unitOverflow || delta.unitPartial
             ? " · Partial unit intelligence"
             : "") +
@@ -1337,9 +1396,15 @@ export class ClientGameRunner {
           " observed units" +
           " · Your troops " +
           Math.floor(observerMap.ownResources.troops).toLocaleString() +
-          (pageComplete ? " · Active outgoing attacks: " + observedAttacks : "") +
+          (pageComplete
+            ? " · Active outgoing attacks: " + observedAttacks
+            : "") +
           (defeated ? " · Nation inactive — no further commands" : "") +
-          (victory === "victory" ? " · Victory confirmed" : victory === "defeat" ? " · Defeat confirmed" : "");
+          (victory === "victory"
+            ? " · Victory confirmed"
+            : victory === "defeat"
+              ? " · Defeat confirmed"
+              : "");
       }
       this.webglBuilder?.update(this.gameView);
       this.renderer.tick();
@@ -1833,7 +1898,8 @@ export class ClientGameRunner {
         if (
           this.trustedNationalProjection &&
           (!this.myPlayer ||
-            this.gameView.trustedAttackTarget(this.myPlayer.id(), tile) !== clickedOwner)
+            this.gameView.trustedAttackTarget(this.myPlayer.id(), tile) !==
+              clickedOwner)
         )
           return;
         if (actions.canAttack) {
@@ -2021,7 +2087,8 @@ export class ClientGameRunner {
         if (
           this.trustedNationalProjection &&
           (!this.myPlayer ||
-            this.gameView.trustedAttackTarget(this.myPlayer.id(), tile) !== clickedOwner)
+            this.gameView.trustedAttackTarget(this.myPlayer.id(), tile) !==
+              clickedOwner)
         )
           return;
         if (actions.canAttack) {

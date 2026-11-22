@@ -12,7 +12,11 @@ import {
   type NationalPrivateCapabilityContext,
   type TrustedNationalStartLike,
 } from "../../../src/client/NationalPrivateCapability";
-import { SendAttackIntentEvent, SendSpawnIntentEvent, Transport } from "../../../src/client/Transport";
+import {
+  SendAttackIntentEvent,
+  SendSpawnIntentEvent,
+  Transport,
+} from "../../../src/client/Transport";
 import { TrustedNationalProjectionRejectedEvent } from "../../../src/client/TrustedNationalSession";
 import type { GameView } from "../../../src/client/view";
 
@@ -75,21 +79,36 @@ describe("Class Five E4 real Private NATIONAL human controls", () => {
 
   it("revokes the real transport send path on a rejected matching projection", () => {
     const { bus, start, packet, context } = session();
-    const transport = new Transport({
-      gameID: start.gameID,
-      gameStartInfo: start,
-      spectator: false,
-    } as LobbyConfig, bus);
+    const transport = new Transport(
+      {
+        gameID: start.gameID,
+        gameStartInfo: start,
+        spectator: false,
+      } as LobbyConfig,
+      bus,
+    );
     const send = vi.fn();
     Object.assign(transport, {
       isSessionReady: true,
       socket: { readyState: WebSocket.OPEN, send },
-      trustedNationalStart: { gameStartInfo: start, clientID: packet.myClientID },
+      trustedNationalStart: {
+        gameStartInfo: start,
+        clientID: packet.myClientID,
+      },
       buffer: [{ type: "intent", intent: { type: "spawn", tile: 3 } }],
     });
-    const internal = transport as unknown as { buffer: unknown[]; isSessionReady: boolean; nationalDiplomacyWireEnabled(): boolean; sendMsg: (msg: unknown) => void };
-    const sendMessage = vi.spyOn(internal, "sendMsg").mockImplementation(() => {});
-    expect(acceptTrustedNationalPrivateCapability(bus, packet, context)).toBe(true);
+    const internal = transport as unknown as {
+      buffer: unknown[];
+      isSessionReady: boolean;
+      nationalDiplomacyWireEnabled(): boolean;
+      sendMsg: (msg: unknown) => void;
+    };
+    const sendMessage = vi
+      .spyOn(internal, "sendMsg")
+      .mockImplementation(() => {});
+    expect(acceptTrustedNationalPrivateCapability(bus, packet, context)).toBe(
+      true,
+    );
     bus.emit(new TrustedNationalProjectionRejectedEvent("unrelated-game"));
     bus.emit(new SendAttackIntentEvent("enemy", 100));
     expect(sendMessage).toHaveBeenCalledTimes(1);
