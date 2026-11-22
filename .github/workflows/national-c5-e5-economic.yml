@@ -34,6 +34,7 @@ jobs:
       - run: npm run inst
       - run: npm run typecheck
       - name: Economic AI and inherited transaction scenarios
+        if: success() || failure()
         run: |
           npx --no-install vitest run --project node \
             tests/national/C5Class1E5EconomicAI.test.ts \
@@ -46,10 +47,18 @@ jobs:
       - name: Changed-file format
         if: success() || failure()
         run: |
-          npx --no-install oxfmt --check \
-            packages/engine/src/national/ai/NationalEconomicPlanner.ts \
-            packages/engine/src/execution/NationExecution.ts \
+          FILES=(
+            packages/engine/src/national/ai/NationalEconomicPlanner.ts
+            packages/engine/src/execution/NationExecution.ts
             tests/national/C5Class1E5EconomicAI.test.ts
+          )
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            echo C5_E5_FORMAT_PATCH_BEGIN
+            git -c color.ui=false diff -- "${FILES[@]}"
+            echo C5_E5_FORMAT_PATCH_END
+            exit 1
+          fi
       - name: Changed-file lint
         if: success() || failure()
         run: |
