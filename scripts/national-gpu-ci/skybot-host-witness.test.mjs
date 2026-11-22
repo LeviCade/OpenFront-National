@@ -2,7 +2,6 @@ import { strict as assert } from "node:assert";
 import { createHash, generateKeyPairSync, sign, verify } from "node:crypto";
 import { test } from "vitest";
 import {
-  APPROVED_STAGING,
   REPOSITORY,
   REPOSITORY_ID,
   verifyControllerRun,
@@ -15,6 +14,7 @@ import {
   createHostPostflight,
 } from "./skybot-host-witness.mjs";
 
+const APPROVED_STAGING = "stage3/conductor4-class1-integration-20261121";
 const SHA = "a".repeat(40);
 const CHALLENGE = "b".repeat(64);
 const STAGE_SHA = SHA;
@@ -34,6 +34,13 @@ const expected = Object.freeze({
 });
 const proof = () => ({
   expected: { ...expected },
+  approval: {
+    repository: REPOSITORY,
+    repositoryId: REPOSITORY_ID,
+    approvedStagingRef: APPROVED_STAGING,
+    approvedStagingSha: SHA,
+    sourceSha: SHA,
+  },
   repository: {
     id: Number(REPOSITORY_ID),
     full_name: REPOSITORY,
@@ -42,6 +49,10 @@ const proof = () => ({
   run: {
     id: Number(expected.runId),
     run_attempt: 1,
+    head_sha: SHA,
+    head_branch: APPROVED_STAGING,
+    head_repository: { id: Number(REPOSITORY_ID) },
+    path: ".github/workflows/national-hardware-acceptance.yml",
     event: "workflow_dispatch",
     status: "in_progress",
     repository: { id: Number(REPOSITORY_ID), full_name: REPOSITORY },
@@ -52,6 +63,7 @@ const proof = () => ({
     id: Number(expected.jobId),
     run_id: Number(expected.runId),
     run_attempt: 1,
+    head_sha: SHA,
     status: "in_progress",
     runner_id: Number(expected.runnerId),
     runner_name: expected.runnerName,
@@ -122,6 +134,12 @@ test("source, repository ID, workflow attempt, runner ID, stage and writer must 
   for (const [section, key, value, reason] of [
     ["expected", "sourceSha", "f".repeat(40), "TRUSTED_RUN_CONTEXT_INCOMPLETE"],
     ["run", "run_attempt", 2, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    ["run", "head_sha", "f".repeat(40), "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    ["run", "head_branch", "main", "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    ["run", "path", ".github/workflows/other.yml", "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    ["job", "head_sha", "f".repeat(40), "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    ["job", "run_attempt", undefined, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    ["approval", "approvedStagingRef", "stage3/conductor3-class1-integration-20261121", "TRUSTED_RUN_CONTEXT_INCOMPLETE"],
     ["job", "runner_id", 222, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
     [
       "stage",
@@ -157,6 +175,17 @@ test("source, repository ID, workflow attempt, runner ID, stage and writer must 
   rejectWith("CONDUCTOR_SOURCE_ANCESTRY_UNVERIFIED", () =>
     verifyControllerRun(staleStage),
   );
+});
+
+test("new conductor requires independently replaced root policy, not a guest ref", () => {
+  const p = proof();
+  const next = "stage3/conductor5-class1-integration-20261122";
+  p.expected.approvedStagingRef = next;
+  p.run.head_branch = next;
+  p.stage.ref = "refs/heads/" + next;
+  rejectWith("TRUSTED_RUN_CONTEXT_INCOMPLETE", () => verifyControllerRun(p));
+  p.approval.approvedStagingRef = next;
+  assert.equal(verifyControllerRun(p).runStartedAtMs, NOW);
 });
 
 test("guest-published shader claims cannot replace out-of-guest controller observation", () => {

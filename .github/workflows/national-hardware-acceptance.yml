@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       candidate_sha:
-        description: "Exact 40-character SHA reachable from approved staging and descended from integration base"
+        description: "Exact reviewed staging SHA; dispatch the staging ref itself"
         type: string
         required: true
 
@@ -18,7 +18,7 @@ concurrency:
 jobs:
   gpu-browser:
     name: Four real game scenarios on one trusted GPU guest
-    if: github.event_name == 'workflow_dispatch' && github.repository == 'LeviCade/OpenFront-National' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'LeviCade/OpenFront-National' && startsWith(github.ref, 'refs/heads/stage3/conductor')
     runs-on: skybot-ci-gpu
     timeout-minutes: 55
     env:
@@ -29,13 +29,14 @@ jobs:
       EGL_PLATFORM: surfaceless
       CHROME_BIN: /opt/skybot-gpu-runtime/chrome-headless-shell-linux64/chrome-headless-shell
     steps:
-      - name: Confirm authorized default-branch dispatch
+      - name: Confirm exact staging dispatch (root policy independently enforced)
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = LeviCade/OpenFront-National
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
-          test "$GITHUB_REF" = refs/heads/main
+          [[ "$GITHUB_REF" =~ ^refs/heads/stage3/conductor[1-9][0-9]*-class[1-9][0-9]*-integration-[0-9]{8}$ ]]
+          test "$GITHUB_SHA" = "$NATIONAL_GPU_CANDIDATE_SHA"
           [[ "$NATIONAL_GPU_CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
             echo 'REFUSED: candidate must be an immutable lowercase 40-character SHA' >&2
             exit 1
@@ -49,9 +50,10 @@ jobs:
             exit 1
           }
 
-      - name: Checkout review base without retaining token
+      - name: Checkout exact dispatched SHA without retaining token
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -61,17 +63,16 @@ jobs:
           set -euo pipefail
           mkdir -p national-qa-artifacts/gpu
           BASE_SHA=ea186fa2580c5e1112e36cf1ddaa9119566a2abe
-          staging=refs/remotes/origin/stage3/conductor3-class1-integration-20261121
-          git fetch --no-tags origin \
-            '+refs/heads/stage3/conductor3-class1-integration-20261121:'"$staging"
+          staging="refs/remotes/origin/${GITHUB_REF#refs/heads/}"
+          git fetch --no-tags origin "+$GITHUB_REF:$staging"
           git cat-file -e "$NATIONAL_GPU_CANDIDATE_SHA^{commit}"
           git merge-base --is-ancestor "$BASE_SHA" "$NATIONAL_GPU_CANDIDATE_SHA" || {
-            echo 'REFUSED: candidate diverges from accepted Third Conductor first-class base' >&2
+            echo 'REFUSED: candidate diverges from accepted integration base' >&2
             exit 1
           }
           # No stale or earlier source: one exact reviewed Conductor staging tip.
           test "$(git rev-parse "$staging")" = "$NATIONAL_GPU_CANDIDATE_SHA" || {
-            echo 'REFUSED: candidate is not the exact Third Conductor first-class staging HEAD' >&2
+            echo 'REFUSED: candidate is not the exact dispatched staging HEAD' >&2
             exit 1
           }
           printf '%s\n' "$staging" > national-qa-artifacts/gpu/approved-staging-ref.txt
