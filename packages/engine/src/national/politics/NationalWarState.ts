@@ -96,7 +96,11 @@ export type NationalWarCommand = (
     }
   | { kind: "propose-peace"; motionId: string; warId: string }
   | { kind: "accept-peace"; motionId: string }
-) & { readonly policyVersion?: number };
+) & {
+  /** Trusted Executor admission stamp; absent only on legacy direct calls. */
+  readonly admissionEmpireId?: string | null;
+  readonly policyVersion?: number | null;
+};
 
 /** Read-only port for E2 attack acceptance and E3 authorized observation. */
 export interface NationalWarAuthority {
