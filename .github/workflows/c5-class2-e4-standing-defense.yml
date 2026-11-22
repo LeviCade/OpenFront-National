@@ -1,0 +1,64 @@
+name: C5 Class Two E4 — Standing Imperial Defense Acceptance
+on:
+  push:
+    branches:
+      - feature/c5-class2-e4-standing-imperial-defense-20261122
+  pull_request:
+    branches:
+      - stage3/conductor5-class2-integration-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c5-class2-e4-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  real-combat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact source SHA
+        env:
+          EXPECTED: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Full workspace typecheck
+        run: npm run typecheck
+      - name: Real invasion, standing policies and adverse authorization
+        if: success() || failure()
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/C5StandingImperialDefense.test.ts \
+            tests/national/C5ImperialWarPolicy.test.ts \
+            tests/national/C5ImperialCentralCombat.test.ts \
+            tests/national/DefenseLevyAtomic.test.ts \
+            tests/national/RoundEightLevyOverlap.test.ts \
+            tests/national/LiveLevyCombatRound5.test.ts
+      - name: Full workspace lint
+        if: success() || failure()
+        run: npm run lint
+      - name: Changed code formatting
+        if: success() || failure()
+        run: |
+          npx --no-install oxfmt --check \
+            packages/engine/src/national/politics/sovereignty.ts \
+            packages/engine/src/national/NationalRuntime.ts \
+            packages/engine-api/src/Schemas.ts \
+            packages/engine/src/national/conflict/WarLedger.ts \
+            packages/engine/src/national/politics/NationalWarState.ts \
+            packages/engine/src/game/GameImpl.ts \
+            packages/engine/src/execution/NationalWarExecution.ts \
+            tests/national/C5StandingImperialDefense.test.ts
+      - name: Production build
+        if: success() || failure()
+        run: npm run build-prod
