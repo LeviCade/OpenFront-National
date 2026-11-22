@@ -63,6 +63,14 @@ if (existsSync("LICENSE-ASSETS")) {
 const noDistribute = [".mp3", ".flac", ".woff", ".woff2", ".ttf"];
 const sample = [];
 const provenance = [];
+const pinned = JSON.parse(
+  readFileSync("docs/release/c4-class2-media-provenance.json", "utf8"),
+);
+const expected = new Map(pinned.records.map((record) => [record.path, record]));
+const seen = new Set();
+if (expected.size !== pinned.records.length || expected.size !== 40) {
+  failed.push("invalid pinned media inventory");
+}
 function scan(dir) {
   if (!existsSync(dir)) return;
   for (const item of readdirSync(dir, { withFileTypes: true })) {
@@ -73,23 +81,49 @@ function scan(dir) {
     } else if (noDistribute.some((suffix) => item.name.endsWith(suffix))) {
       sample.push(p);
       const bytes = readFileSync(p);
+      const gitBlobSha1 = createHash("sha1")
+        .update(`blob ${bytes.length}\0`)
+        .update(bytes)
+        .digest("hex");
+      const origin = expected.get(p);
+      const identityMatches =
+        origin?.gitBlobSha1 === gitBlobSha1 &&
+        origin?.upstreamBlobSha1 === gitBlobSha1 &&
+        origin?.bytes === bytes.length;
+      if (!identityMatches) failed.push("unreviewed or changed media: " + p);
+      seen.add(p);
       provenance.push({
         path: p,
         category: /[.](woff2?|ttf)$/i.test(p) ? "font" : "audio",
         bytes: bytes.length,
         sha256: createHash("sha256").update(bytes).digest("hex"),
         resourceDirectoryLicense: "CC BY-SA 4.0 / resources/LICENSE",
+        gitBlobSha1,
+        pinnedIdentityMatches: identityMatches,
+        pinnedUpstreamSource: origin?.source ?? null,
         independentOriginReview: "PENDING",
       });
     }
   }
 }
 scan("resources");
+for (const path of expected.keys()) {
+  if (!seen.has(path)) failed.push("pinned media missing: " + path);
+}
+const withheldMusic = pinned.withheldMusic.map(
+  (name) => "sounds/music/" + name,
+);
+for (const path of withheldMusic) {
+  if (existsSync(join("resources", path))) {
+    failed.push("withheld music unexpectedly present: " + path);
+  }
+}
 // Audit all literal game music paths rather than assuming they were copied
 // from a restricted upstream package. Never auto-fetch proprietary music.
 const musicSources = [
   "src/client/sound/SoundManager.ts",
   "src/client/sound/MenuMusic.ts",
+  "src/client/sound/MusicAvailability.ts",
 ];
 const musicCallSites = musicSources.flatMap((source) =>
   readFileSync(source, "utf8")
@@ -107,6 +141,10 @@ const referencedMusic = [
 const missingMusic = referencedMusic.filter(
   (path) => !existsSync(join("resources", path)),
 );
+for (const path of referencedMusic) {
+  if (withheldMusic.includes(path))
+    failed.push("withheld music referenced: " + path);
+}
 const result = {
   gate: "known-shell-assets-and-restricted-subtree",
   status: failed.length ? "FAIL" : "PASS",
@@ -117,6 +155,10 @@ const result = {
   ),
   originReviewStatus: "PENDING",
   referencedMusic,
+  withheldMusic,
+  pinnedUpstreamSha: pinned.upstreamSha,
+  pinnedIdentityMatches: provenance.filter((r) => r.pinnedIdentityMatches)
+    .length,
   musicCallSites,
   missingMusic,
   publicReleaseReady:
@@ -144,6 +186,8 @@ console.log(
     fontsPending: provenance.filter((r) => r.category === "font").length,
     audioPending: provenance.filter((r) => r.category === "audio").length,
     referencedMusic: referencedMusic.length,
+    withheldMusic,
+    pinnedIdentityMatches: result.pinnedIdentityMatches,
     missingMusic,
     failures: failed,
   }),
