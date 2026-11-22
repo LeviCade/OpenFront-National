@@ -10,7 +10,11 @@ import { simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import type { Execution, Game, Player } from "../game/Game";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
-import type { ExecRecord, SnapshotReader, SnapshotWriter } from "../snapshot/SnapshotContext";
+import type {
+  ExecRecord,
+  SnapshotReader,
+  SnapshotWriter,
+} from "../snapshot/SnapshotContext";
 
 const commandSchema = z.discriminatedUnion("type", [
   NationalIssueUltimatumIntentSchema,
@@ -19,8 +23,14 @@ const commandSchema = z.discriminatedUnion("type", [
 ]);
 type Command = z.infer<typeof commandSchema>;
 const phaseSchema = z.enum([
-  "pending", "consented", "decision-required", "acceded",
-  "enforced", "backed-down", "withdrawn", "expired",
+  "pending",
+  "consented",
+  "decision-required",
+  "acceded",
+  "enforced",
+  "backed-down",
+  "withdrawn",
+  "expired",
 ]);
 const recordSchema = z.object({
   id: z.string(),
@@ -34,7 +44,9 @@ const recordSchema = z.object({
   response: z.enum(["none", "accept", "refuse"]),
   version: z.number().int().positive(),
   credibility: z.enum(["pending", "kept", "broken", "void"]),
-  actions: z.array(z.object({ actorId: z.string(), requestId: z.string() })).max(64),
+  actions: z
+    .array(z.object({ actorId: z.string(), requestId: z.string() }))
+    .max(64),
   imposedMembers: z.array(z.string()),
   warId: z.string().nullable(),
 });
@@ -61,13 +73,27 @@ function living(game: Game, id: string): Player | null {
   return player.isAlive() && player.hasSpawned() ? player : null;
 }
 
-function authentic(game: Game, actor: Player, clientId: ClientID | null): boolean {
-  if (game.nationalWarAuthority() === null || game.inSpawnPhase() ||
-      living(game, actor.id()) !== actor) return false;
-  if (clientId !== null) return actor.type() === PlayerType.Human &&
-    actor.clientID() === clientId && game.playerByClientID(clientId) === actor;
-  return actor.type() !== PlayerType.Human ||
-    game.config().gameConfig().gameType !== GameType.Private;
+function authentic(
+  game: Game,
+  actor: Player,
+  clientId: ClientID | null,
+): boolean {
+  if (
+    game.nationalWarAuthority() === null ||
+    game.inSpawnPhase() ||
+    living(game, actor.id()) !== actor
+  )
+    return false;
+  if (clientId !== null)
+    return (
+      actor.type() === PlayerType.Human &&
+      actor.clientID() === clientId &&
+      game.playerByClientID(clientId) === actor
+    );
+  return (
+    actor.type() !== PlayerType.Human ||
+    game.config().gameConfig().gameType !== GameType.Private
+  );
 }
 
 /** A demand records choice but creates no autonomous war, treaty, currency or accession. */
@@ -92,49 +118,71 @@ export class NationalUltimatumExecution implements Execution {
       politics?.warPolicyVersionFor(this.actor.id()) ?? null;
   }
 
-  isActive(): boolean { return this.active; }
-  activeDuringSpawnPhase(): boolean { return false; }
+  isActive(): boolean {
+    return this.active;
+  }
+  activeDuringSpawnPhase(): boolean {
+    return false;
+  }
 
   private static records(game: Game): NationalUltimatumExecution[] {
-    return game.executions().filter(
-      (e): e is NationalUltimatumExecution =>
-        e instanceof NationalUltimatumExecution && e.record !== null,
-    );
+    return game
+      .executions()
+      .filter(
+        (e): e is NationalUltimatumExecution =>
+          e instanceof NationalUltimatumExecution && e.record !== null,
+      );
   }
 
   private currentEmperor(): Player | null {
     const game = this.game!;
     const row = this.record!;
-    return game.nationalPoliticalAuthority()?.emperorOf(row.empire) === row.issuer
-      ? living(game, row.issuer) : null;
+    return game.nationalPoliticalAuthority()?.emperorOf(row.empire) ===
+      row.issuer
+      ? living(game, row.issuer)
+      : null;
   }
 
   private advance(tick: number): void {
     const row = this.record!;
-    if (["acceded", "enforced", "backed-down", "withdrawn", "expired"].includes(row.phase))
+    if (
+      ["acceded", "enforced", "backed-down", "withdrawn", "expired"].includes(
+        row.phase,
+      )
+    )
       return;
     const game = this.game!;
     const politics = game.nationalPoliticalAuthority();
-    if (politics?.empireOf(row.target) === row.empire && living(game, row.target)) {
+    if (
+      politics?.empireOf(row.target) === row.empire &&
+      living(game, row.target)
+    ) {
       row.phase = "acceded";
       row.credibility = "kept";
       row.version++;
       return;
     }
-    if (!this.currentEmperor() || politics?.empireOf(row.target) !== null ||
-        !living(game, row.target)) {
+    if (
+      !this.currentEmperor() ||
+      politics?.empireOf(row.target) !== null ||
+      !living(game, row.target)
+    ) {
       row.phase = "expired";
       row.credibility = "void";
       row.version++;
       return;
     }
-    if ((row.phase === "pending" || row.phase === "consented") &&
-        tick >= row.deadline) {
+    if (
+      (row.phase === "pending" || row.phase === "consented") &&
+      tick >= row.deadline
+    ) {
       row.phase = "decision-required";
       row.version++;
     }
-    if (row.phase === "decision-required" &&
-        tick >= row.deadline + RESOLVE_TICKS) {
+    if (
+      row.phase === "decision-required" &&
+      tick >= row.deadline + RESOLVE_TICKS
+    ) {
       row.phase = "backed-down";
       row.credibility = "broken";
       row.version++;
@@ -142,11 +190,13 @@ export class NationalUltimatumExecution implements Execution {
   }
 
   private alreadyUsed(game: Game, actorId: string, requestId: string): boolean {
-    return NationalUltimatumExecution.records(game).some((e) =>
-      (e.actor.id() === actorId && e.command.requestId === requestId) ||
-      e.record!.actions.some((action) =>
-        action.actorId === actorId && action.requestId === requestId,
-      ),
+    return NationalUltimatumExecution.records(game).some(
+      (e) =>
+        (e.actor.id() === actorId && e.command.requestId === requestId) ||
+        e.record!.actions.some(
+          (action) =>
+            action.actorId === actorId && action.requestId === requestId,
+        ),
     );
   }
 
@@ -156,37 +206,67 @@ export class NationalUltimatumExecution implements Execution {
   ): void {
     const game = this.game!;
     const politics = game.nationalPoliticalAuthority();
-    if (!politics || this.admissionEmpire !== command.empireId ||
-        politics.emperorOf(command.empireId) !== this.actor.id()) return;
+    if (
+      !politics ||
+      this.admissionEmpire !== command.empireId ||
+      politics.emperorOf(command.empireId) !== this.actor.id()
+    )
+      return;
     const target = living(game, command.targetId);
-    if (!target || target === this.actor ||
-        politics.empireOf(target.id()) !== null) return;
+    if (
+      !target ||
+      target === this.actor ||
+      politics.empireOf(target.id()) !== null
+    )
+      return;
     const records = NationalUltimatumExecution.records(game);
-    if (records.length >= MAX_RECORDS ||
-        records.filter((e) => e.record!.empire === command.empireId).length >= MAX_PER_EMPIRE ||
-        this.alreadyUsed(game, this.actor.id(), command.requestId)) return;
+    if (
+      records.length >= MAX_RECORDS ||
+      records.filter((e) => e.record!.empire === command.empireId).length >=
+        MAX_PER_EMPIRE ||
+      this.alreadyUsed(game, this.actor.id(), command.requestId)
+    )
+      return;
     const ordinal = game.executions().indexOf(this);
     if (ordinal < 0) return;
     const id = "ultimatum-" + tick + "-" + this.actor.smallID() + "-" + ordinal;
     if (records.some((e) => e.record!.id === id)) return;
     this.record = {
-      id, issuer: this.actor.id(), empire: command.empireId,
-      target: target.id(), threat: command.threat,
-      issuedTick: tick, deadline: tick + command.durationTicks,
-      phase: "pending", response: "none", version: 1,
-      credibility: "pending", actions: [], imposedMembers: [], warId: null,
+      id,
+      issuer: this.actor.id(),
+      empire: command.empireId,
+      target: target.id(),
+      threat: command.threat,
+      issuedTick: tick,
+      deadline: tick + command.durationTicks,
+      phase: "pending",
+      response: "none",
+      version: 1,
+      credibility: "pending",
+      actions: [],
+      imposedMembers: [],
+      warId: null,
     };
     this.active = true;
   }
 
-  private respond(actor: Player, decision: "accept" | "refuse", tick: number): boolean {
+  private respond(
+    actor: Player,
+    decision: "accept" | "refuse",
+    tick: number,
+  ): boolean {
     const row = this.record!;
     const game = this.game!;
-    if ((row.phase !== "pending" && row.phase !== "consented") ||
-        tick >= row.deadline || actor.id() !== row.target ||
-        living(game, row.target) !== actor ||
-        game.nationalPoliticalAuthority()?.empireOf(actor.id()) !== null ||
-        !this.currentEmperor() || row.response === decision) return false;
+    if (
+      (row.phase !== "pending" && row.phase !== "consented") ||
+      tick >= row.deadline ||
+      actor.id() !== row.target ||
+      living(game, row.target) !== actor ||
+      game.nationalPoliticalAuthority()?.empireOf(actor.id()) !== null ||
+      !this.currentEmperor() ||
+      row.response === decision
+    )
+      return false;
     row.response = decision;
     row.phase = decision === "accept" ? "consented" : "decision-required";
     // Two-sided political offer + accept-empire must still execute separately.
@@ -203,9 +283,12 @@ export class NationalUltimatumExecution implements Execution {
   ): boolean {
     const row = this.record!;
     const game = this.game!;
-    if (this.currentEmperor() !== actor ||
-        admittedEmpire !== row.empire ||
-        game.nationalPoliticalAuthority()?.warPolicyVersionFor(actor.id()) !== admittedPolicyVersion)
+    if (
+      this.currentEmperor() !== actor ||
+      admittedEmpire !== row.empire ||
+      game.nationalPoliticalAuthority()?.warPolicyVersionFor(actor.id()) !==
+        admittedPolicyVersion
+    )
       return false;
     if (decision === "withdraw") {
       if (row.phase !== "pending" && row.phase !== "consented") return false;
@@ -222,11 +305,16 @@ export class NationalUltimatumExecution implements Execution {
       return true;
     }
     const target = living(game, row.target);
-    if (!target || game.nationalPoliticalAuthority()?.empireOf(row.target) !== null)
+    if (
+      !target ||
+      game.nationalPoliticalAuthority()?.empireOf(row.target) !== null
+    )
       return false;
     if (row.threat === "embargo") {
-      const ids = game.nationalPoliticalAuthority()?.membersOf(row.empire) ?? [];
-      const members = ids.map((id) => living(game, id))
+      const ids =
+        game.nationalPoliticalAuthority()?.membersOf(row.empire) ?? [];
+      const members = ids
+        .map((id) => living(game, id))
         .filter((p): p is Player => p !== null);
       if (members.length === 0) return false;
       for (const member of members) member.addEmbargo(target, false);
@@ -254,8 +342,10 @@ export class NationalUltimatumExecution implements Execution {
         id,
         this.clientId ?? undefined,
       );
-      if (result.accepted !== true ||
-          game.nationalWarAuthority()?.atWar(actor.id(), target.id()) !== true) {
+      if (
+        result.accepted !== true ||
+        game.nationalWarAuthority()?.atWar(actor.id(), target.id()) !== true
+      ) {
         row.phase = "backed-down";
         row.credibility = "broken";
         row.version++;
@@ -275,7 +365,10 @@ export class NationalUltimatumExecution implements Execution {
   }
 
   tick(tick: number): void {
-    if (this.record !== null) { this.advance(tick); return; }
+    if (this.record !== null) {
+      this.advance(tick);
+      return;
+    }
     this.active = false;
     const game = this.game;
     if (!game || !authentic(game, this.actor, this.clientId)) return;
@@ -289,55 +382,78 @@ export class NationalUltimatumExecution implements Execution {
     const owner = NationalUltimatumExecution.records(game).find(
       (e) => e.record!.id === command.ultimatumId,
     );
-    if (!owner || owner.alreadyUsed(game, this.actor.id(), command.requestId)) return;
+    if (!owner || owner.alreadyUsed(game, this.actor.id(), command.requestId))
+      return;
     owner.advance(tick);
     let accepted = false;
     if (command.type === "national_respond_ultimatum") {
       accepted = owner.respond(this.actor, command.decision, tick);
     } else {
       accepted = owner.resolve(
-        this.actor, command.decision, tick,
-        this.admissionEmpire, this.admissionPolicyVersion,
+        this.actor,
+        command.decision,
+        tick,
+        this.admissionEmpire,
+        this.admissionPolicyVersion,
       );
     }
     if (accepted && owner.record!.actions.length < 64) {
-      owner.record!.actions.push({ actorId: this.actor.id(), requestId: command.requestId });
+      owner.record!.actions.push({
+        actorId: this.actor.id(),
+        requestId: command.requestId,
+      });
     }
   }
 
   static stateHash(game: Game): number {
     const records = this.records(game);
-    return records.length === 0 ? 0 : simpleHash(JSON.stringify(
-      records.map((e) => ({ record: e.record, issueRequestId: e.command.requestId })),
-    ));
+    return records.length === 0
+      ? 0
+      : simpleHash(
+          JSON.stringify(
+            records.map((e) => ({
+              record: e.record,
+              issueRequestId: e.command.requestId,
+            })),
+          ),
+        );
   }
 
   /** Narrow E6 contract: only per-principal terms; never the underlying ledger. */
-  static viewFor(game: Game, observer: Player): readonly NationalUltimatumObservation[] {
+  static viewFor(
+    game: Game,
+    observer: Player,
+  ): readonly NationalUltimatumObservation[] {
     if (living(game, observer.id()) !== observer) return [];
     return this.records(game).flatMap((e) => {
       const row = e.record!;
-      const issuer = e.currentEmperor() === observer && row.issuer === observer.id();
+      const issuer =
+        e.currentEmperor() === observer && row.issuer === observer.id();
       const recipient = row.target === observer.id();
       if (!issuer && !recipient) return [];
-      return [{
-        id: row.id,
-        issuerId: row.issuer,
-        empireId: row.empire,
-        targetId: row.target,
-        role: issuer ? "issuer" as const : "recipient" as const,
-        threat: row.threat,
-        issuedTick: row.issuedTick,
-        deadlineTick: row.deadline,
-        phase: row.phase,
-        response: row.response,
-        credibility: row.credibility,
-        version: row.version,
-        warId: row.warId,
-        imposedMembers: issuer ? [...row.imposedMembers] : [],
-        requestId: issuer && (e.clientId === null || e.clientId === observer.clientID())
-          ? e.command.requestId : null,
-      }];
+      return [
+        {
+          id: row.id,
+          issuerId: row.issuer,
+          empireId: row.empire,
+          targetId: row.target,
+          role: issuer ? ("issuer" as const) : ("recipient" as const),
+          threat: row.threat,
+          issuedTick: row.issuedTick,
+          deadlineTick: row.deadline,
+          phase: row.phase,
+          response: row.response,
+          credibility: row.credibility,
+          version: row.version,
+          warId: row.warId,
+          imposedMembers: issuer ? [...row.imposedMembers] : [],
+          requestId:
+            issuer &&
+            (e.clientId === null || e.clientId === observer.clientID())
+              ? e.command.requestId
+              : null,
+        },
+      ];
     });
   }
 
