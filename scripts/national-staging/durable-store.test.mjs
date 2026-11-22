@@ -4,6 +4,7 @@ import { once } from "node:events";
 import {
   chmodSync,
   mkdtempSync,
+  mkdirSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -12,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
+  assertDurableNationalRoot,
   DurableNationalStore,
   MAX_NATIONAL_RECORD_BYTES,
 } from "../../src/server/national/DurableNationalStore.ts";
@@ -141,6 +143,24 @@ try {
   );
   assert.throws(() => fenced.write("inode", 1, 1, "unsafe"), /writer failed/);
   console.log("PASS lock pathname loss fences old writer");
+  const root = join(dir, "explicit");
+  const initCode = `import {initializeDurableNationalRoot} from ${JSON.stringify(moduleURL)}; initializeDurableNationalRoot(process.argv[1],2)`;
+  const initialized = spawnSync(process.execPath, [...args, initCode, root]);
+  assert.equal(initialized.status, 0, initialized.stderr.toString());
+  assertDurableNationalRoot(root, 2);
+  assert.throws(() => assertDurableNationalRoot(root, 1), /incompatible/);
+  assert.notEqual(
+    spawnSync(process.execPath, [...args, initCode, root]).status,
+    0,
+  );
+  renameSync(join(root, "worker-1.sqlite"), join(root, "removed.sqlite"));
+  assert.throws(() => new DurableNationalStore(root, 1), /ENOENT/);
+  const partial = join(dir, "partial");
+  mkdirSync(partial, { mode: 0o700 });
+  assert.throws(() => assertDurableNationalRoot(partial, 2), /ENOENT/);
+  console.log(
+    "PASS explicit provisioning, topology mismatch, reinitialization refusal, missing database and interrupted initialization",
+  );
 } finally {
   if (child) await kill(child);
   rmSync(dir, { recursive: true, force: true });
