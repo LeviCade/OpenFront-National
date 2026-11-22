@@ -358,7 +358,9 @@ export function decodeSnapshotValue(bytes: Uint8Array): unknown {
           throw new SnapshotCodecError(`misaligned ${C.name} payload`);
         }
         // Copy so the result is aligned and does not pin the input buffer.
-        const copy = r.readBytes(byteLength).slice();
+        // Buffer.slice() aliases storage rather than copying. A checkpoint can
+        // arrive as a Node Buffer with a nonzero byte offset.
+        const copy = new Uint8Array(r.readBytes(byteLength));
         return new C(copy.buffer, 0, byteLength / C.BYTES_PER_ELEMENT);
       }
       default:
