@@ -166,7 +166,7 @@ export function validateNationalObserverNativeLanes(
     sequence(packet.packedTileUpdates).length !== 0
   )
     invalid();
-  validateNationalPactPacket(packet.nationalPolitics, packet.nationalPactDisclosure, page.observerId);
+  validateNationalPactPacket(packet.nationalPolitics, packet.nationalPactDisclosure, page.observerId, page.tick, page.streamId);
   const native = decodeNationalObserverNativeUnits(packet.packedUnitUpdates);
   if ((native?.length ?? 0) !== page.units.length * UNIT_UPDATE_STRIDE)
     invalid();

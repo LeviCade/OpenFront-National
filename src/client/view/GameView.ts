@@ -1,5 +1,5 @@
 import { readPactReceipts, retainPactReceipts, type PactReceipt } from "../NationalPactState";
-import { readNationalPactDisclosure, type NationalPactDisclosureViewData } from "@openfront/engine-api/game/NationalPactView";
+import { readNationalPactWireDisclosure, type NationalPactDisclosureViewData } from "@openfront/engine-api/game/NationalPactView";
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   Cell,
@@ -212,7 +212,6 @@ export class GameView implements GameLike {
   public setTrustedProjectionReady(ready: boolean): void {
     if (!this._trustedNationalProjection) return;
     this._trustedProjectionReady = ready;
-    if (!ready) { this._nationalPactDisclosure = null; this._nationalPactReceipts = []; }
   }
 
   /**
@@ -222,6 +221,8 @@ export class GameView implements GameLike {
    */
   public resetTrustedProjectionSight(): void {
     if (!this._trustedNationalProjection) return;
+    this._nationalPactDisclosure = null;
+    this._nationalPactReceipts = [];
     this._trustedProjectionReady = false;
     this._trustedSpawnReady = false;
     this.trustedPendingTiles = [];
@@ -715,7 +716,9 @@ export class GameView implements GameLike {
     this.toDelete.clear();
 
     const previousTick = this.lastUpdate?.tick ?? -1;
-    this.lastUpdate = gu;
+    // Never keep an unvalidated or revoked constitutional snapshot in the raw renderer cache.
+    this.lastUpdate = gu.nationalPactDisclosure === undefined ? gu : {...gu};
+    delete this.lastUpdate.nationalPactDisclosure;
 
     // Legacy/replay test adapters can provide a partial Config without
     // gameConfig(). Keep ordinary FFA view updates entirely unchanged.
@@ -739,9 +742,10 @@ export class GameView implements GameLike {
 
       const currentActorId =
         this.trustedPrincipal ?? this._myPlayer?.id() ?? null;
-      this._nationalPactDisclosure = gu.tick < previousTick ? null : readNationalPactDisclosure(
+      this._nationalPactDisclosure = gu.tick < previousTick ? null : readNationalPactWireDisclosure(
         gu.nationalPactDisclosure, currentActorId, this._nationalPolitics?.pacts ?? null,
         this._nationalPolitics?.empires.some(e => e.memberIds.includes(currentActorId ?? "")) ?? false,
+        gu.tick, this._trustedNationalProjection ? this.trustedSight?.lastAcceptedStreamId ?? null : undefined,
       );
       this._nationalPactReceipts = gu.tick < previousTick || this._nationalPactDisclosure === null ? [] : retainPactReceipts(
         this._nationalPactReceipts, readPactReceipts(gu.nationalCommandResults,currentActorId,gu.tick),gu.tick);

@@ -1,5 +1,5 @@
 import { AllPlayersStats, ClientID, Winner } from "../Schemas";
-import type { NationalPublicPactView, NationalPactDisclosureViewData } from "./NationalPactView";
+import type { NationalPublicPactView, NationalPactDisclosureWireData } from "./NationalPactView";
 import { TileRef } from "./GameMap";
 import {
   EmojiMessage,
@@ -127,7 +127,7 @@ export interface GameUpdateViewData {
    * from the public political view. Never synthesize offers from the roster.
    */
   nationalAccessionOffers?: NationalAccessionOffersViewData;
-  nationalPactDisclosure?: NationalPactDisclosureViewData;
+  nationalPactDisclosure?: NationalPactDisclosureWireData;
   /**
    * Outcomes scoped to the authenticated recipient of THIS view only.
    * E3 must filter before serialization; never broadcast the E1 journal.

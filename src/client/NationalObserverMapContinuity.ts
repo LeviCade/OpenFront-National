@@ -249,6 +249,8 @@ export class NationalObserverMapContinuity {
         : "unknown";
   }
 
+  get lastAcceptedStreamId(): string | null { return this.streamId; }
+
   get lastAcceptedTick(): number {
     return this.lastTick;
   }

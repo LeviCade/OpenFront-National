@@ -17,8 +17,7 @@ export function readPactReceipts(input: unknown, actor: string | null, tick: num
   const out: PactReceipt[] = [];
   for (const v of input) {
     if (!v || typeof v !== "object" || !types.has(v.type) || v.actorId !== actor ||
-        v.recipientId !== actor || !/^[A-Za-z0-9_-]{1,64}$/.test(v.commandTargetId) ||
-        typeof v.commandTargetId !== "string" || typeof v.requestId !== "string" ||
+        v.recipientId !== actor || typeof v.commandTargetId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(v.commandTargetId) || typeof v.requestId !== "string" ||
         !/^np_[0-9a-f]{32}$/.test(v.requestId) || !Number.isSafeInteger(v.tick) ||
         v.tick < 0 || v.tick > tick || !Number.isSafeInteger(v.sequence) || v.sequence < 0 ||
         typeof v.accepted !== "boolean" || !["accepted","actor-inactive","political-rule"].includes(v.reason) ||

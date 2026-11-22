@@ -686,7 +686,7 @@ export class NationalOutboundFilter {
 
     const publicPoliticalView = publicPolitics(data);
     const publicPacts = projectNationalPublicPacts(game);
-    const privatePacts = projectNationalPactDisclosure(game, this.observerId, publicPacts);
+    const privatePacts = projectNationalPactDisclosure(game, this.observerId, publicPacts, data.tick, page?.streamId);
     const publicConflictView = projectNationalPublicConflict(
       game,
       this.observerId,

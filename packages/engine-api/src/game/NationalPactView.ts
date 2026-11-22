@@ -25,6 +25,12 @@ export interface NationalPactDisclosureViewData {
   readonly recipientId: string;
   readonly pacts: readonly NationalPactDisclosure[];
 }
+/** E4 adds freshness and native socket epoch AFTER E1's canonical read. */
+export interface NationalPactDisclosureWireData extends NationalPactDisclosureViewData {
+  readonly tick: number;
+  /** Required on trusted native frames, absent on Solo worker frames. */
+  readonly streamId?: string;
+}
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -55,7 +61,7 @@ export function readNationalPublicPacts(value: unknown): NationalPublicPactView[
   const seen = new Set<string>();
   for (const p of value) {
     if (!record(p) || !keys(p, ["id","name","kind","memberIds","administratorId"]) ||
-        !pactId(p.id) || seen.has(p.id) || !id(p.name) || p.name.length > 64 ||
+        !pactId(p.id) || seen.has(p.id) || typeof p.name !== "string" || p.name.length > 64 ||
         !p.name.trim() || (p.kind !== "NAP" && p.kind !== "MDA") ||
         !ids(p.memberIds) || !p.memberIds.length ||
         (p.administratorId !== null && (!id(p.administratorId) || !p.memberIds.includes(p.administratorId)))) return null;
@@ -85,7 +91,7 @@ export function readNationalPactDisclosure(
     if (p.pendingAmendment !== undefined) {
       const a = p.pendingAmendment;
       if (p.relationship !== "member" || !record(a) || !keys(a, ["terms","administratorId","approvedBy"]) ||
-          !ids(a.approvedBy) || !a.approvedBy.every((v) => publicPact.memberIds.includes(v)) ||
+          !ids(a.approvedBy) || a.approvedBy.length === publicPact.memberIds.length || !a.approvedBy.every((v) => publicPact.memberIds.includes(v)) ||
           (a.administratorId !== null && (!id(a.administratorId) || !publicPact.memberIds.includes(a.administratorId)))) return null;
       const next = terms(a.terms);
       if (!next) return null;
@@ -96,15 +102,50 @@ export function readNationalPactDisclosure(
   }
   return {version:1,recipientId:actor,pacts:out};
 }
-/** Call at every native trust boundary, including public-only packets. */
+/** Read the current per-tick snapshot, bound to the current socket epoch where applicable. */
+export function readNationalPactWireDisclosure(
+  value: unknown, actor: string | null, roster: readonly NationalPublicPactView[] | null,
+  imperial: boolean, tick: number, streamId?: string | null,
+): NationalPactDisclosureViewData | null {
+  if (!record(value) || !keys(value, ["version","recipientId","pacts","tick","streamId"]) ||
+      !Number.isSafeInteger(tick) || tick < 0 || value.tick !== tick ||
+      streamId === null || value.streamId !== streamId) return null;
+  return readNationalPactDisclosure({version:value.version,recipientId:value.recipientId,pacts:value.pacts},
+    actor,roster,imperial);
+}
+
+/** Call at each native trust boundary, including public-only packets.
+ * A public roster may never carry a private field at ANY nested level. */
 export function validateNationalPactPacket(
   politics: unknown, disclosure: unknown, actor: string | null,
+  tick: number, streamId?: string,
 ): void {
+  if (record(politics)) {
+    if (!keys(politics,["empires","warnings","victory","pacts"]) ||
+        !Array.isArray(politics.empires) ||
+        politics.empires.some(e=>!record(e)||!keys(e,["id","leaderId","memberIds"])) ||
+        (politics.warnings!==undefined && (!Array.isArray(politics.warnings) ||
+          politics.warnings.some(w=>!record(w)||!keys(w,["empireId","deadlineMs","remainingMs","blockedByAssetDisposition"])))) ||
+        (politics.victory!==undefined && politics.victory!==null &&
+          (!record(politics.victory) || !keys(politics.victory,["sovereignPowerCount","resolved","prizes"]) ||
+            !Array.isArray(politics.victory.prizes) ||
+            politics.victory.prizes.some(p=>!record(p)||!keys(p,["kind","nationId","empireId"])))))
+      throw new Error("NATIONAL invalid public politics fields");
+  }
   const roster = record(politics) && politics.pacts !== undefined
     ? readNationalPublicPacts(politics.pacts) : null;
   if (record(politics) && politics.pacts !== undefined && !roster) throw new Error("NATIONAL invalid public pact roster");
-  const imperial = record(politics) && Array.isArray(politics.empires) &&
-    politics.empires.some((e) => record(e) && Array.isArray(e.memberIds) && e.memberIds.includes(actor));
-  if (disclosure !== undefined && !readNationalPactDisclosure(disclosure, actor, roster, imperial))
+  const empireMembers = new Set<string>();
+  if (record(politics) && Array.isArray(politics.empires)) {
+    for (const e of politics.empires) {
+      if (record(e) && Array.isArray(e.memberIds)) for (const m of e.memberIds) {
+        if (typeof m === "string") empireMembers.add(m);
+      }
+    }
+  }
+  if(roster?.some(p=>p.memberIds.some(m=>empireMembers.has(m))))
+    throw new Error("NATIONAL imperial nation in ordinary pact roster");
+  if (disclosure !== undefined && !readNationalPactWireDisclosure(disclosure, actor, roster,
+      actor !== null && empireMembers.has(actor), tick, streamId))
     throw new Error("NATIONAL invalid recipient pact disclosure");
 }

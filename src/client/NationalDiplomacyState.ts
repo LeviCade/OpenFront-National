@@ -189,7 +189,7 @@ export function readNationalPolitics(
     }
   }
   const pacts = source.pacts === undefined ? undefined : readNationalPublicPacts(source.pacts);
-  if (pacts === null) return null;
+  if (pacts === null || pacts?.some(pact=>pact.memberIds.some(id=>members.has(id)))) return null;
   return { empires, warnings, ...(pacts === undefined ? {} : {pacts}) };
 }
 

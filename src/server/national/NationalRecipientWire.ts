@@ -40,7 +40,7 @@ export function encodeNationalRecipientProjection(
   };
   const map = politics.nationalObserverMap;
   const conflicts = politics.nationalConflicts;
-  validateNationalPactPacket(filtered.nationalPolitics, filtered.nationalPactDisclosure, map?.observerId ?? null);
+  validateNationalPactPacket(filtered.nationalPolitics, filtered.nationalPactDisclosure, map?.observerId ?? null, filtered.tick, map?.streamId);
   if (map !== undefined) {
     if (
       map.version !== NATIONAL_OBSERVER_MAP_VERSION ||

@@ -249,7 +249,7 @@ export function assertTrustedPublicProjection(
     !record(packet.updates)
   )
     throw new Error("NATIONAL unauthorized public-only projection");
-  validateNationalPactPacket(packet.nationalPolitics, packet.nationalPactDisclosure, null);
+  validateNationalPactPacket(packet.nationalPolitics, packet.nationalPactDisclosure, null, packet.tick);
   const allowed = new Set([
     "type",
     "id",
@@ -362,6 +362,9 @@ export function materializeTrustedNationalUpdate(
     packet.nationalObserverMap,
     packet.tick,
   );
+  // The caller checks page principal/epoch with NationalObserverMapContinuity.
+  // Independently reject malformed or cross-epoch pact sibling lanes here.
+  validateNationalPactPacket(packet.nationalPolitics, packet.nationalPactDisclosure, observerMap?.observerId ?? null, packet.tick, observerMap?.streamId);
   // E3's paged current-sight map gives late joiners real visible territory.
   // All added states belong to the authenticated observer's current sight.
   const visibleTilePairs = [...tiles, ...observerMapTilePairs(observerMap)];
