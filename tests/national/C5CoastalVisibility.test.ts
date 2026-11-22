@@ -317,7 +317,7 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     );
     // Test a second legitimate sensor: a real owned warship, far beyond
     // the nation's coastline. Moving that sensor must independently revoke.
-    const sensor = game.player(VIEWER.id).buildUnit(UnitType.Warship, farSea!, {});
+    const sensor = game.player(VIEWER.id).buildUnit(UnitType.Warship, farSea!, { patrolTile: farSea! });
     ship.move(farSea!);
     game.executeNextTick();
     const shipborne = collectLiveNationalObservation(game, VIEWER.id);
