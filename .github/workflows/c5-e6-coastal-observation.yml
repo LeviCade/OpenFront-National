@@ -57,7 +57,12 @@ jobs:
       - name: Focused lint and formatting
         run: |
           npx --no-install oxlint packages/engine/src/national/observation/LiveObservation.ts tests/national/C5CoastalVisibility.test.ts
-          FILES=(packages/engine/src/national/observation/LiveObservation.ts tests/national/C5CoastalVisibility.test.ts)
+          FILES=(
+            packages/engine/src/national/observation/LiveObservation.ts
+            tests/national/C5CoastalVisibility.test.ts
+            docs/release/NATIONAL_C5_E6_COASTAL_VISIBILITY.md
+            .github/workflows/c5-e6-coastal-observation.yml
+          )
           if ! npx --no-install oxfmt --check "${FILES[@]}"; then
             npx --no-install oxfmt --write "${FILES[@]}"
             echo C5_E6_FORMAT_PATCH_BEGIN
