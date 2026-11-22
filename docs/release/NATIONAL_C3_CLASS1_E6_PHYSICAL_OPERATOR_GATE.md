@@ -15,7 +15,7 @@ Skybot dependencies: [#248](https://github.com/LeviCade/Skybot-CI/pull/248) and 
 6. After the **actual** job ends, root observes stopped/deleted VM and QEMU, JIT deregistration, GPU ACL and lease restoration, tmpfs/QCOW2/EFI removal, browser process removal, private credential/log destruction, and unchanged CPU capacity. Static cleanup booleans are not sufficient; record host observations.
 7. A host-only sanitized artifact importer must bind immutable SHA-256 screenshot/summary bytes to job/runner/source. A nonexportable signer produces the `skybot-gpu-postflight-v1` receipt only after cleanup; an independent external verifier rejects omissions, signature replay, altered bytes or incomplete game stages.
 
-## Operator read-only prerequisite checks — run on the *authorized real host*
+## Operator read-only prerequisite checks — run on the _authorized real host_
 
 ```sh
 sudo id -u
@@ -31,12 +31,12 @@ These commands have **not been executed by this engineer**. An idle lease check 
 
 ## Four-mode evidence contract
 
-| Mode | Gameplay observer | Physical independent witness |
-| --- | --- | --- |
-| NATIONAL Solo desktop | E5: real server/gameplay, 1280x800, screenshot digests | E6: signed fresh preflight |
-| NATIONAL Solo mobile | E5: real server/gameplay, 390x844, screenshot digests | E6: distinct signed preflight |
-| Legacy desktop | E5: real server/gameplay, 1280x800, screenshot digests | E6: distinct signed preflight |
-| Legacy mobile | E5: real server/gameplay, 390x844, screenshot digests | E6: distinct signed preflight |
+| Mode                  | Gameplay observer                                      | Physical independent witness  |
+| --------------------- | ------------------------------------------------------ | ----------------------------- |
+| NATIONAL Solo desktop | E5: real server/gameplay, 1280x800, screenshot digests | E6: signed fresh preflight    |
+| NATIONAL Solo mobile  | E5: real server/gameplay, 390x844, screenshot digests  | E6: distinct signed preflight |
+| Legacy desktop        | E5: real server/gameplay, 1280x800, screenshot digests | E6: distinct signed preflight |
+| Legacy mobile         | E5: real server/gameplay, 390x844, screenshot digests  | E6: distinct signed preflight |
 
 Do not describe E5 private NATIONAL three-principal browser tests as a physical attestation. They are a separate release gate.
 
