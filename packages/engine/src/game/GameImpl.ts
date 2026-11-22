@@ -805,13 +805,9 @@ export class GameImpl implements Game {
           : command.kind === "propose-peace"
             ? { kind: command.kind, warId: command.warId }
             : { kind: command.kind, motionId: command.motionId };
-    const fingerprint = JSON.stringify({
-      ...intent,
-      ...(command.admissionEmpireId === undefined
-        ? {} : { admissionEmpireId: command.admissionEmpireId }),
-      ...(command.policyVersion === undefined
-        ? {} : { policyVersion: command.policyVersion }),
-    });
+    // The admission stamp is authority, not part of the client's action identity.
+    // Preserve legacy retry fingerprints; validate stamp separately on replay.
+    const fingerprint = JSON.stringify(intent);
     if (typeof fingerprint !== "string" || fingerprint.length > 4096)
       throw new Error("NATIONAL war: invalid command payload");
     const safeId = (id: unknown): string | undefined =>
