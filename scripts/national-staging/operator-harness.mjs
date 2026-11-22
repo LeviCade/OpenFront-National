@@ -73,13 +73,15 @@ export function launch(args, env, executable = process.execPath) {
   const messages = [];
   let identityReady = false;
   let ended = false;
+  let exitSignal = null;
   let pending = "";
   let processError = false;
   child.on("error", () => {
     processError = true;
   });
-  child.on("exit", () => {
+  child.on("exit", (_code, signal) => {
     ended = true;
+    exitSignal = signal;
   });
   child.stderr.resume();
   child.stdout.setEncoding("utf8");
@@ -95,6 +97,8 @@ export function launch(args, env, executable = process.execPath) {
         if (
           [
             "NATIONAL authoritative host ready",
+            "NATIONAL durable match restored",
+            "NATIONAL durable recovery refused",
             "NATIONAL authoritative tick",
             "NATIONAL authenticated socket resumed",
             "NATIONAL account lease ended",
@@ -110,6 +114,13 @@ export function launch(args, env, executable = process.execPath) {
             distinctAccounts: log.distinctAccounts,
             authoritativeRunners: log.authoritativeRunners,
             tick: log.tick,
+            durableTick: log.durableTick,
+            stateCommitment: log.stateCommitment,
+            replayDigest: log.replayDigest,
+            stage: log.stage,
+            reason: log.reason,
+            diagnostic: log.diagnostic,
+            errorType: log.errorType,
             code: log.code,
             queuedIntents: log.queuedIntents,
           });
@@ -126,6 +137,12 @@ export function launch(args, env, executable = process.execPath) {
       }
     }
   });
+  async function hardKill() {
+    assert(child.pid !== undefined && !ended && !processError);
+    process.kill(-child.pid, "SIGKILL");
+    await until(() => ended, "owned process SIGKILL", 5000);
+    assert.equal(exitSignal, "SIGKILL");
+  }
   async function stop() {
     if (child.pid === undefined) return;
     // The spawned process group is exclusively this disposable test, including
@@ -145,6 +162,7 @@ export function launch(args, env, executable = process.execPath) {
     identityReady: () => identityReady,
     alive: () => !processError && !ended,
     stop,
+    hardKill,
   };
 }
 

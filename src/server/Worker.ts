@@ -62,6 +62,10 @@ import { resolveVerifiedJoin } from "./Privilege";
 
 import { loadGatekeeper } from "./Gatekeeper";
 import { MapPlaylist } from "./MapPlaylist";
+import {
+  assertDurableNationalRoot,
+  DurableNationalStore,
+} from "./national/DurableNationalStore";
 import { isNationalSignedInAccount } from "./national/NationalAccountGate";
 import { watchNationalAccount } from "./national/NationalAccountLease";
 import { setNoStoreHeaders } from "./NoStoreHeaders";
@@ -303,7 +307,70 @@ export async function startWorker() {
   });
 
   const gatekeeper = await loadGatekeeper(log);
-  const gm = new GameManager(log, gatekeeper);
+  // Every replacement of this worker shard must acquire the same local
+  // kernel lock before recovery or any listener can become available.
+  const recoveryRoot = process.env.NATIONAL_RECOVERY_ROOT;
+  let nationalStore: DurableNationalStore | undefined;
+  try {
+    if (recoveryRoot !== undefined) {
+      assertDurableNationalRoot(recoveryRoot, ServerEnv.numWorkers());
+      nationalStore = new DurableNationalStore(recoveryRoot, workerId);
+    }
+  } catch (error) {
+    log.error("NATIONAL durable recovery refused", {
+      stage: "ownership-or-root",
+      reason:
+        error instanceof Error &&
+        error.message ===
+          "NATIONAL worker shard already owned or lock unavailable"
+          ? "shard-already-owned"
+          : "root-or-database-unavailable",
+    });
+    throw new Error("NATIONAL durable ownership or storage root unavailable");
+  }
+  const gm = new GameManager(log, gatekeeper, nationalStore);
+  try {
+    await gm.restoreDurableNationalMatches(workerId);
+  } catch (error) {
+    // Fixed reason classes only; never log private row payloads or identity.
+    log.error("NATIONAL durable recovery refused", {
+      stage: "record-or-snapshot",
+      diagnostic:
+        error instanceof Error
+          ? (error.stack ?? "")
+              .split("\n")
+              .slice(1, 12)
+              .flatMap(
+                (line) =>
+                  line.match(
+                    /(?:src|packages)\/[A-Za-z0-9_./-]+\.ts:\d+:\d+/g,
+                  ) ?? [],
+              )
+          : [],
+      errorType: error instanceof Error ? error.name : "unknown",
+      reason:
+        error instanceof Error &&
+        [
+          "NATIONAL invalid checkpoint integrity",
+          "NATIONAL incompatible durable checkpoint",
+          "NATIONAL durable map mismatch",
+          "NATIONAL trusted snapshot header incompatible",
+          "NATIONAL durable engine roundtrip mismatch",
+          "NATIONAL durable engine seat or tick mismatch",
+          "NATIONAL invalid disconnected roster restore",
+          "NATIONAL invalid durable roster or start info",
+          "NATIONAL durable seat binding mismatch",
+          "NATIONAL durable shard mismatch",
+          "NATIONAL invalid recovery lifecycle",
+          "NATIONAL snapshot identity incompatible",
+          "NATIONAL snapshot configuration incompatible",
+          "NATIONAL snapshot human roster incompatible",
+        ].includes(error.message)
+          ? error.message
+          : "invalid durable record or snapshot",
+    });
+    throw new Error("NATIONAL durable record or snapshot refused");
+  }
 
   // Initialize lobby service (handles WebSocket upgrade routing)
   const lobbyService = new WorkerLobbyService(server, wss, gm, log);
