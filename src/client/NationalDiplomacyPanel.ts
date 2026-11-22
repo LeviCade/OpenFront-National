@@ -937,6 +937,22 @@ export class NationalDiplomacyPanel extends LitElement {
     return null;
   }
 
+  /**
+   * Diplomatic representation is broader than combat authority: the emperor
+   * may negotiate a member's national WAR without becoming a belligerent.
+   * Never tell the emperor that their map Attack is legal for that layer.
+   */
+  private isOwnCombatWar(layer: NationalPublicWarLayer): boolean {
+    const actor = this.game?.myPlayer()?.id();
+    if (!actor) return false;
+    const empire = this.memberEmpire;
+    const fighting = (side: NationalPublicWarLayer["first"]) =>
+      side.kind === "nation"
+        ? side.id === actor
+        : side.id === empire?.id && empire.memberIds.includes(actor);
+    return fighting(layer.first) || fighting(layer.second);
+  }
+
   private eligiblePeaceWars(): readonly NationalPublicWarLayer[] {
     return (
       this.game
@@ -2095,7 +2111,7 @@ export class NationalDiplomacyPanel extends LitElement {
       this.lastDiplomacySubmission === null;
     const combatWars =
       conflicts?.layers.filter(
-        (layer) => layer.endedTick === null && this.ourWarSide(layer) !== null,
+        (layer) => layer.endedTick === null && this.isOwnCombatWar(layer),
       ) ?? [];
     // Real GameRunner player attack projection only, not an intent counter.
     const observedOutgoingAttacks =
