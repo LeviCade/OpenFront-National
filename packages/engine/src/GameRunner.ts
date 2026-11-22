@@ -195,7 +195,12 @@ export async function createTrustedNationalGameRunnerFromSnapshot(
   source: string,
   tick: number,
 ): Promise<GameRunner> {
-  const header = readSnapshotHeader(snapshot);
+  let header: ReturnType<typeof readSnapshotHeader>;
+  try {
+    header = readSnapshotHeader(snapshot);
+  } catch {
+    throw new Error("NATIONAL trusted snapshot header incompatible");
+  }
   if (
     gameStart.config.nationalMode !== true ||
     gameStart.config.gameType !== GameType.Private ||
@@ -203,13 +208,17 @@ export async function createTrustedNationalGameRunnerFromSnapshot(
     header.format !== SNAPSHOT_FORMAT_VERSION ||
     header.gitCommit !== source ||
     header.gameID !== gameStart.gameID ||
-    header.tick !== tick ||
-    JSON.stringify(header.gameConfig) !==
-      JSON.stringify(GameConfigSchema.parse(gameStart.config)) ||
-    header.humans.length !== gameStart.players.length ||
-    header.humans.some((h, i) => h.clientID !== gameStart.players[i]?.clientID)
+    header.tick !== tick
   ) {
-    throw new Error("NATIONAL trusted snapshot header incompatible");
+    throw new Error("NATIONAL snapshot identity incompatible");
+  }
+  if (JSON.stringify(header.gameConfig) !==
+      JSON.stringify(GameConfigSchema.parse(gameStart.config))) {
+    throw new Error("NATIONAL snapshot configuration incompatible");
+  }
+  if (header.humans.length !== gameStart.players.length ||
+      header.humans.some((h, i) => h.clientID !== gameStart.players[i]?.clientID)) {
+    throw new Error("NATIONAL snapshot human roster incompatible");
   }
   return restoreRunner(gameStart, snapshot, undefined, map, () => {}, true);
 }

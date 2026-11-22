@@ -314,8 +314,8 @@ export async function startWorker() {
       nationalStore = new DurableNationalStore(recoveryRoot, workerId);
     }
   } catch (error) {
-    log.error("NATIONAL durable recovery refused", { stage: "ownership-or-root" });
-    throw error;
+    log.error("NATIONAL durable recovery refused", { stage: "ownership-or-root", reason: error instanceof Error && error.message === "NATIONAL worker shard already owned or lock unavailable" ? "shard-already-owned" : "root-or-database-unavailable" });
+    throw new Error("NATIONAL durable ownership or storage root unavailable");
   }
   const gm = new GameManager(log, gatekeeper, nationalStore);
   try {
@@ -330,9 +330,18 @@ export async function startWorker() {
         "NATIONAL durable map mismatch",
         "NATIONAL trusted snapshot header incompatible",
         "NATIONAL durable engine roundtrip mismatch",
+        "NATIONAL durable engine seat or tick mismatch",
+        "NATIONAL invalid disconnected roster restore",
+        "NATIONAL invalid durable roster or start info",
+        "NATIONAL durable seat binding mismatch",
+        "NATIONAL durable shard mismatch",
+        "NATIONAL invalid recovery lifecycle",
+        "NATIONAL snapshot identity incompatible",
+        "NATIONAL snapshot configuration incompatible",
+        "NATIONAL snapshot human roster incompatible",
       ].includes(error.message) ? error.message : "invalid durable record or snapshot",
     });
-    throw error;
+    throw new Error("NATIONAL durable record or snapshot refused");
   }
 
   // Initialize lobby service (handles WebSocket upgrade routing)

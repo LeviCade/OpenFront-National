@@ -87,7 +87,7 @@ try {
   assert.throws(() => new DurableNationalStore(dir, 1), /private/);
   chmodSync(dir, 0o700);
   symlinkSync(rawPath, join(dir, "worker-1.sqlite"));
-  assert.throws(() => new DurableNationalStore(dir, 1), /unsafe/);
+  assert.throws(() => new DurableNationalStore(dir, 1, 262144, true), /unsafe/);
   console.log("PASS unsafe permissions and symlink rejected");
   const limited = new DurableNationalStore(dir, 2, 16, true);
   const before = limited.write("quota", 0, 0, "init");

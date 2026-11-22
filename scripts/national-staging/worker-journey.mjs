@@ -78,6 +78,11 @@ async function startHost() {
     await until(
       () => {
         assert(process.alive(), "Master exited before Worker ready");
+        const refusal = process.messages.find(m => m.message === "NATIONAL durable recovery refused");
+        if (refusal) {
+          console.error("SAFE_RECOVERY_REFUSAL " + JSON.stringify({stage: refusal.stage, reason: refusal.reason}));
+          throw new Error("explicit Worker recovery refusal");
+        }
         return (
           process.messages.some((m) =>
             m.message.startsWith("Master HTTP server listening"),

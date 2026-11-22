@@ -98,6 +98,7 @@ export function launch(args, env, executable = process.execPath) {
           [
             "NATIONAL authoritative host ready",
             "NATIONAL durable match restored",
+            "NATIONAL durable recovery refused",
             "NATIONAL authoritative tick",
             "NATIONAL authenticated socket resumed",
             "NATIONAL account lease ended",
@@ -116,6 +117,8 @@ export function launch(args, env, executable = process.execPath) {
             durableTick: log.durableTick,
             stateCommitment: log.stateCommitment,
             replayDigest: log.replayDigest,
+            stage: log.stage,
+            reason: log.reason,
             code: log.code,
             queuedIntents: log.queuedIntents,
           });
