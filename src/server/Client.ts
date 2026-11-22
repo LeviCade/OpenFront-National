@@ -27,8 +27,8 @@ export class Client {
   constructor(
     public readonly clientID: ClientID,
     public readonly persistentID: string,
-    public readonly claims: TokenPayload | null,
-    public readonly role: string | null,
+    public claims: TokenPayload | null,
+    public role: string | null,
     public readonly flares: string[] | undefined,
     public readonly ip: string,
     public username: string,
