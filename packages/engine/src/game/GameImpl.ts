@@ -1006,8 +1006,16 @@ export class GameImpl implements Game {
       ) {
         throw new Error("NATIONAL levy: attack not formally authorized");
       }
-      const expectedDonors = this.nationalMdaAllies(attack.defenderId).filter(
-        (id) => id !== attack.attackerId,
+      const response = this._national.standingDefenseFor(attack.defenderId);
+      const imperialDonors =
+        response?.response === "assist" || response?.response === "both"
+          ? this._national.authority().membersOf(response.empireId)
+          : [];
+      const expectedDonors = [...new Set([
+        ...this.nationalMdaAllies(attack.defenderId),
+        ...imperialDonors,
+      ])].filter(
+        (id) => id !== attack.attackerId && id !== attack.defenderId,
       );
       const suppliedDonors = attack.eligible.map((e) => e.source.nationId);
       if (
@@ -1023,12 +1031,17 @@ export class GameImpl implements Game {
         const id = entry.source.nationId;
         if (
           this.nationalLevySource(id) !== entry.source ||
-          !political.pacts.some(
-            (p) =>
-              p.kind === "MDA" &&
-              p.memberIds.includes(attack.defenderId) &&
-              p.memberIds.includes(id),
-          )
+          !(
+            political.pacts.some(
+              (p) =>
+                p.kind === "MDA" &&
+                p.memberIds.includes(attack.defenderId) &&
+                p.memberIds.includes(id),
+            ) || imperialDonors.includes(id)
+          ) ||
+          entry.maximumFraction !== (imperialDonors.includes(id) ? 1 : 0.1) ||
+          entry.protectedCapacityFraction !== 0.3 ||
+          entry.troopCapacity !== Math.floor(this._config.maxTroops(this.player(id)))
         ) {
           throw new Error(
             "NATIONAL levy: not an authoritative MDA contributor",
@@ -1104,7 +1117,7 @@ export class GameImpl implements Game {
       `national:${attackerId.length}:${attackerId}:${defenderId.length}:${defenderId}`;
     // One transaction across both MDA and imperial contributors; one campaign
     // allowance per real donor, shared across repeated clicks/fronts.
-    const result = this._nationalWar.interceptAcceptedAttacks([{
+    const result = this.applyNationalDefenseLevy([{
       attackId, confirmedAccepted: true, campaignId,
       attackerId, defenderId, attackingTroops: troops, eligible,
     }])[0];
