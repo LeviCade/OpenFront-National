@@ -224,6 +224,14 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
       expect(demand.target).toBe(C);
       expect(demand.recipientIds).toEqual([B]);
       expect(NationalSanctionExecution.viewFor(game, c)).toEqual([]);
+      // A genuinely profitable, long-distance B→A merchant tie makes
+      // preserving issuer trade worth more than the unused B→C route.
+      const distantTile = game.ref(7, 4);
+      a.conquer(distantTile);
+      const distantA = a.buildUnit(UnitType.Port, distantTile, {});
+      tick(game);
+      const dependentTrade = voyage(game, b, bb, distantA);
+      expect(dependentTrade.isActive()).toBe(true);
       game.convertHumanToNation(b, "c5-e5-recipient-" + seed);
       until(game, () =>
         NationalSanctionExecution.viewFor(game, b)[0]?.response !== undefined &&
