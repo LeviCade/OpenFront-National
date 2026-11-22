@@ -303,15 +303,16 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     eliminate(game, A);
     expect(game.nationalPoliticalAuthority()?.empireOf(B)).toBeNull();
     expect(game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBeNull();
-    expect(game.nationalWarState()?.wars.layers).toEqual(
-      ledgerBefore.wars.layers,
+    const archived = game.nationalWarState()!.wars.layers;
+    // D-010: living member's independent national WAR survives. A dissolved
+    // empire's sovereign WAR is retained as historical record but retired.
+    expect(archived.find((l) => l.id === "r4-national")).toEqual(
+      ledgerBefore.wars.layers.find((l) => l.id === "r4-national"),
     );
+    expect(archived.find((l) => l.id === "r4-imperial")?.endedTick).not.toBeNull();
     expect(game.nationalWarAuthority()?.atWar(A, C)).toBe(false);
     expect(game.nationalWarAuthority()?.atWar(B, C)).toBe(true);
-    expect(
-      game.nationalWarState()?.wars.layers.find((l) => l.id === "r4-imperial")
-        ?.endedTick,
-    ).toBeNull();
+    expect(game.nationalWarState()?.wars.layers.find((l) => l.id === "r4-imperial")?.endedTick).not.toBeNull();
     const { restored } = await roundTrip(game, "plains");
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
     expect(restored.nationalWarAuthority()?.atWar(B, C)).toBe(true);
@@ -330,7 +331,7 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     expect(typeof winner === "string" ? winner : winner?.id()).toBe(B);
   });
 
-  it("E3/E4 public political view enumerates only empire, warning and victory facts with no private pact data", async () => {
+  it("D-017 public political view exposes roster metadata, never private pact terms", async () => {
     const game = await live();
     const legacy = await live(2, false);
     expect(legacy.nationalPublicPoliticalView()).toBeNull();
@@ -352,20 +353,27 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     });
     const preAccession = game.nationalPublicPoliticalView()!;
     expect(preAccession.empires).toEqual([]);
-    expect(JSON.stringify(preAccession)).not.toContain("Not client public");
-    expect(JSON.stringify(preAccession)).not.toContain("r4-private-nap");
+    expect(preAccession.pacts).toMatchObject([
+      {
+        id: "r4-private-nap",
+        name: "Not client public",
+        memberIds: [B, C],
+      },
+    ]);
+    expect(JSON.stringify(preAccession)).not.toContain('"terms"');
     joined(game);
     const view = game.nationalPublicPoliticalView()!;
     expect(Object.keys(view).sort()).toEqual([
       "empires",
+      "pacts",
       "victory",
       "warnings",
     ]);
     expect(view.empires).toEqual([
       { id: EMPIRE, leaderId: A, memberIds: [A, B] },
     ]);
-    expect(JSON.stringify(view)).not.toContain("Not client public");
-    expect(JSON.stringify(view)).not.toContain("r4-private-nap");
+    // Public identities remain visible; secret constitutional terms do not.
+    expect(JSON.stringify(view)).not.toContain('"terms"');
     expect(view.warnings).toEqual([]);
     expect(view.victory).toBeNull();
     // Neither nested public arrays nor the captured view owns mutable truth.
