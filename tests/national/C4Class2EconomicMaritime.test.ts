@@ -14,6 +14,11 @@ import { WarshipExecution } from "@openfront/engine/execution/WarshipExecution";
 import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import { Railroad } from "@openfront/engine/game/Railroad";
 import { TrainStation } from "@openfront/engine/game/TrainStation";
+import { planNationalEconomicDecision } from "@openfront/engine/national/ai/NationalEconomicPlanner";
+import {
+  type NationalWorld,
+  projectNationalObservation,
+} from "@openfront/engine/national/observation/NationalObservation";
 import { WaterPathFinder } from "@openfront/engine/pathfinding/PathFinder";
 import { PathStatus } from "@openfront/engine/pathfinding/types";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
@@ -118,6 +123,7 @@ function balances(game: Game) {
       id,
       gold: p.gold(),
       trade: p.tradeGold(),
+      train: p.trainGold(),
       piracy: p.piracyGold(),
     };
   });
@@ -681,9 +687,7 @@ describe("C4 Class 2 E3 real NATIONAL economic and maritime execution", () => {
 
   it("real moving trains pay both stations in peace but not through NATIONAL war", async () => {
     const { game, a, b } = await fixture();
-    const railTiles = Array.from({ length: 12 }, (_, y) =>
-      game.ref(3, y + 1),
-    );
+    const railTiles = Array.from({ length: 12 }, (_, y) => game.ref(3, y + 1));
     a.conquer(railTiles[0]);
     b.conquer(railTiles[railTiles.length - 1]);
     const source = new TrainStation(
@@ -784,6 +788,134 @@ describe("C4 Class 2 E3 real NATIONAL economic and maritime execution", () => {
     expect(game.nationalWarAuthority()?.atWar(C, A)).toBe(false);
     expect(game.nationalWarAuthority()?.atWar(C, D)).toBe(false);
     witness(game, "ECON-04-imperial-enforcement", before, undefined);
+  });
+
+  it("ECON-04: pending imperial demand follows lawful crown succession, not the original issuer", async () => {
+    const { game, a, b, c, d } = await fixture();
+    const empireId = "e3-crown-sanction";
+    game.performNationalCommand(a, { kind: "found-empire", empireId });
+    game.performNationalCommand(a, {
+      kind: "offer-empire",
+      empireId,
+      candidateId: D,
+    });
+    game.performNationalCommand(d, {
+      kind: "accept-empire",
+      empireId,
+      candidateId: D,
+    });
+    game.addExecution(
+      new NationalSanctionExecution(a, {
+        type: "national_issue_sanction",
+        scope: "imperial",
+        targetId: B,
+        recipientIds: [C],
+        durationTicks: 5,
+        requestId: "e3-old-crown-threat",
+      }),
+    );
+    ticks(game, 2);
+    const id = NationalSanctionExecution.viewFor(game, a)[0].id;
+    game.performNationalCommand(a, {
+      kind: "transfer-crown",
+      empireId,
+      successorId: D,
+    });
+    expect(game.nationalPoliticalAuthority()?.emperorOf(empireId)).toBe(D);
+    expect(NationalSanctionExecution.viewFor(game, a)).toEqual([]);
+    expect(NationalSanctionExecution.viewFor(game, d)[0].requestId).toBeNull();
+    expect(NationalSanctionExecution.viewFor(game, d)[0].authorityId).toBe(D);
+    until(
+      game,
+      () =>
+        NationalSanctionExecution.viewFor(game, d)[0].phase ===
+        "decision-required",
+    );
+    const before = balances(game);
+    game.addExecution(
+      new NationalSanctionExecution(a, {
+        type: "national_resolve_sanction",
+        sanctionId: id,
+        decision: "enforce",
+        requestId: "e3-former-crown-denied",
+      }),
+    );
+    ticks(game, 2);
+    expect(a.canTrade(c)).toBe(true);
+    expect(d.canTrade(c)).toBe(true);
+    game.addExecution(
+      new NationalSanctionExecution(d, {
+        type: "national_resolve_sanction",
+        sanctionId: id,
+        decision: "enforce",
+        requestId: "e3-new-crown-enforces",
+      }),
+    );
+    ticks(game, 2);
+    expect(a.canTrade(c)).toBe(false);
+    expect(d.canTrade(c)).toBe(false);
+    expect(c.canTrade(b)).toBe(true);
+    expect(balances(game)).toEqual(before);
+    witness(game, "ECON-04-crown-succession", before, undefined);
+  });
+
+  it("AI-07: isolated observation/heuristic fixture ignores hidden reserves and controller kind, distinguishes a bluff", () => {
+    const makeWorld = (alternate: boolean): NationalWorld => ({
+      tick: 10,
+      nations: [A, B, C].map((id) => ({
+        id,
+        name: id,
+        landPercent: 33,
+        status: "independent",
+        alive: true,
+        controllerKind: id === A && alternate ? "ai" : "human",
+        troops: id === A && alternate ? 1_000_000 : 5,
+        treasury: id === A && alternate ? 999_000_000 : 10,
+      })),
+      coalitions: [],
+      wars: [],
+      invitations: [],
+      assets: alternate
+        ? [{ id: "hidden-ship", ownerId: A, kind: "warship", x: 6, y: 4 }]
+        : [],
+      sightGrants: [],
+      frontiers: [],
+      diplomaticEvents: [],
+    });
+    const obs = projectNationalObservation(makeWorld(false), C);
+    const alternate = projectNationalObservation(makeWorld(true), C);
+    expect(alternate).toEqual(obs);
+    const demand = {
+      id: "current",
+      issuer: A,
+      authorityId: A,
+      empire: null,
+      role: "recipient" as const,
+      recipientIds: [C],
+      target: B,
+      deadline: 20,
+      phase: "pending" as const,
+      trigger: "continuing-trade" as const,
+      threat: "embargo" as const,
+      response: "none" as const,
+      requestId: null,
+    };
+    const ties = [
+      { partnerId: A, tradePermitted: true, activeOwnVoyages: 0 },
+      { partnerId: B, tradePermitted: true, activeOwnVoyages: 0 },
+    ];
+    const history = { ...demand, id: "old", deadline: 5 };
+    const credible = [demand, { ...history, phase: "enforced" as const }];
+    const bluffed = [demand, { ...history, phase: "backed-down" as const }];
+    expect(planNationalEconomicDecision(obs, credible, ties)).toEqual(
+      planNationalEconomicDecision(alternate, credible, ties),
+    );
+    expect(planNationalEconomicDecision(obs, credible, ties)?.decision).toBe(
+      "comply",
+    );
+    expect(planNationalEconomicDecision(obs, bluffed, ties)?.decision).toBe(
+      "refuse",
+    );
   });
 
   it("AI-07: actual NationExecution voluntarily protects its observed merchant relationship", async () => {

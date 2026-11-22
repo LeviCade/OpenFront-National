@@ -8,15 +8,20 @@ import {
   PlayerInfo,
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
-import type { GameConfig } from "@openfront/engine-api/Schemas";
+import {
+  StampedIntentSchema,
+  type GameConfig,
+} from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { NationalSanctionExecution } from "@openfront/engine/execution/NationalSanctionExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
+import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
 import { Client } from "../../src/server/Client";
 import { TrustedNationalMatch } from "../../src/server/national/TrustedNationalMatch";
 import { setup } from "../util/Setup";
+import { roundTrip } from "../util/Snapshot";
 import { TestConfig } from "../util/TestConfig";
 
 const MATCH = "C4E3ECO01";
@@ -53,7 +58,11 @@ describe("M6 economic authority through actual private match ingress", () => {
   it("stamps real principals, rejects replay and forged resolution, and commits real embargoes", async () => {
     const game = await setup(
       "plains",
-      { nationalMode: true, gameType: GameType.Private, gameMode: GameMode.FFA },
+      {
+        nationalMode: true,
+        gameType: GameType.Private,
+        gameMode: GameMode.FFA,
+      },
       roster,
       undefined,
       PrivateEconomicConfig,
@@ -129,6 +138,58 @@ describe("M6 economic authority through actual private match ingress", () => {
       host.tick();
     }
     expect(view(a)[0].phase).toBe("decision-required");
+    // Restore the actual private game with active economic state and a
+    // disconnected target, using the same registered original principals.
+    host.recordServerDisconnect(clients[3], true);
+    host.tick();
+    host.tick();
+    expect(d.isDisconnected()).toBe(true);
+    const { bytes, again, restored } = await roundTrip(game, "plains");
+    expect(again).toEqual(bytes);
+    expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
+    const restoredA = restored.player(A);
+    const restoredB = restored.player(B);
+    const restoredC = restored.player(C);
+    const restoredD = restored.player(D);
+    const nextClient = "E3CLIENTX";
+    const manager = new Executor(restored, MATCH, undefined);
+    const stale = manager.createExec(
+      StampedIntentSchema.parse({
+        type: "national_resolve_sanction",
+        clientID: clients[0],
+        sanctionId: id,
+        decision: "enforce",
+        requestId: "e3-wire-stale",
+      }),
+    );
+    restored.addExecution(stale);
+    restored.takeoverPlayer(restoredA, nextClient);
+    restored.executeNextTick();
+    restored.executeNextTick();
+    expect(restoredA.canTrade(restoredB)).toBe(true);
+    expect(
+      NationalSanctionExecution.viewFor(restored, restoredA)[0].phase,
+    ).toBe("decision-required");
+    expect(
+      NationalSanctionExecution.viewFor(restored, restoredA)[0].requestId,
+    ).toBeNull();
+    restored.addExecution(
+      manager.createExec(
+        StampedIntentSchema.parse({
+          type: "national_resolve_sanction",
+          clientID: nextClient,
+          sanctionId: id,
+          decision: "enforce",
+          requestId: "e3-wire-new-seat",
+        }),
+      ),
+    );
+    restored.executeNextTick();
+    restored.executeNextTick();
+    expect(restoredA.canTrade(restoredB)).toBe(false);
+    expect(restoredA.canTrade(restoredC)).toBe(true);
+    expect(restoredB.canTrade(restoredD)).toBe(true);
+
     const forged = act(1, {
       type: "national_resolve_sanction",
       sanctionId: id,

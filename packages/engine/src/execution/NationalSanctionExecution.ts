@@ -370,7 +370,11 @@ export class NationalSanctionExecution implements Execution {
           // Never expose transaction existence or another recipient's response.
           response: own?.response ?? null,
           requestId:
-            isIssuer && e.actor === observer ? e.command.requestId : null,
+            isIssuer &&
+            e.actor === observer &&
+            (e.clientId === null || e.clientId === observer.clientID())
+              ? e.command.requestId
+              : null,
         },
       ];
     });
