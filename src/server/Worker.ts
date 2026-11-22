@@ -63,6 +63,7 @@ import { resolveVerifiedJoin } from "./Privilege";
 import { loadGatekeeper } from "./Gatekeeper";
 import { MapPlaylist } from "./MapPlaylist";
 import { isNationalSignedInAccount } from "./national/NationalAccountGate";
+import { DurableNationalStore } from "./national/DurableNationalStore";
 import { watchNationalAccount } from "./national/NationalAccountLease";
 import { setNoStoreHeaders } from "./NoStoreHeaders";
 import { PrivilegeRefresher } from "./PrivilegeRefresher";
@@ -303,7 +304,14 @@ export async function startWorker() {
   });
 
   const gatekeeper = await loadGatekeeper(log);
-  const gm = new GameManager(log, gatekeeper);
+  // Every replacement of this worker shard must acquire the same local
+  // kernel lock before recovery or any listener can become available.
+  const recoveryRoot = process.env.NATIONAL_RECOVERY_ROOT;
+  const nationalStore = recoveryRoot === undefined
+    ? undefined
+    : new DurableNationalStore(recoveryRoot, workerId);
+  const gm = new GameManager(log, gatekeeper, nationalStore);
+  await gm.restoreDurableNationalMatches(workerId);
 
   // Initialize lobby service (handles WebSocket upgrade routing)
   const lobbyService = new WorkerLobbyService(server, wss, gm, log);

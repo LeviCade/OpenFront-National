@@ -22,6 +22,9 @@ import {
 } from "./GameServer";
 import { Gatekeeper, noopGatekeeper } from "./Gatekeeper";
 import { ClientAuth, clientAuth } from "./JoinVerify";
+import { DurableNationalCheckpoint } from "./national/DurableNationalCheckpoint";
+import type { DurableNationalStore } from "./national/DurableNationalStore";
+import { ServerEnv } from "./ServerEnv";
 
 export interface ClientSegmentCount {
   platform: Client["platform"];
@@ -36,8 +39,38 @@ export class GameManager {
   constructor(
     private log: Logger,
     private readonly gatekeeper: Gatekeeper = noopGatekeeper,
+    private readonly durableNationalStore?: DurableNationalStore,
   ) {
     setInterval(() => this.tick(), 1000);
+  }
+
+  /** Before the actual Worker listener starts. Failure refuses startup;
+   * no alternate empty timeline or legacy game is ever created. */
+  public async restoreDurableNationalMatches(workerID: number): Promise<void> {
+    const store = this.durableNationalStore;
+    if (!store) return;
+    const source = ServerEnv.gitCommit();
+    if (!/^[a-f0-9]{40}$/.test(source)) throw new Error("NATIONAL recovery requires exact source SHA");
+    for (const id of store.list()) {
+      if (ServerEnv.workerIndex(id) !== workerID || this.games.has(id)) {
+        throw new Error("NATIONAL durable shard mismatch");
+      }
+      const row = store.read(id);
+      if (!row) throw new Error("NATIONAL durable record disappeared");
+      const checkpoint = DurableNationalCheckpoint.load(store, row, source);
+      const creatorIndex = checkpoint.info.players.findIndex((p) => p.isLobbyCreator);
+      const game = new GameServer({
+        id, log: this.log, createdAt: checkpoint.info.lobbyCreatedAt,
+        gameConfig: checkpoint.info.config,
+        creatorPersistentID: checkpoint.seats[creatorIndex].subject,
+      }, { gatekeeper: this.gatekeeper, durableNationalStore: store });
+      if (game.pastMaxDuration()) {
+        checkpoint.retire();
+        continue;
+      }
+      await game.recoverTrustedNational(checkpoint);
+      this.games.set(id, game);
+    }
   }
 
   public game(id: GameID): GameServer | null {
@@ -92,7 +125,7 @@ export class GameManager {
     matchmakingTeams?: string[][],
     matchmakingClanTags?: string[],
   ): GameServer | null {
-    if (this.games.has(id)) {
+    if (this.games.has(id) || this.durableNationalStore?.list().includes(id)) {
       this.log.warn("cannot create game, id already exists", { gameID: id });
       return null;
     }
@@ -128,6 +161,7 @@ export class GameManager {
       },
       {
         gatekeeper: this.gatekeeper,
+        durableNationalStore: this.durableNationalStore,
       },
     );
     this.games.set(id, game);
