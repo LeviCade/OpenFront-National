@@ -59,6 +59,29 @@ jobs:
             packages/engine/src/game/GameImpl.ts \
             packages/engine/src/execution/NationalWarExecution.ts \
             tests/national/C5StandingImperialDefense.test.ts
+      - name: Formatter suggested patch (diagnostic, never auto-commit)
+        if: success() || failure()
+        run: |
+          npx --no-install oxfmt --write \
+            packages/engine/src/national/politics/sovereignty.ts \
+            packages/engine/src/national/NationalRuntime.ts \
+            packages/engine-api/src/Schemas.ts \
+            packages/engine/src/national/conflict/WarLedger.ts \
+            packages/engine/src/national/politics/NationalWarState.ts \
+            packages/engine/src/game/GameImpl.ts \
+            packages/engine/src/execution/NationalWarExecution.ts \
+            tests/national/C5StandingImperialDefense.test.ts
+          echo 'E4_FMT_DIFF_BEGIN'
+          git diff --no-ext-diff --no-color -- \
+            packages/engine/src/national/politics/sovereignty.ts \
+            packages/engine/src/national/NationalRuntime.ts \
+            packages/engine-api/src/Schemas.ts \
+            packages/engine/src/national/conflict/WarLedger.ts \
+            packages/engine/src/national/politics/NationalWarState.ts \
+            packages/engine/src/game/GameImpl.ts \
+            packages/engine/src/execution/NationalWarExecution.ts \
+            tests/national/C5StandingImperialDefense.test.ts
+          echo 'E4_FMT_DIFF_END'
       - name: Production build
         if: success() || failure()
         run: npm run build-prod
