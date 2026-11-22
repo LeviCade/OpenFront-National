@@ -1,0 +1,80 @@
+name: C5 C2 E1 Native NATIONAL Gameplay
+on:
+  push:
+    branches:
+      - feature/c5-class2-e1-native-national-gameplay-20261122
+  pull_request:
+    branches:
+      - stage3/conductor5-class2-integration-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c5-c2-e1-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused-native:
+    name: UI map, imperial works, WAR wire, actual Game
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Assert exact source
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: npm run typecheck
+      - name: Native human interaction, war and private visibility
+        run: |
+          npx --no-install vitest run --project client \
+            tests/ui/national/NationalDiplomacyPanel.test.ts \
+            tests/ui/national/NationalHumanMapInputR11.test.ts \
+            tests/ui/national/NationalWarWire.test.ts \
+            tests/ui/national/NationalPrivatePanelClass5.test.ts
+      - name: Real engine treasury, scoped combat and replay
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/ImperialSpendingClassFive.test.ts \
+            tests/national/C5ImperialCentralCombat.test.ts \
+            tests/national/LiveWarExecutionRound5.test.ts
+      - name: Changed-file formatting
+        run: |
+          npx --no-install oxfmt --check \
+            src/client/NationalDiplomacyPanel.ts \
+            src/client/NationalImperialState.ts \
+            src/client/NationalImperialWorks.ts \
+            tests/ui/national/NationalDiplomacyPanel.test.ts \
+            .github/workflows/c5-class2-e1-native-gameplay.yml
+  source-regression:
+    name: Full source, lint and build (non-GPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: npm test
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run build-prod
