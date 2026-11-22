@@ -55,8 +55,12 @@ jobs:
       - name: Install exact dependencies
         run: npm run inst
       - name: Check all TypeScript workspaces
+        id: types
+        continue-on-error: true
         run: npm run typecheck
       - name: Targeted exact-head live WebSocket and national authority regression
+        id: tests
+        continue-on-error: true
         run: |
           npx --no-install vitest run --project node \
             tests/server/NationalAccountGate.test.ts \
@@ -64,6 +68,8 @@ jobs:
             tests/national/ClassFiveTrustedLobbyTransport.test.ts \
             tests/national/TrustedNationalServerAuthority.test.ts
       - name: Lint owned source and tests
+        id: lint
+        continue-on-error: true
         run: |
           npx --no-install oxlint \
             src/server/Worker.ts src/server/GameServer.ts \
@@ -75,6 +81,8 @@ jobs:
             tests/national/ClassFiveTrustedLobbyTransport.test.ts
 
       - name: Validate formatting and print exact candidate repairs on failure
+        id: format
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -94,3 +102,18 @@ jobs:
             echo "E2_EXACT_FORMAT_REPAIR_END"
             exit 1
           fi
+      - name: Require all exact-source checks
+        if: always()
+        env:
+          TYPES_OUTCOME: ${{ steps.types.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          FORMAT_OUTCOME: ${{ steps.format.outcome }}
+        run: |
+          set -euo pipefail
+          printf 'TYPECHECK=%s TESTS=%s LINT=%s FORMAT=%s\n' \
+            "$TYPES_OUTCOME" "$TESTS_OUTCOME" "$LINT_OUTCOME" "$FORMAT_OUTCOME"
+          test "$TYPES_OUTCOME" = success
+          test "$TESTS_OUTCOME" = success
+          test "$LINT_OUTCOME" = success
+          test "$FORMAT_OUTCOME" = success

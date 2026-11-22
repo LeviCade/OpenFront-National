@@ -42,7 +42,11 @@ import { Client } from "./Client";
 import { gameApiCors } from "./GameApiCors";
 import { GameManager } from "./GameManager";
 import { registerGamePreviewRoute } from "./GamePreviewRoute";
-import { GamePhase, type GameServer } from "./GameServer";
+import {
+  GamePhase,
+  type GameServer,
+  type NationalReconnectPrincipal,
+} from "./GameServer";
 import {
   isSteamAuthenticated,
   type JoinVerifyResponse,
@@ -725,9 +729,7 @@ export async function startWorker() {
           incumbent?.gameConfig.nationalMode === true &&
           (clientMsg.type === "rejoin" ||
             incumbent.getClientIdForPersistentId(persistentId) !== null);
-        let nationalPrincipal:
-          | { subject: string; publicId: string }
-          | undefined;
+        let nationalPrincipal: NationalReconnectPrincipal | undefined;
         if (returningNationalSeat) {
           if (!claims || claims.sub !== persistentId) {
             ws.close(CloseCode.Unauthorized, CloseReason.InvalidToken);

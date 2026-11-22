@@ -843,6 +843,12 @@ export class HostLobbyModal extends BaseModal {
                     .checked=${this.nationalMode}
                     @change=${(event: Event) => {
                       this.nationalMode = (event.target as HTMLInputElement).checked;
+                      if (this.nationalMode) {
+                        // The ordinary private-host defaults include 400 bots;
+                        // the three-human NATIONAL host must start unburdened.
+                        this.bots = 0;
+                        this.nations = 0;
+                      }
                       this.nationalModeLoadedFor = this.lobbyId;
                       void this.putGameConfig();
                     }}
