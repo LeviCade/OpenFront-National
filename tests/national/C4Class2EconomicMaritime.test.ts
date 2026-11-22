@@ -530,6 +530,27 @@ describe("C4 Class 2 E3 real NATIONAL economic and maritime execution", () => {
     witness(game, "ECON-04", before, undefined);
   });
 
+  it("AI-07: actual NationExecution voluntarily protects its observed merchant relationship", async () => {
+    const { game, a, b, c, home, own } = await fixture();
+    // First-party evidence: the recipient currently owns a real A-bound
+    // merchant. Its decision must not read A/B's reserves or controller type.
+    const merchant = sail(game, c, home, own);
+    expect(merchant.isActive()).toBe(true);
+    expect(c.units(UnitType.TradeShip).length).toBeGreaterThan(0);
+    game.convertHumanToNation(c, "e3-economic-ai");
+    game.addExecution(new NationalSanctionExecution(a, {
+      type: "national_issue_sanction",
+      scope: "national",
+      targetId: B,
+      recipientIds: [C],
+      durationTicks: 40,
+      requestId: "e3-ai-demand",
+    }));
+    until(game, () => c.hasManualEmbargoAgainst(b), 30);
+    expect(c.canTrade(a)).toBe(true);
+    expect(NationalSanctionExecution.viewFor(game, c)[0].response).toBe("comply");
+  });
+
   it("tactical shells cannot damage a now-peaceful target; legacy fire is unchanged", async () => {
     for (const nationalMode of [true, false]) {
       const { game, a, b } = await fixture(nationalMode);

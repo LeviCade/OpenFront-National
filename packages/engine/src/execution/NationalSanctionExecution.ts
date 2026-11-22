@@ -315,7 +315,14 @@ export class NationalSanctionExecution implements Execution {
   static stateHash(game: Game): number {
     const records = this.records(game);
     if (records.length === 0) return 0;
-    return simpleHash(JSON.stringify(records.map((e) => e.demand)));
+    return simpleHash(
+      JSON.stringify(
+        records.map((e) => ({
+          demand: e.demand,
+          requestId: e.command.requestId,
+        })),
+      ),
+    );
   }
 
   /** Host-only read; projection must bind the real authenticated observer. */
@@ -331,7 +338,12 @@ export class NationalSanctionExecution implements Execution {
       return [{
         id: d.id,
         issuer: d.issuer,
+        authorityId: e.controllingIssuer()?.id() ?? null,
         empire: d.empire,
+        role: isIssuer ? ("issuer" as const) : ("recipient" as const),
+        recipientIds: isIssuer
+          ? d.recipients.map((row) => row.id)
+          : [observer.id()],
         target: d.target,
         deadline: d.deadline,
         phase: d.phase,
@@ -388,6 +400,10 @@ export class NationalSanctionExecution implements Execution {
     this.demand = s.demand;
   }
 }
+
+export type NationalEconomicDemandView = ReturnType<
+  typeof NationalSanctionExecution.viewFor
+>[number];
 
 export const NationalSanctionExecutionSnapshot = execSnapshotType({
   name: "NationalSanction",
