@@ -980,7 +980,7 @@ describe("C4 E4 native constitutional controls", () => {
         {
           id: "empire",
           leaderId: "nation-a",
-          memberIds: ["nation-a", "nation-b"],
+          memberIds: ["nation-a", "ABCDEF12"],
         },
       ],
       warnings: [],
@@ -1009,7 +1009,7 @@ describe("C4 E4 native constitutional controls", () => {
     Object.assign(element.game!, {
       players: () => [
         players[0],
-        { ...players[1], units: () => [city] },
+        { ...players[1], id: () => "ABCDEF12", units: () => [city] },
         { ...players[2], units: () => [foreign] },
       ],
     });
@@ -1040,7 +1040,7 @@ describe("C4 E4 native constitutional controls", () => {
       command: {
         kind: "upgrade-structure",
         empireId: "empire",
-        memberId: "nation-b",
+        memberId: "ABCDEF12",
         unitId: 42,
       },
     });
@@ -1099,7 +1099,7 @@ describe("C4 E4 native constitutional controls", () => {
       command: {
         kind: "demolish-structure",
         empireId: "empire",
-        memberId: "nation-b",
+        memberId: "ABCDEF12",
         unitId: 42,
       },
     });
@@ -1140,7 +1140,7 @@ describe("C4 E4 native constitutional controls", () => {
         {
           id: "empire",
           leaderId: "nation-a",
-          memberIds: ["nation-a", "nation-b"],
+          memberIds: ["nation-a", "ABCDEF12"],
         },
       ],
       warnings: [],
@@ -1162,7 +1162,7 @@ describe("C4 E4 native constitutional controls", () => {
     };
     const players = element.game!.players();
     Object.assign(element.game!, {
-      players: () => [players[0], { ...players[1], units: () => [city] }],
+      players: () => [players[0], { ...players[1], id: () => "ABCDEF12", units: () => [city] }],
     });
     element.refresh();
     await element.updateComplete;
@@ -1181,8 +1181,8 @@ describe("C4 E4 native constitutional controls", () => {
       empires: [
         {
           id: "empire",
-          leaderId: "nation-b",
-          memberIds: ["nation-a", "nation-b"],
+          leaderId: "ABCDEF12",
+          memberIds: ["nation-a", "ABCDEF12"],
         },
       ],
       warnings: [],
