@@ -10,14 +10,12 @@ import { inflateSync } from "node:zlib";
 const SIGNATURE = Buffer.from("89504e470d0a1a0a", "hex");
 const CRC_TABLE = Uint32Array.from({ length: 256 }, (_, n) => {
   let c = n;
-  for (let k = 0; k < 8; k++)
-    c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
   return c >>> 0;
 });
 function crc32(bytes) {
   let crc = 0xffffffff;
-  for (const byte of bytes)
-    crc = CRC_TABLE[(crc ^ byte) & 255] ^ (crc >>> 8);
+  for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 255] ^ (crc >>> 8);
   return (crc ^ 0xffffffff) >>> 0;
 }
 
@@ -81,16 +79,12 @@ export function validateScreenshotPng(bytes) {
       if (compressedLength > 32 * 1024 * 1024) return null;
       compressed.push(bytes.subarray(offset + 8, end));
     } else if (type === "IEND") {
-      if (!sawIdat || length !== 0 || end + 4 !== bytes.length)
-        return null;
+      if (!sawIdat || length !== 0 || end + 4 !== bytes.length) return null;
       sawIend = true;
       break;
     } else if (type === "PLTE") {
       if (sawIdat) return null;
-    } else if (
-      !/^[a-z]/.test(type) ||
-      !/^[A-Za-z]{4}$/.test(type)
-    ) {
+    } else if (!/^[a-z]/.test(type) || !/^[A-Za-z]{4}$/.test(type)) {
       // Unknown critical PNG chunks are not usable image evidence.
       return null;
     }
