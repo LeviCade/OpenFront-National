@@ -171,9 +171,18 @@ function pageFromWire(
     unitIds.add(unit.id);
   }
   if (
-    Object.keys(base.ownResources).some((key) => !["troops", "treasury"].includes(key)) ||
-    base.visibleBorders.some((border) => Object.keys(border).some((key) => !["targetId", "access"].includes(key))) ||
-    base.countries.some((country) => Object.keys(country).some((key) => !["id", "name", "alive", "landPercent", "status"].includes(key)))
+    Object.keys(base.ownResources).some(
+      (key) => !["troops", "treasury"].includes(key),
+    ) ||
+    base.visibleBorders.some((border) =>
+      Object.keys(border).some((key) => !["targetId", "access"].includes(key)),
+    ) ||
+    base.countries.some((country) =>
+      Object.keys(country).some(
+        (key) =>
+          !["id", "name", "alive", "landPercent", "status"].includes(key),
+      ),
+    )
   )
     throw new Error("NATIONAL private or unknown nested map field");
   const removed = raw.unitRemovedIds as number[];

@@ -479,26 +479,25 @@ export class NationalOutboundFilter {
     // roster without mutating engine diff state. Full own state each live
     // tick also replaces the intentionally suppressed packed attack lane.
     const firstPage = page?.sweepId === 1 && page.cursor === 0;
-    const players =
-      firstPage
-        ? game.allPlayers().map((player): PlayerUpdate =>
-            player.id() === ownID
-              ? player.toFullUpdate()
-              : {
-                  type: GameUpdateType.Player,
-                  id: player.id(),
-                  name: player.name(),
-                  displayName: player.displayName(),
-                  nationFlag: player.info().nationFlag,
-                  playerType: player.type(),
-                  smallID: player.smallID(),
-                  isAlive: player.isAlive(),
-                  tilesOwned: player.numTilesOwned(),
-                },
-          )
-        : rawPlayer
-            .filter((u) => page === undefined || u.id !== ownID)
-            .map((u) => (u.id === ownID ? { ...u } : publicPlayer(u)));
+    const players = firstPage
+      ? game.allPlayers().map((player): PlayerUpdate =>
+          player.id() === ownID
+            ? player.toFullUpdate()
+            : {
+                type: GameUpdateType.Player,
+                id: player.id(),
+                name: player.name(),
+                displayName: player.displayName(),
+                nationFlag: player.info().nationFlag,
+                playerType: player.type(),
+                smallID: player.smallID(),
+                isAlive: player.isAlive(),
+                tilesOwned: player.numTilesOwned(),
+              },
+        )
+      : rawPlayer
+          .filter((u) => page === undefined || u.id !== ownID)
+          .map((u) => (u.id === ownID ? { ...u } : publicPlayer(u)));
     if (page !== undefined && !firstPage && ownID !== null)
       players.push(game.player(ownID).toFullUpdate());
 
@@ -513,11 +512,14 @@ export class NationalOutboundFilter {
     ];
     updates[GameUpdateType.SpawnPhaseEnd] =
       firstPage && !game.inSpawnPhase()
-        ? [{
-            type: GameUpdateType.SpawnPhaseEnd,
-            // GameImpl.elapsedGameSeconds() is canonical elapsed ticks / 10.
-            startTick: game.ticks() - Math.round(game.elapsedGameSeconds() * 10),
-          }]
+        ? [
+            {
+              type: GameUpdateType.SpawnPhaseEnd,
+              // GameImpl.elapsedGameSeconds() is canonical elapsed ticks / 10.
+              startTick:
+                game.ticks() - Math.round(game.elapsedGameSeconds() * 10),
+            },
+          ]
         : [...data.updates[GameUpdateType.SpawnPhaseEnd]];
 
     const packedTile: number[] = [];

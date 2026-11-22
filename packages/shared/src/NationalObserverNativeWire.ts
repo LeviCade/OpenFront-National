@@ -223,10 +223,15 @@ export function validateNationalObserverNativeLanes(
     if (own) {
       if (
         (marker.troops !== undefined && row[OFFSET_TROOPS] !== marker.troops) ||
-        [OFFSET_TARGET_TILE, OFFSET_WARSHIP_PATROL_TILE, OFFSET_WARSHIP_RETREAT_PORT].some(
+        [
+          OFFSET_TARGET_TILE,
+          OFFSET_WARSHIP_PATROL_TILE,
+          OFFSET_WARSHIP_RETREAT_PORT,
+        ].some(
           (offset) => !Number.isNaN(row[offset]) && !uint(row[offset], maxRef),
         ) ||
-        (!Number.isNaN(row[OFFSET_TARGET_UNIT_ID]) && !uint(row[OFFSET_TARGET_UNIT_ID]))
+        (!Number.isNaN(row[OFFSET_TARGET_UNIT_ID]) &&
+          !uint(row[OFFSET_TARGET_UNIT_ID]))
       )
         invalid();
       ownUnits.add(marker.id);
@@ -292,8 +297,10 @@ export function validateNationalObserverNativeLanes(
       player.type !== GameUpdateType.Player ||
       (player.smallID !== undefined &&
         (!uint(player.smallID, 0xfff) ||
-          (player.id === page.observerId) !== (player.smallID === page.observerSmallId))) ||
-      (player.tilesOwned !== undefined && !uint(player.tilesOwned, maxRef + 1)) ||
+          (player.id === page.observerId) !==
+            (player.smallID === page.observerSmallId))) ||
+      (player.tilesOwned !== undefined &&
+        !uint(player.tilesOwned, maxRef + 1)) ||
       (player.name !== undefined && typeof player.name !== "string") ||
       (player.isAlive !== undefined && typeof player.isAlive !== "boolean") ||
       (player.id !== page.observerId &&
@@ -306,11 +313,25 @@ export function validateNationalObserverNativeLanes(
     if (!Array.isArray(entries)) invalid();
     if (Number(key) === GameUpdateType.Player) continue;
     if (Number(key) === GameUpdateType.GamePaused) {
-      if (entries.some((entry: unknown) => !record(entry) ||
-        entry.type !== GameUpdateType.GamePaused || typeof entry.paused !== "boolean")) invalid();
+      if (
+        entries.some(
+          (entry: unknown) =>
+            !record(entry) ||
+            entry.type !== GameUpdateType.GamePaused ||
+            typeof entry.paused !== "boolean",
+        )
+      )
+        invalid();
     } else if (Number(key) === GameUpdateType.SpawnPhaseEnd) {
-      if (entries.some((entry: unknown) => !record(entry) ||
-        entry.type !== GameUpdateType.SpawnPhaseEnd || !uint(entry.startTick, page.tick))) invalid();
+      if (
+        entries.some(
+          (entry: unknown) =>
+            !record(entry) ||
+            entry.type !== GameUpdateType.SpawnPhaseEnd ||
+            !uint(entry.startTick, page.tick),
+        )
+      )
+        invalid();
     } else if (entries.length !== 0) invalid();
   }
   for (const dto of [
@@ -324,10 +345,15 @@ export function validateNationalObserverNativeLanes(
       invalid();
   }
   const offers = packet.nationalAccessionOffers;
-  if (offers !== undefined &&
-    (!record(offers) || !Array.isArray(offers.offers) ||
-      offers.offers.some((offer: unknown) => !record(offer) ||
-        offer.recipientId !== page.observerId)))
+  if (
+    offers !== undefined &&
+    (!record(offers) ||
+      !Array.isArray(offers.offers) ||
+      offers.offers.some(
+        (offer: unknown) =>
+          !record(offer) || offer.recipientId !== page.observerId,
+      ))
+  )
     invalid();
   if (
     packet.nationalCommandResults !== undefined &&

@@ -15,7 +15,10 @@ import {
   PlayerType,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
-import { GameUpdateType, type GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import {
+  GameUpdateType,
+  type GameUpdateViewData,
+} from "@openfront/engine-api/game/GameUpdates";
 import type { GameConfig } from "@openfront/engine-api/Schemas";
 import {
   OFFSET_TARGET_TILE,
@@ -310,7 +313,9 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     host.tick();
     const resumed = view(replacement);
     const roster = resumed.data.updates[GameUpdateType.Player];
-    expect(roster.map((player) => player.id)).toEqual(expect.arrayContaining([A.id, B.id, C.id]));
+    expect(roster.map((player) => player.id)).toEqual(
+      expect.arrayContaining([A.id, B.id, C.id]),
+    );
     const self = roster.find((player) => player.id === B.id);
     expect(self?.troops).toBe(game.player(B.id).troops());
     expect(self?.smallID).toBe(game.player(B.id).smallID());
@@ -319,11 +324,20 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     expect(outsider).not.toHaveProperty("troops");
     expect(outsider).not.toHaveProperty("gold");
     expect(resumed.data.updates[GameUpdateType.SpawnPhaseEnd]).toEqual([
-      expect.objectContaining({startTick: game.ticks() - Math.round(game.elapsedGameSeconds() * 10)}),
+      expect.objectContaining({
+        startTick: game.ticks() - Math.round(game.elapsedGameSeconds() * 10),
+      }),
     ]);
-    const resumedReader = new NationalObserverMapContinuity(B.id, resumed.map.streamId);
+    const resumedReader = new NationalObserverMapContinuity(
+      B.id,
+      resumed.map.streamId,
+    );
     expect(() => resumedReader.accept(b2.map, b2.msg.tick)).toThrow();
-    expect(resumedReader.acceptProjection(parseTrustedNationalProjection(resumed.msg.payload, resumed.msg.tick)).usable).toBe(true);
+    expect(
+      resumedReader.acceptProjection(
+        parseTrustedNationalProjection(resumed.msg.payload, resumed.msg.tick),
+      ).usable,
+    ).toBe(true);
     expect(resumed.map.observerId).toBe(B.id);
     expect(resumed.map.reset).toBe(true);
     expect(resumed.map.cursor).toBe(0);
@@ -664,20 +678,36 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
         packedTileUpdates: [9999, 42],
       }),
     ).toThrow();
-    expect(() => fresh.acceptProjection({
-      ...packet,
-      updates: {
-        ...(packet.updates as Record<string, unknown>),
-        [GameUpdateType.Player]: [{ type: GameUpdateType.Player, id: B.id, troops: 12345 }],
-      },
-    })).toThrow();
-    expect(() => fresh.acceptProjection({
-      ...packet,
-      nationalAccessionOffers: { version: 1, recipientId: A.id, offers: [{ recipientId: C.id }] },
-    })).toThrow();
-    expect(() => fresh.accept({
-      ...one.map, ownResources: { ...one.map.ownResources, enemyTreasury: 1234 },
-    }, one.msg.tick)).toThrow();
+    expect(() =>
+      fresh.acceptProjection({
+        ...packet,
+        updates: {
+          ...(packet.updates as Record<string, unknown>),
+          [GameUpdateType.Player]: [
+            { type: GameUpdateType.Player, id: B.id, troops: 12345 },
+          ],
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      fresh.acceptProjection({
+        ...packet,
+        nationalAccessionOffers: {
+          version: 1,
+          recipientId: A.id,
+          offers: [{ recipientId: C.id }],
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      fresh.accept(
+        {
+          ...one.map,
+          ownResources: { ...one.map.ownResources, enemyTreasury: 1234 },
+        },
+        one.msg.tick,
+      ),
+    ).toThrow();
     expect(fresh.lastAcceptedTick).toBe(-1);
     const u1 = reader.acceptProjection(packet);
     expect(Number.isNaN(u1.nativeUnits![OFFSET_TARGET_TILE])).toBe(true);
