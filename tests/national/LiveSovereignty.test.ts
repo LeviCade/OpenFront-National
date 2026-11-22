@@ -3,15 +3,15 @@ import {
   PlayerType,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
+import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
+import { ConstructionExecution } from "@openfront/engine/execution/ConstructionExecution";
+import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import {
   NationalFoundEmpireExecution,
   NationalFoundEmpireExecutionSnapshot,
 } from "@openfront/engine/execution/NationalFoundEmpireExecution";
-import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
-import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
-import { ConstructionExecution } from "@openfront/engine/execution/ConstructionExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { WinCheckExecution } from "@openfront/engine/execution/WinCheckExecution";
 import type { Game } from "@openfront/engine/game/Game";
@@ -430,7 +430,9 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
       game.nationalUngovernableWarnings(),
     );
     expect(snapshot(restored)).toEqual(snapshot(game));
-    expect(game.nationalPoliticalAuthority()?.empireExists("empire-r3")).toBe(false);
+    expect(game.nationalPoliticalAuthority()?.empireExists("empire-r3")).toBe(
+      false,
+    );
     expect(game.nationalPoliticalAuthority()?.empireOf(S)).toBeNull();
     expect(() =>
       game.performNationalCommand(north, {
@@ -487,34 +489,64 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
 describe("Class Two E1 COAL-02/07 recipient pact reads", () => {
   it("separates public metadata, actionable invitations, and member votes", async () => {
     const game = await realGame(3);
-    const n = game.player(N), s = game.player(S), w = game.player(W);
+    const n = game.player(N),
+      s = game.player(S),
+      w = game.player(W);
     game.performNationalCommand(n, {
-      kind: "found-pact", pactId: "e1-pact", name: "E1 Pact",
-      pactKind: "MDA", terms: { admission: "unanimous", expulsion: "leader" },
+      kind: "found-pact",
+      pactId: "e1-pact",
+      name: "E1 Pact",
+      pactKind: "MDA",
+      terms: { admission: "unanimous", expulsion: "leader" },
     });
-    game.performNationalCommand(n, { kind: "invite-pact", pactId: "e1-pact", candidateId: S });
+    game.performNationalCommand(n, {
+      kind: "invite-pact",
+      pactId: "e1-pact",
+      candidateId: S,
+    });
     expect(game.nationalPublicPactRoster()[0]).not.toHaveProperty("terms");
-    expect(game.nationalPublicPoliticalView()?.pacts).toEqual(game.nationalPublicPactRoster());
+    expect(game.nationalPublicPoliticalView()?.pacts).toEqual(
+      game.nationalPublicPactRoster(),
+    );
     expect(game.nationalPactDisclosure(w)?.pacts).toEqual([]);
-    expect(game.nationalPactDisclosure(s)?.pacts[0]).not.toHaveProperty("pendingAmendment");
+    expect(game.nationalPactDisclosure(s)?.pacts[0]).not.toHaveProperty(
+      "pendingAmendment",
+    );
     expect(game.nationalPactViewsFor(w)).toEqual([]);
     expect(game.nationalPactViewsFor(s)[0].canAccept).toBe(true);
     game.performNationalCommand(s, { kind: "accept-pact", pactId: "e1-pact" });
-    game.performNationalCommand(n, { kind: "invite-pact", pactId: "e1-pact", candidateId: W });
-    expect(game.nationalPactViewsFor(w)).toEqual([]);
-    expect(game.nationalPactViewsFor(n)[0].invitations[0].authorized).toBe(false);
     game.performNationalCommand(n, {
-      kind: "propose-pact-amendment", pactId: "e1-pact",
-      terms: { admission: "leader", expulsion: "forbidden" }, administratorId: N,
+      kind: "invite-pact",
+      pactId: "e1-pact",
+      candidateId: W,
+    });
+    expect(game.nationalPactViewsFor(w)).toEqual([]);
+    expect(game.nationalPactViewsFor(n)[0].invitations[0].authorized).toBe(
+      false,
+    );
+    game.performNationalCommand(n, {
+      kind: "propose-pact-amendment",
+      pactId: "e1-pact",
+      terms: { admission: "leader", expulsion: "forbidden" },
+      administratorId: N,
     });
     expect(game.nationalPactViewsFor(s)[0].canApproveAmendment).toBe(true);
-    expect(game.nationalPactViewsFor(n)[0].pendingAmendment?.ownVote).toBe(true);
-    expect(game.nationalPactDisclosure(n)?.pacts[0].pendingAmendment).not.toHaveProperty("ownVote");
+    expect(game.nationalPactViewsFor(n)[0].pendingAmendment?.ownVote).toBe(
+      true,
+    );
+    expect(
+      game.nationalPactDisclosure(n)?.pacts[0].pendingAmendment,
+    ).not.toHaveProperty("ownVote");
     expect(game.nationalPactViewsFor(w)).toEqual([]);
     expect(Object.isFrozen(game.nationalPactViewsFor(n)[0].terms)).toBe(true);
     const { restored } = await roundTrip(game, "plains");
-    expect(restored.nationalPactViewsFor(restored.player(N))).toEqual(game.nationalPactViewsFor(n));
-    game.performNationalCommand(s, { kind: "approve-pact-amendment", pactId: "e1-pact" });
+    expect(restored.nationalPactViewsFor(restored.player(N))).toEqual(
+      game.nationalPactViewsFor(n),
+    );
+    game.performNationalCommand(s, {
+      kind: "approve-pact-amendment",
+      pactId: "e1-pact",
+    });
     expect(game.nationalPactViewsFor(w)[0].canAccept).toBe(true);
     expect(game.nationalPactViewsFor(n)[0].pendingAmendment).toBeNull();
     expect(game.nationalPactViewsFor(n)[0].expellableMemberIds).toEqual([]);
@@ -524,14 +556,19 @@ describe("Class Two E1 COAL-02/07 recipient pact reads", () => {
 describe("Class Two E1 M5 administration", () => {
   it("D-011 routes actual worker production, guards live construction and transfers current crown", async () => {
     const game = await realGame(3);
-    const n = game.player(N), s = game.player(S), w = game.player(W);
+    const n = game.player(N),
+      s = game.player(S),
+      w = game.player(W);
     foundAndJoined(game);
     const policy = {
-      kind: "set-policy" as const, empireId: "empire-r3",
+      kind: "set-policy" as const,
+      empireId: "empire-r3",
       policy: { workerIncomeBps: 10_000, allowedConstruction: [] },
     };
     const prior = snapshot(game);
-    expect(() => game.performNationalImperialAdministration(s, policy)).toThrow(/emperor/);
+    expect(() => game.performNationalImperialAdministration(s, policy)).toThrow(
+      /emperor/,
+    );
     expect(snapshot(game)).toEqual(prior);
     game.performNationalImperialAdministration(n, policy);
     // Real PlayerExecution production. Direct tick removes scheduling
@@ -545,11 +582,15 @@ describe("Class Two E1 M5 administration", () => {
     income.mockRestore();
     expect(gross).toBeGreaterThan(0n);
     expect(s.gold()).toBe(before);
-    expect(game.nationalImperialAdministrationFor(n)?.treasury).toBe(gross.toString());
+    expect(game.nationalImperialAdministrationFor(n)?.treasury).toBe(
+      gross.toString(),
+    );
     expect(game.nationalImperialAdministrationFor(w)).toBeNull();
     // Direct grants are not worker production.
     s.addGold(50_000_000n);
-    expect(game.nationalImperialAdministrationFor(s)?.treasury).toBe(gross.toString());
+    expect(game.nationalImperialAdministrationFor(s)?.treasury).toBe(
+      gross.toString(),
+    );
     const cityTile = [...s.tiles()][0];
     const savedGold = s.gold();
     const build = new ConstructionExecution(s, UnitType.City, cityTile);
@@ -558,17 +599,20 @@ describe("Class Two E1 M5 administration", () => {
     expect(s.units(UnitType.City)).toHaveLength(0);
     expect(s.gold()).toBe(savedGold);
     game.performNationalImperialAdministration(n, {
-      ...policy, policy: { workerIncomeBps: 2500, allowedConstruction: [UnitType.City] },
+      ...policy,
+      policy: { workerIncomeBps: 2500, allowedConstruction: [UnitType.City] },
     });
     const partialStart = s.gold();
     const partialIncome = vi.spyOn(game.config(), "goldAdditionRate");
     work.tick(game.ticks());
     const partialGross = partialIncome.mock.results[0].value;
     partialIncome.mockRestore();
-    const partialTax = partialGross * 2500n / 10_000n;
+    const partialTax = (partialGross * 2500n) / 10_000n;
     const treasuryBeforeTransfer = gross + partialTax;
     expect(s.gold() - partialStart).toBe(partialGross - partialTax);
-    expect(game.nationalImperialAdministrationFor(n)?.treasury).toBe(treasuryBeforeTransfer.toString());
+    expect(game.nationalImperialAdministrationFor(n)?.treasury).toBe(
+      treasuryBeforeTransfer.toString(),
+    );
     const cost = game.unitInfo(UnitType.City).cost(game, s);
     const ownBefore = s.gold();
     const permitted = new ConstructionExecution(s, UnitType.City, cityTile);
@@ -576,30 +620,56 @@ describe("Class Two E1 M5 administration", () => {
     permitted.tick(game.ticks());
     expect(s.units(UnitType.City)).toHaveLength(1);
     expect(ownBefore - s.gold()).toBe(cost);
-    game.performNationalWarCommand(n, { kind: "declare-national", warId: "e1-national", aggressorId: S, targetId: W });
-    game.performNationalWarCommand(n, { kind: "declare-imperial", warId: "e1-imperial",
-      aggressor: { kind: "empire", id: "empire-r3" }, target: { kind: "nation", id: W } });
+    game.performNationalWarCommand(n, {
+      kind: "declare-national",
+      warId: "e1-national",
+      aggressorId: S,
+      targetId: W,
+    });
+    game.performNationalWarCommand(n, {
+      kind: "declare-imperial",
+      warId: "e1-imperial",
+      aggressor: { kind: "empire", id: "empire-r3" },
+      target: { kind: "nation", id: W },
+    });
     const layers = game.nationalWarState()?.wars.layers;
     expect(layers).toHaveLength(2);
     // Transfer preserves the treasury and automatically revokes the old crown.
     game.performNationalCommand(n, {
-      kind: "transfer-crown", empireId: "empire-r3", successorId: S,
+      kind: "transfer-crown",
+      empireId: "empire-r3",
+      successorId: S,
     });
-    expect(() => game.performNationalImperialAdministration(n, policy)).toThrow(/emperor/);
+    expect(() => game.performNationalImperialAdministration(n, policy)).toThrow(
+      /emperor/,
+    );
     expect(game.nationalImperialAdministrationFor(s)?.canAmend).toBe(true);
     expect(game.nationalWarState()?.wars.layers).toEqual(layers);
-    expect(game.nationalImperialAdministrationFor(s)?.treasury).toBe(treasuryBeforeTransfer.toString());
+    expect(game.nationalImperialAdministrationFor(s)?.treasury).toBe(
+      treasuryBeforeTransfer.toString(),
+    );
     const { restored } = await roundTrip(game, "plains");
-    expect(restored.nationalImperialAdministrationFor(restored.player(S))).toEqual(game.nationalImperialAdministrationFor(s));
+    expect(
+      restored.nationalImperialAdministrationFor(restored.player(S)),
+    ).toEqual(game.nationalImperialAdministrationFor(s));
     for (const g of [game, restored]) {
       const leader = g.player(S);
       const start = leader.gold();
-      g.performNationalImperialAdministration(leader, { kind: "dissolve", empireId: "empire-r3" });
+      g.performNationalImperialAdministration(leader, {
+        kind: "dissolve",
+        empireId: "empire-r3",
+      });
       expect(leader.gold() - start).toBe(treasuryBeforeTransfer);
       expect(g.nationalPoliticalAuthority()?.empireOf(N)).toBeNull();
       expect(g.nationalImperialAdministrationFor(leader)).toBeNull();
-      expect(g.nationalWarState()?.wars.layers.find((l) => l.id === "e1-national")?.endedTick).toBeNull();
-      expect(g.nationalWarState()?.wars.layers.find((l) => l.id === "e1-imperial")?.endedTick).not.toBeNull();
+      expect(
+        g.nationalWarState()?.wars.layers.find((l) => l.id === "e1-national")
+          ?.endedTick,
+      ).toBeNull();
+      expect(
+        g.nationalWarState()?.wars.layers.find((l) => l.id === "e1-imperial")
+          ?.endedTick,
+      ).not.toBeNull();
     }
     expect(snapshot(restored)).toEqual(snapshot(game));
   });
@@ -609,14 +679,22 @@ describe("Class Two E1 M5 administration", () => {
     foundAndJoined(game);
     const n = game.player(N);
     const command = {
-      kind: "set-policy" as const, empireId: "empire-r3",
+      kind: "set-policy" as const,
+      empireId: "empire-r3",
       policy: { workerIncomeBps: 2500, allowedConstruction: [UnitType.City] },
     };
     const issue = (g: Game, clientID: string, requestId: string) => {
       const exec = new Executor(g, "r3-national", undefined);
-      g.addExecution(exec.createExec(StampedIntentSchema.parse({
-        type: "national_imperial_administration", clientID, requestId, command,
-      })));
+      g.addExecution(
+        exec.createExec(
+          StampedIntentSchema.parse({
+            type: "national_imperial_administration",
+            clientID,
+            requestId,
+            command,
+          }),
+        ),
+      );
     };
     issue(game, n.clientID()!, "admin-e1-policy");
     const { restored } = await roundTrip(game, "plains");
@@ -624,24 +702,42 @@ describe("Class Two E1 M5 administration", () => {
       g.executeNextTick();
       g.executeNextTick();
       const actor = g.player(N);
-      expect(g.nationalImperialAdministrationFor(actor)?.workerIncomeBps).toBe(2500);
-      expect(g.nationalPoliticalCommandResults(actor)).toContainEqual(expect.objectContaining({
-        requestId: "admin-e1-policy", commandKind: "imperial-administration",
-        accepted: true, recipientId: N,
-      }));
+      expect(g.nationalImperialAdministrationFor(actor)?.workerIncomeBps).toBe(
+        2500,
+      );
+      expect(g.nationalPoliticalCommandResults(actor)).toContainEqual(
+        expect.objectContaining({
+          requestId: "admin-e1-policy",
+          commandKind: "imperial-administration",
+          accepted: true,
+          recipientId: N,
+        }),
+      );
       const priorCount = g.nationalPoliticalCommandResults(actor).length;
       issue(g, actor.clientID()!, "admin-e1-policy");
-      g.executeNextTick(); g.executeNextTick();
+      g.executeNextTick();
+      g.executeNextTick();
       expect(g.nationalPoliticalCommandResults(actor).length).toBe(priorCount);
-      g.performNationalCommand(actor, { kind: "transfer-crown", empireId: "empire-r3", successorId: S });
+      g.performNationalCommand(actor, {
+        kind: "transfer-crown",
+        empireId: "empire-r3",
+        successorId: S,
+      });
       issue(g, actor.clientID()!, "admin-e1-stale");
-      g.executeNextTick(); g.executeNextTick();
-      expect(g.nationalPoliticalCommandResults(actor)).toContainEqual(expect.objectContaining({
-        requestId: "admin-e1-stale", accepted: false, reason: "political-rule",
-      }));
-      expect(g.nationalPoliticalCommandResults(g.player(S))).not.toContainEqual(expect.objectContaining({
-        requestId: "admin-e1-stale",
-      }));
+      g.executeNextTick();
+      g.executeNextTick();
+      expect(g.nationalPoliticalCommandResults(actor)).toContainEqual(
+        expect.objectContaining({
+          requestId: "admin-e1-stale",
+          accepted: false,
+          reason: "political-rule",
+        }),
+      );
+      expect(g.nationalPoliticalCommandResults(g.player(S))).not.toContainEqual(
+        expect.objectContaining({
+          requestId: "admin-e1-stale",
+        }),
+      );
     }
     expect(snapshot(restored)).toEqual(snapshot(game));
   });
@@ -649,31 +745,59 @@ describe("Class Two E1 M5 administration", () => {
   it("D-011 purchases an actual member structure with imperial rather than personal gold", async () => {
     const game = await realGame(3);
     foundAndJoined(game);
-    const n = game.player(N), s = game.player(S), w = game.player(W);
+    const n = game.player(N),
+      s = game.player(S),
+      w = game.player(W);
     const policy = {
-      kind: "set-policy" as const, empireId: "empire-r3",
+      kind: "set-policy" as const,
+      empireId: "empire-r3",
       policy: { workerIncomeBps: 10_000, allowedConstruction: [] },
     };
     game.performNationalImperialAdministration(n, policy);
     const tile = [...s.tiles()][0];
-    const command = { kind: "build-structure" as const, empireId: "empire-r3",
-      memberId: S, type: UnitType.City, tile };
-    expect(() => game.performNationalImperialAdministration(n, command)).toThrow(/treasury/);
+    const command = {
+      kind: "build-structure" as const,
+      empireId: "empire-r3",
+      memberId: S,
+      type: UnitType.City,
+      tile,
+    };
+    expect(() =>
+      game.performNationalImperialAdministration(n, command),
+    ).toThrow(/treasury/);
     expect(s.units(UnitType.City)).toHaveLength(0);
     const cost = game.unitInfo(UnitType.City).cost(game, s);
     // Numerical funding fixture: amplify real worker production for one tick,
     // without injecting treasury balances or bypassing the actual income path.
-    const rate = vi.spyOn(game.config(), "goldAdditionRate").mockReturnValue(cost + 123n);
+    const rate = vi
+      .spyOn(game.config(), "goldAdditionRate")
+      .mockReturnValue(cost + 123n);
     try {
       const work = new PlayerExecution(s);
       work.init(game, game.ticks());
       work.tick(game.ticks());
-    } finally { rate.mockRestore(); }
-    expect(game.nationalImperialAdministrationFor(n)?.treasury).toBe((cost + 123n).toString());
+    } finally {
+      rate.mockRestore();
+    }
+    expect(game.nationalImperialAdministrationFor(n)?.treasury).toBe(
+      (cost + 123n).toString(),
+    );
     const balances = [n.gold(), s.gold(), w.gold()];
-    expect(() => game.performNationalImperialAdministration(s, command)).toThrow(/emperor/);
-    expect(() => game.performNationalImperialAdministration(n, { ...command, memberId: W })).toThrow(/constituent/);
-    expect(() => game.performNationalImperialAdministration(n, { ...command, tile: [...w.tiles()][0] })).toThrow(/placement/);
+    expect(() =>
+      game.performNationalImperialAdministration(s, command),
+    ).toThrow(/emperor/);
+    expect(() =>
+      game.performNationalImperialAdministration(n, {
+        ...command,
+        memberId: W,
+      }),
+    ).toThrow(/constituent/);
+    expect(() =>
+      game.performNationalImperialAdministration(n, {
+        ...command,
+        tile: [...w.tiles()][0],
+      }),
+    ).toThrow(/placement/);
     game.performNationalImperialAdministration(n, command);
     expect(s.units(UnitType.City)).toHaveLength(1);
     expect(s.units(UnitType.City)[0].owner()).toBe(s);
@@ -681,54 +805,111 @@ describe("Class Two E1 M5 administration", () => {
     expect(game.nationalImperialAdministrationFor(n)?.treasury).toBe("123");
     const { restored } = await roundTrip(game, "plains");
     expect(restored.player(S).units(UnitType.City)).toHaveLength(1);
-    expect(restored.nationalImperialAdministrationFor(restored.player(N))?.treasury).toBe("123");
-    for (let i = 0; i < 3; i++) { game.executeNextTick(); restored.executeNextTick(); }
+    expect(
+      restored.nationalImperialAdministrationFor(restored.player(N))?.treasury,
+    ).toBe("123");
+    for (let i = 0; i < 3; i++) {
+      game.executeNextTick();
+      restored.executeNextTick();
+    }
     expect(snapshot(restored)).toEqual(snapshot(game));
   });
 
   it("D-011 transfers real active reserves atomically and rejects outsider or excess transfers", async () => {
     const game = await realGame(3);
     foundAndJoined(game);
-    const n = game.player(N), s = game.player(S);
+    const n = game.player(N),
+      s = game.player(S);
     n.setTroops(100);
     s.setTroops(1);
     expect(game.config().maxTroops(s)).toBeGreaterThan(11);
-    const command = { kind: "transfer-troops" as const, empireId: "empire-r3", sourceId: N, destinationId: S, amount: 10 };
+    const command = {
+      kind: "transfer-troops" as const,
+      empireId: "empire-r3",
+      sourceId: N,
+      destinationId: S,
+      amount: 10,
+    };
     game.performNationalImperialAdministration(n, command);
     expect([n.troops(), s.troops()]).toEqual([90, 11]);
-    expect(() => game.performNationalImperialAdministration(n, { ...command, amount: 91 })).toThrow();
-    expect(() => game.performNationalImperialAdministration(n, { ...command, destinationId: W })).toThrow();
-    expect(() => game.performNationalImperialAdministration(s, command)).toThrow();
+    expect(() =>
+      game.performNationalImperialAdministration(n, { ...command, amount: 91 }),
+    ).toThrow();
+    expect(() =>
+      game.performNationalImperialAdministration(n, {
+        ...command,
+        destinationId: W,
+      }),
+    ).toThrow();
+    expect(() =>
+      game.performNationalImperialAdministration(s, command),
+    ).toThrow();
     expect([n.troops(), s.troops()]).toEqual([90, 11]);
   });
 
   it("D-011 hybrid production, authorized release, conversion and snapshot conserve actual troops", async () => {
     const game = await realGame(3);
     foundAndJoined(game);
-    const n = game.player(N), s = game.player(S);
-    n.setTroops(1); s.setTroops(1);
-    game.performNationalImperialAdministration(n, { kind: "set-army-mode", empireId: "empire-r3", mode: "hybrid", thresholdBps: 0 });
+    const n = game.player(N),
+      s = game.player(S);
+    n.setTroops(1);
+    s.setTroops(1);
+    game.performNationalImperialAdministration(n, {
+      kind: "set-army-mode",
+      empireId: "empire-r3",
+      mode: "hybrid",
+      thresholdBps: 0,
+    });
     const before = s.troops();
     const execution = new PlayerExecution(s);
     execution.init(game, game.ticks());
     execution.tick(game.ticks());
-    const pool = BigInt(game.nationalImperialAdministrationFor(n)!.imperialTroops);
+    const pool = BigInt(
+      game.nationalImperialAdministrationFor(n)!.imperialTroops,
+    );
     expect(pool).toBeGreaterThan(0n);
     expect(s.troops()).toBe(before);
-    const release = {kind: "release-imperial-troops" as const, empireId: "empire-r3", memberId: N, amount: 1};
-    expect(() => game.performNationalImperialAdministration(s, release)).toThrow();
-    expect(() => game.performNationalImperialAdministration(n, {...release, memberId: W})).toThrow();
+    const release = {
+      kind: "release-imperial-troops" as const,
+      empireId: "empire-r3",
+      memberId: N,
+      amount: 1,
+    };
+    expect(() =>
+      game.performNationalImperialAdministration(s, release),
+    ).toThrow();
+    expect(() =>
+      game.performNationalImperialAdministration(n, {
+        ...release,
+        memberId: W,
+      }),
+    ).toThrow();
     game.performNationalImperialAdministration(n, release);
     expect(n.troops()).toBe(2);
-    expect(BigInt(game.nationalImperialAdministrationFor(n)!.imperialTroops)).toBe(pool - 1n);
+    expect(
+      BigInt(game.nationalImperialAdministrationFor(n)!.imperialTroops),
+    ).toBe(pool - 1n);
     const { restored } = await roundTrip(game, "plains");
     for (const g of [game, restored]) {
       const active = BigInt(g.player(N).troops() + g.player(S).troops());
-      const reserve = BigInt(g.nationalImperialAdministrationFor(g.player(N))!.imperialTroops);
-      g.performNationalImperialAdministration(g.player(N), {kind: "set-army-mode", empireId: "empire-r3", mode: "decentralized", thresholdBps: 0});
-      const claims = BigInt(g.nationalDeferredTroopsFor(g.player(N)) ?? "0") + BigInt(g.nationalDeferredTroopsFor(g.player(S)) ?? "0");
-      expect(BigInt(g.player(N).troops() + g.player(S).troops()) + claims).toBe(active + reserve);
-      expect(g.nationalImperialAdministrationFor(g.player(N))!.imperialTroops).toBe("0");
+      const reserve = BigInt(
+        g.nationalImperialAdministrationFor(g.player(N))!.imperialTroops,
+      );
+      g.performNationalImperialAdministration(g.player(N), {
+        kind: "set-army-mode",
+        empireId: "empire-r3",
+        mode: "decentralized",
+        thresholdBps: 0,
+      });
+      const claims =
+        BigInt(g.nationalDeferredTroopsFor(g.player(N)) ?? "0") +
+        BigInt(g.nationalDeferredTroopsFor(g.player(S)) ?? "0");
+      expect(BigInt(g.player(N).troops() + g.player(S).troops()) + claims).toBe(
+        active + reserve,
+      );
+      expect(
+        g.nationalImperialAdministrationFor(g.player(N))!.imperialTroops,
+      ).toBe("0");
     }
     expect(snapshot(restored)).toEqual(snapshot(game));
   });

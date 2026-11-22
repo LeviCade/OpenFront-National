@@ -1376,7 +1376,12 @@ export class NationalDiplomacyPanel extends LitElement {
         );
       } else {
         const mode = data.get("armyMode");
-        if (mode !== "decentralized" && mode !== "hybrid" && mode !== "centralized") return;
+        if (
+          mode !== "decentralized" &&
+          mode !== "hybrid" &&
+          mode !== "centralized"
+        )
+          return;
         this.sendImperialPolicy(
           { kind, empireId: view.empireId, mode, thresholdBps: bps },
           key,

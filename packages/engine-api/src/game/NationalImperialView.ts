@@ -95,7 +95,9 @@ export function readNationalImperialAdministration(
   const hasMilitary = military.some((v) => v !== undefined);
   if (
     hasMilitary &&
-    ((value.armyMode !== "decentralized" && value.armyMode !== "hybrid" && value.armyMode !== "centralized") ||
+    ((value.armyMode !== "decentralized" &&
+      value.armyMode !== "hybrid" &&
+      value.armyMode !== "centralized") ||
       typeof value.hybridThresholdBps !== "number" ||
       !Number.isInteger(value.hybridThresholdBps) ||
       value.hybridThresholdBps < 0 ||

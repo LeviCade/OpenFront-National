@@ -436,7 +436,10 @@ export class NationalRuntime {
     const row = administrationSchema.parse({
       empireId,
       workerIncomeBps: policy.workerIncomeBps,
-      nonWorkerIncomeBps: policy.nonWorkerIncomeBps ?? this.administration.get(empireId)?.nonWorkerIncomeBps ?? 0,
+      nonWorkerIncomeBps:
+        policy.nonWorkerIncomeBps ??
+        this.administration.get(empireId)?.nonWorkerIncomeBps ??
+        0,
       allowedConstruction: policy.allowedConstruction,
       treasury: this.administration.get(empireId)?.treasury ?? "0",
       military: this.administration.get(empireId)?.military,
@@ -463,7 +466,8 @@ export class NationalRuntime {
       workerIncomeBps: row?.workerIncomeBps ?? 0,
       nonWorkerIncomeBps: row?.nonWorkerIncomeBps ?? 0,
       allowedConstruction:
-        row?.allowedConstruction === null || row?.allowedConstruction === undefined
+        row?.allowedConstruction === null ||
+        row?.allowedConstruction === undefined
           ? null
           : Object.freeze([...row.allowedConstruction]),
       treasury: row?.treasury ?? "0",
@@ -493,8 +497,12 @@ export class NationalRuntime {
       ),
       warPolicyVersion: empire.warPolicyVersion ?? 0,
       accessionWarResponse: empire.accessionWarResponse ?? "none",
-      nationalDeclarationDelegates: Object.freeze([...(empire.delegatedNationalDeclarations ?? [])]),
-      nationalPeaceDelegates: Object.freeze([...(empire.delegatedNationalPeace ?? [])]),
+      nationalDeclarationDelegates: Object.freeze([
+        ...(empire.delegatedNationalDeclarations ?? []),
+      ]),
+      nationalPeaceDelegates: Object.freeze([
+        ...(empire.delegatedNationalPeace ?? []),
+      ]),
     });
   }
 

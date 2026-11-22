@@ -344,7 +344,12 @@ export class TradeShipExecution implements Execution {
       );
       this.srcPort.owner().addTradeGold(gold);
       this._dstPort.owner().addTradeGold(gold);
-      if (gold > 0n) NationalSanctionExecution.paidTrade(this.mg, this.srcPort.owner(), this._dstPort.owner());
+      if (gold > 0n)
+        NationalSanctionExecution.paidTrade(
+          this.mg,
+          this.srcPort.owner(),
+          this._dstPort.owner(),
+        );
       // Record stats
       this.mg
         .stats()

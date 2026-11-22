@@ -73,7 +73,6 @@
 
 Every change must cite an ID, explain national-interest consequences, provide enforceable state transitions, respect fair AI visibility and add acceptance scenarios. "It seems realistic" is not enough if it creates contradictory wars or invisible unlimited liabilities.
 
-
 ## Class Two M5 engineering resolution (D-011/D-012; partial)
 
 - Worker production is routed once at PlayerExecution, not generic addGold (which also credits transfers, conquest and trade). Rate is integer basis points; floor each contribution and keep residual personal. Other revenue sources and imperial spending remain open.

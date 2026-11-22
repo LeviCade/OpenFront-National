@@ -309,10 +309,15 @@ describe("Round Four — real Game WAR/LEVY political state bridge", () => {
     expect(archived.find((l) => l.id === "r4-national")).toEqual(
       ledgerBefore.wars.layers.find((l) => l.id === "r4-national"),
     );
-    expect(archived.find((l) => l.id === "r4-imperial")?.endedTick).not.toBeNull();
+    expect(
+      archived.find((l) => l.id === "r4-imperial")?.endedTick,
+    ).not.toBeNull();
     expect(game.nationalWarAuthority()?.atWar(A, C)).toBe(false);
     expect(game.nationalWarAuthority()?.atWar(B, C)).toBe(true);
-    expect(game.nationalWarState()?.wars.layers.find((l) => l.id === "r4-imperial")?.endedTick).not.toBeNull();
+    expect(
+      game.nationalWarState()?.wars.layers.find((l) => l.id === "r4-imperial")
+        ?.endedTick,
+    ).not.toBeNull();
     const { restored } = await roundTrip(game, "plains");
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
     expect(restored.nationalWarAuthority()?.atWar(B, C)).toBe(true);

@@ -48,7 +48,8 @@ class TradeStationStopHandler implements TrainStopHandler {
     if (trainOwner !== stationOwner) {
       if (mg.nationalWarAuthority() === null)
         stationOwner.addGold(gold, station.tile());
-      else mg.creditNationalCommercialIncome(stationOwner, gold, station.tile());
+      else
+        mg.creditNationalCommercialIncome(stationOwner, gold, station.tile());
       stationOwner.addTrainGold(gold);
       mg.stats().trainExternalTrade(stationOwner, gold);
     }
@@ -61,7 +62,8 @@ class TradeStationStopHandler implements TrainStopHandler {
       mg.nationalWarAuthority() !== null &&
       gold > 0n &&
       trainOwner !== stationOwner
-    ) NationalSanctionExecution.paidTrade(mg, trainOwner, stationOwner);
+    )
+      NationalSanctionExecution.paidTrade(mg, trainOwner, stationOwner);
   }
 }
 
