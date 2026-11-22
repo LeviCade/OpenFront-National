@@ -544,10 +544,14 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
       ...policy(1, "imperial", [], [B]),
       requestId: "c5_real_army_national_peace_grant",
     });
-    expect(political(m, A, "c5_real_army_national_peace_grant").accepted).toBe(true);
-    const imperial = m.game.nationalWarState()!.wars.layers.find(
-      (layer) => layer.scope === "imperial" && layer.endedTick === null,
-    )!;
+    expect(political(m, A, "c5_real_army_national_peace_grant").accepted).toBe(
+      true,
+    );
+    const imperial = m.game
+      .nationalWarState()!
+      .wars.layers.find(
+        (layer) => layer.scope === "imperial" && layer.endedTick === null,
+      )!;
     expect(imperial).toBeDefined();
 
     // Only the physical battlefield and initial troop fixture are seeded;
@@ -596,8 +600,11 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     const accepted = m.host.tick();
     expect(accepted.committedIntents).toBe(1);
     let armyObserved = aggressor.outgoingAttacks().length > 0;
-    for (let step = 0; step < 40 &&
-      aggressor.numTilesOwned() === before.captured; step++) {
+    for (
+      let step = 0;
+      step < 40 && aggressor.numTilesOwned() === before.captured;
+      step++
+    ) {
       m.host.tick();
       armyObserved ||= aggressor.outgoingAttacks().length > 0;
     }
@@ -617,18 +624,21 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(true);
     const { restored } = await roundTrip(m.game, "plains");
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(m.game));
-    console.info("C5_E3_REAL_TROOP_WITNESS_JSON=" + JSON.stringify({
-      kind: "c5-e3-real-national-army-after-imperial-peace",
-      source: "TrustedNationalMatch/GameRunner/Executor/AttackExecution",
-      politicalAuthority: "national-alone-after-imperial-peace",
-      imperialWarId: imperial.id,
-      originalWarId: original.warId,
-      armyObserved,
-      before,
-      after,
-      committedIntents: accepted.committedIntents,
-      replayDigest: accepted.replayDigest,
-    }));
+    console.info(
+      "C5_E3_REAL_TROOP_WITNESS_JSON=" +
+        JSON.stringify({
+          kind: "c5-e3-real-national-army-after-imperial-peace",
+          source: "TrustedNationalMatch/GameRunner/Executor/AttackExecution",
+          politicalAuthority: "national-alone-after-imperial-peace",
+          imperialWarId: imperial.id,
+          originalWarId: original.warId,
+          armyObserved,
+          before,
+          after,
+          committedIntents: accepted.committedIntents,
+          replayDigest: accepted.replayDigest,
+        }),
+    );
 
     // No empire layer remains. When the national layer is also settled,
     // a newly admitted attack may NOT cause another military deployment.
@@ -646,7 +656,9 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     });
     expect(military(m, B, "c5_real_army_last_accept").accepted).toBe(true);
     expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(false);
-    expect(m.game.nationalWarAuthority()?.authorizeOffensiveAction(B, D)).toBe(false);
+    expect(m.game.nationalWarAuthority()?.authorizeOffensiveAction(B, D)).toBe(
+      false,
+    );
     const territoryAfterPeace = aggressor.numTilesOwned();
     admit(m, 1, {
       type: "attack",
@@ -657,7 +669,8 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     m.host.tick();
     expect(aggressor.outgoingAttacks()).toHaveLength(0);
     expect(aggressor.numTilesOwned()).toBe(territoryAfterPeace);
-    expect(BigInt(aggressor.gold().toString()) >= BigInt(after.gold)).toBe(true);
+    expect(BigInt(aggressor.gold().toString()) >= BigInt(after.gold)).toBe(
+      true,
+    );
   });
-
 });
