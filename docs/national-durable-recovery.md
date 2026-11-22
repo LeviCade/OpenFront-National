@@ -64,7 +64,7 @@ git rev-parse HEAD
 node --version
 npm install --global --ignore-scripts npm@12.1.0
 npm run inst
-node --experimental-strip-types scripts/national-staging/durable-store.test.mjs
+node --experimental-strip-types scripts/national-staging/durable-store.nodecheck.mjs
 NATIONAL_TEST_DURABLE_RECOVERY=1 node --import tsx scripts/national-staging/worker-journey.mjs
 ```
 
