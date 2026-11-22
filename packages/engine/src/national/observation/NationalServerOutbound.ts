@@ -97,7 +97,7 @@ export class NationalServerRecipientSession {
     this.observerMap =
       this.principalId === null
         ? null
-        : new NationalObserverMapPager(game, this.principalId);
+        : new NationalObserverMapPager(game, this.principalId, this.originalSessionId);
     this.outbound = new NationalOutboundFilter(game, this.principalId);
     if (this.principalId !== null) {
       this.outbound.restoreSightMemory(
