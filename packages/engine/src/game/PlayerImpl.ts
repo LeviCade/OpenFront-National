@@ -1491,6 +1491,34 @@ export class PlayerImpl implements Player {
     }
 
     const cost = this.mg.unitInfo(type).cost(this.mg, this);
+    return this.placePaidUnit(type, spawnTile, params, () => this.removeGold(cost));
+  }
+
+  /** Engine-only imperial building: same placement and cost, different payer. */
+  buildImperialStructure(
+    type: UnitType,
+    targetTile: TileRef,
+    debit: (cost: Gold) => void,
+  ): Unit {
+    if (!Structures.has(type) || !this.isAlive() ||
+        !this.mg.isValidRef(targetTile) || this.mg.config().isUnitDisabled(type))
+      throw new Error("NATIONAL: invalid imperial structure request");
+    const spawnTile = this.canSpawnUnitType(type, targetTile, null);
+    if (spawnTile === false)
+      throw new Error("NATIONAL: no lawful imperial structure placement");
+    const cost = this.mg.unitInfo(type).cost(this.mg, this);
+    // Validated payer callback must debit or throw before any unit creation.
+    return this.placePaidUnit(type, spawnTile, {}, () => debit(cost));
+  }
+
+  private placePaidUnit<T extends UnitType>(
+    type: T,
+    spawnTile: TileRef,
+    params: UnitParams<T>,
+    pay: () => void,
+  ): Unit {
+    // Preserve legacy construction-cost calculation before recording the unit.
+    pay();
     const b = new UnitImpl(
       type,
       this.mg,
@@ -1502,7 +1530,6 @@ export class PlayerImpl implements Player {
     this._units.push(b);
     this._myUnitsVersion++;
     this.recordUnitConstructed(type);
-    this.removeGold(cost);
     this.removeTroops("troops" in params ? (params.troops ?? 0) : 0);
     this.mg.addUpdate(b.toUpdate());
     this.mg.addUnit(b);

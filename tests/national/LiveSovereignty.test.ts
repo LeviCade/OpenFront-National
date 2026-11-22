@@ -16,7 +16,7 @@ import type { Game } from "@openfront/engine/game/Game";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
 import { NationalRuntime } from "@openfront/engine/national/NationalRuntime";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
@@ -567,6 +567,46 @@ describe("Class Two E1 M5 administration", () => {
       expect(g.nationalPoliticalAuthority()?.empireOf(N)).toBeNull();
       expect(g.nationalImperialAdministrationFor(leader)).toBeNull();
     }
+    expect(snapshot(restored)).toEqual(snapshot(game));
+  });
+
+  it("D-011 purchases an actual member structure with imperial rather than personal gold", async () => {
+    const game = await realGame(3);
+    foundAndJoined(game);
+    const n = game.player(N), s = game.player(S), w = game.player(W);
+    const policy = {
+      kind: "set-policy" as const, empireId: "empire-r3",
+      policy: { workerIncomeBps: 10_000, allowedConstruction: [] },
+    };
+    game.performNationalImperialAdministration(n, policy);
+    const tile = [...s.tiles()][0];
+    const command = { kind: "build-structure" as const, empireId: "empire-r3",
+      memberId: S, type: UnitType.City, tile };
+    expect(() => game.performNationalImperialAdministration(n, command)).toThrow(/treasury/);
+    expect(s.units(UnitType.City)).toHaveLength(0);
+    const cost = game.unitInfo(UnitType.City).cost(game, s);
+    // Numerical funding fixture: amplify real worker production for one tick,
+    // without injecting treasury balances or bypassing the actual income path.
+    const rate = vi.spyOn(game.config(), "goldAdditionRate").mockReturnValue(cost + 123n);
+    try {
+      const work = new PlayerExecution(s);
+      work.init(game, game.ticks());
+      work.tick(game.ticks());
+    } finally { rate.mockRestore(); }
+    expect(game.nationalImperialAdministrationFor(n)?.treasury).toBe((cost + 123n).toString());
+    const balances = [n.gold(), s.gold(), w.gold()];
+    expect(() => game.performNationalImperialAdministration(s, command)).toThrow(/emperor/);
+    expect(() => game.performNationalImperialAdministration(n, { ...command, memberId: W })).toThrow(/constituent/);
+    expect(() => game.performNationalImperialAdministration(n, { ...command, tile: [...w.tiles()][0] })).toThrow(/placement/);
+    game.performNationalImperialAdministration(n, command);
+    expect(s.units(UnitType.City)).toHaveLength(1);
+    expect(s.units(UnitType.City)[0].owner()).toBe(s);
+    expect([n.gold(), s.gold(), w.gold()]).toEqual(balances);
+    expect(game.nationalImperialAdministrationFor(n)?.treasury).toBe("123");
+    const { restored } = await roundTrip(game, "plains");
+    expect(restored.player(S).units(UnitType.City)).toHaveLength(1);
+    expect(restored.nationalImperialAdministrationFor(restored.player(N))?.treasury).toBe("123");
+    for (let i = 0; i < 3; i++) { game.executeNextTick(); restored.executeNextTick(); }
     expect(snapshot(restored)).toEqual(snapshot(game));
   });
 

@@ -67,6 +67,7 @@ import {
   SharedWaterCacheSnapshot,
 } from "../execution/nation/SharedWaterCache";
 import { NationExecution } from "../execution/NationExecution";
+import { ConstructionExecution } from "../execution/ConstructionExecution";
 import { SpawnTimerExecution } from "../execution/SpawnTimerExecution";
 import { TribeExecution } from "../execution/TribeExecution";
 import type {
@@ -1102,6 +1103,17 @@ export class GameImpl implements Game {
         PlayerImpl.transferNationalActiveTroops(
           source, destination, Math.floor(this._config.maxTroops(destination)), command.amount,
         );
+        break;
+      }
+      case "build-structure": {
+        const member = this._players.get(command.memberId);
+        const runtime = this._national;
+        if (!member || !member.hasSpawned() || !member.isAlive() ||
+            runtime.authority().empireOf(member.id()) !== command.empireId)
+          throw new Error("NATIONAL: imperial construction requires a live constituent");
+        const structure = member.buildImperialStructure(command.type, command.tile,
+          (cost) => runtime.debitImperialConstruction(actor.id(), command.empireId, cost));
+        this.addExecution(ConstructionExecution.forImperialPurchase(this, structure));
         break;
       }
       case "dissolve":

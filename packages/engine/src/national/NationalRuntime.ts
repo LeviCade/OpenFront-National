@@ -123,6 +123,7 @@ export type ImperialPolicy = {
 export type NationalImperialAdministrationCommand =
   | { kind: "set-policy"; empireId: string; policy: ImperialPolicy }
   | { kind: "transfer-troops"; empireId: string; sourceId: PlayerID; destinationId: PlayerID; amount: number }
+  | { kind: "build-structure"; empireId: string; memberId: PlayerID; type: UnitType; tile: number }
   | { kind: "dissolve"; empireId: string };
 
 export interface NationalImperialAdministrationView extends ImperialPolicy {
@@ -346,6 +347,16 @@ export class NationalRuntime {
     const split = splitWorkerIncome(gross, row.workerIncomeBps);
     row.treasury = (BigInt(row.treasury) + split.imperial).toString();
     return split.personal;
+  }
+
+  /** Treasury debits never transit a nation's personal wallet. */
+  debitImperialConstruction(actorId: PlayerID, empireId: string, cost: bigint): void {
+    this.assertEmperor(actorId, empireId);
+    const row = this.administration.get(empireId);
+    if (cost < 0n || (!row && cost > 0n) ||
+        (row && BigInt(row.treasury) < cost))
+      throw new Error("NATIONAL: insufficient imperial construction treasury");
+    if (row) row.treasury = (BigInt(row.treasury) - cost).toString();
   }
 
   allowsConstruction(memberId: PlayerID, type: UnitType): boolean {
