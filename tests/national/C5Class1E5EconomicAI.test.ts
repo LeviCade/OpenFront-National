@@ -334,9 +334,22 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     c.conquer(game.ref(3, 2));
     a.setTroops(10);
     game.convertHumanToNation(b, "c5-e5-learns-bluff");
+    tick(game, 45);
+    console.info("C5_E5_BACKDOWN_DIAG=" + JSON.stringify({
+      tick: game.ticks(),
+      phase: NationalSanctionExecution.viewFor(game, a)[0]?.phase,
+      response: NationalSanctionExecution.viewFor(game, b)[0]?.response,
+      bToC: b.canTrade(c),
+      aToB: a.canTrade(b),
+      border: collectLiveNationalObservation(game, A).observation.frontiers,
+      units: a.units(UnitType.TradeShip).map((u) => ({
+        id: u.id(), active: u.isActive(),
+        destination: u.targetUnit()?.owner().id(),
+      })),
+    }));
     until(game, () =>
       NationalSanctionExecution.viewFor(game, a)[0].phase === "backed-down",
-    100);
+    55);
     expect(a.canTrade(b)).toBe(true);
     expect(b.canTrade(c)).toBe(true);
     tick(game, 6); // Recipient's own AI observes the terminal outcome.
