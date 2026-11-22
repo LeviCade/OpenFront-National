@@ -32,7 +32,7 @@ import { verifyIndependentRelease } from "./verify-independent-release.mjs";
 export const HOST_ROOT = "/etc/skybot-ci/national-gpu-release";
 export const REPOSITORY = "LeviCade/OpenFront-National";
 export const REPOSITORY_ID = "1459234894";
-export const APPROVED_STAGING = "stage3/conductor2-class1-engineering-20261121";
+export const APPROVED_STAGING = "stage3/conductor3-class1-integration-20261121";
 export const OVERLAY_DIR = "/var/lib/libvirt/images/ci-disposable/overlays";
 const SHA = /^[a-f0-9]{40}$/;
 const HEX64 = /^[a-f0-9]{64}$/;
@@ -359,10 +359,9 @@ export function verifyControllerTeardown(teardown, expected, jobCompletedAtMs) {
 export function signedHostRecord(payload, privateKeyPem, enrolled, hostTrust) {
   const key = createPrivateKey(privateKeyPem);
   requireTrue(key.asymmetricKeyType === "ed25519", "HOST_SIGNER_KEY_INVALID");
-  const pem = createPublicKey(key)
-    .export({ type: "spki", format: "pem" })
-    .toString();
-  const fingerprint = digest(Buffer.from(pem, "utf8"));
+  const fingerprint = digest(
+    createPublicKey(key).export({ type: "spki", format: "der" }),
+  );
   requireTrue(
     enrolled?.includes(fingerprint) && hostTrust?.includes(fingerprint),
     "HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED",
@@ -385,15 +384,15 @@ export function signHostWithExternalKey(
   hostTrust,
   signMessage,
 ) {
-  const fingerprint = digest(Buffer.from(publicPem, "utf8"));
-  requireTrue(
-    enrolled?.includes(fingerprint) && hostTrust?.includes(fingerprint),
-    "HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED",
-  );
   const key = createPublicKey(publicPem);
   requireTrue(
     key.asymmetricKeyType === "ed25519",
     "HOST_ED25519_PUBLIC_KEY_INVALID",
+  );
+  const fingerprint = digest(key.export({ type: "spki", format: "der" }));
+  requireTrue(
+    enrolled?.includes(fingerprint) && hostTrust?.includes(fingerprint),
+    "HOST_ED25519_KEY_NOT_INDEPENDENTLY_ENROLLED",
   );
   const bytes = Buffer.from(JSON.stringify(payload), "utf8");
   const response = signMessage(bytes);
@@ -446,6 +445,7 @@ export function verifyFourModeHostProofs(proofs, publicPem, expected, times) {
     const p = proof?.payload;
     requireTrue(
       p?.version === 1 &&
+        p.purpose === "skybot-gpu-preflight-v1" &&
         p.mode === PROOF_MODES[i] &&
         p.repository === REPOSITORY &&
         String(p.repositoryId) === REPOSITORY_ID &&
@@ -499,6 +499,7 @@ export function createHostPreflight(expected, times, physical, guest, now) {
   );
   return {
     ...bound(expected),
+    purpose: "skybot-gpu-preflight-v1",
     issuedAtMs: now,
     expiresAtMs: now + 120000,
     host: physical,

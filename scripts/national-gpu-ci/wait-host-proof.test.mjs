@@ -18,10 +18,15 @@ const expected = {
 };
 const { publicKey, privateKey } = generateKeyPairSync("ed25519");
 const pem = publicKey.export({ type: "spki", format: "pem" }).toString();
-const enrolled = [createHash("sha256").update(pem, "utf8").digest("hex")];
+const enrolled = [
+  createHash("sha256")
+    .update(publicKey.export({ type: "spki", format: "der" }))
+    .digest("hex"),
+];
 function proof(mode) {
   const payload = {
     version: 1,
+    purpose: "skybot-gpu-preflight-v1",
     mode,
     repository: "LeviCade/OpenFront-National",
     repositoryId: "1459234894",
@@ -230,4 +235,25 @@ test("independent public GitHub control plane binds actual numeric job and runne
       ),
     );
   }
+});
+
+test("validly signed wrong-phase proof cannot masquerade as GPU preflight", () => {
+  const signed = proof("national-desktop");
+  signed.payload.purpose = "skybot-gpu-postflight-v1";
+  signed.signature = sign(
+    null,
+    Buffer.from(JSON.stringify(signed.payload), "utf8"),
+    privateKey,
+  ).toString("base64");
+  refuse("HOST_PROOF_RUN_OR_MODE_MISMATCH", () =>
+    verifyPublicModeProof(
+      "national-desktop",
+      signed,
+      pem,
+      NONCE,
+      enrolled,
+      expected,
+      NOW,
+    ),
+  );
 });

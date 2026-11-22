@@ -48,7 +48,7 @@ function fixture() {
   const root = mkdtempSync(join(tmpdir(), "r11-e6-host-proof-test-"));
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
   const pem = publicKey.export({ type: "spki", format: "pem" }).toString();
-  const enrolled = digest(Buffer.from(pem, "utf8"));
+  const enrolled = digest(publicKey.export({ type: "spki", format: "der" }));
   const expected = {
     repository: "LeviCade/OpenFront-National",
     repositoryId: "1459234894",
@@ -113,6 +113,7 @@ function fixture() {
         ([k]) => !["runStartedAtMs", "jobCompletedAtMs"].includes(k),
       ),
     ),
+    purpose: "skybot-gpu-preflight-v1",
     issuedAtMs: RUN_START,
     expiresAtMs: RUN_START + 60_000,
     host: {
@@ -437,6 +438,20 @@ test("evidence summary digest cannot be swapped after host postflight signature"
     assert.equal(
       verifyIndependentRelease(f.args).reason,
       "EVIDENCE_DIGEST_MISMATCH",
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("signed postflight-shaped object cannot replace a preflight", () => {
+  const f = fixture();
+  try {
+    f.preflight.purpose = "skybot-gpu-postflight-v1";
+    f.args.preflight = f.wrap(f.preflight);
+    assert.equal(
+      verifyIndependentRelease(f.args).reason,
+      "SIGNATURE_RUN_BINDING_MISMATCH",
     );
   } finally {
     f.dispose();

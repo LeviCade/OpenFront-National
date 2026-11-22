@@ -47,10 +47,18 @@ export function verifyPublicModeProof(
   ) {
     reject("UNTRUSTED_HARDWARE_RUN_CONTEXT");
   }
+  let key;
+  try {
+    key = createPublicKey(publicPem);
+  } catch {
+    reject("HOST_PUBLIC_KEY_NOT_ENROLLED");
+  }
   if (
-    typeof publicPem !== "string" ||
+    key.asymmetricKeyType !== "ed25519" ||
     !enrolled.includes(
-      createHash("sha256").update(publicPem, "utf8").digest("hex"),
+      createHash("sha256")
+        .update(key.export({ type: "spki", format: "der" }))
+        .digest("hex"),
     )
   ) {
     reject("HOST_PUBLIC_KEY_NOT_ENROLLED");
@@ -68,6 +76,7 @@ export function verifyPublicModeProof(
   const p = proof.payload;
   if (
     p.version !== 1 ||
+    p.purpose !== "skybot-gpu-preflight-v1" ||
     p.mode !== mode ||
     p.repository !== "LeviCade/OpenFront-National" ||
     String(p.repositoryId) !== "1459234894" ||
@@ -105,9 +114,7 @@ export function verifyPublicModeProof(
   ) {
     reject("PHYSICAL_GPU_HOST_CHAIN_MISSING");
   }
-  const key = createPublicKey(publicPem);
   if (
-    key.asymmetricKeyType !== "ed25519" ||
     !verify(
       null,
       Buffer.from(JSON.stringify(p), "utf8"),

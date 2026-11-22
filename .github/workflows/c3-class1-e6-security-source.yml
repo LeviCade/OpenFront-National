@@ -1,0 +1,86 @@
+name: C3 E6 — exact security source acceptance, never GPU
+
+on:
+  push:
+    branches:
+      - feature/c3-class1-e6-skybot-physical-proof-20261121
+  pull_request:
+    branches:
+      - stage3/conductor3-class1-integration-20261121
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c3-e6-source-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  c3-e6-source:
+    name: Exact E6 cryptography, workflow contract and TypeScript checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - name: Checkout immutable actual HEAD
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Record and verify checked-out HEAD
+        shell: bash
+        env:
+          REQUIRED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          printf 'SOURCE_SHA=%s\n' "$actual"
+          test "$actual" = "$REQUIRED_SHA"
+      - name: Pin Node and npm
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - name: Install pinned npm
+        run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Install exact dependencies
+        run: npm run inst
+      - name: Pinned formatter (log exact owned-file repairs if red)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npm run format:check; then
+            echo '::error::pinned oxfmt check RED; E6-owned exact candidate patch:'
+            npx --no-install oxfmt --write \
+              .github/workflows/national-hardware-acceptance.yml \
+              .github/workflows/national-c2-e6-source-acceptance.yml \
+              scripts/national-gpu-ci/skybot-host-witness.mjs \
+              scripts/national-gpu-ci/skybot-host-witness.test.mjs \
+              scripts/national-gpu-ci/wait-host-proof.mjs \
+              scripts/national-gpu-ci/wait-host-proof.test.mjs \
+              scripts/national-gpu-ci/verify-independent-release.mjs \
+              scripts/national-gpu-ci/verify-independent-release.test.mjs \
+              scripts/national-gpu-ci/verify-workflow.mjs
+            git diff -- .github/workflows/national-hardware-acceptance.yml \
+              .github/workflows/national-c2-e6-source-acceptance.yml \
+              scripts/national-gpu-ci/
+            exit 1
+          fi
+      - name: Shell and exact workflow contract
+        run: |
+          bash -n scripts/national-gpu-ci/run-four-modes.sh
+          node --test scripts/national-gpu-ci/verify-workflow.mjs
+      - name: E6 independent adversarial tests
+        run: |
+          npx --no-install vitest run --project node \
+            scripts/national-gpu-ci/skybot-host-witness.test.mjs \
+            scripts/national-gpu-ci/wait-host-proof.test.mjs \
+            scripts/national-gpu-ci/verify-independent-release.test.mjs \
+            scripts/national-gpu-ci/sanitize-browser-evidence.test.mjs
+      - name: Full source typecheck
+        run: npm run typecheck
+      - name: Full source lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build-prod
