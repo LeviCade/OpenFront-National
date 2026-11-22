@@ -735,7 +735,7 @@ const boatMenuElement: MenuElement = {
 function trustedCenterActionAvailable(params: MenuElementParams): boolean {
   const { game, tile, myPlayer, selected } = params;
   if (
-    !game.trustedProjectionReady() ||
+    (!game.trustedProjectionReady() && !game.trustedSpawnReady()) ||
     !game.isValidRef(tile) ||
     !game.isLand(tile)
   )

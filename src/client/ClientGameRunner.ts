@@ -1233,26 +1233,12 @@ export class ClientGameRunner {
       )
         throw new Error("NATIONAL missing receiver or incompatible map");
       // Validate the recipient, epoch and both cursors BEFORE any view write.
-      const delta = this.trustedContinuity.accept(
-        event.projection.nationalObserverMap,
-        event.projection.tick,
-      );
+      const delta = this.trustedContinuity.acceptProjection(event.projection);
       const update = materializeTrustedNationalUpdate(
         event.projection,
         this.trustedLastTick,
       );
-      // Even current-sight packed changes may precede their authorized page.
-      // Keep a conservative partial view until the pager has disclosed them.
-      const pairs: number[] = [];
-      for (let i = 0; i < update.packedTileUpdates.length; i += 2) {
-        const ref = update.packedTileUpdates[i];
-        if (!this.gameView.isValidRef(ref))
-          throw new Error("NATIONAL invalid packed tile");
-        if (this.trustedContinuity.tileStatus(ref) === "observed") {
-          pairs.push(ref, update.packedTileUpdates[i + 1]);
-        }
-      }
-      update.packedTileUpdates = Uint32Array.from(pairs);
+      update.packedUnitUpdates = delta.nativeUnits;
       // Do not derive the authenticated principal from a mutable PlayerView.
       const actorUpdates = update.updates[GameUpdateType.Player];
       for (const actor of actorUpdates) {
@@ -1265,9 +1251,10 @@ export class ClientGameRunner {
         )
           throw new Error("NATIONAL projected seat identity mismatch");
       }
-      if (delta.clearAllTiles) {
-        this.revokeTrustedSight();
-        this.webglBuilder?.clearCaches();
+      if (delta.clearAllTiles) this.gameView.resetTrustedTileSight();
+      this.gameView.reconcileTrustedTileVisibility(delta.removedTileRefs);
+      if (delta.clearAllTiles || delta.removedTileRefs.length || delta.clearAllUnits || delta.removedUnitIds.length) {
+        this.eventBus.emit(new TrustedNationalSightRevokedEvent());
       }
       this.gameView.reconcileTrustedUnitVisibility(
         delta.clearAllUnits,
@@ -1276,8 +1263,8 @@ export class ClientGameRunner {
       // Strip stale or not-yet-paged packed markers, including old-position
       // death tombstones: revocation is not an animated unit death.
       this.gameView.applyTrustedUnitPage(update, delta, this.trustedContinuity);
-      const sweepReady =
-        this.gameView.trustedProjectionReady() || delta.sweepComplete;
+      // Partial pages are useful, not proof of unrestricted command authority.
+      const sweepReady = delta.usable;
       this.gameView.setTrustedProjectionReady(sweepReady);
       this.gameView.update(update);
       this.myPlayer = this.clientID
@@ -1286,15 +1273,17 @@ export class ClientGameRunner {
       const pageComplete =
         sweepReady && this.myPlayer?.id() === this.trustedPrincipal;
       this.gameView.setTrustedProjectionReady(pageComplete);
+      const spawnReady = this.myPlayer?.id() === this.trustedPrincipal && this.gameView.inSpawnPhase();
+      this.gameView.setTrustedSpawnReady(spawnReady);
       this.trustedLastTick = update.tick;
       if (this.trustedStatus) {
         this.trustedStatus.dataset.trustedNationalMap = pageComplete
           ? "visible"
-          : "paging";
-        this.trustedStatus.dataset.trustedNationalUnits =
-          delta.unitOverflow || !delta.unitSweepComplete
-            ? "partial"
-            : "synchronized";
+          : spawnReady ? "spawn" : "paging";
+        this.trustedStatus.dataset.trustedNationalTiles = delta.tilePartial ? "partial" : "synchronized";
+        this.trustedStatus.dataset.trustedNationalUnits = delta.unitPartial || delta.unitOverflow ? "partial" : "synchronized";
+        this.trustedStatus.dataset.trustedNationalTileSweep = delta.sweepComplete ? "complete" : "paging";
+        this.trustedStatus.dataset.trustedNationalUnitSweep = delta.unitSweepComplete ? "complete" : "paging";
         const defeated = pageComplete && !this.gameView.inSpawnPhase() &&
           this.myPlayer?.isAlive() === false;
         this.trustedStatus.dataset.trustedNationalLife = defeated ? "inactive" : pageComplete ? "active" : "unverified";
@@ -1303,9 +1292,9 @@ export class ClientGameRunner {
           "NATIONAL · Tick " +
           update.tick +
           (pageComplete
-            ? " · Visible terrain synchronized"
-            : " · Loading visible terrain…") +
-          (delta.unitOverflow || !delta.unitSweepComplete
+            ? (delta.tilePartial ? " · Authorized partial terrain" : " · Visible terrain synchronized")
+            : spawnReady ? " · Choose a spawn location" : " · Loading visible terrain…") +
+          (delta.unitOverflow || delta.unitPartial
             ? " · Partial unit intelligence"
             : "") +
           " · " +
@@ -1765,7 +1754,8 @@ export class ClientGameRunner {
     if (
       !this.isActive ||
       (this.trustedNationalProjection &&
-        !this.gameView.trustedProjectionReady()) ||
+        !this.gameView.trustedProjectionReady() &&
+        !this.gameView.trustedSpawnReady()) ||
       this.renderer.uiState.ghostStructure !== null
     ) {
       return;

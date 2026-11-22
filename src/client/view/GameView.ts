@@ -129,6 +129,53 @@ export class GameView implements GameLike {
     }
   }
   private readonly trustedOriginalTerrain = new Map<TileRef, number>();
+  private trustedPendingTiles: TileRef[] = [];
+  private trustedPendingTerrain: TileRef[] = [];
+  private _trustedSpawnReady = false;
+
+  public trustedSpawnReady(): boolean {
+    return this._trustedNationalProjection && this._trustedSpawnReady && this.inSpawnPhase();
+  }
+
+  public setTrustedSpawnReady(ready: boolean): void {
+    if (this._trustedNationalProjection) this._trustedSpawnReady = ready;
+  }
+
+  /** Tile and unit pager epochs are independent. A tile clear must not erase authorized units. */
+  public resetTrustedTileSight(): void {
+    if (!this._trustedNationalProjection) return;
+    this._trustedProjectionReady = false;
+    this._trustedSpawnReady = false;
+    this.trustedPendingTiles = [];
+    for (const [tile, terrain] of this.trustedOriginalTerrain) {
+      if (this._map.updateTile(tile, terrain << 16)) this.trustedPendingTerrain.push(tile);
+    }
+    this.trustedOriginalTerrain.clear();
+    this._map.tileStateBuffer().fill(0);
+    for (const player of this._players.values()) player.nameData = undefined;
+    this._names.clear();
+    this._namesDirty = true;
+    this._firstPopulate = true;
+  }
+
+  /** Sparse revocations publish only changed native tile refs, including restored terrain. */
+  public reconcileTrustedTileVisibility(removed: readonly TileRef[]): void {
+    if (!this._trustedNationalProjection || !removed.length) return;
+    const removedSet = new Set(removed);
+    for (const tile of removed) {
+      const terrain = this.trustedOriginalTerrain.get(tile) ?? this._map.terrainByte(tile);
+      if (this._map.updateTile(tile, terrain << 16)) this.trustedPendingTerrain.push(tile);
+      this.trustedOriginalTerrain.delete(tile);
+      this.trustedPendingTiles.push(tile);
+    }
+    for (const player of this._players.values()) {
+      const name = player.nameData;
+      if (name && removedSet.has(this._map.ref(Math.floor(name.x), Math.floor(name.y)))) {
+        player.nameData = undefined;
+        this._namesDirty = true;
+      }
+    }
+  }
 
   /** Strictly a view of the E3 recipient packet, NEVER a browser GameRunner. */
   public isTrustedNationalProjection(): boolean {
@@ -157,6 +204,9 @@ export class GameView implements GameLike {
   public resetTrustedProjectionSight(): void {
     if (!this._trustedNationalProjection) return;
     this._trustedProjectionReady = false;
+    this._trustedSpawnReady = false;
+    this.trustedPendingTiles = [];
+    this.trustedPendingTerrain = [];
     this.trustedSight = null;
     this.updatedTerrainTiles = [];
     for (const [tile, terrain] of this.trustedOriginalTerrain) {
@@ -255,25 +305,16 @@ export class GameView implements GameLike {
     }
     if (!update.packedUnitUpdates) return;
     const kept: number[] = [];
+    const currentMarkers = new Map(delta.units.map((marker) => [marker.id, marker]));
     const buffer = update.packedUnitUpdates;
     for (let offset = 0; offset < buffer.length; offset += UNIT_UPDATE_STRIDE) {
       const decoded = new PackedUnitUpdateDecoder(buffer, offset);
-      const marker = this.trustedUnitMarkers.get(decoded.id);
-      if (!marker) continue;
-      if (
-        !decoded.isActive ||
-        receiver.tileStatus(decoded.pos) !== "observed"
-      ) {
+      const marker = currentMarkers.get(decoded.id);
+      if (!marker || decoded.pos !== marker.tile)
+        throw new Error("NATIONAL native unit outside current authorized page");
+      if (!decoded.isActive) {
         this.reconcileTrustedUnitVisibility(false, [decoded.id]);
         continue;
-      }
-      if (decoded.pos !== marker.tile) {
-        // A current packed position can advance a previously disclosed unit;
-        // the position itself was independently checked against known sight.
-        this.trustedUnitMarkers.set(decoded.id, {
-          ...marker,
-          tile: decoded.pos,
-        });
       }
       if (!this._units.has(decoded.id)) this.trustedMarkerRevision++;
       for (let i = 0; i < UNIT_UPDATE_STRIDE; i++)
@@ -715,8 +756,10 @@ export class GameView implements GameLike {
       );
     }
 
-    this.updatedTiles = [];
-    this.updatedTerrainTiles = [];
+    this.updatedTiles = this.trustedPendingTiles;
+    this.updatedTerrainTiles = this.trustedPendingTerrain;
+    this.trustedPendingTiles = [];
+    this.trustedPendingTerrain = [];
     const packed = this.lastUpdate.packedTileUpdates;
     for (let i = 0; i + 1 < packed.length; i += 2) {
       const tile = packed[i];
@@ -1012,7 +1055,7 @@ export class GameView implements GameLike {
     // Trail update: walk active trail-type units and stamp/decay.
     this._trailIdsScratch.length = 0;
     for (const u of this._units.values()) {
-      if (u.isActive() && TRAIL_TYPES.has(u.type())) {
+      if (!this._trustedNationalProjection && u.isActive() && TRAIL_TYPES.has(u.type())) {
         this._trailIdsScratch.push(u.id());
       }
     }
@@ -1442,7 +1485,7 @@ export class GameView implements GameLike {
   }
   isSpectator(): boolean {
     return (
-      (this._trustedNationalProjection && !this._trustedProjectionReady) ||
+      (this._trustedNationalProjection && !this._trustedProjectionReady && !this.trustedSpawnReady()) ||
       !this.myPlayer()?.isAlive() ||
       this._config.isReplay()
     );

@@ -15,9 +15,11 @@ import {
   NATIONAL_OBSERVER_MAX_TILES,
   NATIONAL_OBSERVER_MAX_UNITS,
   NATIONAL_OBSERVER_MAP_VERSION,
+  validNationalObserverPageProgress,
   type NationalObserverMapV1,
   type NationalPublicConflictView,
 } from "@openfront/engine-api/game/NationalRecipientView";
+import { validateNationalObserverNativeLanes } from "@openfront/shared/NationalObserverNativeWire";
 import { replacer } from "@openfront/shared/SharedUtil";
 
 export const MAX_NATIONAL_PROJECTION_BYTES = 2_000_000;
@@ -56,14 +58,23 @@ export function encodeNationalRecipientProjection(
       typeof map.reset !== "boolean" ||
       !Number.isSafeInteger(map.cursor) ||
       map.cursor < 0 ||
-      (map.reset && map.cursor !== 0) ||
+      !validNationalObserverPageProgress(map) ||
+      !Array.isArray(map.tileRemovedRefs) ||
+      map.tileRemovedRefs.length > NATIONAL_OBSERVER_MAX_TILES ||
+      (map.reset && map.tileRemovedRefs.length !== 0) ||
+      map.tileRemovedRefs.some(
+        (ref, i) =>
+          !Number.isSafeInteger(ref) ||
+          ref < 0 ||
+          ref >= map.width * map.height ||
+          (i > 0 && ref <= map.tileRemovedRefs[i - 1]),
+      ) ||
       !Number.isSafeInteger(map.unitCursor) ||
       map.unitCursor < 0 ||
       !Number.isSafeInteger(map.unitSweepId) ||
       map.unitSweepId < 1 ||
       typeof map.unitReset !== "boolean" ||
       typeof map.unitOverflow !== "boolean" ||
-      (map.unitReset && map.unitCursor !== 0) ||
       !Array.isArray(map.unitRemovedIds) ||
       map.unitRemovedIds.length > NATIONAL_OBSERVER_MAX_UNITS ||
       map.unitRemovedIds.some(
@@ -90,6 +101,7 @@ export function encodeNationalRecipientProjection(
       )
     )
       throw new Error("NATIONAL invalid bounded observer-map v1");
+    validateNationalObserverNativeLanes(filtered, map);
   }
   const allowed = {
     tick: filtered.tick,
@@ -154,6 +166,7 @@ export function encodeNationalRecipientProjection(
             version: NATIONAL_OBSERVER_MAP_VERSION,
             tick: map.tick,
             observerId: map.observerId,
+            observerSmallId: map.observerSmallId,
             streamId: map.streamId,
             sweepId: map.sweepId,
             sweepTick: map.sweepTick,
@@ -162,6 +175,9 @@ export function encodeNationalRecipientProjection(
             reset: map.reset,
             cursor: map.cursor,
             nextCursor: map.nextCursor,
+            tilePageSlots: map.tilePageSlots,
+            tileRemovedRefs: [...map.tileRemovedRefs],
+            tilePartial: map.tilePartial,
             tiles: map.tiles.map(([tile, state, terrain, borderMask]) => [
               tile,
               state,
@@ -171,6 +187,8 @@ export function encodeNationalRecipientProjection(
             units: map.units.map((unit) => ({
               id: unit.id,
               ownerId: unit.ownerId,
+              nativeOwnerSmallId: unit.nativeOwnerSmallId,
+              nativeType: unit.nativeType,
               kind: unit.kind,
               tile: unit.tile,
               ...(unit.troops === undefined ? {} : { troops: unit.troops }),
@@ -178,6 +196,8 @@ export function encodeNationalRecipientProjection(
             unitCursor: map.unitCursor,
             unitNextCursor: map.unitNextCursor,
             unitSweepId: map.unitSweepId,
+            unitPageSlots: map.unitPageSlots,
+            unitPartial: map.unitPartial,
             unitReset: map.unitReset,
             unitRemovedIds: [...map.unitRemovedIds],
             unitsTruncated: map.unitsTruncated,
@@ -203,7 +223,9 @@ export function encodeNationalRecipientProjection(
   // Political and player DTOs may contain bigint currency fields; only
   // inside this E3-filtered whitelist do we normalize them to JSON strings.
   const json = JSON.stringify(allowed, replacer);
-  if (json.length > MAX_NATIONAL_PROJECTION_BYTES) {
+  if (
+    new TextEncoder().encode(json).byteLength > MAX_NATIONAL_PROJECTION_BYTES
+  ) {
     throw new Error("NATIONAL recipient packet exceeds bounded wire limit");
   }
   return json;

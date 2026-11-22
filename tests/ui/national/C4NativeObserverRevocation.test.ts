@@ -28,11 +28,15 @@ const self = "nation-a";
 const enemy = "nation-b";
 const ownTile = 22;
 const enemyTile = 33;
-const marker = { id: 19, ownerId: enemy, kind: "warship", tile: enemyTile };
+const marker = { id: 19, ownerId: enemy, nativeOwnerSmallId: 2, nativeType: UnitType.Warship, kind: "warship", tile: enemyTile };
 const land = 128;
 
 function page(tick: number, overrides: Record<string, unknown> = {}) {
-  return {
+  const result = {
+    observerSmallId: 1,
+    tileRemovedRefs: [],
+    tilePartial: false,
+    unitPartial: false,
     version: 1,
     tick,
     observerId: self,
@@ -61,6 +65,7 @@ function page(tick: number, overrides: Record<string, unknown> = {}) {
     visibleBorders: [],
     ...overrides,
   };
+  return { ...result, tilePageSlots: result.tiles.length, unitPageSlots: result.units.length };
 }
 
 function setup() {
@@ -110,26 +115,17 @@ function setup() {
 describe("C4 E4: native recipient view revocation", () => {
   it("draws authorized ownership and packed native units, deletes a unit without fake death, and refuses stale attack dispatch", () => {
     const { view, update, receiver } = setup();
-    const first = receiver.accept(page(1), 1);
-    view.reconcileTrustedUnitVisibility(
-      first.clearAllUnits,
-      first.removedUnitIds,
-    );
+    const packed = packUnitUpdates([makeUnitUpdate({ id: marker.id, ownerID: 2, pos: enemyTile, lastPos: enemyTile, unitType: UnitType.Warship, targetable: false, level: 0 })]).packedUnitUpdates;
+    const packet = parseTrustedNationalProjection(JSON.stringify({ tick: 1, updates: { [GameUpdateType.Player]: [] }, packedTileUpdates: [], packedUnitUpdates: Array.from(packed), nationalObserverMap: page(1) }), 1);
+    const first = receiver.acceptProjection(packet);
+    view.reconcileTrustedUnitVisibility(first.clearAllUnits, first.removedUnitIds);
     update.packedTileUpdates = new Uint32Array([
       ownTile,
       1 | (land << 16),
       enemyTile,
       2 | (land << 16),
     ]);
-    update.packedUnitUpdates = packUnitUpdates([
-      makeUnitUpdate({
-        id: marker.id,
-        ownerID: 2,
-        pos: enemyTile,
-        lastPos: enemyTile,
-        unitType: UnitType.Warship,
-      }),
-    ]).packedUnitUpdates;
+    update.packedUnitUpdates = first.nativeUnits;
     view.applyTrustedUnitPage(update, first, receiver);
     view.markTrustedProjectionReady();
     view.update(update);
@@ -198,6 +194,32 @@ describe("C4 E4: native recipient view revocation", () => {
     expect(attack).toHaveBeenCalledTimes(1);
     expect(() => receiver.accept(page(4, { streamId: "forged" }), 4)).toThrow();
     expect(() => receiver.accept(page(2), 2)).toThrow();
+  });
+
+  it("publishes sparse tile revocation without erasing independently sighted units or unchanged tiles", () => {
+    const { view, update, receiver } = setup();
+    const first = receiver.accept(page(1), 1);
+    update.packedTileUpdates = new Uint32Array([ownTile, 1 | (land << 16), enemyTile, 2 | (land << 16)]);
+    view.applyTrustedUnitPage(update, first, receiver);
+    view.markTrustedProjectionReady();
+    view.update(update);
+    const next = receiver.accept(page(2, { tiles: [[ownTile, 1, land, 0]], units: [marker], tileRemovedRefs: [enemyTile], tilePartial: true }), 2);
+    expect(next.usable).toBe(true);
+    expect(next.tilePartial).toBe(true);
+    view.reconcileTrustedTileVisibility(next.removedTileRefs);
+    const nextUpdate = makeEmptyGu(2);
+    nextUpdate.packedTileUpdates = new Uint32Array([ownTile, 1 | (land << 16)]);
+    view.applyTrustedUnitPage(nextUpdate, next, receiver);
+    view.setTrustedProjectionReady(next.usable);
+    view.update(nextUpdate);
+    expect(view.hasOwner(enemyTile)).toBe(false);
+    expect(view.owner(ownTile).id()).toBe(self);
+    expect(view.frameData().changedTiles).toContain(enemyTile);
+    expect(view.frameData().changedTiles).not.toContain(ownTile);
+    expect(view.trustedAttackTarget(self, enemyTile)).toBeUndefined();
+    expect([...view.trustedObserverFallbackMarkers()]).toEqual([marker]);
+    view.resetTrustedTileSight();
+    expect([...view.trustedObserverFallbackMarkers()]).toEqual([marker]);
   });
 
   it("offers neutral expansion only on observed land and prevents attacking before WAR or after peace", async () => {

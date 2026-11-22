@@ -1,3 +1,5 @@
+import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
+import { decodeNationalObserverNativeUnits } from "@openfront/shared/NationalObserverNativeWire";
 import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { simpleHash } from "@openfront/engine-lib/Util";
@@ -38,44 +40,11 @@ export interface TrustedNationalProjection {
 }
 
 /** E3 / C2 authenticated visible map page, never a Game snapshot. */
-export interface TrustedNationalObserverMap {
-  readonly version: 1;
-  readonly tick: number;
-  readonly observerId: string;
-  readonly width: number;
-  readonly height: number;
-  readonly reset: boolean;
-  readonly cursor: number;
-  readonly nextCursor: number | null;
-  readonly tiles: readonly (readonly [number, number, number, number])[];
-  readonly units: readonly {
-    readonly id: number;
-    readonly ownerId: string;
-    readonly kind: string;
-    readonly tile: number;
-    readonly troops?: number;
-  }[];
-  readonly unitsTruncated: boolean;
-  readonly visibleBorders: readonly {
-    readonly targetId: string;
-    readonly access: "land" | "naval";
-  }[];
-  readonly ownResources: {
-    readonly troops: number;
-    readonly treasury: number;
-  };
-  readonly countries: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly alive: boolean;
-    readonly landPercent: number;
-    readonly status: string;
-  }[];
-}
+export type TrustedNationalObserverMap = NationalObserverMapV1;
 
 /** Do not unlock Private NATIONAL until the final authorized map page arrives. */
 export function completedTrustedObserverMap(
-  page: TrustedNationalObserverMap | null,
+  page: Pick<TrustedNationalObserverMap, "observerId" | "nextCursor"> | null,
   actorId: string | null,
 ): boolean {
   return (
@@ -289,26 +258,7 @@ export function materializeTrustedNationalUpdate(
   // E3's paged current-sight map gives late joiners real visible territory.
   // All added states belong to the authenticated observer's current sight.
   const visibleTilePairs = [...tiles, ...observerMapTilePairs(observerMap)];
-  // JSON serializes the engine packer's optional NaN lanes as null. Restore
-  // only those documented sentinel positions, never required IDs or coordinates.
-  const rawUnits = packet.packedUnitUpdates;
-  const nanOffsets = new Set([4, 5, 6, 7, 9, 10, 12, 13, 14, 15]);
-  const units =
-    rawUnits === undefined
-      ? undefined
-      : Array.isArray(rawUnits) &&
-          rawUnits.length <= 210_000 &&
-          rawUnits.every(
-            (v, i) =>
-              (typeof v === "number" && Number.isFinite(v)) ||
-              (v === null && nanOffsets.has(i % 21)),
-          )
-        ? rawUnits.map((v) => (v === null ? NaN : (v as number)))
-        : (() => {
-            throw new Error("NATIONAL invalid projected unit lanes");
-          })();
-  if (units !== undefined && units.length % 21 !== 0)
-    throw new Error("NATIONAL invalid projected unit stride");
+  const units = decodeNationalObserverNativeUnits(packet.packedUnitUpdates);
   const players = numericArray(packet.packedPlayerUpdates, 25_000);
   if (players !== undefined && players.length % 5 !== 0)
     throw new Error("NATIONAL invalid projected player stride");
@@ -320,7 +270,7 @@ export function materializeTrustedNationalUpdate(
     packedTileUpdates: Uint32Array.from(visibleTilePairs),
     ...(units === undefined
       ? {}
-      : { packedUnitUpdates: Float64Array.from(units) }),
+      : { packedUnitUpdates: units }),
     ...(players === undefined
       ? {}
       : { packedPlayerUpdates: Float64Array.from(players) }),
