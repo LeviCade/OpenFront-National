@@ -17,6 +17,11 @@ import {
   UnitType,
   WarshipState,
 } from "./GameTypes";
+import type { NationalImperialAdministrationWire } from "./NationalImperialView";
+import type {
+  NationalPublicPactView,
+  NationalPactDisclosureWireData,
+} from "./NationalPactView";
 
 /**
  * PUBLIC NATIONAL politics that may cross the worker boundary. This mirrors
@@ -25,6 +30,7 @@ import {
  * invitations, peace motions or raw WarLedger/LevyLedger snapshots.
  */
 export interface NationalPoliticsViewData {
+  readonly pacts?: readonly NationalPublicPactView[];
   readonly empires: readonly {
     readonly id: string;
     readonly leaderId: PlayerID;
@@ -125,6 +131,8 @@ export interface GameUpdateViewData {
    * from the public political view. Never synthesize offers from the roster.
    */
   nationalAccessionOffers?: NationalAccessionOffersViewData;
+  nationalPactDisclosure?: NationalPactDisclosureWireData;
+  nationalImperialAdministration?: NationalImperialAdministrationWire;
   /**
    * Outcomes scoped to the authenticated recipient of THIS view only.
    * E3 must filter before serialization; never broadcast the E1 journal.

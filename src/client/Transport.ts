@@ -11,6 +11,7 @@ import {
   AllPlayersStats,
   ClientID,
   Intent,
+  IntentSchema,
   Winner,
 } from "@openfront/engine-api/Schemas";
 import {
@@ -58,6 +59,7 @@ import {
   SendUpdateGameConfigIntentEvent,
 } from "./LobbyEvents";
 import { LocalServer } from "./LocalServer";
+import type { PactIntent } from "./NationalPactState";
 import {
   acceptTrustedNationalPrivateCapability,
   hasTrustedNationalPrivateCapability,
@@ -117,6 +119,14 @@ export class SendSpawnIntentEvent implements GameEvent {
 }
 
 /** User-originated NATIONAL founding, stamped by the normal transport. */
+export class SendNationalPactIntentEvent implements GameEvent {
+  constructor(public readonly intent: PactIntent) {}
+}
+
+export class SendNationalImperialPolicyIntentEvent implements GameEvent {
+  constructor(public readonly intent: Intent) {}
+}
+
 export class SendNationalFoundEmpireIntentEvent implements GameEvent {
   constructor(
     public readonly empireId: string,
@@ -408,6 +418,18 @@ export class Transport {
       this.rejectNationalStream();
     });
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
+    this.subscribe(SendNationalPactIntentEvent, (e) => {
+      if (this.nationalDiplomacyWireEnabled()) this.sendIntent(e.intent);
+    });
+    this.subscribe(SendNationalImperialPolicyIntentEvent, (e) => {
+      if (!this.nationalDiplomacyWireEnabled()) return;
+      const parsed = IntentSchema.safeParse(e.intent);
+      if (
+        parsed.success &&
+        String(parsed.data.type) === "national_imperial_administration"
+      )
+        this.sendIntent(parsed.data);
+    });
     this.subscribe(SendNationalFoundEmpireIntentEvent, (e) =>
       this.onSendNationalFoundEmpireIntent(e),
     );

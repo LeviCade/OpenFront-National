@@ -11,6 +11,8 @@ import {
   GameUpdateType,
   type GameUpdateViewData,
 } from "@openfront/engine-api/game/GameUpdates";
+import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
+import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import {
   NATIONAL_OBSERVER_MAX_TILES,
   NATIONAL_OBSERVER_MAX_UNITS,
@@ -39,6 +41,20 @@ export function encodeNationalRecipientProjection(
   };
   const map = politics.nationalObserverMap;
   const conflicts = politics.nationalConflicts;
+  validateNationalImperialPacket(
+    filtered.nationalImperialAdministration,
+    filtered.nationalPolitics,
+    map?.observerId ?? null,
+    filtered.tick,
+    map?.streamId,
+  );
+  validateNationalPactPacket(
+    filtered.nationalPolitics,
+    filtered.nationalPactDisclosure,
+    map?.observerId ?? null,
+    filtered.tick,
+    map?.streamId,
+  );
   if (map !== undefined) {
     if (
       map.version !== NATIONAL_OBSERVER_MAP_VERSION ||
@@ -130,6 +146,15 @@ export function encodeNationalRecipientProjection(
     ...(filtered.nationalCommandResults === undefined
       ? {}
       : { nationalCommandResults: filtered.nationalCommandResults }),
+    ...(filtered.nationalImperialAdministration === undefined
+      ? {}
+      : {
+          nationalImperialAdministration:
+            filtered.nationalImperialAdministration,
+        }),
+    ...(filtered.nationalPactDisclosure === undefined
+      ? {}
+      : { nationalPactDisclosure: filtered.nationalPactDisclosure }),
     ...(filtered.nationalAccessionOffers === undefined
       ? {}
       : { nationalAccessionOffers: filtered.nationalAccessionOffers }),

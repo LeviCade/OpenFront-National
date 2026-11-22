@@ -1,4 +1,6 @@
 import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
+import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
+import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { simpleHash } from "@openfront/engine-lib/Util";
@@ -26,6 +28,8 @@ const allowedFields = new Set([
   "nationalConflicts",
   "nationalCommandResults",
   "nationalAccessionOffers",
+  "nationalPactDisclosure",
+  "nationalImperialAdministration",
   "nationalObserverMap",
 ]);
 const permittedUpdates = new Set<number>([
@@ -242,10 +246,18 @@ export function assertTrustedPublicProjection(
       "playerNameViewData",
       "nationalCommandResults",
       "nationalAccessionOffers",
+      "nationalPactDisclosure",
+      "nationalImperialAdministration",
     ].some((key) => packet[key] !== undefined) ||
     !record(packet.updates)
   )
     throw new Error("NATIONAL unauthorized public-only projection");
+  validateNationalPactPacket(
+    packet.nationalPolitics,
+    packet.nationalPactDisclosure,
+    null,
+    packet.tick,
+  );
   const allowed = new Set([
     "type",
     "id",
@@ -358,6 +370,22 @@ export function materializeTrustedNationalUpdate(
     packet.nationalObserverMap,
     packet.tick,
   );
+  // The caller checks page principal/epoch with NationalObserverMapContinuity.
+  // Independently reject malformed or cross-epoch pact sibling lanes here.
+  validateNationalPactPacket(
+    packet.nationalPolitics,
+    packet.nationalPactDisclosure,
+    observerMap?.observerId ?? null,
+    packet.tick,
+    observerMap?.streamId,
+  );
+  validateNationalImperialPacket(
+    packet.nationalImperialAdministration,
+    packet.nationalPolitics,
+    observerMap?.observerId ?? null,
+    packet.tick,
+    observerMap?.streamId,
+  );
   // E3's paged current-sight map gives late joiners real visible territory.
   // All added states belong to the authenticated observer's current sight.
   const visibleTilePairs = [...tiles, ...observerMapTilePairs(observerMap)];
@@ -390,6 +418,14 @@ export function materializeTrustedNationalUpdate(
     ...(packet.nationalCommandResults === undefined
       ? {}
       : { nationalCommandResults: packet.nationalCommandResults }),
+    ...(packet.nationalImperialAdministration === undefined
+      ? {}
+      : {
+          nationalImperialAdministration: packet.nationalImperialAdministration,
+        }),
+    ...(packet.nationalPactDisclosure === undefined
+      ? {}
+      : { nationalPactDisclosure: packet.nationalPactDisclosure }),
     ...(packet.nationalAccessionOffers === undefined
       ? {}
       : { nationalAccessionOffers: packet.nationalAccessionOffers }),
@@ -418,6 +454,9 @@ export class TrustedNationalStartedEvent implements GameEvent {
 
 /** Close native menus holding coordinates and requests from an expired sight lease. */
 export class TrustedNationalSightRevokedEvent implements GameEvent {}
+
+/** Dismiss menu actions computed against superseded political facts. */
+export class NationalPoliticalAffordanceChangedEvent implements GameEvent {}
 
 export class TrustedNationalProjectionEvent implements GameEvent {
   constructor(public readonly projection: TrustedNationalProjection) {}
