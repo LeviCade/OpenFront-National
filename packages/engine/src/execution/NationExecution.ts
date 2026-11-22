@@ -724,22 +724,38 @@ export class NationExecution implements Execution {
         this.nationalPlannerMemory === null
           ? null
           : {
-              ...this.nationalPlannerMemory,
-              reputation: this.nationalPlannerMemory.reputation.map(
-                (entry) => ({ ...entry }),
-              ),
-              rejectedWarTargets:
-                this.nationalPlannerMemory.rejectedWarTargets?.map((entry) => ({
-                  ...entry,
-                })),
+              // Stable explicit snapshot key order, irrespective of which
+              // legal planner transition last spread the mutable memory.
+              // Snapshot -> restore -> snapshot must be byte-identical.
+              observerId: this.nationalPlannerMemory.observerId,
+              objective: this.nationalPlannerMemory.objective,
+              targetId: this.nationalPlannerMemory.targetId,
+              nextPlanningTick: this.nationalPlannerMemory.nextPlanningTick,
               lastProcessedEvent:
                 this.nationalPlannerMemory.lastProcessedEvent === null
                   ? null
                   : { ...this.nationalPlannerMemory.lastProcessedEvent },
-              political:
-                this.nationalPlannerMemory.political === undefined
-                  ? undefined
-                  : {
+              reputation: this.nationalPlannerMemory.reputation.map(
+                (entry) => ({ ...entry }),
+              ),
+              ...(this.nationalPlannerMemory.rejectedWarTargets === undefined
+                ? {}
+                : {
+                    rejectedWarTargets:
+                      this.nationalPlannerMemory.rejectedWarTargets.map(
+                        (entry) => ({ ...entry }),
+                      ),
+                  }),
+              ...(this.nationalPlannerMemory.lastWarOutcomeSequence === undefined
+                ? {}
+                : {
+                    lastWarOutcomeSequence:
+                      this.nationalPlannerMemory.lastWarOutcomeSequence,
+                  }),
+              ...(this.nationalPlannerMemory.political === undefined
+                ? {}
+                : {
+                    political: {
                       ...this.nationalPlannerMemory.political,
                       completedCommands: [
                         ...this.nationalPlannerMemory.political.completedCommands,
@@ -749,6 +765,7 @@ export class NationExecution implements Execution {
                           (entry) => ({ ...entry }),
                         ),
                     },
+                  }),
             },
       nationalSightMemory:
         this.nationalSightMemory === null
