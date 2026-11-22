@@ -986,6 +986,9 @@ export function transferCrown(
   const target = empire(next, empireId);
   target.leaderId = successorId;
   target.crisisDeadlineMs = null;
+  // An old crown's standing WAR response cannot commit after succession.
+  // The new emperor must affirmatively authorize a fresh attack-time doctrine.
+  delete target.standingDefenseResponse;
   // Grants are appointments of the outgoing crown: NONE survive succession.
   // The successor may issue fresh grants through a new authenticated command.
   delete target.delegatedNationalPeace;
