@@ -38,9 +38,6 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
-          npm run typecheck
-          npx --no-install vitest run --project node tests/server/NationalSocketOrigin.test.ts tests/server/NationalAccountGate.test.ts tests/server/NationalAccountLease.test.ts tests/server/TrustedNationalRealWebSocket.test.ts
-          npx --no-install oxlint src/server/Worker.ts src/server/GameServer.ts src/server/national/NationalSocketOrigin.ts tests/server/NationalSocketOrigin.test.ts tests/server/NationalAccountGate.test.ts scripts/national-staging/wss-bridge.mjs scripts/national-staging/worker-journey.mjs
           FILES=(src/server/Worker.ts src/server/GameServer.ts src/server/national/NationalSocketOrigin.ts tests/server/NationalSocketOrigin.test.ts tests/server/NationalAccountGate.test.ts scripts/national-staging/wss-bridge.mjs scripts/national-staging/worker-journey.mjs)
           if ! npx --no-install oxfmt --check "${FILES[@]}"; then
             npx --no-install oxfmt --write "${FILES[@]}"
@@ -49,6 +46,9 @@ jobs:
             echo C5_E2_FORMAT_REPAIR_END
             exit 1
           fi
+          npm run typecheck
+          npx --no-install vitest run --project node tests/server/NationalSocketOrigin.test.ts tests/server/NationalAccountGate.test.ts tests/server/NationalAccountLease.test.ts tests/server/TrustedNationalRealWebSocket.test.ts
+          npx --no-install oxlint src/server/Worker.ts src/server/GameServer.ts src/server/national/NationalSocketOrigin.ts tests/server/NationalSocketOrigin.test.ts tests/server/NationalAccountGate.test.ts scripts/national-staging/wss-bridge.mjs scripts/national-staging/worker-journey.mjs
   tcp-wss-original-game:
     runs-on: ubuntu-latest
     timeout-minutes: 30

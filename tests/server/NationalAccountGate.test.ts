@@ -165,7 +165,7 @@ describe("NATIONAL signed-account browser boundary", () => {
       isAdmin: false,
       isAdminBot: false,
     };
-    const untrusted = makeMockWs();
+    const untrusted = makeClient({ clientID: cid("replacementSocket") }).ws;
     expect(game.rejoinClient(untrusted, "verified-old")).toBe(true);
     expect(game.handleIntent(
       { type: "update_game_config", config: { nationalMode: true } },
