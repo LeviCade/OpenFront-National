@@ -545,6 +545,59 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
     }
   });
 
+  it("preserves non-worker allocation through army centralization, decentralization, policy amendments and snapshot", async () => {
+    const game = await liveGame();
+    join(game);
+    const leader = game.player(N);
+    const member = game.player(S);
+    const unit = city(game);
+    policy(game, 0, 3333);
+    expect(game.nationalImperialAdministrationFor(leader)?.nonWorkerIncomeBps).toBe(3333);
+
+    game.performNationalImperialAdministration(leader, {
+      kind: "set-army-mode",
+      empireId,
+      mode: "hybrid",
+      thresholdBps: 7000,
+    });
+    expect(game.nationalImperialAdministrationFor(leader)?.nonWorkerIncomeBps).toBe(3333);
+
+    const station = new TrainStation(game, unit);
+    const train = new TrainExecution(
+      game.railNetwork(),
+      member,
+      station,
+      station,
+      1,
+    );
+    const beforePersonal = member.gold();
+    const beforeTreasury = treasury(game);
+    const beforeGross = member.trainGold();
+    station.onTrainStop(train); // genuine commercial production after policy transition
+    const gross = member.trainGold() - beforeGross;
+    const share = (gross * 3333n) / 10_000n;
+    expect(share).toBeGreaterThan(0n);
+    expect(member.gold() - beforePersonal).toBe(gross - share);
+    expect(treasury(game) - beforeTreasury).toBe(share);
+
+    game.performNationalImperialAdministration(leader, {
+      kind: "set-army-mode",
+      empireId,
+      mode: "decentralized",
+      thresholdBps: 7000,
+    });
+    game.performNationalImperialAdministration(leader, {
+      kind: "set-policy",
+      empireId,
+      policy: { workerIncomeBps: 1000, allowedConstruction: null },
+    });
+    expect(game.nationalImperialAdministrationFor(leader)?.nonWorkerIncomeBps).toBe(3333);
+    const { restored } = await roundTrip(game, "plains");
+    expect(restored.nationalImperialAdministrationFor(restored.player(N))?.nonWorkerIncomeBps).toBe(3333);
+    expect(treasury(restored)).toBe(treasury(game));
+    expect(national(restored)).toEqual(national(game));
+  });
+
   it("allocates actual train-stop income once; commercial, worker, donations and FFA remain distinct", async () => {
     const game = await liveGame();
     join(game);
