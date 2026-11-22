@@ -1,12 +1,16 @@
 import { PlayerType } from "@openfront/engine-api/game/GameTypes";
 import {
+  readNationalImperialAdministration,
+  type NationalImperialAdministrationView,
+  type NationalImperialAdministrationWire,
+} from "@openfront/engine-api/game/NationalImperialView";
+import {
   readNationalPublicPacts,
   readNationalPactDisclosure,
   type NationalPublicPactView,
   type NationalPactDisclosureViewData,
   type NationalPactDisclosureWireData,
 } from "@openfront/engine-api/game/NationalPactView";
-import { readNationalImperialAdministration, type NationalImperialAdministrationView, type NationalImperialAdministrationWire } from "@openfront/engine-api/game/NationalImperialView";
 import type { Game, Player } from "../../game/Game";
 
 /** E1 owns the two canonical reads. Optional only during parallel integration:
@@ -43,7 +47,8 @@ export function projectNationalPactDisclosure(
   if (
     !roster ||
     !observerId ||
-    !game.config().nationalMode() || game.inSpawnPhase() ||
+    !game.config().nationalMode() ||
+    game.inSpawnPhase() ||
     !game.hasPlayer(observerId)
   )
     return undefined;
@@ -77,20 +82,54 @@ export function projectNationalPactDisclosure(
 
 /** Canonical E1 policy read; no speculative treasury or client-side government. */
 export function projectNationalImperialAdministration(
-  game: Game, observerId: string | null, politics: unknown, tick: number, streamId?: string,
+  game: Game,
+  observerId: string | null,
+  politics: unknown,
+  tick: number,
+  streamId?: string,
 ): NationalImperialAdministrationWire | undefined {
-  if (!observerId || game.inSpawnPhase() || !game.hasPlayer(observerId)) return undefined;
+  if (!observerId || game.inSpawnPhase() || !game.hasPlayer(observerId))
+    return undefined;
   const actor = game.player(observerId);
-  if (actor.type() !== PlayerType.Human || !actor.hasSpawned() || !actor.isAlive() ||
-    !game.nationalPoliticalAuthority()?.empireOf(observerId)) return undefined;
-  const source = (game as Game & { nationalImperialAdministrationFor?(actor: Player): NationalImperialAdministrationView | null }).nationalImperialAdministrationFor?.(actor);
+  if (
+    actor.type() !== PlayerType.Human ||
+    !actor.hasSpawned() ||
+    !actor.isAlive() ||
+    !game.nationalPoliticalAuthority()?.empireOf(observerId)
+  )
+    return undefined;
+  const source = (
+    game as Game & {
+      nationalImperialAdministrationFor?(
+        actor: Player,
+      ): NationalImperialAdministrationView | null;
+    }
+  ).nationalImperialAdministrationFor?.(actor);
   if (!source) return undefined;
-  const packet = {version: 1 as const, recipientId: observerId, tick,
-    ...(streamId === undefined ? {} : {streamId}),
-    empireId: source.empireId, workerIncomeBps: source.workerIncomeBps,
-    allowedConstruction: source.allowedConstruction === null ? null : [...source.allowedConstruction],
-    treasury: source.treasury, canAmend: source.canAmend};
-  if (tick !== game.ticks() || !readNationalImperialAdministration(packet, politics, observerId, tick, streamId))
+  const packet = {
+    version: 1 as const,
+    recipientId: observerId,
+    tick,
+    ...(streamId === undefined ? {} : { streamId }),
+    empireId: source.empireId,
+    workerIncomeBps: source.workerIncomeBps,
+    allowedConstruction:
+      source.allowedConstruction === null
+        ? null
+        : [...source.allowedConstruction],
+    treasury: source.treasury,
+    canAmend: source.canAmend,
+  };
+  if (
+    tick !== game.ticks() ||
+    !readNationalImperialAdministration(
+      packet,
+      politics,
+      observerId,
+      tick,
+      streamId,
+    )
+  )
     throw new Error("NATIONAL invalid authoritative imperial policy");
   return packet;
 }

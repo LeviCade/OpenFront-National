@@ -19,7 +19,10 @@ import {
   SpawnPhaseEndUpdate,
   UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
-import { readNationalImperialAdministration, type NationalImperialAdministrationView } from "@openfront/engine-api/game/NationalImperialView";
+import {
+  readNationalImperialAdministration,
+  type NationalImperialAdministrationView,
+} from "@openfront/engine-api/game/NationalImperialView";
 import {
   readNationalPactWireDisclosure,
   type NationalPactDisclosureViewData,
@@ -104,7 +107,8 @@ export class GameView implements GameLike {
   private lastUpdate: GameUpdateViewData | null;
   // Authoritative, viewer-filtered worker values only. Never reconstruct
   // sovereignty from local intents or speculative client player data.
-  private _nationalImperialAdministration: NationalImperialAdministrationView | null = null;
+  private _nationalImperialAdministration: NationalImperialAdministrationView | null =
+    null;
   private _nationalPactReceipts: PactReceipt[] = [];
   private _nationalPactDisclosure: NationalPactDisclosureViewData | null = null;
   private _nationalPolitics: NationalPublicPolitics | null = null;
@@ -123,7 +127,7 @@ export class GameView implements GameLike {
   public setTrustedPrincipal(principal: string | null): void {
     if (this.trustedPrincipal !== principal) {
       this._nationalPactDisclosure = null;
-    this._nationalImperialAdministration = null;
+      this._nationalImperialAdministration = null;
       this._nationalPactReceipts = [];
     }
     this.trustedPrincipal = principal;
@@ -751,7 +755,11 @@ export class GameView implements GameLike {
 
     const previousTick = this.lastUpdate?.tick ?? -1;
     // Never keep an unvalidated or revoked constitutional snapshot in the raw renderer cache.
-    this.lastUpdate = gu.nationalPactDisclosure === undefined && gu.nationalImperialAdministration === undefined ? gu : { ...gu };
+    this.lastUpdate =
+      gu.nationalPactDisclosure === undefined &&
+      gu.nationalImperialAdministration === undefined
+        ? gu
+        : { ...gu };
     delete this.lastUpdate.nationalPactDisclosure;
     delete this.lastUpdate.nationalImperialAdministration;
 
@@ -777,10 +785,18 @@ export class GameView implements GameLike {
 
       const currentActorId =
         this.trustedPrincipal ?? this._myPlayer?.id() ?? null;
-      this._nationalImperialAdministration = gu.tick < previousTick ? null : readNationalImperialAdministration(
-        gu.nationalImperialAdministration, this._nationalPolitics, currentActorId, gu.tick,
-        this._trustedNationalProjection ? this.trustedSight?.lastAcceptedStreamId ?? null : undefined,
-      );
+      this._nationalImperialAdministration =
+        gu.tick < previousTick
+          ? null
+          : readNationalImperialAdministration(
+              gu.nationalImperialAdministration,
+              this._nationalPolitics,
+              currentActorId,
+              gu.tick,
+              this._trustedNationalProjection
+                ? (this.trustedSight?.lastAcceptedStreamId ?? null)
+                : undefined,
+            );
       this._nationalPactDisclosure =
         gu.tick < previousTick
           ? null

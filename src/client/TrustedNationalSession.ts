@@ -247,7 +247,7 @@ export function assertTrustedPublicProjection(
       "nationalCommandResults",
       "nationalAccessionOffers",
       "nationalPactDisclosure",
-  "nationalImperialAdministration",
+      "nationalImperialAdministration",
     ].some((key) => packet[key] !== undefined) ||
     !record(packet.updates)
   )
@@ -379,7 +379,13 @@ export function materializeTrustedNationalUpdate(
     packet.tick,
     observerMap?.streamId,
   );
-  validateNationalImperialPacket(packet.nationalImperialAdministration, packet.nationalPolitics, observerMap?.observerId ?? null, packet.tick, observerMap?.streamId);
+  validateNationalImperialPacket(
+    packet.nationalImperialAdministration,
+    packet.nationalPolitics,
+    observerMap?.observerId ?? null,
+    packet.tick,
+    observerMap?.streamId,
+  );
   // E3's paged current-sight map gives late joiners real visible territory.
   // All added states belong to the authenticated observer's current sight.
   const visibleTilePairs = [...tiles, ...observerMapTilePairs(observerMap)];
@@ -412,7 +418,11 @@ export function materializeTrustedNationalUpdate(
     ...(packet.nationalCommandResults === undefined
       ? {}
       : { nationalCommandResults: packet.nationalCommandResults }),
-    ...(packet.nationalImperialAdministration === undefined ? {} : { nationalImperialAdministration: packet.nationalImperialAdministration }),
+    ...(packet.nationalImperialAdministration === undefined
+      ? {}
+      : {
+          nationalImperialAdministration: packet.nationalImperialAdministration,
+        }),
     ...(packet.nationalPactDisclosure === undefined
       ? {}
       : { nationalPactDisclosure: packet.nationalPactDisclosure }),

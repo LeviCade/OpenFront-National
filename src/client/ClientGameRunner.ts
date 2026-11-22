@@ -1907,7 +1907,8 @@ export class ClientGameRunner {
     this.myPlayer
       .actions(tile, [UnitType.TransportShip])
       .then((actions) => {
-        if (politicalKey !== this.gameView.nationalAttackEligibilityKey?.()) return;
+        if (politicalKey !== this.gameView.nationalAttackEligibilityKey?.())
+          return;
         if (
           this.trustedNationalProjection &&
           (!this.myPlayer ||
@@ -2098,7 +2099,8 @@ export class ClientGameRunner {
     this.myPlayer
       .actions(tile, null)
       .then((actions) => {
-        if (politicalKey !== this.gameView.nationalAttackEligibilityKey?.()) return;
+        if (politicalKey !== this.gameView.nationalAttackEligibilityKey?.())
+          return;
         if (
           this.trustedNationalProjection &&
           (!this.myPlayer ||

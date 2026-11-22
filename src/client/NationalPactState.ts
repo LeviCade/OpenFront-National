@@ -150,7 +150,8 @@ export function pactActionAllowed(
       return (
         ((privateView.terms.expulsion === "leader" &&
           pact.administratorId === actor) ||
-          (privateView.terms.expulsion === "unanimous" && pact.memberIds.length === 2)) &&
+          (privateView.terms.expulsion === "unanimous" &&
+            pact.memberIds.length === 2)) &&
         action.memberId !== actor &&
         pact.memberIds.includes(action.memberId)
       );

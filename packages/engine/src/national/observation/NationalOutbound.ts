@@ -690,14 +690,26 @@ export class NationalOutboundFilter {
 
     const publicPoliticalView = publicPolitics(data);
     const publicPacts = projectNationalPublicPacts(game);
-    const privatePacts = publicPoliticalView && verified ? projectNationalPactDisclosure(
-      game,
-      this.observerId,
-      publicPacts,
-      data.tick,
-      page?.streamId,
-    ) : undefined;
-    const administration = publicPoliticalView && verified ? projectNationalImperialAdministration(game, this.observerId, publicPoliticalView, data.tick, page?.streamId) : undefined;
+    const privatePacts =
+      publicPoliticalView && verified
+        ? projectNationalPactDisclosure(
+            game,
+            this.observerId,
+            publicPacts,
+            data.tick,
+            page?.streamId,
+          )
+        : undefined;
+    const administration =
+      publicPoliticalView && verified
+        ? projectNationalImperialAdministration(
+            game,
+            this.observerId,
+            publicPoliticalView,
+            data.tick,
+            page?.streamId,
+          )
+        : undefined;
     const publicConflictView = projectNationalPublicConflict(
       game,
       this.observerId,
@@ -724,7 +736,9 @@ export class NationalOutboundFilter {
               ...(publicPacts === undefined ? {} : { pacts: publicPacts }),
             },
           }),
-      ...(administration === undefined ? {} : { nationalImperialAdministration: administration }),
+      ...(administration === undefined
+        ? {}
+        : { nationalImperialAdministration: administration }),
       ...(privatePacts === undefined
         ? {}
         : { nationalPactDisclosure: privatePacts }),

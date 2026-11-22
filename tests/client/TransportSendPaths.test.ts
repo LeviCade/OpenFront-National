@@ -1,5 +1,4 @@
 import { GameType } from "@openfront/engine-api/game/GameTypes";
-import type { PactIntent } from "../../src/client/NationalPactState";
 import { EventBus } from "@openfront/shared/EventBus";
 import { ServerMessage } from "@openfront/shared/WireSchemas";
 import {
@@ -8,6 +7,7 @@ import {
   encodeServerMessage,
 } from "@openfront/shared/ZbinWire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { PactIntent } from "../../src/client/NationalPactState";
 import { testGameConfig } from "../util/Wire";
 
 // Transport's send paths: intent events on the bus leave the socket as
@@ -249,25 +249,66 @@ describe("Transport send paths", () => {
     const requestId = "np_" + "b".repeat(32);
     const terms = { admission: "leader", expulsion: "leader" } as const;
     const intents: PactIntent[] = [
-      { type: "national_found_pact", pactId: "pact", name: "Pact", pactKind: "NAP", terms, requestId },
-      { type: "national_invite_pact", pactId: "pact", candidateId: "player02", requestId },
+      {
+        type: "national_found_pact",
+        pactId: "pact",
+        name: "Pact",
+        pactKind: "NAP",
+        terms,
+        requestId,
+      },
+      {
+        type: "national_invite_pact",
+        pactId: "pact",
+        candidateId: "player02",
+        requestId,
+      },
       { type: "national_accept_pact", pactId: "pact", requestId },
       { type: "national_betray_pact", pactId: "pact", requestId },
-      { type: "national_propose_pact_amendment", pactId: "pact", terms, administratorId: "player02", requestId },
+      {
+        type: "national_propose_pact_amendment",
+        pactId: "pact",
+        terms,
+        administratorId: "player02",
+        requestId,
+      },
       { type: "national_approve_pact_amendment", pactId: "pact", requestId },
-      { type: "national_expel_pact", pactId: "pact", memberId: "player02", requestId },
+      {
+        type: "national_expel_pact",
+        pactId: "pact",
+        memberId: "player02",
+        requestId,
+      },
     ];
     function solo(nationalMode: boolean) {
-      const made = makeTransport({ gameStartInfo: { gameID: "game1234", lobbyCreatedAt: 1_700_000_000_000, config: testGameConfig({ gameType: GameType.Singleplayer, nationalMode }), players: [], tribes: [] } });
+      const made = makeTransport({
+        gameStartInfo: {
+          gameID: "game1234",
+          lobbyCreatedAt: 1_700_000_000_000,
+          config: testGameConfig({
+            gameType: GameType.Singleplayer,
+            nationalMode,
+          }),
+          players: [],
+          tribes: [],
+        },
+      });
       transports.push(made.transport);
-      made.transport.connect(() => {}, () => {});
+      made.transport.connect(
+        () => {},
+        () => {},
+      );
       return made.eventBus;
     }
     it("routes all seven native intents through the normal Solo transport without client-authored actor identity", () => {
       const eventBus = solo(true);
-      for (const intent of intents) eventBus.emit(new SendNationalPactIntentEvent(intent));
-      expect(localServer.onMessage.mock.calls.map(([msg]) => msg)).toEqual(intents.map(intent => ({ type: "intent", intent })));
-      for (const [msg] of localServer.onMessage.mock.calls) expect(msg.intent).not.toHaveProperty("actorId");
+      for (const intent of intents)
+        eventBus.emit(new SendNationalPactIntentEvent(intent));
+      expect(localServer.onMessage.mock.calls.map(([msg]) => msg)).toEqual(
+        intents.map((intent) => ({ type: "intent", intent })),
+      );
+      for (const [msg] of localServer.onMessage.mock.calls)
+        expect(msg.intent).not.toHaveProperty("actorId");
       eventBus.emit(new SetIntentGateEvent(() => false));
       eventBus.emit(new SendNationalPactIntentEvent(intents[0]));
       expect(localServer.onMessage.mock.calls).toHaveLength(7);

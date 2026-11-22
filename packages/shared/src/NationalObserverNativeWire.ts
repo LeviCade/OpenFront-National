@@ -175,7 +175,13 @@ export function validateNationalObserverNativeLanes(
     page.tick,
     page.streamId,
   );
-  validateNationalImperialPacket(packet.nationalImperialAdministration, packet.nationalPolitics, page.observerId, page.tick, page.streamId);
+  validateNationalImperialPacket(
+    packet.nationalImperialAdministration,
+    packet.nationalPolitics,
+    page.observerId,
+    page.tick,
+    page.streamId,
+  );
   const native = decodeNationalObserverNativeUnits(packet.packedUnitUpdates);
   if ((native?.length ?? 0) !== page.units.length * UNIT_UPDATE_STRIDE)
     invalid();

@@ -1033,7 +1033,11 @@ export class NationalDiplomacyPanel extends LitElement {
     if (event.key === "Escape" && this.expanded) {
       event.preventDefault();
       this.expanded = false;
-      void this.updateComplete.then(() => this.querySelector<HTMLButtonElement>('[aria-controls="national-diplomacy-content"]')?.focus());
+      void this.updateComplete.then(() =>
+        this.querySelector<HTMLButtonElement>(
+          '[aria-controls="national-diplomacy-content"]',
+        )?.focus(),
+      );
     }
   }
 
@@ -1084,7 +1088,8 @@ export class NationalDiplomacyPanel extends LitElement {
   private refreshPact(): void {
     const game = this.game;
     const context = this.pactContext();
-    const session = context && game ? JSON.stringify([game.gameID(), context.actor]) : null;
+    const session =
+      context && game ? JSON.stringify([game.gameID(), context.actor]) : null;
     if (session !== this.pactSession) {
       this.pactSession = session;
       if (!session) {
@@ -1093,8 +1098,12 @@ export class NationalDiplomacyPanel extends LitElement {
         this.pactStatus = "No longer authorized; outcome unconfirmed.";
         return;
       }
-      if (this.pactAttempt && this.pactAttempt.actorId !== context?.actor) this.pactAttempt = null;
-      if (!this.pactAttempt) { this.pactPhase = "available"; this.pactStatus = ""; }
+      if (this.pactAttempt && this.pactAttempt.actorId !== context?.actor)
+        this.pactAttempt = null;
+      if (!this.pactAttempt) {
+        this.pactPhase = "available";
+        this.pactStatus = "";
+      }
     }
     const a = this.pactAttempt;
     if (!a) return;
@@ -1107,7 +1116,7 @@ export class NationalDiplomacyPanel extends LitElement {
     ) {
       this.pactAttempt = null;
       this.pactPhase = "unauthorized";
-      this.pactStatus = "No longer authorized; outcome unconfirmed."
+      this.pactStatus = "No longer authorized; outcome unconfirmed.";
       return;
     }
     const result = reconcilePactReceipt(
@@ -1210,13 +1219,35 @@ export class NationalDiplomacyPanel extends LitElement {
   private renderImperialAdministration() {
     const game = this.game;
     const view = game?.nationalImperialAdministration?.();
-    if (!view || this.warUnavailableReason || game?.nationalPoliticsTick?.() !== game?.ticks() || this.memberEmpire?.id !== view.empireId) return nothing;
-    return html`<section data-national-imperial-administration aria-label="Imperial administration" class="space-y-2 rounded border border-amber-400/40 p-3">
-      <h2 class="font-semibold text-amber-200">Imperial administration · ${view.empireId}</h2>
+    if (
+      !view ||
+      this.warUnavailableReason ||
+      game?.nationalPoliticsTick?.() !== game?.ticks() ||
+      this.memberEmpire?.id !== view.empireId
+    )
+      return nothing;
+    return html`<section
+      data-national-imperial-administration
+      aria-label="Imperial administration"
+      class="space-y-2 rounded border border-amber-400/40 p-3"
+    >
+      <h2 class="font-semibold text-amber-200">
+        Imperial administration · ${view.empireId}
+      </h2>
       <p>Imperial treasury: <strong>${view.treasury}</strong> gold</p>
-      <p>Worker income allocated to treasury: ${(view.workerIncomeBps / 100).toFixed(2)}%</p>
-      <p>Construction authority: ${view.allowedConstruction === null ? "All regulated construction categories permitted" : view.allowedConstruction.length ? view.allowedConstruction.join(", ") : "No regulated construction categories permitted"}</p>
-      <p>${view.canAmend ? "Current emperor holds policy and military administration authority." : "The current emperor holds policy and military administration authority."} Administrative commands are not yet exposed on this client. No unilateral secession control.</p>
+      <p>
+        Worker income allocated to treasury:
+        ${(view.workerIncomeBps / 100).toFixed(2)}%
+      </p>
+      <p>
+        Construction authority:
+        ${view.allowedConstruction === null ? "All regulated construction categories permitted" : view.allowedConstruction.length ? view.allowedConstruction.join(", ") : "No regulated construction categories permitted"}
+      </p>
+      <p>
+        ${view.canAmend ? "Current emperor holds policy and military administration authority." : "The current emperor holds policy and military administration authority."}
+        Administrative commands are not yet exposed on this client. No
+        unilateral secession control.
+      </p>
     </section>`;
   }
 
@@ -1244,243 +1275,268 @@ export class NationalDiplomacyPanel extends LitElement {
       <h2 class="font-semibold text-amber-200">
         Non-aggression and mutual defense pacts
       </h2>
-      <p role="status" aria-live="polite" data-national-pact-status
+      <p
+        role="status"
+        aria-live="polite"
+        data-national-pact-status
         data-national-pact-phase=${c ? this.pactPhase : "unauthorized"}
-        data-national-pact-request-id=${this.pactAttempt?.requestId ?? ""}>
-        ${c ? (this.pactStatus || "Available") : "Private constitutional controls unavailable"}
+        data-national-pact-request-id=${this.pactAttempt?.requestId ?? ""}
+      >
+        ${c ? this.pactStatus || "Available" : "Private constitutional controls unavailable"}
       </p>
       ${
         roster === undefined
           ? html`<p>Public pact roster not available.</p>`
           : roster.length === 0
             ? html`<p>No ordinary pacts.</p>`
-            : repeat(roster, (p) => p.id, (p) => {
-                const d = c?.disclosure.pacts.find((x) => x.pactId === p.id);
-                const key = c ? pactConsentKey(c, p.id) : "";
-                const allowed = (action: PactAction) =>
-                  enabled && c !== null && pactActionAllowed(action, c);
-                const send = (action: PactAction) => this.sendPact(action, key);
-                const candidates =
-                  c?.independentCandidates.filter(
-                    (id) => !p.memberIds.includes(id),
-                  ) ?? [];
-                const pending = d?.pendingAmendment;
-                const accept = {
-                  type: "national_accept_pact",
-                  pactId: p.id,
-                } as const;
-                const betray = {
-                  type: "national_betray_pact",
-                  pactId: p.id,
-                } as const;
-                const approve = {
-                  type: "national_approve_pact_amendment",
-                  pactId: p.id,
-                } as const;
-                return keyed(key, html`<article
-                  data-national-pact-id=${p.id}
-                  class="rounded border border-white/20 p-3 space-y-2"
-                >
-                  <h3 class="font-bold break-words">
-                    ${p.name} (${p.kind}) · ${p.id}
-                  </h3>
-                  <p>
-                    Administrator:
-                    ${p.administratorId ? this.playerName(p.administratorId) : "None"}
-                  </p>
-                  <p>
-                    Members:
-                    ${p.memberIds.map((id) => this.playerName(id)).join(", ")}
-                  </p>
-                  ${d ? html`<p data-national-pact-terms>Constitution: admission ${d.terms.admission}; expulsion ${d.terms.expulsion}.</p>` : nothing}
-                  ${
-                    d?.relationship === "invited"
-                      ? html`<p>
-                            Accepting binds your nation to the displayed terms.
-                            ${p.kind === "MDA" ? "Defense levies may commit your troops." : "You cannot attack fellow members without betraying first."}
-                          </p>
-                          <button
-                            class=${button}
-                            type="button"
-                            data-national-pact-action="accept"
-                            ?disabled=${!allowed(accept)}
-                            @click=${() => send(accept)}
-                          >
-                            Accept displayed constitution
-                          </button>`
-                      : nothing
-                  }
-                  ${
-                    d?.relationship === "member"
-                      ? html`
-                          <form
-                            class=${formClass}
-                            @submit=${(e: SubmitEvent) => submit(e, (data) => send({ type: "national_invite_pact", pactId: p.id, candidateId: String(data.get("candidate")) }))}
-                          >
-                            <label
-                              >Invite independent nation
-                              <select
-                                name="candidate"
-                                required
-                                class="bg-slate-800"
+            : repeat(
+                roster,
+                (p) => p.id,
+                (p) => {
+                  const d = c?.disclosure.pacts.find((x) => x.pactId === p.id);
+                  const key = c ? pactConsentKey(c, p.id) : "";
+                  const allowed = (action: PactAction) =>
+                    enabled && c !== null && pactActionAllowed(action, c);
+                  const send = (action: PactAction) =>
+                    this.sendPact(action, key);
+                  const candidates =
+                    c?.independentCandidates.filter(
+                      (id) => !p.memberIds.includes(id),
+                    ) ?? [];
+                  const pending = d?.pendingAmendment;
+                  const accept = {
+                    type: "national_accept_pact",
+                    pactId: p.id,
+                  } as const;
+                  const betray = {
+                    type: "national_betray_pact",
+                    pactId: p.id,
+                  } as const;
+                  const approve = {
+                    type: "national_approve_pact_amendment",
+                    pactId: p.id,
+                  } as const;
+                  return keyed(
+                    key,
+                    html`<article
+                      data-national-pact-id=${p.id}
+                      class="rounded border border-white/20 p-3 space-y-2"
+                    >
+                      <h3 class="font-bold break-words">
+                        ${p.name} (${p.kind}) · ${p.id}
+                      </h3>
+                      <p>
+                        Administrator:
+                        ${p.administratorId ? this.playerName(p.administratorId) : "None"}
+                      </p>
+                      <p>
+                        Members:
+                        ${p.memberIds.map((id) => this.playerName(id)).join(", ")}
+                      </p>
+                      ${d ? html`<p data-national-pact-terms>Constitution: admission ${d.terms.admission}; expulsion ${d.terms.expulsion}.</p>` : nothing}
+                      ${
+                        d?.relationship === "invited"
+                          ? html`<p>
+                                Accepting binds your nation to the displayed
+                                terms.
+                                ${p.kind === "MDA" ? "Defense levies may commit your troops." : "You cannot attack fellow members without betraying first."}
+                              </p>
+                              <button
+                                class=${button}
+                                type="button"
+                                data-national-pact-action="accept"
+                                ?disabled=${!allowed(accept)}
+                                @click=${() => send(accept)}
                               >
-                                <option value="">Choose nation</option>
-                                ${candidates.map((id) => html`<option value=${id}>${this.playerName(id)}</option>`)}
-                              </select></label
-                            >
-                            <button
-                              class=${button}
-                              data-national-pact-action="invite"
-                              ?disabled=${!enabled || !candidates.some((candidateId) => allowed({ type: "national_invite_pact", pactId: p.id, candidateId }))}
-                            >
-                              ${d.terms.admission === "unanimous" && p.memberIds.length > 1 ? "Record initial admission vote" : "Submit invitation"}
-                            </button>
-                            ${d.terms.admission === "unanimous" ? html`<p>Unanimous admission requires all members’ consent. With multiple members, this records the first vote, not an authorized invitation; additional admission ballot controls are not available.</p>` : nothing}
-                          </form>
-                          <form
-                            class=${formClass}
-                            @submit=${(e: SubmitEvent) =>
-                              submit(e, (data) => {
-                                if (data.get("confirm") === "on") send(betray);
-                              })}
-                          >
-                            <p>
-                              Betrayal immediately leaves this coalition and
-                              removes its treaty protection and defense
-                              obligations.
-                            </p>
-                            <label
-                              ><input type="checkbox" required name="confirm" />
-                              I understand and choose to leave</label
-                            >
-                            <button
-                              class=${button}
-                              data-national-pact-action="betray"
-                              ?disabled=${!allowed(betray)}
-                            >
-                              Betray and leave
-                            </button>
-                          </form>
-                          ${
-                            pending
-                              ? html`<div data-national-pact-amendment>
-                                  <p>
-                                    Proposed constitution: admission
-                                    ${pending.terms.admission}; expulsion
-                                    ${pending.terms.expulsion}; administrator
-                                    ${pending.administratorId ? this.playerName(pending.administratorId) : "None"}.
-                                  </p>
-                                  <p>
-                                    Approved: ${pending.approvedBy.length} of
-                                    ${p.memberIds.length} members. All current
-                                    members must consent.
-                                  </p>
-                                  <button
-                                    class=${button}
-                                    type="button"
-                                    data-national-pact-action="approve"
-                                    ?disabled=${!allowed(approve)}
-                                    @click=${() => send(approve)}
+                                Accept displayed constitution
+                              </button>`
+                          : nothing
+                      }
+                      ${
+                        d?.relationship === "member"
+                          ? html`
+                              <form
+                                class=${formClass}
+                                @submit=${(e: SubmitEvent) => submit(e, (data) => send({ type: "national_invite_pact", pactId: p.id, candidateId: String(data.get("candidate")) }))}
+                              >
+                                <label
+                                  >Invite independent nation
+                                  <select
+                                    name="candidate"
+                                    required
+                                    class="bg-slate-800"
                                   >
-                                    Approve displayed amendment
-                                  </button>
-                                </div>`
-                              : html`<form
-                                  class=${formClass}
-                                  @submit=${(e: SubmitEvent) =>
-                                    submit(e, (data) => {
-                                      const terms = this.readPactTerms(data);
-                                      const admin = String(
-                                        data.get("administrator") ?? "",
-                                      );
-                                      if (terms)
-                                        send({
-                                          type: "national_propose_pact_amendment",
-                                          pactId: p.id,
-                                          terms,
-                                          administratorId: admin || null,
-                                        });
-                                    })}
+                                    <option value="">Choose nation</option>
+                                    ${candidates.map((id) => html`<option value=${id}>${this.playerName(id)}</option>`)}
+                                  </select></label
                                 >
-                                  <h4>Propose constitutional amendment</h4>
-                                  ${this.pactTermsControls(d.terms)}
-                                  <label
-                                    >Administrator
-                                    <select
-                                      class="bg-slate-800"
-                                      name="administrator"
-                                    >
-                                      <option
-                                        value=""
-                                        ?selected=${p.administratorId === null}
+                                <button
+                                  class=${button}
+                                  data-national-pact-action="invite"
+                                  ?disabled=${!enabled || !candidates.some((candidateId) => allowed({ type: "national_invite_pact", pactId: p.id, candidateId }))}
+                                >
+                                  ${d.terms.admission === "unanimous" && p.memberIds.length > 1 ? "Record initial admission vote" : "Submit invitation"}
+                                </button>
+                                ${d.terms.admission === "unanimous" ? html`<p>Unanimous admission requires all members’ consent. With multiple members, this records the first vote, not an authorized invitation; additional admission ballot controls are not available.</p>` : nothing}
+                              </form>
+                              <form
+                                class=${formClass}
+                                @submit=${(e: SubmitEvent) =>
+                                  submit(e, (data) => {
+                                    if (data.get("confirm") === "on")
+                                      send(betray);
+                                  })}
+                              >
+                                <p>
+                                  Betrayal immediately leaves this coalition and
+                                  removes its treaty protection and defense
+                                  obligations.
+                                </p>
+                                <label
+                                  ><input
+                                    type="checkbox"
+                                    required
+                                    name="confirm"
+                                  />
+                                  I understand and choose to leave</label
+                                >
+                                <button
+                                  class=${button}
+                                  data-national-pact-action="betray"
+                                  ?disabled=${!allowed(betray)}
+                                >
+                                  Betray and leave
+                                </button>
+                              </form>
+                              ${
+                                pending
+                                  ? html`<div data-national-pact-amendment>
+                                      <p>
+                                        Proposed constitution: admission
+                                        ${pending.terms.admission}; expulsion
+                                        ${pending.terms.expulsion};
+                                        administrator
+                                        ${pending.administratorId ? this.playerName(pending.administratorId) : "None"}.
+                                      </p>
+                                      <p>
+                                        Approved: ${pending.approvedBy.length}
+                                        of ${p.memberIds.length} members. All
+                                        current members must consent.
+                                      </p>
+                                      <button
+                                        class=${button}
+                                        type="button"
+                                        data-national-pact-action="approve"
+                                        ?disabled=${!allowed(approve)}
+                                        @click=${() => send(approve)}
                                       >
-                                        None
-                                      </option>
-                                      ${p.memberIds.map((id) => html`<option value=${id} ?selected=${id === p.administratorId}>${this.playerName(id)}</option>`)}
-                                    </select></label
-                                  >
-                                  <button
-                                    class=${button}
-                                    data-national-pact-action="propose"
-                                    ?disabled=${!enabled}
-                                  >
-                                    Propose amendment (casts your approval)
-                                  </button>
-                                </form>`
-                          }
-                          ${
-                            (d.terms.expulsion === "leader" &&
-                            p.administratorId === c?.actor) ||
-                            (d.terms.expulsion === "unanimous" && p.memberIds.length === 2)
-                              ? html`<form
-                                  class=${formClass}
-                                  @submit=${(e: SubmitEvent) =>
-                                    submit(e, (data) => {
-                                      if (data.get("confirm") === "on")
-                                        send({
-                                          type: "national_expel_pact",
-                                          pactId: p.id,
-                                          memberId: String(data.get("member")),
-                                        });
-                                    })}
-                                >
-                                  <label
-                                    >Expel member
-                                    <select
-                                      name="member"
-                                      required
-                                      class="bg-slate-800"
+                                        Approve displayed amendment
+                                      </button>
+                                    </div>`
+                                  : html`<form
+                                      class=${formClass}
+                                      @submit=${(e: SubmitEvent) =>
+                                        submit(e, (data) => {
+                                          const terms =
+                                            this.readPactTerms(data);
+                                          const admin = String(
+                                            data.get("administrator") ?? "",
+                                          );
+                                          if (terms)
+                                            send({
+                                              type: "national_propose_pact_amendment",
+                                              pactId: p.id,
+                                              terms,
+                                              administratorId: admin || null,
+                                            });
+                                        })}
                                     >
-                                      <option value="">Choose member</option>
-                                      ${p.memberIds.filter((id) => id !== c?.actor).map((id) => html`<option value=${id}>${this.playerName(id)}</option>`)}
-                                    </select></label
-                                  >
-                                  <label
-                                    ><input
-                                      type="checkbox"
-                                      required
-                                      name="confirm"
-                                    />
-                                    ${d.terms.expulsion === "unanimous" ? "Confirm consent as sole remaining member" : "Confirm discretionary expulsion"}</label
-                                  >
-                                  <button
-                                    class=${button}
-                                    data-national-pact-action="expel"
-                                    ?disabled=${!enabled || p.memberIds.length < 2}
-                                  >
-                                    Expel member
-                                  </button>
-                                </form>`
-                              : html`<p>
-                                  Expulsion:
-                                  ${d.terms.expulsion === "forbidden" ? "Forbidden by constitution" : d.terms.expulsion === "unanimous" ? "Requires unanimous consent; voting unavailable" : "Administrator only"}.
-                                </p>`
-                          }
-                        `
-                      : nothing
-                  }
-                </article>`);
-              })
+                                      <h4>Propose constitutional amendment</h4>
+                                      ${this.pactTermsControls(d.terms)}
+                                      <label
+                                        >Administrator
+                                        <select
+                                          class="bg-slate-800"
+                                          name="administrator"
+                                        >
+                                          <option
+                                            value=""
+                                            ?selected=${p.administratorId === null}
+                                          >
+                                            None
+                                          </option>
+                                          ${p.memberIds.map((id) => html`<option value=${id} ?selected=${id === p.administratorId}>${this.playerName(id)}</option>`)}
+                                        </select></label
+                                      >
+                                      <button
+                                        class=${button}
+                                        data-national-pact-action="propose"
+                                        ?disabled=${!enabled}
+                                      >
+                                        Propose amendment (casts your approval)
+                                      </button>
+                                    </form>`
+                              }
+                              ${
+                                (d.terms.expulsion === "leader" &&
+                                  p.administratorId === c?.actor) ||
+                                (d.terms.expulsion === "unanimous" &&
+                                  p.memberIds.length === 2)
+                                  ? html`<form
+                                      class=${formClass}
+                                      @submit=${(e: SubmitEvent) =>
+                                        submit(e, (data) => {
+                                          if (data.get("confirm") === "on")
+                                            send({
+                                              type: "national_expel_pact",
+                                              pactId: p.id,
+                                              memberId: String(
+                                                data.get("member"),
+                                              ),
+                                            });
+                                        })}
+                                    >
+                                      <label
+                                        >Expel member
+                                        <select
+                                          name="member"
+                                          required
+                                          class="bg-slate-800"
+                                        >
+                                          <option value="">
+                                            Choose member
+                                          </option>
+                                          ${p.memberIds.filter((id) => id !== c?.actor).map((id) => html`<option value=${id}>${this.playerName(id)}</option>`)}
+                                        </select></label
+                                      >
+                                      <label
+                                        ><input
+                                          type="checkbox"
+                                          required
+                                          name="confirm"
+                                        />
+                                        ${d.terms.expulsion === "unanimous" ? "Confirm consent as sole remaining member" : "Confirm discretionary expulsion"}</label
+                                      >
+                                      <button
+                                        class=${button}
+                                        data-national-pact-action="expel"
+                                        ?disabled=${!enabled || p.memberIds.length < 2}
+                                      >
+                                        Expel member
+                                      </button>
+                                    </form>`
+                                  : html`<p>
+                                      Expulsion:
+                                      ${d.terms.expulsion === "forbidden" ? "Forbidden by constitution" : d.terms.expulsion === "unanimous" ? "Requires unanimous consent; voting unavailable" : "Administrator only"}.
+                                    </p>`
+                              }
+                            `
+                          : nothing
+                      }
+                    </article>`,
+                  );
+                },
+              )
       }
       ${
         c
@@ -1558,7 +1614,10 @@ export class NationalDiplomacyPanel extends LitElement {
       >
         NATIONAL Private controls are locked until the server verifies your
         current active seat and trusted match.
-        <details><summary>Public pact roster</summary>${this.renderPacts(false)}</details>
+        <details>
+          <summary>Public pact roster</summary>
+          ${this.renderPacts(false)}
+        </details>
       </section>`;
     }
     const politics = game.nationalPolitics();
@@ -1647,8 +1706,7 @@ export class NationalDiplomacyPanel extends LitElement {
                       : "Battle: right-click opposing territory on desktop, or tap it on mobile, then choose the enabled Attack action."
                   }
                 </p>
-                ${this.renderPacts()}
-                ${this.renderImperialAdministration()}
+                ${this.renderPacts()} ${this.renderImperialAdministration()}
                 ${
                   politics
                     ? html`<div class="space-y-2">

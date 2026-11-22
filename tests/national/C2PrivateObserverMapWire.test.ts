@@ -249,7 +249,9 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     expect(c.msg.payload).not.toContain("forbidden");
     // If the E1 public pact read is integrated, the ID is intentionally public.
     if (c.data.nationalPolitics?.pacts !== undefined)
-      expect(c.data.nationalPolitics.pacts).toContainEqual(expect.objectContaining({ id: "c2_e3_secret_mda" }));
+      expect(c.data.nationalPolitics.pacts).toContainEqual(
+        expect.objectContaining({ id: "c2_e3_secret_mda" }),
+      );
     expect(a.map.countries.map((n) => n.id)).toEqual(
       expect.arrayContaining([A.id, B.id, C.id]),
     );
