@@ -5,6 +5,7 @@
  * The TLS reverse proxy must additionally restrict direct backend access.
  */
 import { GameEnv } from "@openfront/shared/configuration/Env";
+import type WebSocket from "ws";
 import { DESKTOP_APP_ORIGIN } from "../GameApiCors";
 import { ServerEnv } from "../ServerEnv";
 
@@ -62,4 +63,18 @@ export function isAllowedNationalSocketOrigin(
       gameHost ? ServerEnv.pageHostFor(gameHost) : undefined,
     ),
   );
+}
+
+/** Provenance belongs to one PHYSICAL socket; never reuse a Client's past approval after reconnect. */
+const eligibleNationalSockets = new WeakSet<WebSocket>();
+
+export function registerNationalSocketOrigin(
+  socket: WebSocket,
+  origin: string | undefined,
+): void {
+  if (isAllowedNationalSocketOrigin(origin)) eligibleNationalSockets.add(socket);
+}
+
+export function hasTrustedNationalSocketOrigin(socket: WebSocket): boolean {
+  return eligibleNationalSockets.has(socket);
 }

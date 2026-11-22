@@ -67,7 +67,10 @@ import {
   DurableNationalStore,
 } from "./national/DurableNationalStore";
 import { isNationalSignedInAccount } from "./national/NationalAccountGate";
-import { isAllowedNationalSocketOrigin } from "./national/NationalSocketOrigin";
+import {
+  isAllowedNationalSocketOrigin,
+  registerNationalSocketOrigin,
+} from "./national/NationalSocketOrigin";
 import { watchNationalAccount } from "./national/NationalAccountLease";
 import { setNoStoreHeaders } from "./NoStoreHeaders";
 import { PrivilegeRefresher } from "./PrivilegeRefresher";
@@ -669,6 +672,8 @@ export async function startWorker() {
 
   // WebSocket handling
   wss.on("connection", (ws: WebSocket, req) => {
+    // Provenance belongs to this socket, not a reusable lobby Client or ID.
+    registerNationalSocketOrigin(ws, req.headers.origin);
     // First admission awaits API calls. A second join frame cannot overtake
     // that call and claim multiple roster seats from one physical socket.
     let admissionStarted = false;

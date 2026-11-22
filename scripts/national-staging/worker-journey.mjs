@@ -264,7 +264,7 @@ async function peer(socketOrigin = "http://localhost:9000") {
   const ws = new WebSocket(wssBridge.url, {
     ca: wssBridge.ca,
     rejectUnauthorized: true,
-    ...(socketOrigin === undefined ? {} : { origin: socketOrigin }),
+    ...(socketOrigin === null ? {} : { origin: socketOrigin }),
   });
   const state = {
     ws,
@@ -512,7 +512,7 @@ try {
 
   setStage("adversarial real WSS physical Origins cannot acquire seats");
   for (const hostileOrigin of [
-    undefined,
+    null,
     "https://attacker.invalid",
     "http://localhost:9000.attacker.invalid",
     "null",

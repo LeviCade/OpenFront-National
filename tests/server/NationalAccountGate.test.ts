@@ -6,6 +6,7 @@ import {
 } from "@openfront/shared/WorkerSchemas";
 import { describe, expect, it } from "vitest";
 import { isNationalSignedInAccount } from "../../src/server/national/NationalAccountGate";
+import { registerNationalSocketOrigin } from "../../src/server/national/NationalSocketOrigin";
 import {
   cid,
   makeClient,
@@ -116,16 +117,14 @@ describe("NATIONAL signed-account browser boundary", () => {
       creatorPersistentID: "verified-host",
       config: { gameType: GameType.Private, gameMode: GameMode.FFA },
     });
-    expect(
-      game.joinClient(
-        makeClient({
-          clientID: id,
-          persistentID: "verified-host",
-          publicId: "api-host",
-          claims: claims("verified-host", "google"),
-        }),
-      ),
-    ).toBe("joined");
+    const original = makeClient({
+      clientID: id,
+      persistentID: "verified-host",
+      publicId: "api-host",
+      claims: claims("verified-host", "google"),
+    });
+    registerNationalSocketOrigin(original.ws, "http://localhost:9000");
+    expect(game.joinClient(original)).toBe("joined");
     const actor = {
       clientID: id,
       isLobbyCreator: true,
@@ -146,6 +145,40 @@ describe("NATIONAL signed-account browser boundary", () => {
       ).status,
     ).toBe(403);
   });
+  it("rejects NATIONAL upgrade on an untrusted replacement physical socket", () => {
+    const id = cid("oldSocket");
+    const game = makeGame({
+      creatorPersistentID: "verified-old",
+      config: { gameType: GameType.Private, gameMode: GameMode.FFA },
+    });
+    const player = makeClient({
+      clientID: id,
+      persistentID: "verified-old",
+      publicId: "real-old",
+      claims: claims("verified-old", "google"),
+    });
+    registerNationalSocketOrigin(player.ws, "http://localhost:9000");
+    expect(game.joinClient(player)).toBe("joined");
+    const actor = {
+      clientID: id,
+      isLobbyCreator: true,
+      isAdmin: false,
+      isAdminBot: false,
+    };
+    const untrusted = makeMockWs();
+    expect(game.rejoinClient(untrusted, "verified-old")).toBe(true);
+    expect(game.handleIntent(
+      { type: "update_game_config", config: { nationalMode: true } },
+      actor,
+    ).status).toBe(403);
+    expect(game.gameConfig.nationalMode).not.toBe(true);
+    registerNationalSocketOrigin(untrusted, "http://localhost:9000");
+    expect(game.handleIntent(
+      { type: "update_game_config", config: { nationalMode: true } },
+      actor,
+    ).status).toBe(200);
+  });
+
   it("does not restore superseded account roles on valid reconnect", () => {
     const client = makeClient({
       clientID: cid("roleOne"),

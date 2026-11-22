@@ -13,4 +13,4 @@ A real TLS test terminator generates a disposable self-signed cert, connects via
 
 ## Limits
 
-The initial non-NATIONAL legacy lobby may be configured to NATIONAL before match start; hardening the mode-transition Origin provenance of *already-admitted* legacy sockets remains a follow-on gate. Session revocation is currently bounded by the pre-existing 10-second account lease, not instantaneous across independent clients. A public release is not approved. No official percentage is claimed; the Manager alone certifies new M0 credit.
+Legacy lobby promotion is now refused unless every seated human's **current physical WebSocket** has independent allowed-Origin provenance. Reconnecting swaps the socket and cannot reuse the old approval; unauthorized spectators cannot ride a legacy-to-NATIONAL upgrade. Session revocation is currently bounded by the pre-existing 10-second account lease, not instantaneous across independent clients. A public release is not approved. No official percentage is claimed; the Manager alone certifies new M0 credit.
