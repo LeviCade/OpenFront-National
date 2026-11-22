@@ -256,7 +256,6 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
 
   it("ECON-03/06 live: refusal pays actual gold, issuer AI enforces with a real embargo", async () => {
     const { game, a, b, c, ca, bb, cc } = await live(113);
-    const before = ledger(game);
     const leverage = voyage(game, a, ca, bb);
     expect(leverage.isActive()).toBe(true);
     const defiant = voyage(game, b, bb, cc);
