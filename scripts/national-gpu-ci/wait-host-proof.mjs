@@ -86,7 +86,8 @@ export function verifyPublicModeProof(
     p.runnerName !== expected.runnerName ||
     !DECIMAL.test(String(p.jobId ?? "")) ||
     !DECIMAL.test(String(p.runnerId ?? "")) ||
-    p.challenge !== challenge
+    p.challenge !== challenge ||
+    !NONCE.test(p.runGrantSha256 ?? "")
   ) {
     reject("HOST_PROOF_RUN_OR_MODE_MISMATCH");
   }
@@ -149,7 +150,12 @@ export function verifyGitHubJobBinding(payload, jobs, expected) {
       String(job.run_attempt) === String(expected.runAttempt) &&
       job.runner_name === expected.runnerName &&
       String(job.runner_id) === String(payload.runnerId) &&
-      job.status === "in_progress",
+      job.status === "in_progress" &&
+      job.head_sha === expected.sourceSha &&
+      job.name === "Four real game scenarios on one trusted GPU guest" &&
+      Array.isArray(job.labels) &&
+      job.labels.length === 1 &&
+      job.labels[0] === "skybot-ci-gpu",
   );
   if (
     candidates.length !== 1 ||
@@ -221,6 +227,7 @@ async function cli() {
             Accept: "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
           },
+          redirect: "error",
           signal: AbortSignal.timeout(10000),
         },
       );

@@ -65,7 +65,9 @@ function fixture() {
   };
   const modeReports = {};
   for (const mode of MODES) {
-    const filename = "home.png";
+    const filename = mode.startsWith("legacy-")
+      ? "legacy-player-action.png"
+      : "solo-battle-authoritative.png";
     const dir = join(root, mode);
     mkdirSync(dir);
     writeFileSync(join(dir, filename), syntheticPng);
@@ -74,6 +76,9 @@ function fixture() {
       : "1280x800 desktop";
     modeReports[mode] = {
       scenario: mode,
+      scenarioKind: mode.startsWith("legacy-") ? "legacy" : "national-solo",
+      stageReached: mode.startsWith("legacy-") ? "legacy-player-action" : "solo-playability-complete",
+      errorCount: 0,
       outcome: "UNVERIFIED",
       reason: "SIGNED_WITNESS_NOT_VERIFIED",
       firstFailedStage: null,
@@ -100,7 +105,7 @@ function fixture() {
     };
   }
   const summary = {
-    schema: 3,
+    schema: 4,
     expectedSourceSha: sourceSha,
     exactCandidateSha: sourceSha,
     lane: "release",
@@ -335,7 +340,7 @@ test("every physical teardown and deregistration fact must be signed true", () =
 test("missing, divergent, symlinked and modified screenshots fail closed", () => {
   const f = fixture();
   try {
-    const p = join(f.root, "legacy-desktop", "home.png");
+    const p = join(f.root, "legacy-desktop", "legacy-player-action.png");
     writeFileSync(p, Buffer.alloc(70, 1));
     assert.equal(
       verifyIndependentRelease(f.args).reason,
@@ -353,7 +358,7 @@ test("missing, divergent, symlinked and modified screenshots fail closed", () =>
       verifyIndependentRelease(f.args).reason,
       "SCREENSHOT_MISSING_legacy-desktop",
     );
-    symlinkSync(join(f.root, "legacy-mobile", "home.png"), p);
+    symlinkSync(join(f.root, "legacy-mobile", "legacy-player-action.png"), p);
     assert.equal(
       verifyIndependentRelease(f.args).reason,
       "SCREENSHOT_SYMLINK_OR_SIZE_legacy-desktop",

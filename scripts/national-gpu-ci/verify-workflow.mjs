@@ -34,7 +34,7 @@ void test("strict exact staging dispatch and independent root admission", () => 
   for (const required of [
     "github.repository == 'LeviCade/OpenFront-National'",
     "github.event_name == 'workflow_dispatch'",
-    "startsWith(github.ref, 'refs/heads/stage3/conductor')",
+    "github.ref == 'refs/heads/stage3/conductor4-class2-integration-20261122'",
     'test "$GITHUB_SHA" = "$NATIONAL_GPU_CANDIDATE_SHA"',
     "ref: ${{ github.sha }}",
     "ea186fa2580c5e1112e36cf1ddaa9119566a2abe",
@@ -96,6 +96,8 @@ void test("one pinned installation, one real GPU runner and four serial browser 
     /for mode in national-desktop national-mobile legacy-desktop legacy-mobile/,
   );
   assert.ok(runner.includes('wait-host-proof.mjs "$mode"'));
+  assert.ok(runner.includes("args+=(--solo)"));
+  assert.ok(runner.includes("assert_exact_source"));
   assert.ok(runner.includes("NATIONAL_GPU_ATTESTATION_FILE"));
   assert.ok(runner.includes("NATIONAL_GPU_ATTESTATION_CHALLENGE"));
   assert.ok(runner.includes("node scripts/national-qa/browser-gameplay.mjs"));
