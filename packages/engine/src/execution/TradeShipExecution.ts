@@ -189,9 +189,17 @@ export class TradeShipExecution implements Execution {
 
     if (this.wasCaptured && this.tradeShip!.owner() === this.origOwner) {
       // Retaken by its original owner: the payout stands, but nobody pirated it.
-      this.mg.creditNationalCommercialIncome(this.origOwner, gold, this._dstPort.tile());
+      this.mg.creditNationalCommercialIncome(
+        this.origOwner,
+        gold,
+        this._dstPort.tile(),
+      );
     } else if (this.wasCaptured) {
-      this.mg.creditNationalCommercialIncome(this.tradeShip!.owner(), gold, this._dstPort.tile());
+      this.mg.creditNationalCommercialIncome(
+        this.tradeShip!.owner(),
+        gold,
+        this._dstPort.tile(),
+      );
       this.tradeShip!.owner().addPiracyGold(gold);
       this.mg.displayMessage(
         "events_display.received_gold_from_captured_ship",
@@ -210,8 +218,16 @@ export class TradeShipExecution implements Execution {
         .stats()
         .boatCapturedTrade(this.tradeShip!.owner(), this.origOwner, gold);
     } else {
-      this.mg.creditNationalCommercialIncome(this.srcPort.owner(), gold, this.srcPort.tile());
-      this.mg.creditNationalCommercialIncome(this._dstPort.owner(), gold, this._dstPort.tile());
+      this.mg.creditNationalCommercialIncome(
+        this.srcPort.owner(),
+        gold,
+        this.srcPort.tile(),
+      );
+      this.mg.creditNationalCommercialIncome(
+        this._dstPort.owner(),
+        gold,
+        this._dstPort.tile(),
+      );
       this.srcPort.owner().addTradeGold(gold);
       this._dstPort.owner().addTradeGold(gold);
       // Record stats
