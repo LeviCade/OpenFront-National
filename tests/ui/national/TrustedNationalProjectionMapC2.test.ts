@@ -169,6 +169,46 @@ describe("Second Conductor Class One E4: E3-authoritative graphical map feed", (
     expect(completedTrustedObserverMap(complete, "nation-a")).toBe(true);
   });
 
+  it("erases old visible map names and forbids stale labels after E3 sight revocation", () => {
+    const tiles = new Uint32Array(100).fill(5);
+    const names = new Map([
+      ["nation-a", { playerID: "nation-a", x: 2, y: 2, size: 4 }],
+      ["nation-b", { playerID: "nation-b", x: 3, y: 3, size: 4 }],
+    ]);
+    const owner = { isPlayer: () => true, id: () => "nation-a" };
+    const view = Object.create(GameView.prototype) as GameView;
+    Object.assign(view, {
+      _trustedNationalProjection: true,
+      _trustedProjectionReady: true,
+      _map: {
+        width: () => 10,
+        height: () => 10,
+        tileStateBuffer: () => tiles,
+      },
+      _names: names,
+      _namesDirty: false,
+      _units: new Map(),
+      _unitStates: new Map(),
+      _unitsByOwner: new Map(),
+      toDelete: new Set(),
+      invalidateNationalPoliticalView: () => {},
+      isValidCoord: (x: number, y: number) =>
+        x >= 0 && y >= 0 && x < 10 && y < 10,
+      ref: (x: number, y: number) => y * 10 + x,
+      hasOwner: (tile: number) => tile === 22,
+      owner: () => owner,
+    });
+    const self = { id: () => "nation-a", nameData: { x: 2, y: 2 } } as PlayerView;
+    const enemy = { id: () => "nation-b", nameData: { x: 3, y: 3 } } as PlayerView;
+    expect(view.trustedNameVisible(self)).toBe(true);
+    expect(view.trustedNameVisible(enemy)).toBe(false);
+    view.resetTrustedProjectionSight();
+    expect([...tiles].every((value) => value === 0)).toBe(true);
+    expect(names.size).toBe(0);
+    expect(view.trustedProjectionReady()).toBe(false);
+    expect(view.trustedNameVisible(self)).toBe(false);
+  });
+
   it("merges only E3 current visible terrain pages into actual WebGL tile lanes", () => {
     const visiblePage = {
       version: 1,
