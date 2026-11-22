@@ -181,6 +181,10 @@ export class HostLobbyModal extends BaseModal {
   // loaded yet", so an unrelated setting change must not clear it.
   private winThresholdLoadedFor: string | null = null;
 
+  // Preserve verified NATIONAL setting when the host reopens an existing
+  // lobby. Ignore a stale first lobby_info after a local toggle.
+  private nationalModeLoadedFor: string | null = null;
+
   private readonly handleLobbyInfo = (event: LobbyInfoEvent) => {
     const lobby = event.lobby;
     if (!this.lobbyId || lobby.gameID !== this.lobbyId) {
@@ -206,6 +210,10 @@ export class HostLobbyModal extends BaseModal {
         this.winThreshold = true;
         this.winThresholdValue = tenths / 10;
       }
+    }
+    if (this.nationalModeLoadedFor !== this.lobbyId) {
+      this.nationalModeLoadedFor = this.lobbyId;
+      this.nationalMode = lobby.gameConfig?.nationalMode === true;
     }
     if ("serverTime" in lobby && typeof lobby.serverTime === "number") {
       this.serverTimeOffset = calculateServerTimeOffset(lobby.serverTime);
@@ -835,6 +843,7 @@ export class HostLobbyModal extends BaseModal {
                     .checked=${this.nationalMode}
                     @change=${(event: Event) => {
                       this.nationalMode = (event.target as HTMLInputElement).checked;
+                      this.nationalModeLoadedFor = this.lobbyId;
                       void this.putGameConfig();
                     }}
                   />
