@@ -132,7 +132,17 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
 
   it("a threatened bot accepts a human-offered empire through real validator and serves its victory", async () => {
     const game = await seeded(0.18, 0.7, true);
-    const runner = runnerFor(game);
+    // Establish the legitimate human offer BEFORE the first AI planning
+    // tick, so its acceptance cannot race the AI's own shelter proposal.
+    game.performNationalCommand(game.player(H), {
+      kind: "found-empire",
+      empireId: "c5_human_crown",
+    });
+    const invitation = game.performNationalPoliticalCommandWithOutcome(
+      game.player(H),
+      { kind: "offer-empire", empireId: "c5_human_crown", candidateId: A },
+    );
+    expect(invitation.accepted).toBe(true);
     // A public, actual WAR layer supplies an existential rather than a
     // fabricated threat. The AI receives no private B troop intelligence.
     const war = game.performNationalWarCommandWithOutcome(game.player(B), {
@@ -142,17 +152,7 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
       warId: "c5_threat_A",
     });
     expect(war.accepted).toBe(true);
-    humanTurn(runner, game, {
-      type: "national_found_empire",
-      empireId: "c5_human_crown",
-      requestId: "c5_found",
-    });
-    humanTurn(runner, game, {
-      type: "national_offer_empire",
-      empireId: "c5_human_crown",
-      candidateId: A,
-      requestId: "c5_offer_A",
-    });
+    const runner = runnerFor(game);
     let accepted = false;
     for (let i = 0; i < 70; i++) {
       humanTurn(runner, game);
