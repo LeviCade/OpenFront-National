@@ -284,15 +284,18 @@ describe("C4 E4 stamped pact commands on actual server-owned engine and recipien
       initial.ref(70, 50),
     ]);
     const canonical =
-      typeof (game as unknown as { nationalImperialAdministrationFor?: unknown })
-        .nationalImperialAdministrationFor === "function";
+      typeof (
+        game as unknown as { nationalImperialAdministrationFor?: unknown }
+      ).nationalImperialAdministrationFor === "function";
     if (process.env.NATIONAL_C4_REQUIRE_PACT_READ === "1")
       expect(canonical).toBe(true);
     const empireId = "c4_empire";
     let sequence = 100;
     const send = (seat: number, action: object) => {
       const requestId = "np_" + (++sequence).toString(16).padStart(32, "0");
-      expect(host.submit(sockets[seat].client, { ...action, requestId })).toBe(true);
+      expect(host.submit(sockets[seat].client, { ...action, requestId })).toBe(
+        true,
+      );
       tickTwice(host);
       return requestId;
     };
@@ -301,7 +304,11 @@ describe("C4 E4 stamped pact commands on actual server-owned engine and recipien
     send(0, { type: "national_offer_empire", empireId, candidateId: B.id });
     send(1, { type: "national_accept_empire", empireId, candidateId: B.id });
     expect(read(0).nationalPolitics?.empires).toContainEqual(
-      expect.objectContaining({ id: empireId, leaderId: A.id, memberIds: expect.arrayContaining([A.id, B.id]) }),
+      expect.objectContaining({
+        id: empireId,
+        leaderId: A.id,
+        memberIds: expect.arrayContaining([A.id, B.id]),
+      }),
     );
     if (!canonical) {
       expect(read(0).nationalImperialAdministration).toBeUndefined();
@@ -309,27 +316,71 @@ describe("C4 E4 stamped pact commands on actual server-owned engine and recipien
       return;
     }
     const admin = (i: number) => read(i).nationalImperialAdministration;
-    expect(admin(0)).toMatchObject({ empireId, recipientId: A.id, canAmend: true });
-    expect(admin(1)).toMatchObject({ empireId, recipientId: B.id, canAmend: false });
+    expect(admin(0)).toMatchObject({
+      empireId,
+      recipientId: A.id,
+      canAmend: true,
+    });
+    expect(admin(1)).toMatchObject({
+      empireId,
+      recipientId: B.id,
+      canAmend: false,
+    });
     expect(admin(2)).toBeUndefined();
-    const policy = { kind: "set-policy", empireId, policy: { workerIncomeBps: 1250, allowedConstruction: [] } };
+    const policy = {
+      kind: "set-policy",
+      empireId,
+      policy: { workerIncomeBps: 1250, allowedConstruction: [] },
+    };
     const command = (seat: number, payload: object, accepted: boolean) => {
-      const requestId = send(seat, { type: "national_imperial_administration", command: payload });
-      expect(read(seat).nationalCommandResults).toContainEqual(expect.objectContaining({
-        type: "national_imperial_administration", requestId, actorId: P[seat].id,
-        recipientId: P[seat].id, commandTargetId: empireId, accepted,
-      }));
-      for (const other of [0, 1, 2].filter(i => i !== seat))
-        expect(read(other).nationalCommandResults?.some(r => r.requestId === requestId) ?? false).toBe(false);
+      const requestId = send(seat, {
+        type: "national_imperial_administration",
+        command: payload,
+      });
+      expect(read(seat).nationalCommandResults).toContainEqual(
+        expect.objectContaining({
+          type: "national_imperial_administration",
+          requestId,
+          actorId: P[seat].id,
+          recipientId: P[seat].id,
+          commandTargetId: empireId,
+          accepted,
+        }),
+      );
+      for (const other of [0, 1, 2].filter((i) => i !== seat))
+        expect(
+          read(other).nationalCommandResults?.some(
+            (r) => r.requestId === requestId,
+          ) ?? false,
+        ).toBe(false);
     };
     command(0, policy, true);
-    expect(admin(0)).toMatchObject({ workerIncomeBps: 1250, allowedConstruction: [] });
-    expect(admin(1)).toMatchObject({ workerIncomeBps: 1250, allowedConstruction: [] });
-    command(1, { ...policy, policy: { workerIncomeBps: 9999, allowedConstruction: null } }, false);
+    expect(admin(0)).toMatchObject({
+      workerIncomeBps: 1250,
+      allowedConstruction: [],
+    });
+    expect(admin(1)).toMatchObject({
+      workerIncomeBps: 1250,
+      allowedConstruction: [],
+    });
+    command(
+      1,
+      {
+        ...policy,
+        policy: { workerIncomeBps: 9999, allowedConstruction: null },
+      },
+      false,
+    );
     expect(admin(0)?.workerIncomeBps).toBe(1250);
-    command(0, { kind: "set-army-mode", empireId, mode: "hybrid", thresholdBps: 6000 }, true);
-    expect(admin(1)).toMatchObject({ armyMode: "hybrid", hybridThresholdBps: 6000 });
+    command(
+      0,
+      { kind: "set-army-mode", empireId, mode: "hybrid", thresholdBps: 6000 },
+      true,
+    );
+    expect(admin(1)).toMatchObject({
+      armyMode: "hybrid",
+      hybridThresholdBps: 6000,
+    });
     expect(admin(2)).toBeUndefined();
   });
-
 });
