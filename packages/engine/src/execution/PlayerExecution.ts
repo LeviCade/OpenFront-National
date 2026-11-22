@@ -22,6 +22,8 @@ import type {
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
 
+import { authorizeNationalAttack } from "./NationalWarExecution";
+
 const TICKS_PER_CLUSTER_CALC = 20;
 
 const CLUSTER_SURROUNDED = 1;
@@ -606,7 +608,7 @@ export class PlayerExecution implements Execution {
       // Evaluate if this component is enclosed using bounded 4-way flood fill:
       if (this.isEnclosed(start, cMinX, cMinY, cMaxX, cMaxY)) {
         const capturing = this.getCapturingPlayer(componentTiles);
-        if (capturing !== null) {
+        if (capturing !== null && this.mayCaptureTerritory(capturing)) {
           if (this.player.numTilesOwned() === componentTiles.length) {
             this.mg.conquerPlayer(capturing, this.player);
           }
@@ -918,7 +920,7 @@ export class PlayerExecution implements Execution {
     // once. If unsealed, abort immediately in O(1) without looping cluster tiles.
     if (!pinched) {
       const capturing = knownCaptor ?? this.getCapturingPlayer(cluster);
-      if (capturing === null) {
+      if (capturing === null || !this.mayCaptureTerritory(capturing)) {
         return false;
       }
       if (!this.isEnclosed(firstTile, minX, minY, maxX, maxY)) {
@@ -984,7 +986,7 @@ export class PlayerExecution implements Execution {
 
       if (tiles.length > 0) {
         const componentCaptor = knownCaptor ?? this.getCapturingPlayer(tiles);
-        if (componentCaptor === null) {
+        if (componentCaptor === null || !this.mayCaptureTerritory(componentCaptor)) {
           continue;
         }
         anyRemoved = true;
@@ -1111,6 +1113,13 @@ export class PlayerExecution implements Execution {
     return true;
   }
 
+  // Geography is not a declaration of WAR. Every enclosure transfer,
+  // including a preselected captor, must obey the same NATIONAL authority
+  // as an explicit land attack. Legacy FFA keeps its original behavior.
+  private mayCaptureTerritory(captor: Player): boolean {
+    return authorizeNationalAttack(this.mg, captor.id(), this.player.id());
+  }
+
   private getCapturingPlayer(cluster: readonly TileRef[]): Player | null {
     const neighbors = new Map<Player, number>();
     const map = this.map;
@@ -1123,7 +1132,7 @@ export class PlayerExecution implements Execution {
           continue;
         }
         const owner = this.mg.playerBySmallID(ownerId) as Player;
-        if (!owner.isFriendly(this.player)) {
+        if (!owner.isFriendly(this.player) && this.mayCaptureTerritory(owner)) {
           neighbors.set(owner, (neighbors.get(owner) ?? 0) + 1);
         }
       }
