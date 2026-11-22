@@ -17,26 +17,31 @@ export interface ObservedImperialUltimatum {
   readonly id: string;
   readonly empireId: string;
   readonly issuerId: string;
-  readonly recipientId: string;
+  readonly targetId: string;
+  readonly role: "issuer" | "recipient";
+  readonly threat: "embargo" | "imperial-war";
   readonly deadlineTick: number;
   readonly phase:
     | "pending"
+    | "consented"
     | "decision-required"
+    | "acceded"
     | "enforced"
     | "backed-down"
+    | "withdrawn"
     | "expired";
-  readonly response?: "none" | "resist" | "consent";
+  readonly response: "none" | "accept" | "refuse";
 }
 
 export interface NationalCoercionMemory {
   readonly observerId: string;
-  readonly processedOutcomeIds: readonly string[];
-  readonly issuerCredibility: readonly {
+  readonly processedOutcomeIds: string[];
+  readonly issuerCredibility: {
     readonly issuerId: string;
     readonly score: number;
     readonly lastObservedTick: number;
   }[];
-  readonly publicEmpireLand: readonly {
+  readonly publicEmpireLand: {
     readonly empireId: string;
     readonly landPercent: number;
     readonly lastObservedTick: number;
@@ -48,6 +53,10 @@ export type CoercionDecision =
       readonly kind: "resist";
       readonly ultimatumId: string;
       readonly reason: string;
+    }
+  | {
+      readonly kind: "acknowledge-consent";
+      readonly ultimatumId: string;
     }
   | {
       readonly kind: "request-consent";
@@ -99,7 +108,7 @@ export function updateNationalCoercionMemory(
   for (const view of [...views].sort(
     (a, b) => a.deadlineTick - b.deadlineTick || compare(a.id, b.id),
   )) {
-    if (view.recipientId !== observation.observerId || processed.has(view.id))
+    if (view.role !== "recipient" || view.targetId !== observation.observerId || processed.has(view.id))
       continue;
     if (view.phase !== "enforced" && view.phase !== "backed-down") continue;
     const empire = observation.coalitions.find(
@@ -303,9 +312,10 @@ export function planObservedImperialCoercion(
     );
     if (!empire) continue;
     if (
-      v.recipientId === self &&
-      v.phase === "pending" &&
-      (v.response ?? "none") === "none" &&
+      v.role === "recipient" &&
+      v.targetId === self &&
+      v.deadlineTick > observation.tick &&
+      (v.phase === "pending" || v.phase === "consented") &&
       own.status === "independent"
     ) {
       const risk = assessImperialShelter(observation, empire, previous);
@@ -328,6 +338,11 @@ export function planObservedImperialCoercion(
               ? "collapsing-protector"
               : "preserve-sovereignty",
         };
+      // E3 acceptance of a demand is not imperial accession. The Game
+      // must first record consent, then authorize its normal bilateral offer.
+      if (v.phase === "pending" && v.response === "none")
+        return { kind: "acknowledge-consent", ultimatumId: v.id };
+      if (v.phase !== "consented" || v.response !== "accept") return null;
       const hasOffer = (observation.imperialOffers ?? []).some(
         (o) =>
           o.empireId === v.empireId &&
@@ -340,18 +355,19 @@ export function planObservedImperialCoercion(
         : { kind: "request-consent", ultimatumId: v.id, empireId: v.empireId };
     }
     if (
+      v.role === "issuer" &&
       v.issuerId === self &&
       v.phase === "decision-required" &&
       own.status === "imperial"
     ) {
-      const recipient = observation.nations.find((n) => n.id === v.recipientId);
+      const recipient = observation.nations.find((n) => n.id === v.targetId);
       const reach =
         recipient?.alive &&
-        (observation.frontiers.some(
-          (f) => f.targetId === v.recipientId && f.access === "land",
+        (v.threat === "embargo" || observation.frontiers.some(
+          (f) => f.targetId === v.targetId && f.access === "land",
         ) ||
           (observation.frontiers.some(
-            (f) => f.targetId === v.recipientId && f.access === "naval",
+            (f) => f.targetId === v.targetId && f.access === "naval",
           ) &&
             observation.visibleAssets.some(
               (a) => a.ownerId === self && a.kind === "transport",
@@ -376,7 +392,13 @@ export function planObservedImperialCoercion(
       )
       .filter((n): n is NonNullable<typeof n> => n !== undefined)
       .sort((a, b) => compare(a.id, b.id))[0];
-    if (target && target.landPercent < own.landPercent * 0.5)
+    if (
+      target && target.landPercent < own.landPercent * 0.5 &&
+      !views.some((v) =>
+        v.role === "issuer" && v.issuerId === self &&
+        v.empireId === empire.id && v.targetId === target.id &&
+        (v.phase === "pending" || v.phase === "consented" || v.phase === "decision-required"))
+    )
       return { kind: "issue", candidateId: target.id, empireId: empire.id };
   }
   return null;
