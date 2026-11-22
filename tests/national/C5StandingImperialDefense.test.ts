@@ -433,6 +433,51 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     ).toBe("none");
   });
 
+  it("keeps ordinary FFA attacks independent of imperial policy and NATIONAL WAR", async () => {
+    const game = await setup("plains", { nationalMode: false }, roster.slice(0, 2));
+    const attackerInfo = roster[0];
+    const defenderInfo = roster[1];
+    game.addExecution(
+      new SpawnExecution("c5e4-ffa", attackerInfo, game.ref(30, 30)),
+    );
+    game.addExecution(
+      new SpawnExecution("c5e4-ffa", defenderInfo, game.ref(50, 50)),
+    );
+    game.executeNextTick();
+    game.executeNextTick();
+    expect(game.nationalPoliticalAuthority()).toBeNull();
+    expect(game.nationalWarAuthority()).toBeNull();
+    const attacker = game.player(CROWN);
+    const defender = game.player(MEMBER);
+    const buf = [0, 0, 0, 0];
+    let bordered = false;
+    for (const tile of attacker.tiles()) {
+      const n = game.map().neighbors4(tile, buf);
+      for (let i = 0; i < n; i++) {
+        const candidate = buf[i];
+        if (
+          !game.map().isWater(candidate) &&
+          !game.map().isImpassable(candidate) &&
+          game.owner(candidate) === game.terraNullius()
+        ) {
+          defender.conquer(candidate);
+          bordered = true;
+          break;
+        }
+      }
+      if (bordered) break;
+    }
+    expect(attacker.sharesBorderWith(defender)).toBe(true);
+    attacker.setTroops(20_000);
+    defender.setTroops(1);
+    game.addExecution(new AttackExecution(10_000, attacker, MEMBER));
+    tick(game);
+    expect(game.nationalWarState()).toBeNull();
+    expect(
+      attacker.outgoingAttacks().some((attack) => attack.target() === defender),
+    ).toBe(true);
+  });
+
   it("limits twenty microattack clicks to one non-refreshing donor campaign allowance", async () => {
     const game = await found();
     setResponse(game, "assist");
