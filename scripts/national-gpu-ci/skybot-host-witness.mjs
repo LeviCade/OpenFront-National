@@ -114,7 +114,8 @@ export function verifyControllerRun({
       job.head_sha === expected.sourceSha &&
       same(job.runner_id, expected.runnerId) &&
       job.runner_name === expected.runnerName &&
-      ["queued", "in_progress", "completed"].includes(job.status),
+      ["queued", "in_progress", "completed"].includes(job.status) &&
+      (job.status !== "completed" || job.conclusion === "success"),
     "GITHUB_JOB_RUN_RUNNER_MISMATCH",
   );
   const actor = Number(run.run_attempt) > 1 ? run.triggering_actor : run.actor;
@@ -143,6 +144,23 @@ export function verifyControllerRun({
 
 /** Root-owned files can originate from the controller only. Guest uploads
  * are NEVER read from these paths and guest paths are NEVER accepted. */
+export function verifyArtifactCustody(receipt, expected, bytes) {
+  requireTrue(
+    receipt?.kind === "skybot-github-artifact-custody-v1" &&
+      Number.isSafeInteger(receipt.artifactId) &&
+      receipt.artifactId > 0 &&
+      HEX64.test(receipt.archiveSha256 ?? "") &&
+      receipt.summarySha256 === digest(bytes) &&
+      receipt.sourceSha === expected.sourceSha &&
+      same(receipt.runId, expected.runId) &&
+      same(receipt.runAttempt, expected.runAttempt) &&
+      same(receipt.jobId, expected.jobId) &&
+      same(receipt.runnerId, expected.runnerId) &&
+      receipt.challenge === expected.challenge,
+    "HOST_ARTIFACT_CUSTODY_UNVERIFIED",
+  );
+}
+
 export function checkRootFile(path, uid = 0) {
   const st = lstatSync(path);
   requireTrue(st.isFile() && !st.isSymbolicLink(), "HOST_FILE_SYMLINK_OR_TYPE");
@@ -721,7 +739,13 @@ async function main() {
       expected,
       times.jobCompletedAtMs,
     );
+    checkRootDirectory(join(HOST_ROOT, "verified-artifacts"));
     const summaryBytes = readRoot("verified-artifacts/summary.json");
+    verifyArtifactCustody(
+      readRootJson("verified-artifacts/import-receipt.json"),
+      expected,
+      summaryBytes,
+    );
     payload = createHostPostflight(
       expected,
       times,

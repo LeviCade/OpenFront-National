@@ -282,7 +282,9 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       recursive: true,
       force: true,
     });
-    rmSync(join(dir, "browser-national-mobile", "peace-accepted-ended-war.png"));
+    rmSync(
+      join(dir, "browser-national-mobile", "peace-accepted-ended-war.png"),
+    );
     assert.equal(publishEvidence(dir, SHA, "release"), false);
     const missing = JSON.parse(
       readFileSync(
@@ -291,7 +293,10 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       ),
     );
     assert.equal(missing.evidenceReadyForHostReview, false);
-    assert.equal(missing.modes["national-mobile"].reason, "SCREENSHOT_MISSING");
+    assert.equal(
+      missing.modes["national-mobile"].reason,
+      "SCREENSHOT_MISSING",
+    );
     const changed = sample();
     changed.exactSource = "b".repeat(40);
     writeFileSync(

@@ -415,7 +415,10 @@ export function publishEvidence(root, expectedSha, kind = "release") {
       laneMatches,
       releaseCertified: false,
       evidenceReadyForHostReview:
-        kind === "release" && reportedPass && scenarioAccepted && images.length > 0,
+        kind === "release" &&
+        reportedPass &&
+        scenarioAccepted &&
+        images.length > 0,
       reportPresent: raw !== null,
       expectedViewport,
       actualViewport,
@@ -450,7 +453,9 @@ export function publishEvidence(root, expectedSha, kind = "release") {
     JSON.stringify(result, null, 2) + "\n",
   );
   // Successful transport of complete evidence is not release acceptance.
-  return kind === "release" ? result.evidenceReadyForHostReview : result.allModesPass;
+  return kind === "release"
+    ? result.evidenceReadyForHostReview
+    : result.allModesPass;
 }
 
 if (process.argv[1]?.endsWith("sanitize-browser-evidence.mjs")) {

@@ -5,6 +5,7 @@ import {
   REPOSITORY,
   REPOSITORY_ID,
   verifyControllerRun,
+  verifyArtifactCustody,
   validateControllerObservation,
   verifyControllerTeardown,
   signedHostRecord,
@@ -460,4 +461,45 @@ test("preflight phase is signed separately from postflight", () => {
     NOW + 1_000,
   );
   assert.equal(before.purpose, "skybot-gpu-preflight-v1");
+});
+
+test("root artifact receipt binds exact bytes and numeric execution identity", () => {
+  const bytes = Buffer.from("reviewed artifact summary");
+  const receipt = {
+    kind: "skybot-github-artifact-custody-v1",
+    artifactId: 7,
+    archiveSha256: "c".repeat(64),
+    summarySha256: createHash("sha256").update(bytes).digest("hex"),
+    sourceSha: expected.sourceSha,
+    runId: expected.runId,
+    runAttempt: expected.runAttempt,
+    jobId: expected.jobId,
+    runnerId: expected.runnerId,
+    challenge: expected.challenge,
+  };
+  assert.doesNotThrow(() => verifyArtifactCustody(receipt, expected, bytes));
+  for (const key of [
+    "artifactId",
+    "archiveSha256",
+    "summarySha256",
+    "sourceSha",
+    "runId",
+    "runAttempt",
+    "jobId",
+    "runnerId",
+    "challenge",
+  ]) {
+    rejectWith("HOST_ARTIFACT_CUSTODY_UNVERIFIED", () =>
+      verifyArtifactCustody({ ...receipt, [key]: "invalid" }, expected, bytes),
+    );
+  }
+  rejectWith("HOST_ARTIFACT_CUSTODY_UNVERIFIED", () =>
+    verifyArtifactCustody(receipt, expected, Buffer.from("tampered")),
+  );
+  const failed = proof();
+  failed.job.status = "completed";
+  failed.job.conclusion = "failure";
+  rejectWith("GITHUB_JOB_RUN_RUNNER_MISMATCH", () =>
+    verifyControllerRun(failed),
+  );
 });
