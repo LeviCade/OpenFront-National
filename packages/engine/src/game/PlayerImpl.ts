@@ -1508,7 +1508,8 @@ export class PlayerImpl implements Player {
       throw new Error("NATIONAL: no lawful imperial structure placement");
     const cost = this.mg.unitInfo(type).cost(this.mg, this);
     // Validated payer callback must debit or throw before any unit creation.
-    return this.placePaidUnit(type, spawnTile, {}, () => debit(cost));
+    debit(cost);
+    return this.placePaidUnit(type, spawnTile, {}, () => {});
   }
 
   private placePaidUnit<T extends UnitType>(
@@ -1517,8 +1518,6 @@ export class PlayerImpl implements Player {
     params: UnitParams<T>,
     pay: () => void,
   ): Unit {
-    // Preserve legacy construction-cost calculation before recording the unit.
-    pay();
     const b = new UnitImpl(
       type,
       this.mg,
@@ -1530,6 +1529,7 @@ export class PlayerImpl implements Player {
     this._units.push(b);
     this._myUnitsVersion++;
     this.recordUnitConstructed(type);
+    pay();
     this.removeTroops("troops" in params ? (params.troops ?? 0) : 0);
     this.mg.addUpdate(b.toUpdate());
     this.mg.addUnit(b);

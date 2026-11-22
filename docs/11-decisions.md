@@ -82,3 +82,8 @@ Every change must cite an ID, explain national-interest consequences, provide en
 - On dissolution, credit the living former leader; otherwise divide treasury equally across living members, assigning integer residuals by ascending member ID. When no constituent survives, keep an unspendable terminal estate; no dead nation receives spendable income and no gold disappears from the ledger.
 - OPEN item 6, initial deterministic extinction rule: retire imperial war layers tied to a dissolved sovereign without creating new national wars; leave existing national layers and historical records intact. This avoids ownerless active wars or a re-founded empire ID resurrecting conflict. Succession never retires those layers.
 - No external wire commands added here. The trusted GameImpl path enforces current crown and authenticated principal; request-ID journaling and stamped client/AI integration are separate remaining work.
+
+### Class Two implemented extensions
+
+- Imperial construction orders can purchase actual structures on a live constituent's territory. Existing placement rules, unit cost, construction completion execution and snapshot schema are reused; personal gold is unchanged. Construction order acceptance is authoritative. Imperial upgrade/demolition orders remain separate work.
+- The shared intent union appends one `national_imperial_administration` variant without moving existing discriminants. Executor resolves the stamped client, the existing Game-owned political journal enforces request identity and idempotence, and the canonical result type is `national_imperial_administration`. Recipient UI wiring is separately owned by E4.

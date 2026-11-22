@@ -23,9 +23,9 @@ import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
 const roster = [
-  new PlayerInfo("North", PlayerType.Human, "r3-north-client", "r3-north-id"),
-  new PlayerInfo("South", PlayerType.Human, "r3-south-client", "r3-south-id"),
-  new PlayerInfo("West", PlayerType.Human, "r3-west-client", "r3-west-id"),
+  new PlayerInfo("North", PlayerType.Human, "R3NORTH1", "r3-north-id"),
+  new PlayerInfo("South", PlayerType.Human, "R3SOUTH1", "r3-south-id"),
+  new PlayerInfo("West", PlayerType.Human, "R3WEST01", "r3-west-id"),
 ];
 const N = "r3-north-id";
 const S = "r3-south-id";
@@ -536,9 +536,11 @@ describe("Class Two E1 M5 administration", () => {
     const work = new PlayerExecution(s);
     work.init(game, game.ticks());
     const before = s.gold();
-    const gross = game.config().goldAdditionRate(s);
-    expect(gross).toBeGreaterThan(0n);
+    const income = vi.spyOn(game.config(), "goldAdditionRate");
     work.tick(game.ticks());
+    const gross = income.mock.results[0].value;
+    income.mockRestore();
+    expect(gross).toBeGreaterThan(0n);
     expect(s.gold()).toBe(before);
     expect(game.nationalImperialAdministrationFor(n)?.treasury).toBe(gross.toString());
     expect(game.nationalImperialAdministrationFor(w)).toBeNull();
@@ -552,22 +554,49 @@ describe("Class Two E1 M5 administration", () => {
     build.tick(game.ticks());
     expect(s.units(UnitType.City)).toHaveLength(0);
     expect(s.gold()).toBe(savedGold);
+    game.performNationalImperialAdministration(n, {
+      ...policy, policy: { workerIncomeBps: 2500, allowedConstruction: [UnitType.City] },
+    });
+    const partialStart = s.gold();
+    const partialIncome = vi.spyOn(game.config(), "goldAdditionRate");
+    work.tick(game.ticks());
+    const partialGross = partialIncome.mock.results[0].value;
+    partialIncome.mockRestore();
+    const partialTax = partialGross * 2500n / 10_000n;
+    const treasuryBeforeTransfer = gross + partialTax;
+    expect(s.gold() - partialStart).toBe(partialGross - partialTax);
+    expect(game.nationalImperialAdministrationFor(n)?.treasury).toBe(treasuryBeforeTransfer.toString());
+    const cost = game.unitInfo(UnitType.City).cost(game, s);
+    const ownBefore = s.gold();
+    const permitted = new ConstructionExecution(s, UnitType.City, cityTile);
+    permitted.init(game, game.ticks());
+    permitted.tick(game.ticks());
+    expect(s.units(UnitType.City)).toHaveLength(1);
+    expect(ownBefore - s.gold()).toBe(cost);
+    game.performNationalWarCommand(n, { kind: "declare-national", warId: "e1-national", aggressorId: S, targetId: W });
+    game.performNationalWarCommand(n, { kind: "declare-imperial", warId: "e1-imperial",
+      aggressor: { kind: "empire", id: "empire-r3" }, target: { kind: "nation", id: W } });
+    const layers = game.nationalWarState()?.wars.layers;
+    expect(layers).toHaveLength(2);
     // Transfer preserves the treasury and automatically revokes the old crown.
     game.performNationalCommand(n, {
       kind: "transfer-crown", empireId: "empire-r3", successorId: S,
     });
     expect(() => game.performNationalImperialAdministration(n, policy)).toThrow(/emperor/);
     expect(game.nationalImperialAdministrationFor(s)?.canAmend).toBe(true);
-    expect(game.nationalImperialAdministrationFor(s)?.treasury).toBe(gross.toString());
+    expect(game.nationalWarState()?.wars.layers).toEqual(layers);
+    expect(game.nationalImperialAdministrationFor(s)?.treasury).toBe(treasuryBeforeTransfer.toString());
     const { restored } = await roundTrip(game, "plains");
     expect(restored.nationalImperialAdministrationFor(restored.player(S))).toEqual(game.nationalImperialAdministrationFor(s));
     for (const g of [game, restored]) {
       const leader = g.player(S);
       const start = leader.gold();
       g.performNationalImperialAdministration(leader, { kind: "dissolve", empireId: "empire-r3" });
-      expect(leader.gold() - start).toBe(gross);
+      expect(leader.gold() - start).toBe(treasuryBeforeTransfer);
       expect(g.nationalPoliticalAuthority()?.empireOf(N)).toBeNull();
       expect(g.nationalImperialAdministrationFor(leader)).toBeNull();
+      expect(g.nationalWarState()?.wars.layers.find((l) => l.id === "e1-national")?.endedTick).toBeNull();
+      expect(g.nationalWarState()?.wars.layers.find((l) => l.id === "e1-imperial")?.endedTick).not.toBeNull();
     }
     expect(snapshot(restored)).toEqual(snapshot(game));
   });
@@ -675,8 +704,11 @@ describe("Class Two E1 M5 administration", () => {
     const n = game.player(N);
     const execution = new PlayerExecution(n);
     execution.init(game, game.ticks());
-    const before = n.gold(), gross = game.config().goldAdditionRate(n);
+    const before = n.gold();
+    const income = vi.spyOn(game.config(), "goldAdditionRate");
     execution.tick(game.ticks());
+    const gross = income.mock.results[0].value;
+    income.mockRestore();
     expect(n.gold() - before).toBe(gross);
     expect(game.nationalImperialAdministrationFor(n)).toBeNull();
   });
