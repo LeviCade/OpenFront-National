@@ -664,8 +664,19 @@ export class AttackExecution implements Execution {
   }
 
   private handleDeadDefender() {
-    if (!(this.target.isPlayer() && this.target.numTilesOwned() < 100)) return;
+    if (!this.target.isPlayer()) return;
     const target: Player = this.target;
+
+    // D-003/D-014 (SOV-01, WAR-01): a NATIONAL sovereign is defeated
+    // only when its actual territory is gone. The legacy <100-tile
+    // shortcut otherwise awards surviving land (even to neutral neighbors)
+    // and records a kill before the defender has actually been eliminated.
+    // In NATIONAL every remaining tile uses the normal combat path.
+    if (this.mg.nationalPoliticalAuthority() !== null) {
+      if (!target.isAlive()) this.mg.conquerPlayer(this._owner, target);
+      return;
+    }
+    if (target.numTilesOwned() >= 100) return;
 
     this.mg.conquerPlayer(this._owner, target);
 

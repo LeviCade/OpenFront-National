@@ -15,8 +15,15 @@ import {
   PlayerType,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
-import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import {
+  GameUpdateType,
+  type GameUpdateViewData,
+} from "@openfront/engine-api/game/GameUpdates";
 import type { GameConfig } from "@openfront/engine-api/Schemas";
+import {
+  OFFSET_TARGET_TILE,
+  OFFSET_TROOPS,
+} from "@openfront/engine-lib/game/PackedUnitUpdates";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
@@ -24,6 +31,7 @@ import { GameRunner } from "@openfront/engine/GameRunner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import {
   NATIONAL_OBSERVER_MAX_TILES,
+  NationalObserverMapPager,
   type NationalObserverMapV1,
 } from "@openfront/engine/national/observation/NationalObserverMap";
 import {
@@ -32,6 +40,7 @@ import {
 } from "@openfront/shared/ZbinWire";
 import { describe, expect, it } from "vitest";
 import { NationalObserverMapContinuity } from "../../src/client/NationalObserverMapContinuity";
+import { parseTrustedNationalProjection } from "../../src/client/TrustedNationalSession";
 import { Client } from "../../src/server/Client";
 import {
   encodeNationalRecipientProjection,
@@ -122,6 +131,7 @@ async function rig(mapName: string, starts: number[]) {
     undefined,
   );
   const sockets = P.map(seat);
+  const measurements = { wireMs: 0 };
   const host = new TrustedNationalMatch(
     MATCH,
     runner,
@@ -129,6 +139,7 @@ async function rig(mapName: string, starts: number[]) {
     (client, packet) => {
       const target = sockets.find((s) => s.client === client);
       if (!target) throw new Error("unrecognized host seat");
+      const wireStarted = performance.now();
       const payload = encodeNationalRecipientProjection(packet);
       // E2's real GameServer emits on Client.ws AFTER an original-seat
       // reconnect. Do not pin this test delivery to the first socket object.
@@ -142,9 +153,10 @@ async function rig(mapName: string, starts: number[]) {
           undefined,
         ),
       );
+      measurements.wireMs += performance.now() - wireStarted;
     },
   );
-  return { game, sockets, host };
+  return { game, sockets, host, measurements };
 }
 function tickTwice(host: TrustedNationalMatch) {
   host.tick();
@@ -300,6 +312,32 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     expect(host.resumeRecipient(sockets[1].client)).toBe(true);
     host.tick();
     const resumed = view(replacement);
+    const roster = resumed.data.updates[GameUpdateType.Player];
+    expect(roster.map((player) => player.id)).toEqual(
+      expect.arrayContaining([A.id, B.id, C.id]),
+    );
+    const self = roster.find((player) => player.id === B.id);
+    expect(self?.troops).toBe(game.player(B.id).troops());
+    expect(self?.smallID).toBe(game.player(B.id).smallID());
+    const outsider = roster.find((player) => player.id === A.id);
+    expect(outsider?.smallID).toBe(game.player(A.id).smallID());
+    expect(outsider).not.toHaveProperty("troops");
+    expect(outsider).not.toHaveProperty("gold");
+    expect(resumed.data.updates[GameUpdateType.SpawnPhaseEnd]).toEqual([
+      expect.objectContaining({
+        startTick: game.ticks() - Math.round(game.elapsedGameSeconds() * 10),
+      }),
+    ]);
+    const resumedReader = new NationalObserverMapContinuity(
+      B.id,
+      resumed.map.streamId,
+    );
+    expect(() => resumedReader.accept(b2.map, b2.msg.tick)).toThrow();
+    expect(
+      resumedReader.acceptProjection(
+        parseTrustedNationalProjection(resumed.msg.payload, resumed.msg.tick),
+      ).usable,
+    ).toBe(true);
     expect(resumed.map.observerId).toBe(B.id);
     expect(resumed.map.reset).toBe(true);
     expect(resumed.map.cursor).toBe(0);
@@ -512,6 +550,18 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
       { ...first.map, streamId: "malicious-socket", tick: first.map.tick + 1 },
       { ...first.map, cursor: 0, tick: first.map.tick + 1 },
       { ...first.map, reset: true, tick: first.map.tick + 1 },
+      {
+        ...first.map,
+        cursor: 4096,
+        tilePageSlots: 1,
+        tick: first.map.tick + 1,
+      },
+      {
+        ...first.map,
+        cursor: 4096,
+        sweepId: first.map.sweepId + 2,
+        tick: first.map.tick + 1,
+      },
     ]) {
       expect(() => reader.accept(fake, first.msg.tick + 1)).toThrow();
       expect(reader.lastAcceptedTick).toBe(tickBeforeAttack);
@@ -523,6 +573,29 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     for (let steps = 0; steps < 20 && last.map.nextCursor !== null; steps++) {
       host.tick();
       last = view(sockets[0].socket);
+      if (steps === 0) {
+        const neverDisclosed = last.map.tiles[0][0];
+        expect(() =>
+          reader.accept(
+            {
+              ...last.map,
+              tileRemovedRefs: [neverDisclosed],
+              tiles: last.map.tiles.slice(1),
+            },
+            last.msg.tick,
+          ),
+        ).toThrow();
+        expect(() =>
+          reader.accept(
+            {
+              ...last.map,
+              tilePageSlots: 4097,
+            },
+            last.msg.tick,
+          ),
+        ).toThrow();
+        expect(reader.lastAcceptedTick).toBe(tickBeforeAttack);
+      }
       const delta = reader.accept(last.map, last.msg.tick);
       expect(last.map.sweepId).toBe(sweepId);
       expect(delta.clearAllTiles).toBe(false);
@@ -567,7 +640,77 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     expect(one.map.unitsTruncated).toBe(true);
     expect(one.map.units).toHaveLength(2048);
     expect(one.map.unitNextCursor).toBe(2048);
-    const u1 = reader.accept(one.map, one.msg.tick);
+    const packet = parseTrustedNationalProjection(
+      one.msg.payload,
+      one.msg.tick,
+    );
+    const native = packet.packedUnitUpdates as unknown[];
+    expect(native[OFFSET_TARGET_TILE]).toBeNull();
+    const fresh = new NationalObserverMapContinuity(A.id, one.map.streamId);
+    expect(() =>
+      new NationalObserverMapContinuity(A.id, "old-stream").acceptProjection(
+        packet,
+      ),
+    ).toThrow();
+    for (const [offset, value] of [
+      [OFFSET_TARGET_TILE, 123],
+      [OFFSET_TROOPS, 9876543],
+    ] as const) {
+      const forged = [...native];
+      forged[offset] = value;
+      expect(() =>
+        fresh.acceptProjection({
+          ...packet,
+          packedUnitUpdates: forged,
+        }),
+      ).toThrow();
+      expect(fresh.lastAcceptedTick).toBe(-1);
+    }
+    expect(() =>
+      fresh.acceptProjection({
+        ...packet,
+        nationalCommandResults: [{ actorId: B.id, recipientId: B.id }],
+      }),
+    ).toThrow();
+    expect(() =>
+      fresh.acceptProjection({
+        ...packet,
+        packedTileUpdates: [9999, 42],
+      }),
+    ).toThrow();
+    expect(() =>
+      fresh.acceptProjection({
+        ...packet,
+        updates: {
+          ...(packet.updates as Record<string, unknown>),
+          [GameUpdateType.Player]: [
+            { type: GameUpdateType.Player, id: B.id, troops: 12345 },
+          ],
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      fresh.acceptProjection({
+        ...packet,
+        nationalAccessionOffers: {
+          version: 1,
+          recipientId: A.id,
+          offers: [{ recipientId: C.id }],
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      fresh.accept(
+        {
+          ...one.map,
+          ownResources: { ...one.map.ownResources, enemyTreasury: 1234 },
+        },
+        one.msg.tick,
+      ),
+    ).toThrow();
+    expect(fresh.lastAcceptedTick).toBe(-1);
+    const u1 = reader.acceptProjection(packet);
+    expect(Number.isNaN(u1.nativeUnits![OFFSET_TARGET_TILE])).toBe(true);
     expect(u1.clearAllUnits).toBe(true);
     expect(one.msg.payload).not.toContain("8876543");
     expect(one.map.units.every((unit) => unit.troops === undefined)).toBe(true);
@@ -628,7 +771,7 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     expect(reader.observedUnitCount).toBeGreaterThan(2000);
   });
 
-  it("revocation of genuine empire-contributed tiles causes a full map reset and discards cached visible ownership", async () => {
+  it("revocation of genuine empire-contributed tiles discards cached visible ownership without forced rewind", async () => {
     const init = await setup("big_plains", { nationalMode: true }, P);
     const { game, host, sockets } = await rig("big_plains", [
       init.ref(20, 20),
@@ -662,13 +805,33 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
       B.clientID!,
     );
     const allyRef = b.spawnTile()!;
+    const foreignTile = game.ref(90, 105);
+    const c = game.player(C.id);
+    c.conquer(foreignTile);
+    const foreignCity = c.buildUnit(UnitType.City, foreignTile, {});
+    expect(
+      collectLiveNationalObservation(game, A.id).observation.visibleAssets.some(
+        (asset) => asset.id === String(foreignCity.id()),
+      ),
+    ).toBe(true);
     expect(
       collectLiveNationalObservation(game, A.id).visibleTiles.has(allyRef),
     ).toBe(true);
     host.tick();
     const allied = view(sockets[0].socket);
+    expect(game.unit(foreignCity.id())).toBeDefined();
+    expect(
+      collectLiveNationalObservation(game, A.id).observation.visibleAssets.some(
+        (asset) => asset.id === String(foreignCity.id()),
+      ),
+    ).toBe(true);
     const reader = new NationalObserverMapContinuity(A.id);
-    reader.accept(allied.map, allied.msg.tick);
+    reader.acceptProjection(
+      parseTrustedNationalProjection(allied.msg.payload, allied.msg.tick),
+    );
+    expect(reader.units().some((unit) => unit.id === foreignCity.id())).toBe(
+      true,
+    );
     // A reciprocal member is removed by the same real authoritative
     // tile-relinquish elimination used by the existing FOG-06/07 fixture.
     for (const tile of [...b.tiles()]) b.relinquish(tile);
@@ -678,17 +841,180 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     ).toBe(false);
     host.tick();
     const after = view(sockets[0].socket);
-    expect(after.map.reset).toBe(true);
-    expect(after.map.cursor).toBe(0);
-    expect(after.map.unitReset).toBe(true);
-    const d = reader.accept(after.map, after.msg.tick);
-    expect(d.clearAllTiles).toBe(true);
-    expect(d.clearAllUnits).toBe(true);
+    const d = reader.acceptProjection(
+      parseTrustedNationalProjection(after.msg.payload, after.msg.tick),
+    );
+    expect(d.clearAllTiles || d.removedTileRefs.includes(allyRef)).toBe(true);
+    expect(d.clearAllUnits || d.removedUnitIds.includes(foreignCity.id())).toBe(
+      true,
+    );
+    expect(reader.units().some((unit) => unit.id === foreignCity.id())).toBe(
+      false,
+    );
+    expect(after.map.units.some((unit) => unit.id === foreignCity.id())).toBe(
+      false,
+    );
     expect(reader.tileStatus(allyRef)).toBe("revoked");
     expect(
       after.map.tiles.every(([ref]) =>
         collectLiveNationalObservation(game, A.id).visibleTiles.has(ref),
       ),
     ).toBe(true);
+    // Independent direct sight can legitimately reacquire the former shared
+    // asset, without resurrecting the revoked cache or sharing its strength.
+    a.conquer(game.ref(90, 104));
+    host.tick();
+    const reacquired = view(sockets[0].socket);
+    reader.acceptProjection(
+      parseTrustedNationalProjection(
+        reacquired.msg.payload,
+        reacquired.msg.tick,
+      ),
+    );
+    expect(reader.units().find((unit) => unit.id === foreignCity.id())).toEqual(
+      expect.objectContaining({ ownerId: C.id, tile: foreignTile }),
+    );
+    expect(
+      reader.units().find((unit) => unit.id === foreignCity.id()),
+    ).not.toHaveProperty("troops");
+  });
+});
+
+describe("C4 E3 continuous authoritative churn", () => {
+  it("makes progress across both frozen streams during repeated real territorial churn", async () => {
+    const init = await setup("big_plains", { nationalMode: true }, P);
+    const { game, host, sockets, measurements } = await rig("big_plains", [
+      init.ref(20, 100),
+      init.ref(150, 150),
+      init.ref(190, 190),
+    ]);
+    const a = game.player(A.id);
+    const b = game.player(B.id);
+    for (let y = 5; y < 86; y++) {
+      for (let x = 5; x < 86; x++) {
+        const ref = game.ref(x, y);
+        if (game.isLand(ref) && game.owner(ref) !== a) a.conquer(ref);
+      }
+    }
+    const remote = game.ref(115, 115);
+    const units = [];
+    for (let i = 0; i < 2055; i++)
+      units.push(a.buildUnit(UnitType.City, game.ref(20, 20), {}));
+    a.conquer(remote);
+    // An early disconnected outpost is disclosed on page one, unlike
+    // the late remote outpost whose frozen slots are skipped during loss.
+    const early = game.ref(195, 5);
+    a.conquer(early);
+    const readers = P.map((p) => new NationalObserverMapContinuity(p.id));
+    const seen = new Set<number>();
+    const known = new Set<number>();
+    let firstTileComplete = -1;
+    let firstUnitComplete = -1;
+    let peakBytes = 0;
+    let resets = 0;
+    let holes = 0;
+    let hostMs = 0;
+    let producerMs = 0;
+    let reconcileMs = 0;
+    let revokedDisclosures = 0;
+    const profilers = P.map(
+      (p) => new NationalObserverMapPager(game, p.id, "profile-" + p.id),
+    );
+    const readyMs = P.map(() => -1);
+    const readyFrames = P.map(() => -1);
+    const runStarted = performance.now();
+    const startHeap = process.memoryUsage().heapUsed;
+    let peakHeap = startHeap;
+    for (let frame = 0; frame < 8; frame++) {
+      if (frame % 2 === 1) {
+        b.conquer(remote);
+        b.conquer(early);
+      } else if (frame > 0) {
+        a.conquer(remote);
+        a.conquer(early);
+      }
+      units[0].move(game.ref(frame % 2 === 0 ? 20 : 21, 20));
+      const started = performance.now();
+      host.tick();
+      hostMs += performance.now() - started;
+      for (let i = 0; i < P.length; i++) {
+        const v = view(sockets[i].socket);
+        const readStarted = performance.now();
+        const delta = readers[i].acceptProjection(
+          parseTrustedNationalProjection(v.msg.payload, v.msg.tick),
+        );
+        reconcileMs += performance.now() - readStarted;
+        if (delta.usable && readyFrames[i] === -1) {
+          readyFrames[i] = frame;
+          readyMs[i] = performance.now() - runStarted;
+        }
+        const frames = sockets[i].socket.frames;
+        peakBytes = Math.max(peakBytes, frames[frames.length - 1].byteLength);
+        const sight = collectLiveNationalObservation(game, P[i].id);
+        const producerStarted = performance.now();
+        profilers[i].page(sight);
+        producerMs += performance.now() - producerStarted;
+        for (const [ref] of delta.tiles)
+          expect(sight.visibleTiles.has(ref)).toBe(true);
+        if (i !== 0) continue;
+        for (const ref of known) {
+          if (!sight.visibleTiles.has(ref)) {
+            expect(readers[i].tileStatus(ref)).toBe("revoked");
+            revokedDisclosures++;
+          }
+        }
+        if (delta.clearAllTiles) {
+          known.clear();
+          resets++;
+        }
+        for (const ref of delta.removedTileRefs) {
+          expect(known.delete(ref)).toBe(true);
+          expect(readers[i].tileStatus(ref)).toBe("revoked");
+        }
+        for (const [ref] of delta.tiles) known.add(ref);
+        for (const unit of delta.units) seen.add(unit.id);
+        holes += v.map.tilePageSlots - v.map.tiles.length;
+        for (const ref of known) expect(sight.visibleTiles.has(ref)).toBe(true);
+        expect(delta.usable).toBe(true);
+        if (delta.sweepComplete && firstTileComplete < 0)
+          firstTileComplete = frame;
+        if (delta.unitSweepComplete && firstUnitComplete < 0)
+          firstUnitComplete = frame;
+        if (frame === 0) {
+          expect(v.map.nextCursor).toBe(4096);
+          expect(v.map.unitNextCursor).toBe(2048);
+        }
+      }
+      peakHeap = Math.max(peakHeap, process.memoryUsage().heapUsed);
+    }
+    expect(firstTileComplete).toBe(1);
+    expect(firstUnitComplete).toBe(1);
+    expect(resets).toBe(1);
+    expect(revokedDisclosures).toBeGreaterThan(0);
+    expect(readyFrames).toEqual([0, 0, 0]);
+    expect(units.every((unit) => seen.has(unit.id()))).toBe(true);
+    console.info(
+      "C4_E3_CHURN_METRICS",
+      JSON.stringify({
+        observers: 3,
+        frames: 8,
+        firstTileComplete,
+        firstUnitComplete,
+        firstUsableFrame: 0,
+        maxReadyFrame: Math.max(...readyFrames),
+        maxReadyElapsedMs: Math.max(...readyMs),
+        resets,
+        holes,
+        peakBytes,
+        hostMs,
+        producerMs,
+        wireMs: measurements.wireMs,
+        reconcileMs,
+        peakHeapDelta: peakHeap - startHeap,
+        permanentlyUnseenUnits: 0,
+        revokedDisclosures,
+        maxRevocationDelayFrames: revokedDisclosures > 0 ? 0 : null,
+      }),
+    );
   });
 });

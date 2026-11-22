@@ -731,8 +731,28 @@ const boatMenuElement: MenuElement = {
   },
 };
 
+/** Cached pointer menu actions cannot survive a new sight lease or owner change. */
+function trustedCenterActionAvailable(params: MenuElementParams): boolean {
+  const { game, tile, myPlayer, selected } = params;
+  if (
+    (!game.trustedProjectionReady() && !game.trustedSpawnReady()) ||
+    !game.isValidRef(tile) ||
+    !game.isLand(tile)
+  )
+    return false;
+  if (game.inSpawnPhase())
+    return !game.config().isRandomSpawn() && !game.owner(tile).isPlayer();
+  const target = game.trustedAttackTarget(myPlayer.id(), tile);
+  return target !== undefined && target === (selected?.id() ?? null);
+}
+
 export const centerButtonElement: CenterButtonElement = {
   disabled: (params: MenuElementParams): boolean => {
+    if (
+      params.game.isTrustedNationalProjection?.() &&
+      !trustedCenterActionAvailable(params)
+    )
+      return true;
     const tileOwner = params.game.owner(params.tile);
     const isLand = params.game.isLand(params.tile);
     if (!isLand) {
@@ -755,6 +775,13 @@ export const centerButtonElement: CenterButtonElement = {
     return !params.playerActions.canAttack;
   },
   action: (params: MenuElementParams) => {
+    if (
+      params.game.isTrustedNationalProjection?.() &&
+      !trustedCenterActionAvailable(params)
+    ) {
+      params.closeMenu();
+      return;
+    }
     if (params.game.inSpawnPhase()) {
       params.playerActionHandler.handleSpawn(params.tile);
     } else {

@@ -1,0 +1,60 @@
+name: C4 E3 — exact continuous recipient map source
+on:
+  pull_request:
+    branches:
+      - stage3/conductor4-class1-integration-20261121
+    paths:
+      - packages/engine/src/national/observation/**
+      - packages/engine/src/game/Game.ts
+      - packages/engine/src/game/PlayerImpl.ts
+      - packages/engine-api/src/game/NationalRecipientView.ts
+      - src/client/NationalObserverMapContinuity.ts
+      - packages/shared/src/NationalObserverNativeWire.ts
+      - src/server/national/NationalRecipientWire.ts
+      - tests/national/C2PrivateObserverMapWire.test.ts
+      - tests/national/C4ContinuousFogAlgorithm.test.ts
+      - .github/workflows/national-c4-class1-e3-continuity.yml
+permissions:
+  contents: read
+concurrency:
+  group: c4-e3-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact source
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: npm run typecheck
+      - name: Real host churn, privacy, legacy and layer boundaries
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/C2PrivateObserverMapWire.test.ts \
+            tests/national/C4ContinuousFogAlgorithm.test.ts \
+            tests/national/NationalGeographicFogR8.test.ts \
+            tests/national/NationalServerOutboundClass4.test.ts \
+            tests/LayerBoundaries.test.ts
+      - name: E3 lint
+        run: npx --no-install oxlint packages/engine-api/src/game/NationalRecipientView.ts packages/engine/src/national/observation/NationalObserverMap.ts src/server/national/NationalRecipientWire.ts src/client/NationalObserverMapContinuity.ts packages/engine/src/national/observation/NationalServerOutbound.ts packages/engine/src/national/observation/NationalOutbound.ts packages/engine/src/game/Game.ts packages/engine/src/game/PlayerImpl.ts tests/national/C2PrivateObserverMapWire.test.ts tests/national/C4ContinuousFogAlgorithm.test.ts packages/shared/src/NationalObserverNativeWire.ts
+      - name: E3 exact formatter diff
+        run: |
+          files=(packages/engine-api/src/game/NationalRecipientView.ts packages/engine/src/national/observation/NationalObserverMap.ts src/server/national/NationalRecipientWire.ts src/client/NationalObserverMapContinuity.ts packages/engine/src/national/observation/NationalServerOutbound.ts packages/engine/src/national/observation/NationalOutbound.ts packages/engine/src/game/Game.ts packages/engine/src/game/PlayerImpl.ts tests/national/C2PrivateObserverMapWire.test.ts tests/national/C4ContinuousFogAlgorithm.test.ts packages/shared/src/NationalObserverNativeWire.ts docs/release/NATIONAL_C4_CLASS1_E3_CONTINUOUS_FOG.md .github/workflows/national-c4-class1-e3-continuity.yml)
+          if ! npx --no-install oxfmt --check "${files[@]}"; then
+            npx --no-install oxfmt --write "${files[@]}"
+            git -c color.ui=false diff -- "${files[@]}"
+            exit 1
+          fi

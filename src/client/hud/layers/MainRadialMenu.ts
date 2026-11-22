@@ -4,6 +4,7 @@ import { assetUrl } from "@openfront/shared/AssetUrls";
 import { EventBus } from "@openfront/shared/EventBus";
 import { Controller } from "../../Controller";
 import { TransformHandler } from "../../TransformHandler";
+import { TrustedNationalSightRevokedEvent } from "../../TrustedNationalSession";
 import { UIState } from "../../UIState";
 import { GameView, PlayerView } from "../../view";
 import { BuildMenu } from "./BuildMenu";
@@ -90,6 +91,7 @@ export class MainRadialMenu implements Controller {
 
   init() {
     this.radialMenu.init();
+    this.eventBus.on(TrustedNationalSightRevokedEvent, () => this.closeMenu());
     this.eventBus.on(CloseViewEvent, () => {
       this.menuRequest = null;
       this.pendingDonations.clear();
@@ -109,6 +111,12 @@ export class MainRadialMenu implements Controller {
       if (!this.game.isValidCoord(worldCoords.x, worldCoords.y)) {
         return;
       }
+      if (
+        this.game.isTrustedNationalProjection?.() &&
+        !this.game.trustedProjectionReady() &&
+        !this.game.trustedSpawnReady()
+      )
+        return;
       const clickedTile = this.game.ref(worldCoords.x, worldCoords.y);
       this.clickedTile = clickedTile;
 

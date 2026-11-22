@@ -4,7 +4,11 @@ import {
   PlayerInfo,
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
-import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import {
+  GameUpdateType,
+  type GameUpdateViewData,
+  type PlayerUpdate,
+} from "@openfront/engine-api/game/GameUpdates";
 import type { GameConfig } from "@openfront/engine-api/Schemas";
 import { EngineConfig } from "@openfront/engine/configuration/EngineConfig";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
@@ -43,7 +47,7 @@ function seat(clientID: string, publicId: string): Client {
   );
 }
 
-async function match() {
+async function match(spawn = true) {
   const humans = [
     new PlayerInfo("Alpha", PlayerType.Human, "TRUSTEDA1", "ALPHA1"),
     new PlayerInfo("Bravo", PlayerType.Human, "TRUSTEDB1", "BRAVO1"),
@@ -54,14 +58,17 @@ async function match() {
     humans,
     undefined,
     TrustedTestConfig,
+    spawn,
   );
-  for (let i = 0; i < humans.length; i++) {
-    game.addExecution(
-      new SpawnExecution(GAME_ID, humans[i], game.ref(i === 0 ? 20 : 80, 20)),
-    );
+  if (spawn) {
+    for (let i = 0; i < humans.length; i++) {
+      game.addExecution(
+        new SpawnExecution(GAME_ID, humans[i], game.ref(i === 0 ? 20 : 80, 20)),
+      );
+    }
+    game.executeNextTick();
+    game.executeNextTick();
   }
-  game.executeNextTick();
-  game.executeNextTick();
 
   const runner = new GameRunner(
     game,
@@ -188,6 +195,41 @@ describe("Fourth Class / E2 trusted Private NATIONAL host", () => {
     authority.tick();
     expect(sentA).toHaveLength(2);
     expect(sentB).toHaveLength(1);
+  });
+
+  it("binds only one's own engine identity before spawn and after fresh socket registration", async () => {
+    const { authority, a, b, humans, sentA, sentB } = await match(false);
+    authority.tick();
+    const assertOwn = (
+      packet: GameUpdateViewData,
+      client: Client,
+      playerId: string,
+    ) => {
+      const updates = packet.updates[GameUpdateType.Player] as PlayerUpdate[];
+      const mapped = updates.filter((u) => typeof u.clientID === "string");
+      expect(mapped).toHaveLength(1);
+      expect(mapped[0]).toMatchObject({
+        id: playerId,
+        clientID: client.clientID,
+        hasSpawned: false,
+      });
+      expect(mapped[0].gold).toBeUndefined();
+      expect(mapped[0].troops).toBeUndefined();
+      expect(packet.packedPlayerUpdates).toBeUndefined();
+      expect(packet.nationalCommandResults ?? []).toHaveLength(0);
+    };
+    expect(humans[0].id).not.toBe(a.clientID);
+    expect(humans[1].id).not.toBe(b.clientID);
+    assertOwn(sentA[0], a, humans[0].id);
+    assertOwn(sentB[0], b, humans[1].id);
+
+    authority.revokeRecipient(b);
+    authority.tick();
+    expect(sentB).toHaveLength(1);
+    expect(authority.resumeRecipient(b)).toBe(true);
+    authority.tick();
+    expect(sentB).toHaveLength(2);
+    assertOwn(sentB[1], b, humans[1].id);
   });
 
   it("rejects fake extra players, anonymous seats and duplicate accounts", async () => {

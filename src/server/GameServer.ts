@@ -539,7 +539,11 @@ export class GameServer {
           stamped.config.nationalMode ?? this.gameConfig.nationalMode === true;
         if (national) {
           const mode = stamped.config.gameMode ?? this.gameConfig.gameMode;
+          const players = this.clients.players();
           if (
+            new Set(players.map((c) => c.publicId)).size !== players.length ||
+            new Set(players.map((c) => c.persistentID)).size !==
+              players.length ||
             this.isPublic() ||
             this.isListed() ||
             mode !== GameMode.FFA ||
@@ -646,6 +650,43 @@ export class GameServer {
     return { username: client.username, clanTag: client.clanTag };
   }
 
+  // Worker account lease callbacks must refer to the exact physical socket,
+  // not merely a persistent ID (which can reconnect while an API call awaits).
+  public nationalAccountSocket(
+    persistentID: string,
+    ws: WebSocket,
+  ): string | null {
+    const clientID = this.getClientIdForPersistentId(persistentID);
+    const client = clientID ? this.clients.get(clientID) : undefined;
+    return client &&
+      client.ws === ws &&
+      this.clients.isConnected(client) &&
+      ws.readyState === WebSocket.OPEN
+      ? (client.publicId ?? null)
+      : null;
+  }
+
+  public revokeNationalAccountSocket(
+    persistentID: string,
+    ws: WebSocket,
+    code: CloseCode,
+    reason: CloseReason,
+  ): void {
+    if (
+      this.gameConfig.nationalMode !== true ||
+      this.nationalAccountSocket(persistentID, ws) === null
+    )
+      return;
+    const clientID = this.getClientIdForPersistentId(persistentID);
+    const client = clientID ? this.clients.get(clientID) : undefined;
+    if (!client) return;
+    // Disconnect now, not when the untrusted peer acknowledges CLOSE:
+    // cancel all queued recipient-bound commands before the next tick.
+    this.handleClientDisconnect(client);
+    ws.close(code, reason);
+    this.log.info("NATIONAL account lease ended", { gameID: this.id, code });
+  }
+
   public joinClient(client: Client): JoinResult {
     // e.g. the host left an unstarted lobby and GameManager hasn't pruned
     // it yet. Distinct from "rejected" so the worker does not tell a player
@@ -667,6 +708,28 @@ export class GameServer {
     // A separately signed login may still refer to the same provider-linked
     // account row. Reject the alias before it can sabotage the starting roster.
     if (this.gameConfig.nationalMode === true) {
+      // An async Worker account lookup can race another admission. Resolve
+      // the same subject against the already-seated principal atomically here.
+      const existingID = this.getClientIdForPersistentId(client.persistentID);
+      if (existingID !== null) {
+        const existing = this.clients.get(existingID);
+        if (
+          !existing ||
+          existing.spectator ||
+          client.spectator ||
+          existing.publicId !== client.publicId ||
+          !client.claims
+        ) {
+          return "not_trusted";
+        }
+        return this.rejoinClient(client.ws, client.persistentID, 0, undefined, {
+          subject: client.claims.sub,
+          publicId: client.publicId!,
+          claims: client.claims,
+        })
+          ? "joined"
+          : "not_trusted";
+      }
       const occupiedByAnotherPrincipal = this.clients
         .players()
         .some(
@@ -1014,7 +1077,7 @@ export class GameServer {
       }
       case "spectate": {
         // NATIONAL roster and recipient rights freeze at server match start.
-        if (this.nationalMatch !== null) break;
+        if (this.gameConfig.nationalMode === true) break;
         this.setSpectator(client, clientMsg.spectator);
         break;
       }
@@ -1042,6 +1105,7 @@ export class GameServer {
   }
 
   private handleClientDisconnect(client: Client) {
+    if (!this.clients.isConnected(client)) return;
     this.clients.markLeft(client);
     if (this.nationalMatch !== null) {
       this.nationalMatch.revokeRecipient(client);

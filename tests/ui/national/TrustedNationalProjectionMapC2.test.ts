@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import { describe, expect, it } from "vitest";
 import {
@@ -9,6 +10,12 @@ import {
 } from "../../../src/client/TrustedNationalSession";
 import { GameView } from "../../../src/client/view/GameView";
 import type { PlayerView } from "../../../src/client/view/PlayerView";
+import {
+  makeEmptyGu,
+  makeGameView,
+  makeNameViewData,
+  makePlayerUpdate,
+} from "../../util/viewStubs";
 
 function packet(tick: number) {
   return {
@@ -169,50 +176,53 @@ describe("Second Conductor Class One E4: E3-authoritative graphical map feed", (
     expect(completedTrustedObserverMap(complete, "nation-a")).toBe(true);
   });
 
-  it("erases old visible map names and forbids stale labels after E3 sight revocation", () => {
-    const tiles = new Uint32Array(100).fill(5);
-    const names = new Map([
-      ["nation-a", { playerID: "nation-a", x: 2, y: 2, size: 4 }],
-      ["nation-b", { playerID: "nation-b", x: 3, y: 3, size: 4 }],
-    ]);
-    const owner = { isPlayer: () => true, id: () => "nation-a" };
-    const view = Object.create(GameView.prototype) as GameView;
-    Object.assign(view, {
-      _trustedNationalProjection: true,
-      _trustedProjectionReady: true,
-      _map: {
-        width: () => 10,
-        height: () => 10,
-        tileStateBuffer: () => tiles,
-      },
-      _names: names,
-      _namesDirty: false,
-      _units: new Map(),
-      _unitStates: new Map(),
-      _unitsByOwner: new Map(),
-      toDelete: new Set(),
-      invalidateNationalPoliticalView: () => {},
-      isValidCoord: (x: number, y: number) =>
-        x >= 0 && y >= 0 && x < 10 && y < 10,
-      ref: (x: number, y: number) => y * 10 + x,
-      hasOwner: (tile: number) => tile === 22,
-      owner: () => owner,
+  it("erases actual GameView ownership, placement and rendered state on E3 revocation", () => {
+    const view = makeGameView({
+      trustedProjection: true,
+      myClientID: "client-a",
     });
-    const self = {
-      id: () => "nation-a",
-      nameData: { x: 2, y: 2 },
-    } as PlayerView;
-    const enemy = {
-      id: () => "nation-b",
-      nameData: { x: 3, y: 3 },
-    } as PlayerView;
-    expect(view.trustedNameVisible(self)).toBe(true);
-    expect(view.trustedNameVisible(enemy)).toBe(false);
+    view.setTrustedPrincipal("nation-a");
+    view.markTrustedProjectionReady();
+    const gu = makeEmptyGu(1, {
+      packedTileUpdates: new Uint32Array([
+        22,
+        1 | (128 << 16),
+        33,
+        2 | (128 << 16),
+      ]),
+      playerNameViewData: {
+        "nation-a": makeNameViewData({ x: 2, y: 2 }),
+        "nation-b": makeNameViewData({ x: 3, y: 3 }),
+      },
+    });
+    gu.updates[GameUpdateType.Player] = [
+      makePlayerUpdate({ id: "nation-a" }),
+      {
+        type: GameUpdateType.Player,
+        id: "nation-b",
+        name: "B",
+        displayName: "B",
+        smallID: 2,
+        playerType: PlayerType.Human,
+        tilesOwned: 1,
+        isAlive: true,
+      },
+    ];
+    view.update(gu);
+    expect(view.trustedNameVisible(view.player("nation-a"))).toBe(true);
+    expect(view.trustedNameVisible(view.player("nation-b"))).toBe(true);
+    expect(view.frameData().names.size).toBe(2);
+    expect(view.player("nation-b").hasSpawned()).toBe(true);
     view.resetTrustedProjectionSight();
-    expect([...tiles].every((value) => value === 0)).toBe(true);
-    expect(names.size).toBe(0);
+    expect([...view.frameData().tileState].every((value) => value === 0)).toBe(
+      true,
+    );
+    expect(view.frameData().names.size).toBe(0);
     expect(view.trustedProjectionReady()).toBe(false);
-    expect(view.trustedNameVisible(self)).toBe(false);
+    expect(view.trustedNameVisible(view.player("nation-a"))).toBe(false);
+    expect(view.player("nation-b").nameData).toBeUndefined();
+    expect(view.terrainByte(33)).toBe(0);
+    expect(view.frameData().changedTiles).toBeNull();
   });
 
   it("merges only E3 current visible terrain pages into actual WebGL tile lanes", () => {

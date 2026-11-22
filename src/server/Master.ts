@@ -284,9 +284,13 @@ export async function startMaster() {
     );
   });
   const PORT = 3000;
-  server.listen(PORT, () => {
-    log.info(`Master HTTP server listening on port ${PORT}`);
-  });
+  server.listen(
+    PORT,
+    ServerEnv.localNationalStaging() ? "localhost" : undefined,
+    () => {
+      log.info(`Master HTTP server listening on port ${PORT}`);
+    },
+  );
 
   // Register with the API and keep checking in (docs/MultiServer.md,
   // "Server list v2"): the API's list is what clients read to find a

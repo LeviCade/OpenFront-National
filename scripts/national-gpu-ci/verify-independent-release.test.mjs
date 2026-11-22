@@ -77,6 +77,7 @@ function fixture() {
       reason: "SIGNED_WITNESS_NOT_VERIFIED",
       firstFailedStage: null,
       releaseCertified: false,
+      evidenceReadyForHostReview: true,
       exitCode: 0,
       stageComplete: true,
       reportPresent: true,
@@ -103,6 +104,7 @@ function fixture() {
     exactCandidateSha: sourceSha,
     lane: "release",
     releaseCertified: false,
+    evidenceReadyForHostReview: true,
     hostCleanupVerified: false,
     modes: modeReports,
   };
@@ -114,6 +116,7 @@ function fixture() {
       ),
     ),
     purpose: "skybot-gpu-preflight-v1",
+    mode: MODES[0],
     issuedAtMs: RUN_START,
     expiresAtMs: RUN_START + 60_000,
     host: {
@@ -170,6 +173,14 @@ function fixture() {
     now: NOW,
     summaryBytes: Buffer.from(JSON.stringify(summary)),
     preflight: wrap(preflight),
+    modePreflights: MODES.map((mode, index) =>
+      wrap({
+        ...preflight,
+        mode,
+        issuedAtMs: RUN_START + index * 1000,
+        expiresAtMs: RUN_START + index * 1000 + 60_000,
+      }),
+    ),
     postflight: null,
   };
   const sync = () => {
@@ -453,6 +464,39 @@ test("signed postflight-shaped object cannot replace a preflight", () => {
       verifyIndependentRelease(f.args).reason,
       "SIGNATURE_RUN_BINDING_MISMATCH",
     );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("missing, reordered, copied or forged mode-specific proofs cannot certify", () => {
+  const f = fixture();
+  try {
+    assert.equal(
+      verifyIndependentRelease({ ...f.args, modePreflights: [] }).reason,
+      "FOUR_MODE_PREFLIGHTS_MISSING",
+    );
+    const replacements = [
+      f.args.modePreflights[0],
+      f.args.modePreflights[2],
+      f.wrap({
+        ...f.args.modePreflights[1].payload,
+        issuedAtMs: RUN_START,
+      }),
+      f.wrap({
+        ...f.args.modePreflights[1].payload,
+        guest: { ...f.preflight.guest, webgl2ShaderPixel: [0, 0, 0, 0] },
+      }),
+      { ...f.args.modePreflights[1], signature: "A".repeat(86) + "==" },
+    ];
+    for (const replacement of replacements) {
+      const modePreflights = [...f.args.modePreflights];
+      modePreflights[1] = replacement;
+      assert.equal(
+        verifyIndependentRelease({ ...f.args, modePreflights }).accepted,
+        false,
+      );
+    }
   } finally {
     f.dispose();
   }

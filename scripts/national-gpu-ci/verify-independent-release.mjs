@@ -2,7 +2,7 @@
 /**
  * E6 external release verifier. MUST execute outside the Skybot GPU guest.
  * A guest-written JSON report is never a host attestation or a cleanup receipt.
- * This module verifies two independently signed, run-bound host observations
+ * This module verifies four per-mode preflights and signed host postflight
  * against out-of-guest key material and the reviewed E5 fingerprint enrollment.
  */
 import { createHash, createPublicKey, verify } from "node:crypto";
@@ -54,6 +54,7 @@ export function verifyIndependentRelease({
   summaryBytes,
   artifactRoot,
   preflight,
+  modePreflights,
   postflight,
   trustedPublicKeyPem,
   enrolledFingerprints,
@@ -212,6 +213,7 @@ export function verifyIndependentRelease({
     summary.exactCandidateSha !== expected.sourceSha ||
     summary.expectedSourceSha !== expected.sourceSha ||
     summary.releaseCertified !== false ||
+    summary.evidenceReadyForHostReview !== true ||
     summary.hostCleanupVerified !== false ||
     !isObject(summary.modes) ||
     Object.keys(summary.modes).length !== MODES.length
@@ -228,6 +230,49 @@ export function verifyIndependentRelease({
     before.guest.webgl1Renderer !== before.guest.renderer
   )
     return rejection("SIGNED_GPU_SHADER_EVIDENCE_INCOMPLETE");
+  // Verify every mode independently, not merely the host's first receipt.
+  if (
+    !Array.isArray(modePreflights) ||
+    modePreflights.length !== MODES.length ||
+    modePreflights[0]?.signature !== preflight.signature
+  )
+    return rejection("FOUR_MODE_PREFLIGHTS_MISSING");
+  let previousIssued = expected.runStartedAtMs - 30_001;
+  for (let index = 0; index < MODES.length; index++) {
+    const proof = modePreflights[index];
+    if (!verifySignature(proof))
+      return rejection("MODE_PREFLIGHT_SIGNATURE_INVALID_" + MODES[index]);
+    const p = proof.payload;
+    if (
+      !bind(p) ||
+      p.purpose !== "skybot-gpu-preflight-v1" ||
+      p.mode !== MODES[index] ||
+      !Number.isSafeInteger(p.issuedAtMs) ||
+      !Number.isSafeInteger(p.expiresAtMs) ||
+      p.issuedAtMs <= previousIssued ||
+      p.issuedAtMs > expected.jobCompletedAtMs ||
+      p.expiresAtMs <= p.issuedAtMs ||
+      p.expiresAtMs - p.issuedAtMs > 120_000 ||
+      p.expiresAtMs < expected.runStartedAtMs ||
+      p.host?.physicallyVerified !== true ||
+      p.host?.gpuAccessLeaseVerified !== true ||
+      p.host?.virglTransportVerified !== true ||
+      p.host?.virtualization !== "kvm" ||
+      p.host?.deviceVendorId !== host.deviceVendorId ||
+      p.host?.deviceId !== host.deviceId ||
+      p.host?.driver !== host.driver ||
+      p.host?.renderNode !== host.renderNode ||
+      p.guest?.hardwareBackedVerified !== true ||
+      p.guest?.backend !== "virgl" ||
+      !pixel(p.guest?.webgl1ShaderPixel) ||
+      !pixel(p.guest?.webgl2ShaderPixel) ||
+      typeof p.guest?.renderer !== "string" ||
+      !/virgl/i.test(p.guest.renderer) ||
+      p.guest.webgl1Renderer !== p.guest.renderer
+    )
+      return rejection("MODE_PREFLIGHT_INVALID_" + MODES[index]);
+    previousIssued = p.issuedAtMs;
+  }
   if (typeof artifactRoot !== "string" || !artifactRoot)
     return rejection("ARTIFACT_DIRECTORY_MISSING");
   const root = resolve(artifactRoot);
@@ -245,6 +290,7 @@ export function verifyIndependentRelease({
       report.reason !== "SIGNED_WITNESS_NOT_VERIFIED" ||
       report.firstFailedStage !== null ||
       report.releaseCertified !== false ||
+      report.evidenceReadyForHostReview !== true ||
       report.sourceMatches !== true ||
       report.exactSource !== expected.sourceSha ||
       report.reportPresent !== true ||
@@ -257,7 +303,8 @@ export function verifyIndependentRelease({
       report.actualViewport !== report.expectedViewport ||
       !isObject(report.hardware) ||
       report.hardware.diagnosticObserved !== true ||
-      report.hardware.renderer !== before.guest.renderer ||
+      report.hardware.renderer !==
+        modePreflights[MODES.indexOf(mode)].payload.guest.renderer ||
       !pixel(report.hardware.webgl1ShaderPixel) ||
       !pixel(report.hardware.webgl2ShaderPixel) ||
       !Array.isArray(report.screenshotNames) ||
@@ -334,6 +381,19 @@ if (
     if (process.env.GITHUB_ACTIONS === "true")
       throw Error("REFUSED_IN_GITHUB_ACTIONS_GUEST");
     const ctx = readJson(join(rootDir, "trusted-github-run-context.json"));
+    const receipt = readJson(
+      join(rootDir, "verified-artifacts", "import-receipt.json"),
+    );
+    if (
+      receipt.kind !== "skybot-github-artifact-custody-v1" ||
+      receipt.sourceSha !== ctx.sourceSha ||
+      String(receipt.runId) !== String(ctx.runId) ||
+      String(receipt.runAttempt) !== String(ctx.runAttempt) ||
+      String(receipt.jobId) !== String(ctx.jobId) ||
+      String(receipt.runnerId) !== String(ctx.runnerId) ||
+      receipt.challenge !== ctx.challenge
+    )
+      throw Error("HOST_ARTIFACT_CUSTODY_UNVERIFIED");
     const pinned = readJson(
       join(repoRoot, "scripts/national-qa/trusted-gpu-keys.json"),
     );
@@ -344,6 +404,9 @@ if (
       ),
       artifactRoot: join(rootDir, "verified-artifacts"),
       preflight: readJson(join(rootDir, "controller-preflight.json")),
+      modePreflights: MODES.map((mode) =>
+        readJson(join(rootDir, "controller-preflight-" + mode + ".json")),
+      ),
       postflight: readJson(join(rootDir, "controller-postflight.json")),
       trustedPublicKeyPem: readFileSync(
         join(rootDir, "host-public-key.pem"),
@@ -351,7 +414,11 @@ if (
       ),
       enrolledFingerprints: pinned.trustedEd25519PublicKeySha256,
       hostTrustedFingerprints: hosted.trustedEd25519PublicKeySha256,
-      expected: ctx,
+      expected: {
+        ...ctx,
+        runStartedAtMs: receipt.runStartedAtMs,
+        jobCompletedAtMs: receipt.jobCompletedAtMs,
+      },
     });
     output = checked;
   } catch {
