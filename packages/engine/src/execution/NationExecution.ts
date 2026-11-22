@@ -1014,6 +1014,20 @@ const NationStateSchema = z.object({
               }),
             )
             .max(64),
+          coercion: z.object({
+            observerId: z.string(),
+            processedOutcomeIds: z.array(z.string()).max(128),
+            issuerCredibility: z.array(z.object({
+              issuerId: z.string(),
+              score: z.number().int().min(-6).max(6),
+              lastObservedTick: z.number().int().nonnegative(),
+            })).max(16),
+            publicEmpireLand: z.array(z.object({
+              empireId: z.string(),
+              landPercent: z.number().nonnegative(),
+              lastObservedTick: z.number().int().nonnegative(),
+            })).max(16),
+          }).optional(),
         })
         .optional(),
     })
