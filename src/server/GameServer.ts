@@ -91,8 +91,8 @@ import {
 } from "./national/DurableNationalCheckpoint";
 import type { DurableNationalStore } from "./national/DurableNationalStore";
 import { isNationalSignedInAccount } from "./national/NationalAccountGate";
-import { hasTrustedNationalSocketOrigin } from "./national/NationalSocketOrigin";
 import { encodeNationalRecipientProjection } from "./national/NationalRecipientWire";
+import { hasTrustedNationalSocketOrigin } from "./national/NationalSocketOrigin";
 import { loadTrustedNationalMapFiles } from "./national/TrustedNationalMapFiles";
 import { TrustedNationalMatch } from "./national/TrustedNationalMatch";
 import { poolTargetFor } from "./PoolRouting";
@@ -584,9 +584,9 @@ export class GameServer {
             // Existing legacy sockets must prove current physical Origin
             // before promotion, not just sign in to an ordinary lobby.
             (this.gameConfig.nationalMode !== true &&
-              (this.clients.players().some(
-                (c) => !hasTrustedNationalSocketOrigin(c.ws),
-              ) ||
+              (this.clients
+                .players()
+                .some((c) => !hasTrustedNationalSocketOrigin(c.ws)) ||
                 this.clients.active().some((c) => c.spectator))) ||
             this.clients
               .players()

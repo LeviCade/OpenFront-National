@@ -167,16 +167,20 @@ describe("NATIONAL signed-account browser boundary", () => {
     };
     const untrusted = makeClient({ clientID: cid("replacementSocket") }).ws;
     expect(game.rejoinClient(untrusted, "verified-old")).toBe(true);
-    expect(game.handleIntent(
-      { type: "update_game_config", config: { nationalMode: true } },
-      actor,
-    ).status).toBe(403);
+    expect(
+      game.handleIntent(
+        { type: "update_game_config", config: { nationalMode: true } },
+        actor,
+      ).status,
+    ).toBe(403);
     expect(game.gameConfig.nationalMode).not.toBe(true);
     registerNationalSocketOrigin(untrusted, "http://localhost:9000");
-    expect(game.handleIntent(
-      { type: "update_game_config", config: { nationalMode: true } },
-      actor,
-    ).status).toBe(200);
+    expect(
+      game.handleIntent(
+        { type: "update_game_config", config: { nationalMode: true } },
+        actor,
+      ).status,
+    ).toBe(200);
   });
 
   it("does not restore superseded account roles on valid reconnect", () => {

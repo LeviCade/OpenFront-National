@@ -18,7 +18,7 @@ permissions:
 jobs:
   origin-and-source:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -77,3 +77,31 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           printf 'SOURCE_SHA=%s DURABLE=%s\n' "$EXPECTED_SHA" "$NATIONAL_TEST_DURABLE_RECOVERY"
           node --import tsx scripts/national-staging/worker-journey.mjs
+
+  full-source-regression:
+    name: Entire source test suite and production bundle on exact PR head
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Verify exact source, full regression, build, lint and formatting
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'SOURCE_SHA=%s FULL_SOURCE=1\n' "$EXPECTED_SHA"
+          npm test
+          npm run build-prod
+          npm run lint
+          npm run format:check

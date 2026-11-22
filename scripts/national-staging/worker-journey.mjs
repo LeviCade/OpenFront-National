@@ -520,7 +520,11 @@ try {
     const hostile = await peer(hostileOrigin);
     join(hostile, id, auth[3].jwt, 3);
     await until(() => hostile.closeCode !== null, "rejected cross-origin WSS");
-    assert.notEqual(hostile.closeCode, 1006, "hostile Origin normal network close");
+    assert.notEqual(
+      hostile.closeCode,
+      1006,
+      "hostile Origin normal network close",
+    );
     assert(!hostile.starts && hostile.lastProjectionTick === -1);
   }
   pass("untrusted-and-missing-Origins-denied-before-live-account-admission");

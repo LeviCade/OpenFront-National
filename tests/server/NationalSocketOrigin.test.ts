@@ -52,7 +52,10 @@ describe("NATIONAL physical WebSocket Origin admission", () => {
       expect(matchesNationalSocketOrigin(origin, hosted)).toBe(false);
     }
     expect(
-      matchesNationalSocketOrigin("http://localhost:9000.attacker.invalid", LOCAL_NATIONAL_ORIGINS),
+      matchesNationalSocketOrigin(
+        "http://localhost:9000.attacker.invalid",
+        LOCAL_NATIONAL_ORIGINS,
+      ),
     ).toBe(false);
   });
 });

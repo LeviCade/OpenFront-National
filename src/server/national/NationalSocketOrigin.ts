@@ -72,7 +72,8 @@ export function registerNationalSocketOrigin(
   socket: WebSocket,
   origin: string | undefined,
 ): void {
-  if (isAllowedNationalSocketOrigin(origin)) eligibleNationalSockets.add(socket);
+  if (isAllowedNationalSocketOrigin(origin))
+    eligibleNationalSockets.add(socket);
 }
 
 export function hasTrustedNationalSocketOrigin(socket: WebSocket): boolean {

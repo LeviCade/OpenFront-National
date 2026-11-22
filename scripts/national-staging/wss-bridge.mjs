@@ -14,25 +14,42 @@ export async function startNationalWssBridge(privateDir) {
   execFileSync(
     "openssl",
     [
-      "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-      "-days", "1", "-subj", "/CN=localhost",
-      "-addext", "subjectAltName=DNS:localhost",
-      "-keyout", key, "-out", cert,
+      "req",
+      "-x509",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-days",
+      "1",
+      "-subj",
+      "/CN=localhost",
+      "-addext",
+      "subjectAltName=DNS:localhost",
+      "-keyout",
+      key,
+      "-out",
+      cert,
     ],
     { stdio: ["ignore", "ignore", "ignore"] },
   );
   const sockets = new Set();
-  const tls = createServer({ key: readFileSync(key), cert: readFileSync(cert) }, (secure) => {
-    sockets.add(secure);
-    const backend = connect({ host: "localhost", port: 3001 });
-    sockets.add(backend);
-    const teardown = () => { secure.destroy(); backend.destroy(); };
-    secure.once("close", () => sockets.delete(secure));
-    backend.once("close", () => sockets.delete(backend));
-    secure.on("error", teardown);
-    backend.on("error", teardown);
-    secure.pipe(backend).pipe(secure);
-  });
+  const tls = createServer(
+    { key: readFileSync(key), cert: readFileSync(cert) },
+    (secure) => {
+      sockets.add(secure);
+      const backend = connect({ host: "localhost", port: 3001 });
+      sockets.add(backend);
+      const teardown = () => {
+        secure.destroy();
+        backend.destroy();
+      };
+      secure.once("close", () => sockets.delete(secure));
+      backend.once("close", () => sockets.delete(backend));
+      secure.on("error", teardown);
+      backend.on("error", teardown);
+      secure.pipe(backend).pipe(secure);
+    },
+  );
   await new Promise((resolve, reject) => {
     tls.once("error", reject);
     tls.listen(0, "localhost", resolve);
