@@ -89,12 +89,6 @@ export function verifyIndependentRelease({
     typeof trustedPublicKeyPem !== "string"
   )
     return rejection("OUT_OF_GUEST_TRUST_ROOT_NOT_ENROLLED");
-  const fingerprint = sha256(Buffer.from(trustedPublicKeyPem, "utf8"));
-  if (
-    !enrolledFingerprints.includes(fingerprint) ||
-    !hostTrustedFingerprints.includes(fingerprint)
-  )
-    return rejection("TRUST_ROOT_FINGERPRINT_MISMATCH");
   let key;
   try {
     key = createPublicKey(trustedPublicKeyPem);
@@ -102,6 +96,13 @@ export function verifyIndependentRelease({
   } catch {
     return rejection("INVALID_TRUSTED_ED25519_KEY");
   }
+  // Key identity is canonical SPKI DER, not formatting-dependent PEM text.
+  const fingerprint = sha256(key.export({ type: "spki", format: "der" }));
+  if (
+    !enrolledFingerprints.includes(fingerprint) ||
+    !hostTrustedFingerprints.includes(fingerprint)
+  )
+    return rejection("TRUST_ROOT_FINGERPRINT_MISMATCH");
   const verifySignature = (proof) => {
     if (
       !isObject(proof) ||
@@ -148,6 +149,7 @@ export function verifyIndependentRelease({
   if (
     !bind(before) ||
     !bind(after) ||
+    before.purpose !== "skybot-gpu-preflight-v1" ||
     after.purpose !== "skybot-gpu-postflight-v1"
   )
     return rejection("SIGNATURE_RUN_BINDING_MISMATCH");

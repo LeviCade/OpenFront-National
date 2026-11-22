@@ -209,10 +209,9 @@ test("host teardown must independently account for private logs, CPU slots and J
 test("synthetic Ed25519 signer respects independent dual enrollment and immutable bytes", () => {
   const keys = generateKeyPairSync("ed25519");
   const privatePem = keys.privateKey.export({ format: "pem", type: "pkcs8" });
-  const publicPem = keys.publicKey
-    .export({ format: "pem", type: "spki" })
-    .toString();
-  const fp = createHash("sha256").update(publicPem).digest("hex");
+  const fp = createHash("sha256")
+    .update(keys.publicKey.export({ type: "spki", format: "der" }))
+    .digest("hex");
   const payload = { sourceSha: SHA, runId: expected.runId, nonce: CHALLENGE };
   const signed = signedHostRecord(payload, privatePem, [fp], [fp]);
   assert.equal(
@@ -293,7 +292,9 @@ test("hardware signer contract refuses exportable fallback, wrong enrollment or 
   const publicPem = publicKey
     .export({ format: "pem", type: "spki" })
     .toString();
-  const fp = createHash("sha256").update(publicPem, "utf8").digest("hex");
+  const fp = createHash("sha256")
+    .update(publicKey.export({ type: "spki", format: "der" }))
+    .digest("hex");
   const payload = {
     jobId: expected.jobId,
     runId: expected.runId,
@@ -355,6 +356,7 @@ test("postflight requires four distinct signed, source-bound and non-replayed mo
   ].map((mode, index) => {
     const p = {
       version: 1,
+      purpose: "skybot-gpu-preflight-v1",
       mode,
       repository: REPOSITORY,
       repositoryId: REPOSITORY_ID,
@@ -408,4 +410,15 @@ test("postflight requires four distinct signed, source-bound and non-replayed mo
   rejectWith("FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED", () =>
     verifyFourModeHostProofs(forged, publicPem, expected, times),
   );
+});
+
+test("preflight phase is signed separately from postflight", () => {
+  const before = createHostPreflight(
+    expected,
+    { runStartedAtMs: NOW, jobCompletedAtMs: null },
+    { physicallyVerified: true },
+    { hardwareBackedVerified: true },
+    NOW + 1_000,
+  );
+  assert.equal(before.purpose, "skybot-gpu-preflight-v1");
 });
