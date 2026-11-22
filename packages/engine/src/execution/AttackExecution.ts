@@ -74,7 +74,11 @@ export class AttackExecution implements Execution {
     private imperialOrder: boolean = false,
   ) {}
 
-  static forImperialOrder(troops: number, member: Player, target: PlayerID): AttackExecution {
+  static forImperialOrder(
+    troops: number,
+    member: Player,
+    target: PlayerID,
+  ): AttackExecution {
     return new AttackExecution(troops, member, target, null, true, null, true);
   }
 
