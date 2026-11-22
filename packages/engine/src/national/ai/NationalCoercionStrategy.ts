@@ -226,7 +226,8 @@ export function assessImperialShelter(
     return (
       enemy !== undefined &&
       (sides.enemies.has(id) ||
-        (observedMilitaryOwners.has(id) && enemy.landPercent > self.landPercent * 1.5))
+        (observedMilitaryOwners.has(id) &&
+          enemy.landPercent > self.landPercent * 1.5))
     );
   });
   const threat = Math.max(
