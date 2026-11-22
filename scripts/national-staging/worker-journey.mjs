@@ -2,6 +2,7 @@
 // Automated protocol participants are NOT independently witnessed humans.
 import { GameMapSize, GameMapType } from "@openfront/engine-api/game/GameTypes";
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
+import { decodeSnapshotValue, encodeSnapshotValue } from "@openfront/engine/snapshot/SnapshotCodec";
 import { loadTerrainMap } from "@openfront/engine-lib/game/TerrainMapLoader";
 import {
   createGameWireContext,
@@ -56,6 +57,41 @@ function durableRow(id) {
     return { tick: row.tick, commitment: digest, replayDigest: data.state.replayDigest, generation: row.generation };
   } finally { db.close(); }
 }
+async function assertWorkerRefusal(root, reason) {
+  const child = launch(
+    ["--import", "tsx", "--input-type=module", "-e", "import { startWorker } from './src/server/Worker.ts'; await startWorker();"],
+    { ...fixture.env, NATIONAL_RECOVERY_ROOT: root, WORKER_ID: "0" },
+  );
+  try {
+    await until(() => child.messages.some(m => m.message === "NATIONAL durable recovery refused"), "explicit competing or incompatible Worker refusal", 20_000);
+    const refusal = child.messages.find(m => m.message === "NATIONAL durable recovery refused");
+    assert.equal(refusal.reason, reason);
+    assert(!child.messages.some(m => m.message === "NATIONAL durable match restored" || m.message.startsWith("running on http://localhost:")));
+  } finally {
+    await child.stop();
+  }
+}
+
+async function assertCorruptWorkerRefusal(id, name, alter, reason, recalculate = true) {
+  const root = joinPath(fixture.dir, "fault-" + name);
+  execFileSync(process.execPath, ["--experimental-strip-types", "scripts/national-staging/init-durable-world.mjs", root, "1"], { env: fixture.env, stdio: ["ignore", "pipe", "pipe"] });
+  const original = new DatabaseSync(joinPath(worldRoot, "worker-0.sqlite"), { readOnly: true });
+  let row;
+  try {
+    row = original.prepare("SELECT * FROM checkpoints WHERE gameID = ?").get(id);
+  } finally { original.close(); }
+  assert(row);
+  const data = JSON.parse(row.payload);
+  alter(data);
+  const payload = JSON.stringify(data);
+  const digest = recalculate ? createHash("sha256").update(JSON.stringify([1, id, row.generation, row.tick, payload])).digest("hex") : row.digest;
+  const clone = new DatabaseSync(joinPath(root, "worker-0.sqlite"));
+  try {
+    clone.prepare("INSERT INTO checkpoints(gameID, generation, tick, payload, digest) VALUES (?, ?, ?, ?, ?)").run(id, row.generation, row.tick, payload, digest);
+  } finally { clone.close(); }
+  await assertWorkerRefusal(root, reason);
+}
+
 const hostUrl = "http://localhost:3001";
 const peers = [];
 let identity;
@@ -772,6 +808,15 @@ try {
     assert.equal(restored[0].replayDigest, disk.replayDigest);
     const restoreElapsedMs = Math.round(performance.now() - startedRecovery);
     pass("same-game-restored-exact-independent-disk-commitment");
+
+    setStage("actual competing Worker and semantic fault clones");
+    await assertWorkerRefusal(worldRoot, "shard-already-owned");
+    await assertCorruptWorkerRefusal(id, "checksum", d => { d.state.replayDigest = "0".repeat(64); }, "NATIONAL invalid checkpoint integrity", false);
+    await assertCorruptWorkerRefusal(id, "source", d => { d.source = "0".repeat(40); }, "NATIONAL incompatible durable checkpoint");
+    await assertCorruptWorkerRefusal(id, "map", d => { d.mapDigest = "0".repeat(64); }, "NATIONAL durable map mismatch");
+    await assertCorruptWorkerRefusal(id, "version", d => { const snap = decodeSnapshotValue(Buffer.from(d.snapshot, "base64")); snap.format = 999; d.snapshot = Buffer.from(encodeSnapshotValue(snap)).toString("base64"); }, "NATIONAL trusted snapshot header incompatible");
+    assert.equal(durableRow(id).commitment, disk.commitment);
+    pass("actual-competing-worker-checksum-source-map-snapshot-rejections");
 
     setStage("foreign, banned, spectator and unavailable identity recovery denial");
     const foreign = await peer();
