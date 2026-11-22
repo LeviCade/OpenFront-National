@@ -158,15 +158,20 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     ship.move(center);
     expect(visible(game, BUYER.id, ship.id())).toBeDefined();
 
-    const initial = collectLiveNationalObservation(game, BUYER.id).observation;
-    const memory = advanceLastKnown(initial, null, 60).memory;
-    for (let tick = game.ticks(); tick <= lease.expiresAtTick; tick++)
+    // Observe on the LAST authorized tick, then cross exactly ONE tick
+    // to expiry. Prior memory would otherwise last another 60 ticks.
+    while (game.ticks() < lease.expiresAtTick - 1)
       game.executeNextTick();
+    const lastLawful = collectLiveNationalObservation(game, BUYER.id).observation;
+    expect(lastLawful.visibleAssets.some((asset) => asset.id === String(factory.id()))).toBe(true);
+    const memory = advanceLastKnown(lastLawful, null, 60).memory;
+    game.executeNextTick();
+    expect(game.ticks()).toBe(lease.expiresAtTick);
     expect(visible(game, BUYER.id, factory.id())).toBeUndefined();
     expect(visible(game, BUYER.id, ship.id())).toBeUndefined();
     const expired = collectLiveNationalObservation(game, BUYER.id).observation;
     expect(advanceLastKnown(expired, memory, 60).stale).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: String(ship.id()) })]),
+      expect.arrayContaining([expect.objectContaining({ id: String(factory.id()) })]),
     );
     expect(packetHasUnit(packet(game, BUYER.clientID!), ship.id())).toBe(false);
     expect(game.nationalReconnaissanceFor(BUYER.id)).toEqual([]);
@@ -217,6 +222,14 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     } finally {
       spy.mockRestore();
     }
+    // Genuine Game-owned dissolution (not a mocked membership). The
+    // purchased grant remains buyer-owned but the former ally loses rights.
+    game.performNationalImperialAdministration(buyer, {
+      kind: "dissolve", empireId: "recon_empire",
+    });
+    expect(game.nationalPoliticalAuthority()?.empireOf(ALLY.id)).toBeNull();
+    expect(visible(game, ALLY.id, factory.id())).toBeUndefined();
+    expect(visible(game, BUYER.id, factory.id())?.source).toBe("recon");
   });
 
   it("stamps payer from Game's actual human session, rejects forgery and malformed or unfunded commands, and preserves replay rejection", async () => {
