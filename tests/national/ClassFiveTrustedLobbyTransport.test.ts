@@ -325,8 +325,7 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
     expect(two.game.hasEnded()).toBe(false);
     expect(
       sent(duplicate).some(
-        (m) =>
-          m.type === "national_start" || m.type === "national_projection",
+        (m) => m.type === "national_start" || m.type === "national_projection",
       ),
     ).toBe(false);
   });
