@@ -106,6 +106,7 @@ export function decodeNationalObserverNativeUnits(value: unknown): Float64Array 
 }
 
 interface NativeLanes {
+  readonly tick?: unknown;
   readonly packedTileUpdates?: unknown;
   readonly packedUnitUpdates?: unknown;
   readonly packedMissileTimers?: unknown;

@@ -184,6 +184,7 @@ function pageFromWire(
 export class NationalObserverMapContinuity {
   private streamId: string | null = null;
   private lastTick = -1;
+  private observerSmallId = -1;
   private sweepId = 0;
   private sweepTick = -1;
   private nextCursor: number | null = null;
@@ -257,6 +258,8 @@ export class NationalObserverMapContinuity {
       (page.width !== this.width || page.height !== this.height)
     )
       throw new Error("NATIONAL map dimensions changed without new start");
+    if (this.lastTick >= 0 && page.observerSmallId !== this.observerSmallId)
+      throw new Error("NATIONAL observer identity changed without new start");
     if (this.lastTick < 0) {
       if (
         !page.reset ||
@@ -367,6 +370,7 @@ export class NationalObserverMapContinuity {
     for (const unit of page.units) this.seenUnitsInSweep.add(unit.id);
     this.streamId = page.streamId;
     this.lastTick = page.tick;
+    this.observerSmallId = page.observerSmallId;
     this.sweepId = page.sweepId;
     this.sweepTick = page.sweepTick;
     this.nextCursor = page.nextCursor;

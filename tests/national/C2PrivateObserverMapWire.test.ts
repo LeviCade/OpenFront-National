@@ -612,6 +612,7 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     const native = packet.packedUnitUpdates as unknown[];
     expect(native[OFFSET_TARGET_TILE]).toBeNull();
     const fresh = new NationalObserverMapContinuity(A.id, one.map.streamId);
+    expect(() => new NationalObserverMapContinuity(A.id, "old-stream").acceptProjection(packet)).toThrow();
     for (const [offset, value] of [[OFFSET_TARGET_TILE, 123], [OFFSET_TROOPS, 9876543]] as const) {
       const forged = [...native];
       forged[offset] = value;
@@ -781,6 +782,7 @@ describe("C4 E3 continuous authoritative churn", () => {
     let hostMs = 0;
     let producerMs = 0;
     let reconcileMs = 0;
+    let revokedDisclosures = 0;
     const profilers = P.map(
       (p) => new NationalObserverMapPager(game, p.id, "profile-" + p.id),
     );
@@ -789,6 +791,7 @@ describe("C4 E3 continuous authoritative churn", () => {
     for (let frame = 0; frame < 8; frame++) {
       if (frame % 2 === 1) b.conquer(remote);
       else if (frame > 0) a.conquer(remote);
+      units[0].move(game.ref(frame % 2 === 0 ? 20 : 21, 20));
       const started = performance.now();
       host.tick();
       hostMs += performance.now() - started;
@@ -808,6 +811,12 @@ describe("C4 E3 continuous authoritative churn", () => {
         for (const [ref] of delta.tiles)
           expect(sight.visibleTiles.has(ref)).toBe(true);
         if (i !== 0) continue;
+        for (const ref of known) {
+          if (!sight.visibleTiles.has(ref)) {
+            expect(readers[i].tileStatus(ref)).toBe("revoked");
+            revokedDisclosures++;
+          }
+        }
         if (delta.clearAllTiles) {
           known.clear();
           resets++;
@@ -853,6 +862,8 @@ describe("C4 E3 continuous authoritative churn", () => {
         reconcileMs,
         peakHeapDelta: peakHeap - startHeap,
         permanentlyUnseenUnits: 0,
+        revokedDisclosures,
+        maxRevocationDelayFrames: revokedDisclosures > 0 ? 0 : null,
       }),
     );
   });

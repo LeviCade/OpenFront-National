@@ -168,32 +168,34 @@ export class NationalObserverMapPager {
 
     // Filter before slicing! The old implementation sliced the first 2048
     // candidates and could silently omit authorized later units forever.
-    const currentUnits = new Map(
-      verified.observation.visibleAssets
-        .filter(
-          (asset) =>
-            Number.isSafeInteger(Number(asset.id)) &&
-            Number(asset.id) >= 0 &&
-            Number(asset.id) <= 0xffffffff &&
-            map.isValidCoord(asset.x, asset.y) &&
-            visible.has(map.ref(asset.x, asset.y)),
-        )
-        .map((asset) => [Number(asset.id), asset] as const),
-    );
-    const nowIds = new Set(currentUnits.keys());
+    const currentUnits = new Map<
+      number,
+      LiveNationalObservation["observation"]["visibleAssets"][number]
+    >();
+    for (const asset of verified.observation.visibleAssets) {
+      const id = Number(asset.id);
+      if (
+        Number.isSafeInteger(id) &&
+        id >= 0 &&
+        id <= 0xffffffff &&
+        map.isValidCoord(asset.x, asset.y) &&
+        visible.has(map.ref(asset.x, asset.y))
+      )
+        currentUnits.set(id, asset);
+    }
     if (this.unitCursor === 0) {
-      const sorted = [...nowIds].sort((a, b) => a - b);
+      const sorted = [...currentUnits.keys()].sort((a, b) => a - b);
       if (sorted.length > NATIONAL_OBSERVER_MAX_TRACKED_UNITS) {
         // Rotate the bounded window instead of permanently excluding high IDs.
         let offset = sorted.findIndex((id) => id > this.unitWindowAnchor);
         if (offset < 0) offset = 0;
-        const window = sorted.slice(
+        let window = sorted.slice(
           offset,
           offset + NATIONAL_OBSERVER_MAX_TRACKED_UNITS,
         );
         if (window.length < NATIONAL_OBSERVER_MAX_TRACKED_UNITS)
-          window.push(
-            ...sorted.slice(
+          window = window.concat(
+            sorted.slice(
               0,
               NATIONAL_OBSERVER_MAX_TRACKED_UNITS - window.length,
             ),
@@ -317,11 +319,11 @@ export class NationalObserverMapPager {
       unitNextCursor,
       unitSweepId: this.unitSweepId,
       unitPageSlots: unitPageIds.length,
-      unitPartial: this.emittedUnits.size !== nowIds.size,
+      unitPartial: this.emittedUnits.size !== currentUnits.size,
       unitReset,
       unitRemovedIds: unitReset ? [] : removed,
-      unitsTruncated: nowIds.size > NATIONAL_OBSERVER_MAX_UNITS,
-      unitOverflow: nowIds.size > NATIONAL_OBSERVER_MAX_TRACKED_UNITS,
+      unitsTruncated: currentUnits.size > NATIONAL_OBSERVER_MAX_UNITS,
+      unitOverflow: currentUnits.size > NATIONAL_OBSERVER_MAX_TRACKED_UNITS,
       visibleBorders: verified.observation.frontiers.map((frontier) => ({
         targetId: frontier.targetId,
         access: frontier.access,
