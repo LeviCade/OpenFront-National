@@ -35,6 +35,7 @@ jobs:
       - name: Whole-project typecheck
         run: npm run typecheck
       - name: Authoritative political gameplay and regression tests
+        if: success() || failure()
         run: |
           npx --no-install vitest run --project node \
             tests/national/C5AIPoliticalStrategy.test.ts \
@@ -49,14 +50,24 @@ jobs:
       - name: Verify E4 touched files format
         if: success() || failure()
         run: |
-          npx --no-install oxfmt --check \
-            packages/engine/src/national/ai/NationalPoliticalStrategy.ts \
-            packages/engine/src/national/politics/PoliticalAuthorityAdapter.ts \
-            packages/engine/src/national/observation/LiveObservation.ts \
-            packages/engine/src/national/observation/NationalObservation.ts \
-            packages/engine/src/execution/NationExecution.ts \
-            tests/national/C5AIPoliticalStrategy.test.ts \
+          FILES=(
+            packages/engine/src/national/ai/NationalPoliticalStrategy.ts
+            packages/engine/src/national/politics/PoliticalAuthorityAdapter.ts
+            packages/engine/src/national/observation/LiveObservation.ts
+            packages/engine/src/national/observation/NationalObservation.ts
+            packages/engine/src/execution/NationExecution.ts
+            tests/national/C5AIPoliticalStrategy.test.ts
             tests/national/C5AIPoliticalGame.test.ts
+          )
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            for path in "${FILES[@]}"; do
+              printf 'C5AI_FORMAT_BEGIN:%s\n' "$path"
+              base64 -w76 "$path" | sed 's/^/C5AI_BASE64:/'
+              printf 'C5AI_FORMAT_END:%s\n' "$path"
+            done
+            exit 1
+          fi
       - name: Production compile
         if: success() || failure()
         run: npm run build-prod
