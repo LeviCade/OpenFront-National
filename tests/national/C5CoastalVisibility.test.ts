@@ -481,14 +481,52 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     // warship anchor but failed to authorize its very own tile; the native
     // map pager consequently dropped its otherwise approved marker.
     expect(verified.visibleTiles.has(offshore)).toBe(true);
-    const page = new NationalObserverMapPager(
+    const pager = new NationalObserverMapPager(
       game,
       VIEWER.id,
       "c5-e6-isolated-offshore",
-    ).page(verified);
+    );
+    const page = pager.page(verified);
     expect(page.units.some(
       (unit) => unit.id === owned.id() && unit.tile === offshore,
     )).toBe(true);
-    console.info("[C5 FOG-04 own-sea] warshipId=" + ownId + " tile=" + offshore);
+
+    // Exact default map-tile Euclidean threshold: x=1 warship sees x=201
+    // (200 tiles), but never x=202 (201 tiles) on genuine ocean terrain.
+    const justInside = game.ref(201, 1);
+    const justOutside = game.ref(202, 1);
+    expect(game.isLand(justInside)).toBe(false);
+    expect(game.isLand(justOutside)).toBe(false);
+    const foreignShip = game.player(OUTSIDER.id).buildUnit(
+      UnitType.TransportShip,
+      justOutside,
+      { troops: 1_234_567 },
+    );
+    expect(collectLiveNationalObservation(game, VIEWER.id).observation.visibleAssets.some(
+      (asset) => asset.id === String(foreignShip.id()),
+    )).toBe(false);
+    foreignShip.move(justInside);
+    game.executeNextTick();
+    const inside = collectLiveNationalObservation(game, VIEWER.id);
+    expect(inside.observation.visibleAssets.find(
+      (asset) => asset.id === String(foreignShip.id()),
+    )?.source).toBe("warship");
+    const acquired = pager.page(inside);
+    expect(acquired.units.some((unit) => unit.id === foreignShip.id())).toBe(true);
+    foreignShip.move(justOutside);
+    game.executeNextTick();
+    const outside = collectLiveNationalObservation(game, VIEWER.id);
+    expect(outside.observation.visibleAssets.some(
+      (asset) => asset.id === String(foreignShip.id()),
+    )).toBe(false);
+    const revoked = pager.page(outside);
+    expect(revoked.unitRemovedIds).toContain(foreignShip.id());
+    console.info(
+      "[C5 FOG-04 own-sea] warshipId=" + ownId
+      + " tile=" + offshore
+      + " exactInside=" + justInside
+      + " exactOutside=" + justOutside
+      + " foreignShipId=" + foreignShip.id(),
+    );
   });
 });
