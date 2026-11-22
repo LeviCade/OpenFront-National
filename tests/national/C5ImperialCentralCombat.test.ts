@@ -1,5 +1,6 @@
 import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
+import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
@@ -256,6 +257,60 @@ describe("C5 M5 centralized real imperial combat", () => {
     expect(snapshotGameData(restored).game).toEqual(
       snapshotGameData(game).game,
     );
+  });
+
+  it("deploys genuine pooled defenders, executes enemy attack, then blocks all imperial assaults after peace", async () => {
+    const game = await spawned();
+    makeRealBorder(game);
+    declareImperialWar(game);
+    const north = game.player(N),
+      south = game.player(S),
+      west = game.player(W);
+    north.setTroops(500);
+    south.setTroops(5000);
+    west.setTroops(2000);
+    centralize(game);
+    expect(pool(game)).toBe(5500n);
+    game.performNationalImperialAdministration(north, {
+      kind: "release-imperial-troops",
+      empireId,
+      memberId: S,
+      amount: 1200,
+    });
+    expect(south.troops()).toBe(1200);
+    expect(pool(game)).toBe(4300n);
+    // The defending troops now live exclusively in the real south Player,
+    // rather than existing twice in the imperial reserve and player.
+    game.addExecution(new AttackExecution(1000, west, S));
+    tickRunner(game, 1);
+    expect(west.troops()).toBeLessThan(2000);
+    expect(south.isAlive()).toBe(true);
+    expect(pool(game)).toBeGreaterThanOrEqual(4300n);
+    game.performNationalWarCommand(north, {
+      kind: "propose-peace",
+      motionId: "c5-e1-defensive-peace",
+      warId: "c5-e1-war",
+    });
+    game.performNationalWarCommand(west, {
+      kind: "accept-peace",
+      motionId: "c5-e1-defensive-peace",
+    });
+    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(S, W)).toBe(
+      false,
+    );
+    const before = pool(game);
+    expect(() =>
+      game.performNationalImperialAdministration(north, {
+        kind: "imperial-attack",
+        empireId,
+        memberId: S,
+        targetId: W,
+        amount: 200,
+      }),
+    ).toThrow(/WAR target/);
+    expect(pool(game)).toBe(before);
+    const { restored } = await roundTrip(game, "plains");
+    expect(pool(restored)).toBe(before);
   });
 
   it("rejects unauthorized stamped subordinate attack with no side effects", async () => {
