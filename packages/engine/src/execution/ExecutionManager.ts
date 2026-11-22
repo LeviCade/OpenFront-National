@@ -78,6 +78,14 @@ export class Executor {
           intent.clientID,
         );
       }
+      case "national_betray_pact":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          { kind: "betray-pact", pactId: intent.pactId },
+          intent.requestId,
+          intent.clientID,
+        );
       case "national_found_pact":
         return new NationalFoundEmpireExecution(
           player,

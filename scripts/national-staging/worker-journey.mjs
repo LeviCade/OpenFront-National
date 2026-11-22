@@ -475,6 +475,34 @@ try {
     true,
   );
   pass("real-worker-pact-founding-invitation-consent-and-outsider-denial");
+  await pactReceipt(
+    2,
+    {
+      type: "national_betray_pact",
+      pactId,
+      requestId: "c4c2-pact-outsider-exit",
+    },
+    false,
+  );
+  await pactReceipt(
+    1,
+    {
+      type: "national_betray_pact",
+      pactId,
+      requestId: "c4c2-pact-sovereign-exit",
+    },
+    true,
+  );
+  await pactReceipt(
+    1,
+    {
+      type: "national_betray_pact",
+      pactId,
+      requestId: "c4c2-pact-double-exit",
+    },
+    false,
+  );
+  pass("real-worker-nonwaivable-pact-exit-and-repeated-exit-denial");
 
   const requests = ["e2-local-alpha", "e2-local-bravo", "e2-local-charlie"];
   send(players[0], {
