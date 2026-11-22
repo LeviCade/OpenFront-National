@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: c4-e2-operational-${{ github.event.pull_request.number || github.ref }}
+  group: c4-e2-operational-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -80,3 +80,27 @@ jobs:
             exit 1
           fi
           npx --no-install oxlint "${FILES[@]}"
+  browser-auth:
+    name: Three actual isolated Chromium account UI sessions (CPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Ordinary UI authentication and cookie-only reload
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
+          node scripts/national-staging/browser-auth-check.mjs

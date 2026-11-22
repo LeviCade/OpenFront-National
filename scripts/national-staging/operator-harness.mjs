@@ -64,8 +64,8 @@ export function accountCommand(env, command, email) {
   });
 }
 
-export function launch(args, env) {
-  const child = spawn(process.execPath, args, {
+export function launch(args, env, executable = process.execPath) {
+  const child = spawn(executable, args, {
     env,
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],
