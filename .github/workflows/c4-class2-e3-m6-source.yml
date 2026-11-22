@@ -39,3 +39,14 @@ jobs:
       - name: Existing real war and AI behavior
         if: success() || failure()
         run: npx --no-install vitest run --project node tests/national/NationalAIRealWar.test.ts tests/national/ConductorThreeAuthoritativeCombat.test.ts
+      - name: Existing legacy train, trade, embargo and naval regressions
+        if: success() || failure()
+        run: >-
+          npx --no-install vitest run --project node
+          tests/core/game/TrainStation.test.ts
+          tests/core/executions/TrainExecution.test.ts
+          tests/core/executions/TradeShipExecution.test.ts
+          tests/core/executions/EmbargoAllExecution.test.ts
+          tests/Warship.test.ts
+          tests/WarshipVeterancy.test.ts
+          tests/TradeTrainGolden.test.ts

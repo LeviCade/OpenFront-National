@@ -9,8 +9,11 @@ import { NationalSanctionExecution } from "@openfront/engine/execution/NationalS
 import { PortExecution } from "@openfront/engine/execution/PortExecution";
 import { ShellExecution } from "@openfront/engine/execution/ShellExecution";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
+import { TrainExecution } from "@openfront/engine/execution/TrainExecution";
 import { WarshipExecution } from "@openfront/engine/execution/WarshipExecution";
 import type { Game, Player, Unit } from "@openfront/engine/game/Game";
+import { Railroad } from "@openfront/engine/game/Railroad";
+import { TrainStation } from "@openfront/engine/game/TrainStation";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
@@ -625,6 +628,113 @@ describe("C4 Class 2 E3 real NATIONAL economic and maritime execution", () => {
     expect(ship.owner()).toBe(c);
     expect(balances(game)).toEqual(before);
     witness(game, "NAV-02-no-home", before, ship);
+  });
+
+  it("real moving trains pay both stations in peace but not through NATIONAL war", async () => {
+    const { game, a, b } = await fixture();
+    const railTiles = Array.from({ length: 12 }, (_, y) =>
+      game.ref(3, y + 1),
+    );
+    a.conquer(railTiles[0]);
+    b.conquer(railTiles[railTiles.length - 1]);
+    const source = new TrainStation(
+      game,
+      a.buildUnit(UnitType.City, railTiles[0], {}),
+    );
+    const destination = new TrainStation(
+      game,
+      b.buildUnit(UnitType.City, railTiles[railTiles.length - 1], {}),
+    );
+    const network = game.railNetwork();
+    network.stationManager().addStation(source);
+    network.stationManager().addStation(destination);
+    const rail = new Railroad(source, destination, railTiles, 1);
+    source.addRailroad(rail);
+    destination.addRailroad(rail);
+    const before = balances(game);
+    const peaceful = new TrainExecution(network, a, source, destination, 1);
+    game.addExecution(peaceful);
+    until(game, () => !peaceful.isActive());
+    expect(a.trainGold()).toBeGreaterThan(0n);
+    expect(b.trainGold()).toBe(a.trainGold());
+    expect(a.gold() - before[0].gold).toBe(a.trainGold());
+    expect(b.gold() - before[1].gold).toBe(b.trainGold());
+
+    const running = new TrainExecution(network, a, source, destination, 1);
+    game.addExecution(running);
+    ticks(game, 2);
+    expect(running.isActive()).toBe(true);
+    expect(a.units(UnitType.Train).length).toBeGreaterThan(0);
+    const atWar = balances(game);
+    war(game);
+    until(game, () => !running.isActive());
+    expect(balances(game)).toEqual(atWar);
+    witness(game, "ECON-01-rail", before, undefined);
+  });
+
+  it("ECON-04: a current emperor can enforce through actual member policy", async () => {
+    const { game, a, b, c, d, home, other } = await fixture();
+    game.performNationalCommand(a, {
+      kind: "found-empire",
+      empireId: "e3-enforce-empire",
+    });
+    game.performNationalCommand(a, {
+      kind: "offer-empire",
+      empireId: "e3-enforce-empire",
+      candidateId: D,
+    });
+    game.performNationalCommand(d, {
+      kind: "accept-empire",
+      empireId: "e3-enforce-empire",
+      candidateId: D,
+    });
+    const before = balances(game);
+    game.addExecution(
+      new NationalSanctionExecution(a, {
+        type: "national_issue_sanction",
+        scope: "imperial",
+        targetId: B,
+        recipientIds: [C],
+        durationTicks: 5,
+        requestId: "e3-emperor-enforce",
+      }),
+    );
+    ticks(game, 2);
+    const id = NationalSanctionExecution.viewFor(game, a)[0].id;
+    until(
+      game,
+      () =>
+        NationalSanctionExecution.viewFor(game, a)[0].phase ===
+        "decision-required",
+    );
+    game.addExecution(
+      new NationalSanctionExecution(d, {
+        type: "national_resolve_sanction",
+        sanctionId: id,
+        decision: "enforce",
+        requestId: "e3-subordinate-enforce",
+      }),
+    );
+    ticks(game, 2);
+    expect(d.canTrade(c)).toBe(true);
+    expect(a.canTrade(c)).toBe(true);
+    game.addExecution(
+      new NationalSanctionExecution(a, {
+        type: "national_resolve_sanction",
+        sanctionId: id,
+        decision: "enforce",
+        requestId: "e3-authorized-enforce",
+      }),
+    );
+    ticks(game, 2);
+    expect(a.canTrade(c)).toBe(false);
+    expect(d.canTrade(c)).toBe(false);
+    expect(c.canTrade(b)).toBe(true);
+    expect(sail(game, c, home, other).isActive()).toBe(false);
+    expect(balances(game)).toEqual(before);
+    expect(game.nationalWarAuthority()?.atWar(C, A)).toBe(false);
+    expect(game.nationalWarAuthority()?.atWar(C, D)).toBe(false);
+    witness(game, "ECON-04-imperial-enforcement", before, undefined);
   });
 
   it("AI-07: actual NationExecution voluntarily protects its observed merchant relationship", async () => {
