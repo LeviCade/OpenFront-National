@@ -284,8 +284,11 @@ describe("C5 M5 centralized real imperial combat", () => {
         }),
       ),
     );
-    tickRunner(game, 1);
+    // Political executions initialize before tick(); two runner turns prove
+    // that the actual stamped subordinate order reaches the journal.
+    tickRunner(game, 2);
     expect(pool(game)).toBeGreaterThanOrEqual(baseline);
+    expect(game.player(S).troops()).toBe(0);
     expect(game.nationalPoliticalCommandResults(game.player(S))).toContainEqual(
       expect.objectContaining({
         requestId: "c5-subordinate-denied",
