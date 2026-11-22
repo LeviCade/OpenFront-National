@@ -144,19 +144,25 @@ describe("C2 E5 proof rejects optimistic browser and release claims", () => {
   });
   it("rejects a mobile viewport which did not dispatch CDP touch", () => {
     const report = proof("legacy-mobile");
-    report.events = report.events.filter((e) => e.name !== "actual-touch-input");
+    report.events = report.events.filter(
+      (e) => e.name !== "actual-touch-input",
+    );
     const verdict = result("legacy-mobile", report);
     expect(verdict.gameplay).toBe("FAIL");
-    expect(verdict.checksFailed.some((e) =>
-      e.code === "ACTUAL_POINTER_OR_TOUCH_DISPATCH_MISSING",
-    )).toBe(true);
+    expect(
+      verdict.checksFailed.some(
+        (e) => e.code === "ACTUAL_POINTER_OR_TOUCH_DISPATCH_MISSING",
+      ),
+    ).toBe(true);
   });
   it("preserves a sanitized real stage timeout as the first failure", () => {
     const report = proof("national-solo-desktop");
-    report.errors = [{
-      stage: "start",
-      error: "TIMED_OUT: authoritative evidence",
-    }];
+    report.errors = [
+      {
+        stage: "start",
+        error: "TIMED_OUT: authoritative evidence",
+      },
+    ];
     report.events.push({ name: "stage-failed", stage: "start" });
     const verdict = result("national-solo-desktop", report);
     expect(verdict.firstFailure.code).toBe("TIMED_OUT: authoritative evidence");
@@ -166,8 +172,9 @@ describe("C2 E5 proof rejects optimistic browser and release claims", () => {
     const report = proof("legacy-desktop");
     report.exactSource = "f".repeat(40);
     report.errors = [{ stage: "boot", error: "SPAWN_ACCEPTANCE_FAILURE" }];
-    expect(result("legacy-desktop", report).firstFailure.code)
-      .toBe("SOURCE_SHA_MISMATCH_OR_MISSING");
+    expect(result("legacy-desktop", report).firstFailure.code).toBe(
+      "SOURCE_SHA_MISMATCH_OR_MISSING",
+    );
   });
   it("rejects missing error arrays rather than assuming no browser exception", () => {
     const report = proof("legacy-desktop");
