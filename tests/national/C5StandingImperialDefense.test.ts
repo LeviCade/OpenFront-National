@@ -377,6 +377,62 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
   });
 
+  it("rejects direct synthetic attack receipts and forged troop size before charging a donor or creating WAR", async () => {
+    const game = await found();
+    setResponse(game, "both");
+    game.player(DONOR).setTroops(reserve(game) + 50_000);
+    game.player(ENEMY).setTroops(50_000);
+    const read = () => ({
+      donors: game.player(DONOR).troops(),
+      processed: ledger(game).levy.processed,
+      wars: imperialLayers(game),
+    });
+    const ingress = game as Game & {
+      interceptNationalIncomingAttack(
+        attackId: string,
+        attackerId: string,
+        defenderId: string,
+        troops: number,
+      ): unknown;
+    };
+    const before = read();
+    expect(() =>
+      ingress.interceptNationalIncomingAttack(
+        "forged-not-a-real-attack", ENEMY, MEMBER, 50_000,
+      ),
+    ).toThrow(/real accepted invading army/);
+    expect(read()).toEqual(before);
+
+    const shell = game.player(ENEMY).createAttack(
+      game.player(MEMBER), 100, null, new Set(),
+    );
+    expect(() =>
+      ingress.interceptNationalIncomingAttack(
+        shell.id(), ENEMY, MEMBER, 50_000,
+      ),
+    ).toThrow(/forged invading troop strength/);
+    shell.delete();
+    expect(read()).toEqual(before);
+  });
+
+  it("re-checks current emperor doctrine when a real attack waits in the queue", async () => {
+    const game = await found();
+    setResponse(game, "both");
+    game.player(MEMBER).setTroops(1);
+    game.player(DONOR).setTroops(reserve(game) + 40_000);
+    game.player(ENEMY).setTroops(10_000);
+    game.addExecution(new AttackExecution(10_000, game.player(ENEMY), MEMBER));
+    setResponse(game, "none", 1);
+    tick(game);
+    expect(ledger(game).levy.processed).toHaveLength(1);
+    expect(ledger(game).levy.processed[0].result.intercepted).toBe(0);
+    expect(imperialLayers(game)).toHaveLength(0);
+    expect(
+      game.nationalImperialAdministrationFor(game.player(CROWN))
+        ?.standingDefenseResponse,
+    ).toBe("none");
+  });
+
   it("limits twenty microattack clicks to one non-refreshing donor campaign allowance", async () => {
     const game = await found();
     setResponse(game, "assist");
