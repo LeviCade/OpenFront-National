@@ -1,4 +1,5 @@
 import { AllPlayersStats, ClientID, Winner } from "../Schemas";
+import type { NationalPublicPactView, NationalPactDisclosureViewData } from "./NationalPactView";
 import { TileRef } from "./GameMap";
 import {
   EmojiMessage,
@@ -25,6 +26,7 @@ import {
  * invitations, peace motions or raw WarLedger/LevyLedger snapshots.
  */
 export interface NationalPoliticsViewData {
+  readonly pacts?: readonly NationalPublicPactView[];
   readonly empires: readonly {
     readonly id: string;
     readonly leaderId: PlayerID;
@@ -125,6 +127,7 @@ export interface GameUpdateViewData {
    * from the public political view. Never synthesize offers from the roster.
    */
   nationalAccessionOffers?: NationalAccessionOffersViewData;
+  nationalPactDisclosure?: NationalPactDisclosureViewData;
   /**
    * Outcomes scoped to the authenticated recipient of THIS view only.
    * E3 must filter before serialization; never broadcast the E1 journal.

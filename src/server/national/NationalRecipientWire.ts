@@ -19,6 +19,7 @@ import {
   type NationalObserverMapV1,
   type NationalPublicConflictView,
 } from "@openfront/engine-api/game/NationalRecipientView";
+import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import { validateNationalObserverNativeLanes } from "@openfront/shared/NationalObserverNativeWire";
 import { replacer } from "@openfront/shared/SharedUtil";
 
@@ -39,6 +40,7 @@ export function encodeNationalRecipientProjection(
   };
   const map = politics.nationalObserverMap;
   const conflicts = politics.nationalConflicts;
+  validateNationalPactPacket(filtered.nationalPolitics, filtered.nationalPactDisclosure, map?.observerId ?? null);
   if (map !== undefined) {
     if (
       map.version !== NATIONAL_OBSERVER_MAP_VERSION ||
@@ -130,6 +132,8 @@ export function encodeNationalRecipientProjection(
     ...(filtered.nationalCommandResults === undefined
       ? {}
       : { nationalCommandResults: filtered.nationalCommandResults }),
+    ...(filtered.nationalPactDisclosure === undefined
+      ? {} : { nationalPactDisclosure: filtered.nationalPactDisclosure }),
     ...(filtered.nationalAccessionOffers === undefined
       ? {}
       : { nationalAccessionOffers: filtered.nationalAccessionOffers }),

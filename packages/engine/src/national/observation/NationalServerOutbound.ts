@@ -17,6 +17,7 @@ import {
   restoreNationalHumanSight,
 } from "./HumanSightPersistence";
 import { collectLiveNationalObservation } from "./LiveObservation";
+import { projectNationalPublicPacts, projectNationalPactDisclosure } from "./NationalPactProjection";
 import { NationalObserverMapPager } from "./NationalObserverMap";
 import {
   NationalOutboundFilter,
@@ -51,6 +52,7 @@ export type NationalServerPoliticalPacket = Pick<
   | "tick"
   | "nationalPolitics"
   | "nationalAccessionOffers"
+  | "nationalPactDisclosure"
   | "nationalCommandResults"
 >;
 
@@ -169,9 +171,11 @@ export class NationalServerRecipientSession {
     if (publicView === null) {
       throw new Error("NATIONAL server is missing authoritative politics");
     }
+    const publicPacts = projectNationalPublicPacts(this.game);
     const political: NationalServerPoliticalPacket = {
       tick: this.game.ticks(),
       nationalPolitics: {
+        ...(publicPacts === undefined ? {} : { pacts: publicPacts }),
         empires: publicView.empires.map((empire) => ({
           id: empire.id,
           leaderId: empire.leaderId,
@@ -206,6 +210,7 @@ export class NationalServerRecipientSession {
     // and must be present to invalidate stale UI action state.
     if (actor === null) return political;
     const offers = projectNationalAccessionOffers(this.game, actor.id());
+    const pactDisclosure = projectNationalPactDisclosure(this.game, actor.id(), publicPacts);
     const results = actorNationalResults(
       this.game,
       actor,
@@ -213,6 +218,7 @@ export class NationalServerRecipientSession {
     );
     return {
       ...political,
+      ...(pactDisclosure === undefined ? {} : { nationalPactDisclosure: pactDisclosure }),
       ...(offers === undefined ? {} : { nationalAccessionOffers: offers }),
       ...(results.length === 0 ? {} : { nationalCommandResults: results }),
     };
@@ -243,6 +249,7 @@ export class NationalServerRecipientSession {
       nationalPolitics: packet.nationalPolitics,
       nationalCommandResults: packet.nationalCommandResults,
       nationalAccessionOffers: packet.nationalAccessionOffers,
+      nationalPactDisclosure: packet.nationalPactDisclosure,
     };
     // A pre-spawn/eliminated principal is not authorized to receive any
     // first-party player stats, historical units or private invitation DTO.

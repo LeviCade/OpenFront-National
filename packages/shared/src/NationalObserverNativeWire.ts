@@ -4,6 +4,7 @@
  * representation must agree with it; it may not create a second sight path.
  * No simulation imports; used on both trusted host and browser.
  */
+import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import {
   NATIONAL_OBSERVER_MAX_UNITS,
@@ -133,6 +134,7 @@ interface NativeLanes {
   readonly playerNameViewData?: unknown;
   readonly updates?: unknown;
   readonly nationalPolitics?: unknown;
+  readonly nationalPactDisclosure?: unknown;
   readonly nationalConflicts?: unknown;
   readonly nationalAccessionOffers?: unknown;
   readonly nationalCommandResults?: unknown;
@@ -164,6 +166,7 @@ export function validateNationalObserverNativeLanes(
     sequence(packet.packedTileUpdates).length !== 0
   )
     invalid();
+  validateNationalPactPacket(packet.nationalPolitics, packet.nationalPactDisclosure, page.observerId);
   const native = decodeNationalObserverNativeUnits(packet.packedUnitUpdates);
   if ((native?.length ?? 0) !== page.units.length * UNIT_UPDATE_STRIDE)
     invalid();

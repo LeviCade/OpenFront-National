@@ -1,3 +1,4 @@
+import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
 import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
@@ -26,6 +27,7 @@ const allowedFields = new Set([
   "nationalConflicts",
   "nationalCommandResults",
   "nationalAccessionOffers",
+  "nationalPactDisclosure",
   "nationalObserverMap",
 ]);
 const permittedUpdates = new Set<number>([
@@ -242,10 +244,12 @@ export function assertTrustedPublicProjection(
       "playerNameViewData",
       "nationalCommandResults",
       "nationalAccessionOffers",
+      "nationalPactDisclosure",
     ].some((key) => packet[key] !== undefined) ||
     !record(packet.updates)
   )
     throw new Error("NATIONAL unauthorized public-only projection");
+  validateNationalPactPacket(packet.nationalPolitics, packet.nationalPactDisclosure, null);
   const allowed = new Set([
     "type",
     "id",
@@ -390,6 +394,8 @@ export function materializeTrustedNationalUpdate(
     ...(packet.nationalCommandResults === undefined
       ? {}
       : { nationalCommandResults: packet.nationalCommandResults }),
+    ...(packet.nationalPactDisclosure === undefined
+      ? {} : { nationalPactDisclosure: packet.nationalPactDisclosure }),
     ...(packet.nationalAccessionOffers === undefined
       ? {}
       : { nationalAccessionOffers: packet.nationalAccessionOffers }),
