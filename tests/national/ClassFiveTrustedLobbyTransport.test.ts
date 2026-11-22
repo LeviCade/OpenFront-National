@@ -318,11 +318,16 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
       },
     ) as Client;
     const two = fixture([verified(0), verified(1), duplicate]);
-    expect(two.game.getClientIdForPersistentId(duplicate.persistentID)).toBeNull();
+    expect(
+      two.game.getClientIdForPersistentId(duplicate.persistentID),
+    ).toBeNull();
     await boot(two.game);
     expect(two.game.hasEnded()).toBe(false);
     expect(
-      sent(duplicate).some((m) => m.type === "national_start" || m.type === "national_projection"),
+      sent(duplicate).some(
+        (m) =>
+          m.type === "national_start" || m.type === "national_projection",
+      ),
     ).toBe(false);
   });
 
