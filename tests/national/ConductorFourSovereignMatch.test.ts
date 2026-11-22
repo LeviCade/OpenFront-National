@@ -621,6 +621,16 @@ describe("C4 E1 actual last-sovereign engine", () => {
     expect(layer(m, national).scope).toBe("national");
     expect(layer(m, imperial).scope).toBe("imperial");
 
+    const stages: unknown[] = [];
+    const checkpoint = (stage: string) => {
+      stages.push({
+        stage,
+        tick: game.ticks(),
+        balances: balances(game),
+        winner: winner(game),
+      });
+    };
+    checkpoint("independent-war-layers");
     const before = balances(game);
     const idle = await roundTrip(game, "plains");
     const twin = { game: idle.restored, ...runner(idle.restored) };
@@ -647,6 +657,7 @@ describe("C4 E1 actual last-sovereign engine", () => {
     const firstCapture = c.numTilesOwned();
     tick(m);
     expect(c.numTilesOwned()).toBeLessThan(firstCapture);
+    checkpoint("simultaneous-assaults");
 
     clicks(
       m,
@@ -681,6 +692,7 @@ describe("C4 E1 actual last-sovereign engine", () => {
     }
     expect(restored.errors).toEqual([]);
     expect(c.isAlive()).toBe(true);
+    checkpoint("eight-tick-replay");
 
     clicks(
       m,
@@ -703,6 +715,7 @@ describe("C4 E1 actual last-sovereign engine", () => {
     );
     expect(military(m, A, "stale-crown").accepted).toBe(false);
     expect(layer(m, imperial).endedTick).toBeNull();
+    checkpoint("stale-crown-rejected");
 
     clicks(m, attack(B, C, 5_000));
     const repeat = game.nationalWarState()!.levy;
@@ -723,6 +736,7 @@ describe("C4 E1 actual last-sovereign engine", () => {
     expect(game.nationalWarAuthority()?.atWar(B, C)).toBe(true);
     wait(m, 2);
     expect(a.outgoingAttacks()).toHaveLength(0);
+    checkpoint("independent-war-survives-peace");
 
     // Consent, not annexation: the donor becomes an imperial member and its
     // former MDA membership ends. The surviving rival remains independent.
@@ -733,6 +747,7 @@ describe("C4 E1 actual last-sovereign engine", () => {
     wait(m, 12);
     expect(winner(game)).toBeNull();
     expect(game.nationalVictoryRoster()).toBeNull();
+    checkpoint("two-sovereigns-no-winner");
 
     // Win via repeated real attacks and normal regeneration, never by
     // removing tiles directly or invoking WinCheck manually.
@@ -755,6 +770,19 @@ describe("C4 E1 actual last-sovereign engine", () => {
       { kind: "EmpireVictor", nationId: D, empireId: EMPIRE },
     ]);
     expect(m.errors).toEqual([]);
+    checkpoint("imperial-victory");
+    const commandReceipts = infos
+      .flatMap(({ id }) => [
+        ...game.nationalPoliticalCommandResults(game.player(id)),
+        ...game.nationalWarCommandResults(game.player(id)),
+      ])
+      .sort((a, b) => a.tick - b.tick || a.sequence - b.sequence)
+      .map((receipt) => ({
+        receipt,
+        sha256: createHash("sha256")
+          .update(JSON.stringify(receipt))
+          .digest("hex"),
+      }));
     console.info(
       "C4_E1_COMPLETE_MATCH_JSON=" +
         JSON.stringify({
@@ -764,6 +792,9 @@ describe("C4 E1 actual last-sovereign engine", () => {
           ticks: game.ticks(),
           firstLevy: receipts,
           donorDebit: debits,
+          warIds: { national, imperial },
+          commandReceipts,
+          stages,
           replayCommitments: commitments,
           finalCampaigns,
           winner: winner(game),

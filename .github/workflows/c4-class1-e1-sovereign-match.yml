@@ -66,15 +66,21 @@ jobs:
           npx --no-install oxfmt --write \
             packages/engine/src/execution/AttackExecution.ts \
             packages/engine/src/execution/PlayerExecution.ts \
-            tests/national/ConductorFourSovereignMatch.test.ts
+            tests/national/ConductorFourSovereignMatch.test.ts \
+            .github/workflows/c3-class1-e1-authoritative-combat.yml \
+            .github/workflows/c4-class1-e1-sovereign-match.yml
           git -c color.ui=false diff -- \
             packages/engine/src/execution/AttackExecution.ts \
             packages/engine/src/execution/PlayerExecution.ts \
-            tests/national/ConductorFourSovereignMatch.test.ts
+            tests/national/ConductorFourSovereignMatch.test.ts \
+            .github/workflows/c3-class1-e1-authoritative-combat.yml \
+            .github/workflows/c4-class1-e1-sovereign-match.yml
           git diff --exit-code -- \
             packages/engine/src/execution/AttackExecution.ts \
             packages/engine/src/execution/PlayerExecution.ts \
-            tests/national/ConductorFourSovereignMatch.test.ts
+            tests/national/ConductorFourSovereignMatch.test.ts \
+            .github/workflows/c3-class1-e1-authoritative-combat.yml \
+            .github/workflows/c4-class1-e1-sovereign-match.yml
       - name: Prove the focused regression detects the founding source defect
         if: always() && steps.install.outcome == 'success'
         run: |
