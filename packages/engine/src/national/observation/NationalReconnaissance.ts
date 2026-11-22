@@ -12,7 +12,7 @@ export const REGIONAL_RECON_RADIUS = 90;
 export const REGIONAL_RECON_DURATION_TICKS = 600;
 const MAX_RECON_PURCHASES = 4096;
 const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
-const tick = z.number().int().safe().nonnegative();
+const tick = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 
 const grantSchema = z.object({
   requestId: id,
