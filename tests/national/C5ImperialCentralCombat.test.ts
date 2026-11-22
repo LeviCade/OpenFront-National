@@ -1,6 +1,7 @@
-import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
+import { PlayerInfo, PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
+import { TransportShipExecution } from "@openfront/engine/execution/TransportShipExecution";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
@@ -311,6 +312,40 @@ describe("C5 M5 centralized real imperial combat", () => {
     expect(pool(game)).toBe(before);
     const { restored } = await roundTrip(game, "plains");
     expect(pool(restored)).toBe(before);
+  });
+
+  it("denies ordinary member land and naval attacks under centralized authority", async () => {
+    const game = await spawned();
+    makeRealBorder(game);
+    declareImperialWar(game);
+    const north = game.player(N),
+      south = game.player(S),
+      west = game.player(W);
+    north.setTroops(500);
+    south.setTroops(700);
+    centralize(game);
+    game.performNationalImperialAdministration(north, {
+      kind: "release-imperial-troops",
+      empireId,
+      memberId: S,
+      amount: 250,
+    });
+    expect(south.troops()).toBe(250);
+    const reserve = pool(game);
+    const levyCount = game.nationalWarState()!.levy.processed.length;
+    const ships = south.unitCount(UnitType.TransportShip);
+    const westTiles = west.numTilesOwned();
+    game.addExecution(
+      new AttackExecution(100, south, W),
+      new TransportShipExecution(south, game.map().ref(70, 70), 100),
+    );
+    tickRunner(game, 1);
+    expect(south.troops()).toBe(250);
+    expect(south.outgoingAttacks()).toHaveLength(0);
+    expect(south.unitCount(UnitType.TransportShip)).toBe(ships);
+    expect(west.numTilesOwned()).toBe(westTiles);
+    expect(game.nationalWarState()!.levy.processed).toHaveLength(levyCount);
+    expect(pool(game)).toBeGreaterThanOrEqual(reserve);
   });
 
   it("rejects unauthorized stamped subordinate attack with no side effects", async () => {

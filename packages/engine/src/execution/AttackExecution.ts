@@ -70,7 +70,13 @@ export class AttackExecution implements Execution {
     private removeTroops: boolean = true,
     /** Original server-stamped seat of an authenticated human attack. */
     private authenticatedClientID: ClientID | null = null,
+    /** Trusted Game-created imperial deployment (not client-provided). */
+    private imperialOrder: boolean = false,
   ) {}
+
+  static forImperialOrder(troops: number, member: Player, target: PlayerID): AttackExecution {
+    return new AttackExecution(troops, member, target, null, true, null, true);
+  }
 
   public targetID(): PlayerID | null {
     return this._targetID;
@@ -105,6 +111,21 @@ export class AttackExecution implements Execution {
         (this.authenticatedClientID !== null &&
           (this._owner.type() !== PlayerType.Human ||
             mg.playerByClientID(this.authenticatedClientID) !== this._owner)))
+    ) {
+      this.active = false;
+      return;
+    }
+
+    // Centralization revokes ordinary subordinate land orders, even when
+    // a WAR exists. Emperor orders were paid by GameImpl's reserve transfer.
+    // Previously paid ship landings are not new deployments.
+    const military = mg.nationalImperialAdministrationFor(this._owner);
+    if (
+      military?.armyMode === "centralized" &&
+      !military.canAmend &&
+      !this.imperialOrder &&
+      this.removeTroops &&
+      this.sourceTile === null
     ) {
       this.active = false;
       return;
@@ -733,6 +754,7 @@ export class AttackExecution implements Execution {
       removeTroops: this.removeTroops,
       authenticatedClientID: this.authenticatedClientID,
       legacyUnstampedPending: this.legacyUnstampedPending,
+      imperialOrder: this.imperialOrder,
     });
   }
 
@@ -761,6 +783,7 @@ export class AttackExecution implements Execution {
     this.removeTroops = s.removeTroops;
     this.authenticatedClientID = s.authenticatedClientID;
     this.legacyUnstampedPending = s.legacyUnstampedPending;
+    this.imperialOrder = s.imperialOrder;
   }
 }
 
@@ -787,12 +810,13 @@ const AttackExecutionStateSchema = z.object({
   removeTroops: z.boolean(),
   authenticatedClientID: z.string().nullable(),
   legacyUnstampedPending: z.boolean(),
+  imperialOrder: z.boolean(),
 });
 type AttackExecutionState = z.infer<typeof AttackExecutionStateSchema>;
 
 export const AttackExecutionSnapshot = execSnapshotType({
   name: "Attack",
-  version: 2,
+  version: 3,
   schema: AttackExecutionStateSchema,
   migrations: {
     // Historical snapshots predate the stamped attack origin. Read them
@@ -802,6 +826,8 @@ export const AttackExecutionSnapshot = execSnapshotType({
       authenticatedClientID: null,
       legacyUnstampedPending: old.initialized !== true,
     }),
+    // Old snapshots cannot retroactively acquire pooled military authority.
+    2: (old: object) => ({ ...old, imperialOrder: false }),
   },
   cls: () => AttackExecution,
 });

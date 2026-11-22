@@ -1269,7 +1269,7 @@ export class GameImpl implements Game {
         // A later peace or crown change can abort the queued attack, but
         // it cannot cause reserve troops to be credited twice.
         this.addExecution(
-          new AttackExecution(command.amount, member, target.id()),
+          AttackExecution.forImperialOrder(command.amount, member, target.id()),
         );
         break;
       }
