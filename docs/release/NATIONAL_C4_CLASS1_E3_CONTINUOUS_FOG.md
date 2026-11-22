@@ -42,6 +42,7 @@ are source-only unless CI actually executes them. E4/E5 visual witness remains
 a separate gate.
 
 ## Iteration evidence
+
 First candidate 0ddfce49329da8ee42f92ccf4f6f40b9d2160c54, CI run 44974970302:
 typecheck first failed on test-only Array.at (TS2550); subsequent tests skipped.
 Local exact-source algorithm probe (type-only syntax erased; synthetic authoritative
@@ -60,6 +61,7 @@ visibility can still yield partial state; finite stable membership traversal
 is independent of churn.
 
 ## Native companion lane
+
 The active private host's sole tile ownership feed is the map tuple page.
 Its packedUnitUpdates is the native representation of exactly that page's
 markers, checked by shared NationalObserverNativeWire. Native owner small ID
