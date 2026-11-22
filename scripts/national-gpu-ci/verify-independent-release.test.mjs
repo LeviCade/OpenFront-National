@@ -77,7 +77,9 @@ function fixture() {
     modeReports[mode] = {
       scenario: mode,
       scenarioKind: mode.startsWith("legacy-") ? "legacy" : "national-solo",
-      stageReached: mode.startsWith("legacy-") ? "legacy-player-action" : "solo-playability-complete",
+      stageReached: mode.startsWith("legacy-")
+        ? "legacy-player-action"
+        : "solo-playability-complete",
       errorCount: 0,
       outcome: "UNVERIFIED",
       reason: "SIGNED_WITNESS_NOT_VERIFIED",

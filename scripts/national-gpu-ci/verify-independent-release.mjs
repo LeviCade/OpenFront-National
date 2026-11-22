@@ -287,8 +287,12 @@ export function verifyIndependentRelease({
     if (
       !isObject(report) ||
       report.scenario !== mode ||
-      report.scenarioKind !== (mode.startsWith("legacy-") ? "legacy" : "national-solo") ||
-      report.stageReached !== (mode.startsWith("legacy-") ? "legacy-player-action" : "solo-playability-complete") ||
+      report.scenarioKind !==
+        (mode.startsWith("legacy-") ? "legacy" : "national-solo") ||
+      report.stageReached !==
+        (mode.startsWith("legacy-")
+          ? "legacy-player-action"
+          : "solo-playability-complete") ||
       report.errorCount !== 0 ||
       // A postflight signer must not transform a guest-declared FAIL into PASS.
       // Guest release outcomes are deliberately UNVERIFIED until this gate;
@@ -316,7 +320,11 @@ export function verifyIndependentRelease({
       !pixel(report.hardware.webgl2ShaderPixel) ||
       !Array.isArray(report.screenshotNames) ||
       report.screenshotNames.length === 0 ||
-      !report.screenshotNames.includes(mode.startsWith("legacy-") ? "legacy-player-action.png" : "solo-battle-authoritative.png") ||
+      !report.screenshotNames.includes(
+        mode.startsWith("legacy-")
+          ? "legacy-player-action.png"
+          : "solo-battle-authoritative.png",
+      ) ||
       report.screenshotNames.length > 30 ||
       report.screenshotCount !== report.screenshotNames.length ||
       !isObject(report.screenshotSha256)

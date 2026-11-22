@@ -22,6 +22,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { verifyPublicModeProof } from "../national-gpu-ci/wait-host-proof.mjs";
 import { connectAuthenticatedPeer } from "./browser-r11-peer.mjs";
 import {
   verifyDistinctLiveSessions,
@@ -45,7 +46,6 @@ import {
 } from "./browser-r11-verdict.mjs";
 import { reconcileDiplomacyEvidence } from "./browser-verdict.mjs";
 import { verifyHardwareWebgl } from "./gpu-attestation.mjs";
-import { verifyPublicModeProof } from "../national-gpu-ci/wait-host-proof.mjs";
 import {
   assertSoloLaunch,
   assertSoloSelection,

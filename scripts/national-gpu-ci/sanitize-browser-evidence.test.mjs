@@ -255,8 +255,21 @@ test("publish four separate reports; reject absent proof and nonmatching source"
               { name: "authoritative-empire-accepted", verified: true },
               { name: "authoritative-war-declared", uiConfirmed: true },
               { name: "authoritative-combat-impact" },
-              { name: "solo-real-battle-engine-correlated", opponentDamaged: true, troopLoss: true },
-              { name: "authoritative-solo-playability-complete", founded: true, spawned: true, warDeclared: true, realRadialAttack: true, opponentDamaged: true, liveTick: 30, workerPacketCount: 5 },
+              {
+                name: "solo-real-battle-engine-correlated",
+                opponentDamaged: true,
+                troopLoss: true,
+              },
+              {
+                name: "authoritative-solo-playability-complete",
+                founded: true,
+                spawned: true,
+                warDeclared: true,
+                realRadialAttack: true,
+                opponentDamaged: true,
+                liveTick: 30,
+                workerPacketCount: 5,
+              },
             ]),
       ];
       if (!legacy) {
@@ -267,9 +280,24 @@ test("publish four separate reports; reject absent proof and nonmatching source"
         rmSync(join(target, "peace-accepted-ended-war.png"));
       }
       assert.equal(physicalGameplayContract(raw, mode), true);
-      assert.equal(physicalGameplayContract({ ...raw, scenarioKind: "national-three-player" }, mode), false);
-      assert.equal(physicalGameplayContract({ ...raw, events: raw.events.slice(0, -1) }, mode), false);
-      assert.equal(physicalGameplayContract({ ...raw, errors: [{}] }, mode), false);
+      assert.equal(
+        physicalGameplayContract(
+          { ...raw, scenarioKind: "national-three-player" },
+          mode,
+        ),
+        false,
+      );
+      assert.equal(
+        physicalGameplayContract(
+          { ...raw, events: raw.events.slice(0, -1) },
+          mode,
+        ),
+        false,
+      );
+      assert.equal(
+        physicalGameplayContract({ ...raw, errors: [{}] }, mode),
+        false,
+      );
       writeFileSync(join(target, "acceptance.json"), JSON.stringify(raw));
     }
     // The first diagnostic lane is immutable; no mixed or stale artifacts.

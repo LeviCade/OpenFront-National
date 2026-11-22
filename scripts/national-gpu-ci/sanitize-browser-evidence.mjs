@@ -136,7 +136,8 @@ export function physicalGameplayContract(raw, mode) {
   const legacy = mode.startsWith("legacy-");
   if (
     raw?.scenarioKind !== (legacy ? "legacy" : "national-solo") ||
-    raw.stage !== (legacy ? "legacy-player-action" : "solo-playability-complete") ||
+    raw.stage !==
+      (legacy ? "legacy-player-action" : "solo-playability-complete") ||
     !Array.isArray(raw.errors) ||
     raw.errors.length !== 0 ||
     !Array.isArray(raw.events)
@@ -166,9 +167,13 @@ export function physicalGameplayContract(raw, mode) {
     unique("authoritative-combat-impact") &&
     battle?.opponentDamaged === true &&
     (battle.troopLoss === true || battle.territoryLoss === true) &&
-    ["founded", "spawned", "warDeclared", "realRadialAttack", "opponentDamaged"].every(
-      (name) => end?.[name] === true,
-    ) &&
+    [
+      "founded",
+      "spawned",
+      "warDeclared",
+      "realRadialAttack",
+      "opponentDamaged",
+    ].every((name) => end?.[name] === true) &&
     Number.isSafeInteger(end.liveTick) &&
     end.liveTick > 0 &&
     Number.isSafeInteger(end.workerPacketCount) &&
@@ -355,16 +360,18 @@ export function publishEvidence(root, expectedSha, kind = "release") {
     const historicalEvents = Array.isArray(raw?.events) ? raw.events : [];
     const hasEvent = (name) =>
       historicalEvents.some((event) => event?.name === name);
-    const stageComplete = kind === "release"
-      ? physicalGameplayContract(raw, mode)
-      : mode.startsWith("legacy-")
-      ? ["legacy-ffa", "legacy-player-action"].every((s) =>
-          summary.completedStages.includes(s),
-        ) &&
-        hasEvent("legacy-ffa-verified") &&
-        hasEvent("legacy-actual-map-interaction-authoritative-update")
-      : R11_NATIONAL_STAGES.every((s) => summary.completedStages.includes(s)) &&
-        R11_NATIONAL_RECEIPTS.every(hasEvent);
+    const stageComplete =
+      kind === "release"
+        ? physicalGameplayContract(raw, mode)
+        : mode.startsWith("legacy-")
+          ? ["legacy-ffa", "legacy-player-action"].every((s) =>
+              summary.completedStages.includes(s),
+            ) &&
+            hasEvent("legacy-ffa-verified") &&
+            hasEvent("legacy-actual-map-interaction-authoritative-update")
+          : R11_NATIONAL_STAGES.every((s) =>
+              summary.completedStages.includes(s),
+            ) && R11_NATIONAL_RECEIPTS.every(hasEvent);
     const gl1 = raw?.actualHardware?.webgl1;
     const gl2 = raw?.actualHardware?.webgl;
     const physicalDiagnostic =
@@ -469,7 +476,8 @@ export function publishEvidence(root, expectedSha, kind = "release") {
       ? "legacy-player-action.png"
       : "solo-battle-authoritative.png";
     const screenshotReady =
-      images.length > 0 && (kind !== "release" || images.includes(requiredScreenshot));
+      images.length > 0 &&
+      (kind !== "release" || images.includes(requiredScreenshot));
     if (reportedPass && scenarioAccepted && !screenshotReady) {
       valid = false;
       outcome = "UNVERIFIED";
@@ -477,7 +485,11 @@ export function publishEvidence(root, expectedSha, kind = "release") {
     }
     result.modes[mode] = {
       scenario: mode,
-      scenarioKind: ["legacy", "national-solo", "national-three-player"].includes(raw?.scenarioKind)
+      scenarioKind: [
+        "legacy",
+        "national-solo",
+        "national-three-player",
+      ].includes(raw?.scenarioKind)
         ? raw.scenarioKind
         : null,
       reportPath: REPORT_FOLDERS[mode] + "/acceptance.json",
