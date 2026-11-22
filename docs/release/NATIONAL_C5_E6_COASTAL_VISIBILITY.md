@@ -18,6 +18,14 @@ We inspected `NationalObservation`, `LiveObservation`, `NationalObserverMap`, `N
 
 This repro is an adversarial **trusted read-port inconsistency**; it does not assert that normal pact-state transactions leave stale membership in production.
 
+## Second independent FOG-04 RED: isolated friendly warship hidden in native map
+
+The founding `LiveObservation` also inserted owned warships into the 200-tile sensing index **without ever marking that warship's own offshore tile as visible**. `NationalObservation.visibleAssets` included the warship, but `NationalObserverMapPager.page()` unconditionally filters markers to `verified.visibleTiles` and silently dropped the first-party ship when no foreign target happened to be nearby. This is distinct from the first empire-roster defect.
+
+- Test-only `2dd5b435a9a04f756bd5d1c4641f25ece1a4284e` exhibited the real producer regression using an own warship on ocean tile `2001`, while the human nation spawned inland in North America. GitHub Actions [FOG-04 RED #45063150116](https://github.com/LeviCade/OpenFront-National/actions/runs/45063150116) typechecked and passed 30 existing tests but failed the newly added test at the intended `verified.visibleTiles.has(offshore)` assertion (expected `true`, got `false`). Existing source fragment matched the founding SHA.
+- Fix `e8bbe2bcd703b3cfdfddf378ed61b2190d364ea9`: mark precisely each **current first-party or reciprocal-empire unit's occupied tile** as legitimately observed, **after** foreign-unit visibility attribution. The late pass preserves `warship` versus `border` provenance even when a foreign ship and observing warship share a tile. It grants no surrounding ship radius to transports, no distant foreign facts and no cached former-ally privileges.
+- Independent same-map threshold extension `407a0e2ed6547fb472fd4488600aa04a75142cde` tests an observing warship at `(1,1)`, an actual foreign ship entering exactly **200** map tiles away at `(201,1)`, exiting **201** tiles away at `(202,1)`, and immediate authenticated observer-map tombstone. The radius implementation itself was already present in the founding source.
+
 ## New gameplay witnesses
 
 File: `tests/national/C5CoastalVisibility.test.ts`, built using real authoritative `Game`, spawns, units, territorial mutations, map terrain, and real observer-map pager/recipient continuity; no fabricated sight grants.
@@ -28,6 +36,7 @@ File: `tests/national/C5CoastalVisibility.test.ts`, built using real authoritati
 - **FOG-06/07:** Three real nations form an empire with authenticated commands, then trusted authoritative read-port reciprocal departure is modeled. An outdated member list grants neither territory, ship, nor troop stats. Current outsider `City` stays hidden. Pre-existing real AI/human parity and empire transitions remain in the focused regression set.
 - **FOG-05/07 hidden reads:** A hidden foreign transport's `troops()` getter is replaced with a throwing spy. `collectLiveNationalObservation` succeeds without calling it. Another malicious recipient page adds foreign private troop data; continuity rejects it **before** cache mutation. Rejoin on a fresh stream while the ship is hidden yields no stale marker.
 - **Native full-runner:** Two real `GameRunner` packets for the moving coastal transport show a zero-private-troops marker on legitimate reacquisition and a deleted marker at the **last visible sea tile**, not at undisclosed destination. Existing renderer and native guarding tests cover the broader browser reconciliation contract; no actual physical GPU/browser claim is made here.
+- **Isolated owner and exact 200 cutoff:** First-party warship tile and marker remain authorized without an enemy target; true owned-warship coverage includes the exact 200-tile threshold and excludes 201-tile target, with a same-frame native observer-map removal on departure.
 - **Legacy safety:** Existing `NationalLiveObservation.test.ts` confirms full legacy packet visibility is unchanged; original 100/200 behavior is checked by `NationalGeographicFogR8.test.ts`; finite sweep/memory invariants are checked by `C4ContinuousFogAlgorithm.test.ts`.
 
 ## Exact measurements and limitations
