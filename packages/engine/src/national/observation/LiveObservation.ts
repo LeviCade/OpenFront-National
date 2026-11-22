@@ -389,6 +389,21 @@ export function collectLiveNationalObservation(
     }
   }
 
+  // Every currently authorized first-party or reciprocal-empire unit is a
+  // legitimate point observation even outside national territory. In
+  // particular, an isolated owned warship must appear in the native map
+  // while sailing in the open ocean with no foreign target nearby.
+  //
+  // Defer these point grants until AFTER foreign asset attribution. Otherwise
+  // a foreign ship sharing an owned warship's tile could be misclassified as
+  // a land-border sighting instead of a real "warship" observation.
+  // No new radius, remote terrain sweep, enemy reconnaissance or stale
+  // empire membership is introduced by this final point-sight pass.
+  for (const unit of allUnits) {
+    const memberId = unit.owner().id();
+    if (allowedPrincipals.has(memberId)) markVisible(unit.tile(), memberId);
+  }
+
   // Public war IDs/sides come ONLY from the current Game-owned canonical
   // ledger. Never copy private peace motions, levy spending or declaredBy.
   // A stale empire roster cannot resurrect a departed member's war rights.
