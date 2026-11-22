@@ -24,6 +24,7 @@ import { GameRunner } from "@openfront/engine/GameRunner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import {
   NATIONAL_OBSERVER_MAX_TILES,
+  NationalObserverMapPager,
   type NationalObserverMapV1,
 } from "@openfront/engine/national/observation/NationalObserverMap";
 import {
@@ -122,6 +123,7 @@ async function rig(mapName: string, starts: number[]) {
     undefined,
   );
   const sockets = P.map(seat);
+  const measurements = { wireMs: 0 };
   const host = new TrustedNationalMatch(
     MATCH,
     runner,
@@ -129,6 +131,7 @@ async function rig(mapName: string, starts: number[]) {
     (client, packet) => {
       const target = sockets.find((s) => s.client === client);
       if (!target) throw new Error("unrecognized host seat");
+      const wireStarted = performance.now();
       const payload = encodeNationalRecipientProjection(packet);
       // E2's real GameServer emits on Client.ws AFTER an original-seat
       // reconnect. Do not pin this test delivery to the first socket object.
@@ -142,9 +145,10 @@ async function rig(mapName: string, starts: number[]) {
           undefined,
         ),
       );
+      measurements.wireMs += performance.now() - wireStarted;
     },
   );
-  return { game, sockets, host };
+  return { game, sockets, host, measurements };
 }
 function tickTwice(host: TrustedNationalMatch) {
   host.tick();
@@ -512,6 +516,8 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
       { ...first.map, streamId: "malicious-socket", tick: first.map.tick + 1 },
       { ...first.map, cursor: 0, tick: first.map.tick + 1 },
       { ...first.map, reset: true, tick: first.map.tick + 1 },
+      { ...first.map, cursor: 4096, tilePageSlots: 1, tick: first.map.tick + 1 },
+      { ...first.map, cursor: 4096, sweepId: first.map.sweepId + 2, tick: first.map.tick + 1 },
     ]) {
       expect(() => reader.accept(fake, first.msg.tick + 1)).toThrow();
       expect(reader.lastAcceptedTick).toBe(tickBeforeAttack);
@@ -523,6 +529,16 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     for (let steps = 0; steps < 20 && last.map.nextCursor !== null; steps++) {
       host.tick();
       last = view(sockets[0].socket);
+      if (steps === 0) {
+        const neverDisclosed = last.map.tiles[0][0];
+        expect(() => reader.accept({
+          ...last.map, tileRemovedRefs: [neverDisclosed], tiles: last.map.tiles.slice(1),
+        }, last.msg.tick)).toThrow();
+        expect(() => reader.accept({
+          ...last.map, tilePageSlots: 4097,
+        }, last.msg.tick)).toThrow();
+        expect(reader.lastAcceptedTick).toBe(tickBeforeAttack);
+      }
       const delta = reader.accept(last.map, last.msg.tick);
       expect(last.map.sweepId).toBe(sweepId);
       expect(delta.clearAllTiles).toBe(false);
@@ -692,7 +708,7 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
 describe("C4 E3 continuous authoritative churn", () => {
   it("makes progress across both frozen streams during repeated real territorial churn", async () => {
     const init = await setup("big_plains", { nationalMode: true }, P);
-    const { game, host, sockets } = await rig("big_plains", [
+    const { game, host, sockets, measurements } = await rig("big_plains", [
       init.ref(20, 100), init.ref(150, 150), init.ref(190, 190),
     ]);
     const a = game.player(A.id);
@@ -717,7 +733,9 @@ describe("C4 E3 continuous authoritative churn", () => {
     let resets = 0;
     let holes = 0;
     let hostMs = 0;
+    let producerMs = 0;
     let reconcileMs = 0;
+    const profilers = P.map((p) => new NationalObserverMapPager(game, p.id, "profile-" + p.id));
     const startHeap = process.memoryUsage().heapUsed;
     let peakHeap = startHeap;
     for (let frame = 0; frame < 8; frame++) {
@@ -731,8 +749,12 @@ describe("C4 E3 continuous authoritative churn", () => {
         const readStarted = performance.now();
         const delta = readers[i].accept(v.map, v.msg.tick);
         reconcileMs += performance.now() - readStarted;
-        peakBytes = Math.max(peakBytes, sockets[i].socket.frames.at(-1)!.byteLength);
+        const frames = sockets[i].socket.frames;
+        peakBytes = Math.max(peakBytes, frames[frames.length - 1].byteLength);
         const sight = collectLiveNationalObservation(game, P[i].id);
+        const producerStarted = performance.now();
+        profilers[i].page(sight);
+        producerMs += performance.now() - producerStarted;
         for (const [ref] of delta.tiles) expect(sight.visibleTiles.has(ref)).toBe(true);
         if (i !== 0) continue;
         if (delta.clearAllTiles) { known.clear(); resets++; }
@@ -760,7 +782,8 @@ describe("C4 E3 continuous authoritative churn", () => {
     expect(units.every((unit) => seen.has(unit.id()))).toBe(true);
     console.info("C4_E3_CHURN_METRICS", JSON.stringify({
       observers: 3, frames: 8, firstTileComplete, firstUnitComplete,
-      firstUsableFrame: 0, resets, holes, peakBytes, hostMs, reconcileMs,
+      firstUsableFrame: 0, resets, holes, peakBytes, hostMs, producerMs,
+      wireMs: measurements.wireMs, reconcileMs,
       peakHeapDelta: peakHeap - startHeap, permanentlyUnseenUnits: 0,
     }));
   });

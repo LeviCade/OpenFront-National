@@ -64,6 +64,17 @@ function pageFromWire(
   const base = readTrustedNationalObserverMap(untrusted, tick);
   if (base === null) throw new Error("NATIONAL missing observer map");
   const raw = base as unknown as Record<string, unknown>;
+  const allowedMapKeys: Record<keyof NationalObserverMapV1, true> = {
+    version: true, tick: true, observerId: true, streamId: true, sweepId: true,
+    sweepTick: true, width: true, height: true, reset: true, cursor: true,
+    nextCursor: true, tilePageSlots: true, tileRemovedRefs: true, tilePartial: true,
+    tiles: true, units: true, unitCursor: true, unitNextCursor: true, unitSweepId: true,
+    unitPageSlots: true, unitPartial: true, unitReset: true, unitRemovedIds: true,
+    unitsTruncated: true, unitOverflow: true, visibleBorders: true, ownResources: true,
+    countries: true,
+  };
+  if (Object.keys(raw).some((key) => !Object.prototype.hasOwnProperty.call(allowedMapKeys, key)))
+    throw new Error("NATIONAL unexpected observer map field");
   const int = (v: unknown, min: number, max: number): v is number =>
     typeof v === "number" && Number.isSafeInteger(v) && v >= min && v <= max;
   if (
@@ -98,6 +109,9 @@ function pageFromWire(
   for (const unit of base.units) {
     if (
       unitIds.has(unit.id) ||
+      unit.ownerId.length === 0 ||
+      !["army", "structure", "warship", "transport", "trade-ship"].includes(unit.kind) ||
+      Object.keys(unit).some((key) => !["id", "ownerId", "kind", "tile", "troops"].includes(key)) ||
       (unit.ownerId !== expectedPrincipal && unit.troops !== undefined)
     )
       throw new Error("NATIONAL invalid or private unit marker");
@@ -128,6 +142,8 @@ export class NationalObserverMapContinuity {
   private unitSweepId = 0;
   private nextUnitCursor: number | null = null;
   private knownCount = 0;
+  private lastTileRef = -1;
+  private readonly seenUnitsInSweep = new Set<number>();
   private width = 0;
   private height = 0;
   /** Compact bitsets: at most 64 MB for a 32-million-tile map. */
@@ -196,6 +212,12 @@ export class NationalObserverMapContinuity {
         this.nextUnitCursor !== null || page.unitCursor !== 0)
         throw new Error("NATIONAL incomplete/inconsistent unit sweep");
     }
+    if (page.sweepId === this.sweepId && page.tiles.length > 0 &&
+      page.tiles[0][0] <= this.lastTileRef)
+      throw new Error("NATIONAL duplicate/backward tile in frozen sweep");
+    if (page.unitSweepId === this.unitSweepId &&
+      page.units.some((unit) => this.seenUnitsInSweep.has(unit.id)))
+      throw new Error("NATIONAL duplicate unit in frozen sweep");
     // Tombstones are valid only for currently disclosed cache entries.
     if (page.tileRemovedRefs.some((ref) => this.known[ref] !== 1) ||
       page.unitRemovedIds.some((id) => !this.unitCache.has(id)))
@@ -247,6 +269,11 @@ export class NationalObserverMapContinuity {
       this.known[tile[0]] = 1;
       this.revoked[tile[0]] = 0;
     }
+    if (page.sweepId !== this.sweepId) this.lastTileRef = -1;
+    if (page.tiles.length > 0)
+      this.lastTileRef = page.tiles[page.tiles.length - 1][0];
+    if (page.unitSweepId !== this.unitSweepId) this.seenUnitsInSweep.clear();
+    for (const unit of page.units) this.seenUnitsInSweep.add(unit.id);
     this.streamId = page.streamId;
     this.lastTick = page.tick;
     this.sweepId = page.sweepId;

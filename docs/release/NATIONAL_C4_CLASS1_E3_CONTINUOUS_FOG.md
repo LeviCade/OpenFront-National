@@ -40,3 +40,21 @@ Exact-host churn test runs three authenticated seats through GameRunner and
 encoded Zbin, logs aggregate time, bytes, heap delta, sweep progress. Metrics
 are source-only unless CI actually executes them. E4/E5 visual witness remains
 a separate gate.
+
+## Iteration evidence
+First candidate 0ddfce49329da8ee42f92ccf4f6f40b9d2160c54, CI run 44974970302:
+typecheck first failed on test-only Array.at (TS2550); subsequent tests skipped.
+Local exact-source algorithm probe (type-only syntax erased; synthetic authoritative
+map adapter, not GameRunner) compared a 32-frame 17,999-visible-tile / up-to-6,200
+marker alternating sight scenario. Founding: 32 resets per stream, neither
+sweep completed, 4,152 IDs never appeared, peak map JSON 167,042 chars.
+First candidate: first tile completion frame 5, first unit completion frame 4,
+one initial reset per stream, peak map JSON 174,577 chars, one phase-locked
+transient ID never appeared. Wall-time in that isolated JS probe: producer
+353 vs 849 ms; map JSON 12 vs 7 ms; shadow cache reconciliation 44 vs 73 ms.
+Not full host metrics. The second iteration prioritizes missing authorized unit IDs
+at next sweep, tracks loss of shared troop authorization in the native lane,
+rejects duplicated IDs across pages, and avoids allocating per-cached-tile
+tuple arrays during freshness checks. Sustained adversarial phase-locked
+visibility can still yield partial state; finite stable membership traversal
+is independent of churn.
