@@ -571,11 +571,14 @@ try {
   assert.notEqual(liveB.streamId, recovered.streamId);
   assert.equal(
     server.messages.filter(
-      (m) => m.message === "NATIONAL authoritative host ready" && m.gameID === id,
+      (m) =>
+        m.message === "NATIONAL authoritative host ready" && m.gameID === id,
     ).length,
     1,
   );
-  pass("live-identity-outage-fails-closed-same-session-seats-resume-one-runner");
+  pass(
+    "live-identity-outage-fails-closed-same-session-seats-resume-one-runner",
+  );
 
   setStage("host loss and terminal old match");
   await server.stop();
