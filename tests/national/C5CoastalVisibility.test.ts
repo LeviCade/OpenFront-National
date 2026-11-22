@@ -467,16 +467,15 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     game.executeNextTick();
     const offshore = game.ref(1, 1);
     expect(game.isLand(offshore)).toBe(false);
-    const owned = game.player(VIEWER.id).buildUnit(
-      UnitType.Warship,
-      offshore,
-      { patrolTile: offshore },
-    );
+    const owned = game
+      .player(VIEWER.id)
+      .buildUnit(UnitType.Warship, offshore, { patrolTile: offshore });
     const verified = collectLiveNationalObservation(game, VIEWER.id);
     const ownId = String(owned.id());
-    expect(verified.observation.visibleAssets.find(
-      (asset) => asset.id === ownId,
-    )?.source).toBe("own");
+    expect(
+      verified.observation.visibleAssets.find((asset) => asset.id === ownId)
+        ?.source,
+    ).toBe("own");
     // Founding-source witness: the producer had a legitimate observing
     // warship anchor but failed to authorize its very own tile; the native
     // map pager consequently dropped its otherwise approved marker.
@@ -487,9 +486,11 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
       "c5-e6-isolated-offshore",
     );
     const page = pager.page(verified);
-    expect(page.units.some(
-      (unit) => unit.id === owned.id() && unit.tile === offshore,
-    )).toBe(true);
+    expect(
+      page.units.some(
+        (unit) => unit.id === owned.id() && unit.tile === offshore,
+      ),
+    ).toBe(true);
 
     // Exact default map-tile Euclidean threshold: x=1 warship sees x=201
     // (200 tiles), but never x=202 (201 tiles) on genuine ocean terrain.
@@ -497,36 +498,50 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     const justOutside = game.ref(202, 1);
     expect(game.isLand(justInside)).toBe(false);
     expect(game.isLand(justOutside)).toBe(false);
-    const foreignShip = game.player(OUTSIDER.id).buildUnit(
-      UnitType.TransportShip,
-      justOutside,
-      { troops: 1_234_567 },
-    );
-    expect(collectLiveNationalObservation(game, VIEWER.id).observation.visibleAssets.some(
-      (asset) => asset.id === String(foreignShip.id()),
-    )).toBe(false);
+    const foreignShip = game
+      .player(OUTSIDER.id)
+      .buildUnit(UnitType.TransportShip, justOutside, { troops: 1_234_567 });
+    expect(
+      collectLiveNationalObservation(
+        game,
+        VIEWER.id,
+      ).observation.visibleAssets.some(
+        (asset) => asset.id === String(foreignShip.id()),
+      ),
+    ).toBe(false);
     foreignShip.move(justInside);
     game.executeNextTick();
     const inside = collectLiveNationalObservation(game, VIEWER.id);
-    expect(inside.observation.visibleAssets.find(
-      (asset) => asset.id === String(foreignShip.id()),
-    )?.source).toBe("warship");
+    expect(
+      inside.observation.visibleAssets.find(
+        (asset) => asset.id === String(foreignShip.id()),
+      )?.source,
+    ).toBe("warship");
     const acquired = pager.page(inside);
-    expect(acquired.units.some((unit) => unit.id === foreignShip.id())).toBe(true);
+    expect(acquired.units.some((unit) => unit.id === foreignShip.id())).toBe(
+      true,
+    );
     foreignShip.move(justOutside);
     game.executeNextTick();
     const outside = collectLiveNationalObservation(game, VIEWER.id);
-    expect(outside.observation.visibleAssets.some(
-      (asset) => asset.id === String(foreignShip.id()),
-    )).toBe(false);
+    expect(
+      outside.observation.visibleAssets.some(
+        (asset) => asset.id === String(foreignShip.id()),
+      ),
+    ).toBe(false);
     const revoked = pager.page(outside);
     expect(revoked.unitRemovedIds).toContain(foreignShip.id());
     console.info(
-      "[C5 FOG-04 own-sea] warshipId=" + ownId
-      + " tile=" + offshore
-      + " exactInside=" + justInside
-      + " exactOutside=" + justOutside
-      + " foreignShipId=" + foreignShip.id(),
+      "[C5 FOG-04 own-sea] warshipId=" +
+        ownId +
+        " tile=" +
+        offshore +
+        " exactInside=" +
+        justInside +
+        " exactOutside=" +
+        justOutside +
+        " foreignShipId=" +
+        foreignShip.id(),
     );
   });
 
@@ -565,16 +580,12 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     expect(game.isLand(patrol)).toBe(false);
     expect(game.isLand(contact)).toBe(false);
     expect(game.isLand(retreat)).toBe(false);
-    const alliedWarship = game.player(ALLY.id).buildUnit(
-      UnitType.Warship,
-      patrol,
-      { patrolTile: patrol },
-    );
-    const contacted = game.player(OUTSIDER.id).buildUnit(
-      UnitType.TransportShip,
-      contact,
-      { troops: 9_876_543 },
-    );
+    const alliedWarship = game
+      .player(ALLY.id)
+      .buildUnit(UnitType.Warship, patrol, { patrolTile: patrol });
+    const contacted = game
+      .player(OUTSIDER.id)
+      .buildUnit(UnitType.TransportShip, contact, { troops: 9_876_543 });
     const seen = collectLiveNationalObservation(game, VIEWER.id);
     const inherited = seen.observation.visibleAssets.find(
       (asset) => asset.id === String(contacted.id()),
@@ -583,30 +594,41 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     expect(inherited?.sourceNationId).toBe(ALLY.id);
     expect(inherited).not.toHaveProperty("strength");
     const outsider = collectLiveNationalObservation(game, OUTSIDER.id);
-    expect(outsider.observation.visibleAssets.some(
-      (asset) => asset.id === String(alliedWarship.id()),
-    )).toBe(false);
+    expect(
+      outsider.observation.visibleAssets.some(
+        (asset) => asset.id === String(alliedWarship.id()),
+      ),
+    ).toBe(false);
     const pager = new NationalObserverMapPager(
       game,
       VIEWER.id,
       "c5-e6-empire-navy",
     );
     const disclosed = pager.page(seen);
-    expect(disclosed.units.some((unit) => unit.id === contacted.id())).toBe(true);
+    expect(disclosed.units.some((unit) => unit.id === contacted.id())).toBe(
+      true,
+    );
     alliedWarship.move(retreat);
     game.executeNextTick();
     const lost = collectLiveNationalObservation(game, VIEWER.id);
-    expect(lost.observation.visibleAssets.some(
-      (asset) => asset.id === String(contacted.id()),
-    )).toBe(false);
+    expect(
+      lost.observation.visibleAssets.some(
+        (asset) => asset.id === String(contacted.id()),
+      ),
+    ).toBe(false);
     const revoked = pager.page(lost);
     expect(revoked.unitRemovedIds).toContain(contacted.id());
     console.info(
-      "[C5 FOG-06 naval empire] sensorId=" + alliedWarship.id()
-      + " transportId=" + contacted.id()
-      + " patrolTile=" + patrol
-      + " contactTile=" + contact
-      + " retreatTile=" + retreat,
+      "[C5 FOG-06 naval empire] sensorId=" +
+        alliedWarship.id() +
+        " transportId=" +
+        contacted.id() +
+        " patrolTile=" +
+        patrol +
+        " contactTile=" +
+        contact +
+        " retreatTile=" +
+        retreat,
     );
   });
 });
