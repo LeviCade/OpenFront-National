@@ -6,19 +6,19 @@ import {
 import { NationalSanctionExecution } from "@openfront/engine/execution/NationalSanctionExecution";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
 import { TrainExecution } from "@openfront/engine/execution/TrainExecution";
+import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import { Railroad } from "@openfront/engine/game/Railroad";
 import { TrainStation } from "@openfront/engine/game/TrainStation";
-import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import {
   initialNationalEconomicMemory,
   planNationalEconomicDecision,
   updateNationalEconomicMemory,
 } from "@openfront/engine/national/ai/NationalEconomicPlanner";
+import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import {
   projectNationalObservation,
   type NationalWorld,
 } from "@openfront/engine/national/observation/NationalObservation";
-import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
@@ -56,17 +56,24 @@ function ledger(game: Game) {
     };
   });
 }
-function witness(game: Game, scenario: string, before: ReturnType<typeof ledger>) {
-  console.info("C5_E5_ECONOMIC_WITNESS=" + JSON.stringify({
-    scenario,
-    tick: game.ticks(),
-    before,
-    after: ledger(game),
-    views: {
-      issuer: NationalSanctionExecution.viewFor(game, game.player(A)),
-      recipient: NationalSanctionExecution.viewFor(game, game.player(B)),
-    },
-  }));
+function witness(
+  game: Game,
+  scenario: string,
+  before: ReturnType<typeof ledger>,
+) {
+  console.info(
+    "C5_E5_ECONOMIC_WITNESS=" +
+      JSON.stringify({
+        scenario,
+        tick: game.ticks(),
+        before,
+        after: ledger(game),
+        views: {
+          issuer: NationalSanctionExecution.viewFor(game, game.player(A)),
+          recipient: NationalSanctionExecution.viewFor(game, game.player(B)),
+        },
+      }),
+  );
 }
 async function live(seed: number) {
   const game = await setup(
@@ -122,17 +129,24 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     const world: NationalWorld = {
       tick: 20,
       nations: [A, B, C].map((id) => ({
-        id, name: id, landPercent: 33, status: "independent" as const,
-        alive: true, troops: 100, treasury: 100,
+        id,
+        name: id,
+        landPercent: 33,
+        status: "independent" as const,
+        alive: true,
+        troops: 100,
+        treasury: 100,
       })),
       coalitions: [],
-      wars: [{
-        id: "economic-war",
-        scope: "national",
-        first: { kind: "nation", stableId: A, activeMemberIds: [A] },
-        second: { kind: "nation", stableId: C, activeMemberIds: [C] },
-        startedTick: 1,
-      }],
+      wars: [
+        {
+          id: "economic-war",
+          scope: "national",
+          first: { kind: "nation", stableId: A, activeMemberIds: [A] },
+          second: { kind: "nation", stableId: C, activeMemberIds: [C] },
+          startedTick: 1,
+        },
+      ],
       invitations: [],
       assets: [],
       sightGrants: [],
@@ -142,124 +156,219 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     const ties = [{ partnerId: B, tradePermitted: true, activeOwnVoyages: 2 }];
     const obs = projectNationalObservation(world, A);
     expect(planNationalEconomicDecision(obs, [], ties)).toEqual({
-      kind: "issue", scope: "national", targetId: C,
-      recipientIds: [B], durationTicks: 30,
+      kind: "issue",
+      scope: "national",
+      targetId: C,
+      recipientIds: [B],
+      durationTicks: 30,
     });
-    expect(planNationalEconomicDecision(obs, [], [{ ...ties[0], activeOwnVoyages: 0 }])).toBeNull();
-    expect(planNationalEconomicDecision(
-      projectNationalObservation({
-        ...world, frontiers: [{ observerId: A, targetId: C, access: "naval" }],
-      }, A), [], ties,
-    )).toBeNull();
-    expect(planNationalEconomicDecision(
-      projectNationalObservation({
-        ...world, coalitions: [{
-          id: "empire", kind: "empire", leaderId: B,
-          members: [B, A], terms: {},
-        }],
-      }, A), [], ties,
-    )).toBeNull();
-    expect(planNationalEconomicDecision(
-      projectNationalObservation({
-        ...world,
-        nations: world.nations.map((n) => n.id === A ? { ...n, status: "imperial" } : n),
-        coalitions: [{
-          id: "empire", kind: "empire", leaderId: A,
-          members: [A], terms: {},
-        }],
-      }, A), [], ties,
-    )?.kind).toBe("issue");
+    expect(
+      planNationalEconomicDecision(
+        obs,
+        [],
+        [{ ...ties[0], activeOwnVoyages: 0 }],
+      ),
+    ).toBeNull();
+    expect(
+      planNationalEconomicDecision(
+        projectNationalObservation(
+          {
+            ...world,
+            frontiers: [{ observerId: A, targetId: C, access: "naval" }],
+          },
+          A,
+        ),
+        [],
+        ties,
+      ),
+    ).toBeNull();
+    expect(
+      planNationalEconomicDecision(
+        projectNationalObservation(
+          {
+            ...world,
+            coalitions: [
+              {
+                id: "empire",
+                kind: "empire",
+                leaderId: B,
+                members: [B, A],
+                terms: {},
+              },
+            ],
+          },
+          A,
+        ),
+        [],
+        ties,
+      ),
+    ).toBeNull();
+    expect(
+      planNationalEconomicDecision(
+        projectNationalObservation(
+          {
+            ...world,
+            nations: world.nations.map((n) =>
+              n.id === A ? { ...n, status: "imperial" } : n,
+            ),
+            coalitions: [
+              {
+                id: "empire",
+                kind: "empire",
+                leaderId: A,
+                members: [A],
+                terms: {},
+              },
+            ],
+          },
+          A,
+        ),
+        [],
+        ties,
+      )?.kind,
+    ).toBe("issue");
   });
 
   it("ECON-06/AI-07: bounded observed fulfillment and bluff persist and change next response", () => {
     const world: NationalWorld = {
       tick: 50,
       nations: [A, B, C].map((id) => ({
-        id, name: id, landPercent: 20, status: "independent" as const,
-        alive: true, troops: 0, treasury: 0,
+        id,
+        name: id,
+        landPercent: 20,
+        status: "independent" as const,
+        alive: true,
+        troops: 0,
+        treasury: 0,
       })),
-      coalitions: [], wars: [], invitations: [], assets: [],
-      sightGrants: [], frontiers: [], diplomaticEvents: [],
+      coalitions: [],
+      wars: [],
+      invitations: [],
+      assets: [],
+      sightGrants: [],
+      frontiers: [],
+      diplomaticEvents: [],
     };
     const obs = projectNationalObservation(world, B);
     const demand = {
-      id: "old", issuer: A, authorityId: A, empire: null,
-      role: "recipient" as const, recipientIds: [B],
-      target: C, deadline: 20, phase: "enforced" as const,
+      id: "old",
+      issuer: A,
+      authorityId: A,
+      empire: null,
+      role: "recipient" as const,
+      recipientIds: [B],
+      target: C,
+      deadline: 20,
+      phase: "enforced" as const,
       trigger: "continuing-trade" as const,
       threat: "embargo" as const,
       response: "refuse" as const,
       requestId: null,
     };
-    const next = { ...demand, id: "next", deadline: 60, phase: "pending" as const, response: "none" as const };
+    const next = {
+      ...demand,
+      id: "next",
+      deadline: 60,
+      phase: "pending" as const,
+      response: "none" as const,
+    };
     const ties = [
       { partnerId: A, tradePermitted: true, activeOwnVoyages: 0 },
       { partnerId: C, tradePermitted: true, activeOwnVoyages: 0 },
     ];
     const memory = initialNationalEconomicMemory(B);
     const fulfilled = updateNationalEconomicMemory(obs, [demand], memory);
-    const bluffed = updateNationalEconomicMemory(obs, [
-      { ...demand, phase: "backed-down" },
-    ], memory);
+    const bluffed = updateNationalEconomicMemory(
+      obs,
+      [{ ...demand, phase: "backed-down" }],
+      memory,
+    );
     expect(fulfilled.credibility[0].score).toBe(2);
     expect(bluffed.credibility[0].score).toBe(-3);
-    expect(updateNationalEconomicMemory(obs, [demand], fulfilled)).toEqual(fulfilled);
-    expect(planNationalEconomicDecision(obs, [next], ties, fulfilled)).toMatchObject({
-      kind: "respond", decision: "comply",
+    expect(updateNationalEconomicMemory(obs, [demand], fulfilled)).toEqual(
+      fulfilled,
+    );
+    expect(
+      planNationalEconomicDecision(obs, [next], ties, fulfilled),
+    ).toMatchObject({
+      kind: "respond",
+      decision: "comply",
     });
-    expect(planNationalEconomicDecision(obs, [next], ties, bluffed)).toMatchObject({
-      kind: "respond", decision: "refuse",
+    expect(
+      planNationalEconomicDecision(obs, [next], ties, bluffed),
+    ).toMatchObject({
+      kind: "respond",
+      decision: "refuse",
     });
-    expect(() => updateNationalEconomicMemory(
-      projectNationalObservation(world, A), [demand], fulfilled,
-    )).toThrow("principal mismatch");
+    expect(() =>
+      updateNationalEconomicMemory(
+        projectNationalObservation(world, A),
+        [demand],
+        fulfilled,
+      ),
+    ).toThrow("principal mismatch");
   });
 
   for (const seed of [17, 73]) {
-    it("ECON-02–07 live seed " + seed + ": AI issues, recipient complies, and paid trade is denied", async () => {
-      const { game, a, b, c, ca, bb, cc } = await live(seed);
-      const before = ledger(game);
-      const route = voyage(game, a, ca, bb);
-      expect(route.isActive()).toBe(true);
-      game.convertHumanToNation(a, "c5-e5-issuer-" + seed);
-      until(game, () => NationalSanctionExecution.viewFor(game, a).length > 0, 60);
-      const demand = NationalSanctionExecution.viewFor(game, a)[0];
-      expect(demand.issuer).toBe(A);
-      expect(demand.target).toBe(C);
-      expect(demand.recipientIds).toEqual([B]);
-      expect(NationalSanctionExecution.viewFor(game, c)).toEqual([]);
-      // A genuinely profitable, long-distance B→A merchant tie makes
-      // preserving issuer trade worth more than the unused B→C route.
-      const distantTile = game.ref(7, 4);
-      a.conquer(distantTile);
-      const distantA = a.buildUnit(UnitType.Port, distantTile, {});
-      tick(game);
-      const dependentTrade = voyage(game, b, bb, distantA);
-      expect(dependentTrade.isActive()).toBe(true);
-      game.convertHumanToNation(b, "c5-e5-recipient-" + seed);
-      until(game, () =>
-        NationalSanctionExecution.viewFor(game, b)[0]?.response !== undefined &&
-        NationalSanctionExecution.viewFor(game, b)[0].response !== "none",
-      50);
-      expect(NationalSanctionExecution.viewFor(game, b)[0].response).toBe("comply");
-      expect(b.canTrade(c)).toBe(false);
-      const blocked = voyage(game, b, bb, cc);
-      expect(blocked.isActive()).toBe(false);
-      const noBtoC = ledger(game);
-      tick(game, 5);
-      expect(b.tradeGold()).toBe(BigInt(noBtoC[1].trade));
-      expect(c.tradeGold()).toBe(BigInt(noBtoC[2].trade));
-      const { bytes, again, restored } = await roundTrip(game, MAP);
-      expect(again).toEqual(bytes);
-      expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
-      expect(restored.player(B).canTrade(restored.player(C))).toBe(false);
-      for (let i = 0; i < 4; i++) {
+    it(
+      "ECON-02–07 live seed " +
+        seed +
+        ": AI issues, recipient complies, and paid trade is denied",
+      async () => {
+        const { game, a, b, c, ca, bb, cc } = await live(seed);
+        const before = ledger(game);
+        const route = voyage(game, a, ca, bb);
+        expect(route.isActive()).toBe(true);
+        game.convertHumanToNation(a, "c5-e5-issuer-" + seed);
+        until(
+          game,
+          () => NationalSanctionExecution.viewFor(game, a).length > 0,
+          60,
+        );
+        const demand = NationalSanctionExecution.viewFor(game, a)[0];
+        expect(demand.issuer).toBe(A);
+        expect(demand.target).toBe(C);
+        expect(demand.recipientIds).toEqual([B]);
+        expect(NationalSanctionExecution.viewFor(game, c)).toEqual([]);
+        // A genuinely profitable, long-distance B→A merchant tie makes
+        // preserving issuer trade worth more than the unused B→C route.
+        const distantTile = game.ref(7, 4);
+        a.conquer(distantTile);
+        const distantA = a.buildUnit(UnitType.Port, distantTile, {});
         tick(game);
-        tick(restored);
+        const dependentTrade = voyage(game, b, bb, distantA);
+        expect(dependentTrade.isActive()).toBe(true);
+        game.convertHumanToNation(b, "c5-e5-recipient-" + seed);
+        until(
+          game,
+          () =>
+            NationalSanctionExecution.viewFor(game, b)[0]?.response !==
+              undefined &&
+            NationalSanctionExecution.viewFor(game, b)[0].response !== "none",
+          50,
+        );
+        expect(NationalSanctionExecution.viewFor(game, b)[0].response).toBe(
+          "comply",
+        );
+        expect(b.canTrade(c)).toBe(false);
+        const blocked = voyage(game, b, bb, cc);
+        expect(blocked.isActive()).toBe(false);
+        const noBtoC = ledger(game);
+        tick(game, 5);
+        expect(b.tradeGold()).toBe(BigInt(noBtoC[1].trade));
+        expect(c.tradeGold()).toBe(BigInt(noBtoC[2].trade));
+        const { bytes, again, restored } = await roundTrip(game, MAP);
+        expect(again).toEqual(bytes);
         expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
-      }
-      witness(game, "seed-" + seed + "-compliance", before);
-    });
+        expect(restored.player(B).canTrade(restored.player(C))).toBe(false);
+        for (let i = 0; i < 4; i++) {
+          tick(game);
+          tick(restored);
+          expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
+        }
+        witness(game, "seed-" + seed + "-compliance", before);
+      },
+    );
   }
 
   it("ECON-03/06 live: refusal pays actual gold, issuer AI enforces with a real embargo", async () => {
@@ -269,20 +378,31 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     const defiant = voyage(game, b, bb, cc);
     expect(defiant.isActive()).toBe(true);
     game.convertHumanToNation(a, "c5-e5-issuer-113");
-    until(game, () => NationalSanctionExecution.viewFor(game, a).length > 0, 60);
+    until(
+      game,
+      () => NationalSanctionExecution.viewFor(game, a).length > 0,
+      60,
+    );
     game.convertHumanToNation(b, "c5-e5-recipient-113");
-    until(game, () =>
-      NationalSanctionExecution.viewFor(game, b)[0]?.response !== undefined &&
+    until(
+      game,
+      () =>
+        NationalSanctionExecution.viewFor(game, b)[0]?.response !== undefined &&
         NationalSanctionExecution.viewFor(game, b)[0].response !== "none",
-    60);
-    expect(NationalSanctionExecution.viewFor(game, b)[0].response).toBe("refuse");
+      60,
+    );
+    expect(NationalSanctionExecution.viewFor(game, b)[0].response).toBe(
+      "refuse",
+    );
     expect(b.canTrade(c)).toBe(true);
     until(game, () => !defiant.isActive(), 100);
     expect(b.tradeGold()).toBeGreaterThan(0n);
     expect(c.tradeGold()).toBeGreaterThan(0n);
-    until(game, () =>
-      NationalSanctionExecution.viewFor(game, a)[0]?.phase === "enforced",
-    120);
+    until(
+      game,
+      () => NationalSanctionExecution.viewFor(game, a)[0]?.phase === "enforced",
+      120,
+    );
     expect(a.canTrade(b)).toBe(false);
     expect(b.canTrade(c)).toBe(true);
     const after = ledger(game);
@@ -293,11 +413,16 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     // Without that observed reputation the recipient would refuse: no A trade
     // is presently permitted, and C trade remains nominally permitted.
     tick(game, 5);
-    game.addExecution(new NationalSanctionExecution(a, {
-      type: "national_issue_sanction", scope: "national",
-      targetId: C, recipientIds: [B], durationTicks: 30,
-      requestId: "c5-e5-second-after-enforcement",
-    }));
+    game.addExecution(
+      new NationalSanctionExecution(a, {
+        type: "national_issue_sanction",
+        scope: "national",
+        targetId: C,
+        recipientIds: [B],
+        durationTicks: 30,
+        requestId: "c5-e5-second-after-enforcement",
+      }),
+    );
     tick(game, 2);
     const fresh = NationalSanctionExecution.viewFor(game, b).find(
       (row) => row.id !== "sanction-8-1-3",
@@ -313,9 +438,14 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
       initialNationalEconomicMemory(B),
     );
     expect(naive).toMatchObject({ kind: "respond", decision: "refuse" });
-    until(game, () => NationalSanctionExecution.viewFor(game, b).some(
-      (row) => row.id === fresh?.id && row.response === "comply",
-    ), 50);
+    until(
+      game,
+      () =>
+        NationalSanctionExecution.viewFor(game, b).some(
+          (row) => row.id === fresh?.id && row.response === "comply",
+        ),
+      50,
+    );
     expect(b.canTrade(c)).toBe(false);
     witness(game, "seed-113-enforcement-changes-next-ai-choice", after);
   });
@@ -326,24 +456,38 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     const leverage = voyage(game, a, ca, bb);
     expect(leverage.isActive()).toBe(true);
     game.convertHumanToNation(a, "c5-e5-issuer-221");
-    until(game, () => NationalSanctionExecution.viewFor(game, a).length > 0, 60);
+    until(
+      game,
+      () => NationalSanctionExecution.viewFor(game, a).length > 0,
+      60,
+    );
     const original = NationalSanctionExecution.viewFor(game, a)[0];
-    game.addExecution(new NationalSanctionExecution(b, {
-      type: "national_respond_sanction", sanctionId: original.id,
-      decision: "refuse", requestId: "c5-e5-human-refuses",
-    }));
+    game.addExecution(
+      new NationalSanctionExecution(b, {
+        type: "national_respond_sanction",
+        sanctionId: original.id,
+        decision: "refuse",
+        requestId: "c5-e5-human-refuses",
+      }),
+    );
     tick(game, 2);
-    expect(NationalSanctionExecution.viewFor(game, b)[0].response).toBe("refuse");
+    expect(NationalSanctionExecution.viewFor(game, b)[0].response).toBe(
+      "refuse",
+    );
     // Genuine map ownership no longer supplies the issuer a discovered
     // land frontier to the declared target. No synthetic planner flags.
     c.conquer(game.ref(3, 2));
     a.setTroops(10);
     game.convertHumanToNation(b, "c5-e5-learns-bluff");
     tick(game, 45);
-    expect(NationalSanctionExecution.viewFor(game, a)[0].phase).toBe("backed-down");
-    expect(collectLiveNationalObservation(game, A).observation.frontiers.some(
-      (f) => f.targetId === C,
-    )).toBe(false);
+    expect(NationalSanctionExecution.viewFor(game, a)[0].phase).toBe(
+      "backed-down",
+    );
+    expect(
+      collectLiveNationalObservation(game, A).observation.frontiers.some(
+        (f) => f.targetId === C,
+      ),
+    ).toBe(false);
     expect(a.canTrade(b)).toBe(true);
     expect(b.canTrade(c)).toBe(true);
     tick(game, 6); // Recipient's own AI observes the terminal outcome.
@@ -357,28 +501,40 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     // baseline (4 + 1 reach) > 4, but remembered bluff (4 - 3 + 1) < 4.
     const cDependency = voyage(game, b, bb, cc);
     expect(cDependency.isActive()).toBe(true);
-    game.addExecution(new NationalSanctionExecution(a, {
-      type: "national_issue_sanction", scope: "national",
-      targetId: C, recipientIds: [B], durationTicks: 30,
-      requestId: "c5-e5-second-after-bluff",
-    }));
+    game.addExecution(
+      new NationalSanctionExecution(a, {
+        type: "national_issue_sanction",
+        scope: "national",
+        targetId: C,
+        recipientIds: [B],
+        durationTicks: 30,
+        requestId: "c5-e5-second-after-bluff",
+      }),
+    );
     tick(game, 2);
     const next = NationalSanctionExecution.viewFor(game, b).find(
       (row) => row.id !== original.id,
     );
     expect(next?.phase).toBe("pending");
-    expect(planNationalEconomicDecision(
-      collectLiveNationalObservation(game, B).observation,
-      [next!],
-      [
-        { partnerId: A, tradePermitted: b.canTrade(a), activeOwnVoyages: 1 },
-        { partnerId: C, tradePermitted: b.canTrade(c), activeOwnVoyages: 1 },
-      ],
-      initialNationalEconomicMemory(B),
-    )).toMatchObject({ kind: "respond", decision: "comply" });
-    until(game, () => NationalSanctionExecution.viewFor(game, b).some(
-      (row) => row.id === next?.id && row.response === "refuse",
-    ), 50);
+    expect(
+      planNationalEconomicDecision(
+        collectLiveNationalObservation(game, B).observation,
+        [next!],
+        [
+          { partnerId: A, tradePermitted: b.canTrade(a), activeOwnVoyages: 1 },
+          { partnerId: C, tradePermitted: b.canTrade(c), activeOwnVoyages: 1 },
+        ],
+        initialNationalEconomicMemory(B),
+      ),
+    ).toMatchObject({ kind: "respond", decision: "comply" });
+    until(
+      game,
+      () =>
+        NationalSanctionExecution.viewFor(game, b).some(
+          (row) => row.id === next?.id && row.response === "refuse",
+        ),
+      50,
+    );
     expect(b.canTrade(c)).toBe(true);
     witness(game, "seed-221-backdown-changes-next-ai-choice", before);
   });
@@ -389,8 +545,14 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     const tiles = Array.from({ length: 12 }, (_, i) => game.ref(3, i + 1));
     b.conquer(tiles[0]);
     c.conquer(tiles[tiles.length - 1]);
-    const from = new TrainStation(game, b.buildUnit(UnitType.City, tiles[0], {}));
-    const to = new TrainStation(game, c.buildUnit(UnitType.City, tiles[tiles.length - 1], {}));
+    const from = new TrainStation(
+      game,
+      b.buildUnit(UnitType.City, tiles[0], {}),
+    );
+    const to = new TrainStation(
+      game,
+      c.buildUnit(UnitType.City, tiles[tiles.length - 1], {}),
+    );
     const network = game.railNetwork();
     network.stationManager().addStation(from);
     network.stationManager().addStation(to);
@@ -409,15 +571,21 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     const route = voyage(game, a, ca, bb);
     expect(route.isActive()).toBe(true);
     game.convertHumanToNation(a, "c5-e5-issuer-313");
-    until(game, () => NationalSanctionExecution.viewFor(game, a).length > 0, 70);
+    until(
+      game,
+      () => NationalSanctionExecution.viewFor(game, a).length > 0,
+      70,
+    );
     const demand = NationalSanctionExecution.viewFor(game, a)[0];
     expect(demand.issuer).toBe(A);
-    game.addExecution(new NationalSanctionExecution(b, {
-      type: "national_respond_sanction",
-      sanctionId: demand.id,
-      decision: "comply",
-      requestId: "c5-e5-rail-compliance",
-    }));
+    game.addExecution(
+      new NationalSanctionExecution(b, {
+        type: "national_respond_sanction",
+        sanctionId: demand.id,
+        decision: "comply",
+        requestId: "c5-e5-rail-compliance",
+      }),
+    );
     tick(game, 2);
     expect(b.canTrade(c)).toBe(false);
     const blockedBefore = ledger(game);
@@ -437,7 +605,11 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     const route = voyage(game, a, ca, bb);
     expect(route.isActive()).toBe(true);
     game.convertHumanToNation(a, "c5-e5-imperial-issuer");
-    until(game, () => NationalSanctionExecution.viewFor(game, a).length > 0, 55);
+    until(
+      game,
+      () => NationalSanctionExecution.viewFor(game, a).length > 0,
+      55,
+    );
     const demand = NationalSanctionExecution.viewFor(game, a)[0];
     expect(demand.issuer).toBe(A);
     expect(demand.authorityId).toBe(A);
@@ -452,9 +624,11 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     // public WAR status and foreign land-share rankings remain unchanged.
     c.conquer(game.ref(3, 2));
     a.setTroops(10);
-    expect(collectLiveNationalObservation(game, A).observation.frontiers.some(
-      (f) => f.targetId === C,
-    )).toBe(false);
+    expect(
+      collectLiveNationalObservation(game, A).observation.frontiers.some(
+        (f) => f.targetId === C,
+      ),
+    ).toBe(false);
     const route = voyage(game, a, ca, bb);
     expect(route.isActive()).toBe(true);
     game.convertHumanToNation(a, "c5-e5-weak-issuer");
@@ -464,18 +638,30 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
 
   it("ECON-04: actual imperial subordinate command is rejected", async () => {
     const { game, a, b, c } = await live(211);
-    game.performNationalCommand(a, { kind: "found-empire", empireId: "c5-e5-empire" });
     game.performNationalCommand(a, {
-      kind: "offer-empire", empireId: "c5-e5-empire", candidateId: B,
+      kind: "found-empire",
+      empireId: "c5-e5-empire",
+    });
+    game.performNationalCommand(a, {
+      kind: "offer-empire",
+      empireId: "c5-e5-empire",
+      candidateId: B,
     });
     game.performNationalCommand(b, {
-      kind: "accept-empire", empireId: "c5-e5-empire", candidateId: B,
+      kind: "accept-empire",
+      empireId: "c5-e5-empire",
+      candidateId: B,
     });
-    game.addExecution(new NationalSanctionExecution(b, {
-      type: "national_issue_sanction", scope: "imperial",
-      targetId: C, recipientIds: [D], durationTicks: 30,
-      requestId: "c5-e5-illegal-subordinate",
-    }));
+    game.addExecution(
+      new NationalSanctionExecution(b, {
+        type: "national_issue_sanction",
+        scope: "imperial",
+        targetId: C,
+        recipientIds: [D],
+        durationTicks: 30,
+        requestId: "c5-e5-illegal-subordinate",
+      }),
+    );
     tick(game, 2);
     expect(NationalSanctionExecution.viewFor(game, a)).toEqual([]);
     expect(NationalSanctionExecution.viewFor(game, c)).toEqual([]);
