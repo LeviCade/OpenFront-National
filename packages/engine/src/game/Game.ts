@@ -625,6 +625,9 @@ export interface Game extends GameLike {
     command: NationalImperialAdministrationCommand,
     authenticatedClientID?: ClientID,
   ): void;
+  nationalDeferredTroopsFor(observer: Player): string | null;
+  releaseNationalDeferredTroops(player: Player): void;
+  creditNationalTroopGrowth(player: Player, gross: number): void;
   creditNationalWorkerIncome(player: Player, gross: Gold): void;
   nationalAllowsConstruction(player: Player, type: UnitType): boolean;
   /** Private pending invitations addressed only to this authenticated human. */

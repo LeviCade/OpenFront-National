@@ -7,6 +7,7 @@
  */
 import { Structures, UnitType, type PlayerID } from "@openfront/engine-api/game/GameTypes";
 import { distributeImperialGold, splitWorkerIncome } from "./politics/ImperialAccounting";
+import { distributeImperialTroops, hybridPoolCapacity, splitHybridGrowth, type ArmyCapacity } from "./politics/ImperialArmyAccounting";
 import { simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { PoliticalAuthorityAdapter } from "./politics/PoliticalAuthorityAdapter";
@@ -112,6 +113,11 @@ const administrationSchema = z.object({
   workerIncomeBps: z.number().int().min(0).max(10_000),
   allowedConstruction: z.array(z.enum(UnitType)).nullable(),
   treasury: exactGold,
+  military: z.object({
+    mode: z.enum(["decentralized", "hybrid"]),
+    thresholdBps: z.number().int().min(0).max(10_000),
+    pool: exactGold,
+  }).optional(),
 });
 type AdministrationRow = z.infer<typeof administrationSchema>;
 
@@ -124,20 +130,29 @@ export type NationalImperialAdministrationCommand =
   | { kind: "set-policy"; empireId: string; policy: ImperialPolicy }
   | { kind: "transfer-troops"; empireId: string; sourceId: PlayerID; destinationId: PlayerID; amount: number }
   | { kind: "build-structure"; empireId: string; memberId: PlayerID; type: UnitType; tile: number }
-  | { kind: "dissolve"; empireId: string };
+  | { kind: "dissolve"; empireId: string }
+  | { kind: "set-army-mode"; empireId: string; mode: "decentralized" | "hybrid"; thresholdBps: number }
+  | { kind: "release-imperial-troops"; empireId: string; memberId: PlayerID; amount: number };
 
 export interface NationalImperialAdministrationView extends ImperialPolicy {
   readonly empireId: string;
   readonly treasury: string;
   readonly canAmend: boolean;
+  readonly armyMode: "decentralized" | "hybrid";
+  readonly hybridThresholdBps: number;
+  readonly imperialTroops: string;
+  readonly imperialTroopCapacity: string;
 }
 
 type ImperialDisposition = (
   credits: ReadonlyMap<PlayerID, bigint>,
   collapsedEmpireIds: readonly string[],
+  troopCredits: ReadonlyMap<PlayerID, bigint>,
 ) => void;
 
 function validateAdministration(row: AdministrationRow): void {
+  if (row.military?.mode === "decentralized" && row.military.pool !== "0")
+    throw new Error("NATIONAL: decentralized empire cannot own pooled troops");
   const allowed = row.allowedConstruction;
   if (allowed !== null &&
       (new Set(allowed).size !== allowed.length ||
@@ -151,6 +166,8 @@ export const NationalRuntimeSnapshotSchema = z.object({
   politics: politicsSchema,
   administration: z.array(administrationSchema).optional(),
   unclaimedTreasury: exactGold.optional(),
+  deferredTroops: z.array(z.object({ memberId: z.string(), amount: exactGold })).optional(),
+  unclaimedTroops: exactGold.optional(),
 });
 export type NationalRuntimeSnapshot = z.infer<
   typeof NationalRuntimeSnapshotSchema
@@ -303,6 +320,8 @@ export class NationalRuntime {
   private lastTick = 0;
   private administration = new Map<string, AdministrationRow>();
   private unclaimedTreasury = 0n;
+  private deferredTroops = new Map<PlayerID, bigint>();
+  private unclaimedTroops = 0n;
 
   assertEmperor(actorId: PlayerID, empireId: string): void {
     requireCommandId(empireId);
@@ -319,6 +338,7 @@ export class NationalRuntime {
       workerIncomeBps: policy.workerIncomeBps,
       allowedConstruction: policy.allowedConstruction,
       treasury: this.administration.get(empireId)?.treasury ?? "0",
+      military: this.administration.get(empireId)?.military,
     });
     validateAdministration(row);
     row.allowedConstruction?.sort();
@@ -337,7 +357,113 @@ export class NationalRuntime {
         ? null : Object.freeze([...row.allowedConstruction]),
       treasury: row?.treasury ?? "0",
       canAmend: empire.leaderId === memberId,
+      armyMode: row?.military?.mode ?? "decentralized",
+      hybridThresholdBps: row?.military?.thresholdBps ?? 6000,
+      imperialTroops: row?.military?.pool ?? "0",
+      imperialTroopCapacity: row?.military?.mode === "hybrid"
+        ? hybridPoolCapacity(this.armySlots(this.politics, empire.memberIds), row.military.thresholdBps).toString() : "0",
     });
+  }
+
+  private armySlots(state: PoliticsProjection, ids: readonly PlayerID[]): ArmyCapacity[] {
+    const members = new Set(ids);
+    return state.nations.filter(n => n.alive && members.has(n.id)).map(n => ({
+      id: n.id, capacity: BigInt(n.metrics.maxPopulation), active: BigInt(n.metrics.activePopulation),
+    }));
+  }
+
+  private addTroopFacts(state: PoliticsProjection, credits: ReadonlyMap<PlayerID, bigint>): void {
+    for (const [id, amount] of credits) {
+      const nation = state.nations.find(n => n.id === id && n.alive);
+      if (!nation || amount <= 0n) throw new Error("NATIONAL: invalid troop recipient");
+      const total = BigInt(nation.metrics.activePopulation) + amount;
+      if (total > BigInt(nation.metrics.maxPopulation) || total > BigInt(Number.MAX_SAFE_INTEGER))
+        throw new Error("NATIONAL: troop allocation exceeds capacity");
+      nation.metrics.activePopulation = Number(total);
+    }
+  }
+
+  setArmyMode(actorId: PlayerID, empireId: string, mode: "decentralized" | "hybrid",
+    thresholdBps: number, disposition: ImperialDisposition): void {
+    this.assertEmperor(actorId, empireId);
+    const empire = this.politics.empires.find(e => e.id === empireId)!;
+    const previous = this.administration.get(empireId);
+    const pool = BigInt(previous?.military?.pool ?? "0");
+    const row = administrationSchema.parse({
+      empireId, workerIncomeBps: previous?.workerIncomeBps ?? 0,
+      allowedConstruction: previous?.allowedConstruction ?? null,
+      treasury: previous?.treasury ?? "0",
+      military: { mode, thresholdBps, pool: mode === "hybrid" ? pool.toString() : "0" },
+    });
+    const slots = this.armySlots(this.politics, empire.memberIds);
+    if (mode === "hybrid") {
+      if (pool > hybridPoolCapacity(slots, thresholdBps))
+        throw new Error("NATIONAL: release excess pooled reserves before reducing hybrid cap");
+      this.administration.set(empireId, row);
+      return;
+    }
+    const allocation = distributeImperialTroops(pool, slots);
+    const next = clonePoliticalProjection(this.politics);
+    const deferred = new Map(this.deferredTroops);
+    for (const [id, amount] of allocation.deferred)
+      deferred.set(id, (deferred.get(id) ?? 0n) + amount);
+    this.addTroopFacts(next, allocation.active);
+    validatePolitics(next);
+    disposition(new Map(), [], allocation.active);
+    this.administration.set(empireId, row);
+    this.deferredTroops = deferred;
+    this.unclaimedTroops += allocation.unclaimed;
+    this.politics = next;
+  }
+
+  /** A pooled reserve is a real separately owned balance, never a sum of wallets. */
+  routeHybridGrowth(memberId: PlayerID, gross: bigint,
+    liveSlots: (ids: readonly PlayerID[]) => readonly ArmyCapacity[]): bigint {
+    const empire = this.politics.empires.find(e => e.memberIds.includes(memberId));
+    const row = empire && this.administration.get(empire.id);
+    const military = row?.military;
+    if (!empire || !military || military.mode !== "hybrid" || gross <= 0n)
+      return gross;
+    const slots = liveSlots(empire.memberIds);
+    const member = slots.find(s => s.id === memberId);
+    if (!member) return gross;
+    const split = splitHybridGrowth(gross, member.active, member.capacity,
+      military.thresholdBps, BigInt(military.pool),
+      hybridPoolCapacity(slots, military.thresholdBps));
+    military.pool = (BigInt(military.pool) + split.imperial).toString();
+    return split.personal;
+  }
+
+  releaseImperialTroops(actorId: PlayerID, empireId: string, memberId: PlayerID,
+    amount: number, disposition: ImperialDisposition): void {
+    this.assertEmperor(actorId, empireId);
+    const empire = this.politics.empires.find(e => e.id === empireId)!;
+    const military = this.administration.get(empireId)?.military;
+    if (!military || military.mode !== "hybrid" ||
+        !empire.memberIds.includes(memberId) || !Number.isSafeInteger(amount) ||
+        amount <= 0 || BigInt(amount) > BigInt(military.pool))
+      throw new Error("NATIONAL: invalid or unaffordable imperial reserve release");
+    const credits = new Map([[memberId, BigInt(amount)]]);
+    const next = clonePoliticalProjection(this.politics);
+    this.addTroopFacts(next, credits);
+    validatePolitics(next);
+    disposition(new Map(), [], credits);
+    military.pool = (BigInt(military.pool) - BigInt(amount)).toString();
+    this.politics = next;
+  }
+
+  deferredTroopsFor(memberId: PlayerID): string {
+    return (this.deferredTroops.get(memberId) ?? 0n).toString();
+  }
+
+  /** Capacity-contraction overflow remains owned, inactive and redeemable. */
+  redeemDeferredTroops(memberId: PlayerID, headroom: bigint): bigint {
+    if (headroom <= 0n) return 0n;
+    const claim = this.deferredTroops.get(memberId) ?? 0n;
+    const amount = claim < headroom ? claim : headroom;
+    if (amount === claim) this.deferredTroops.delete(memberId);
+    else this.deferredTroops.set(memberId, claim - amount);
+    return amount;
   }
 
   /** Only PlayerExecution's actual worker production enters this ledger. */
@@ -374,10 +500,12 @@ export class NationalRuntime {
   private settleCollapsed(next: PoliticsProjection, disposition?: ImperialDisposition): void {
     const survivingEmpires = new Set(next.empires.map((e) => e.id));
     const collapsed = this.politics.empires.filter((e) => !survivingEmpires.has(e.id));
-    if (collapsed.length === 0) return;
     const live = new Set(next.nations.filter((n) => n.alive).map((n) => n.id));
     const credits = new Map<PlayerID, bigint>();
     let unclaimed = this.unclaimedTreasury;
+    let unclaimedTroops = this.unclaimedTroops;
+    const deferred = new Map(this.deferredTroops);
+    const troopCredits = new Map<PlayerID, bigint>();
     for (const empire of collapsed) {
       const gold = BigInt(this.administration.get(empire.id)?.treasury ?? "0");
       const allocation = distributeImperialGold(
@@ -386,13 +514,28 @@ export class NationalRuntime {
       for (const [id, amount] of allocation.credits)
         credits.set(id, (credits.get(id) ?? 0n) + amount);
       unclaimed += allocation.unclaimed;
+      const pool = BigInt(this.administration.get(empire.id)?.military?.pool ?? "0");
+      const army = distributeImperialTroops(pool, this.armySlots(next, empire.memberIds));
+      for (const [id, amount] of army.active)
+        troopCredits.set(id, (troopCredits.get(id) ?? 0n) + amount);
+      for (const [id, amount] of army.deferred)
+        deferred.set(id, (deferred.get(id) ?? 0n) + amount);
+      unclaimedTroops += army.unclaimed;
     }
-    if (!disposition && credits.size > 0)
+    // Deferred reserves of eliminated nations have no surviving owner.
+    for (const [id, amount] of deferred) {
+      if (!live.has(id)) { unclaimedTroops += amount; deferred.delete(id); }
+    }
+    this.addTroopFacts(next, troopCredits);
+    if (!disposition && (credits.size > 0 || troopCredits.size > 0))
       throw new Error("NATIONAL: treasury disposition engine port missing");
     // GameImpl's callback preflights every actual destination before mutating.
-    disposition?.(credits, collapsed.map((e) => e.id).sort());
+    if (collapsed.length > 0)
+      disposition?.(credits, collapsed.map((e) => e.id).sort(), troopCredits);
     for (const empire of collapsed) this.administration.delete(empire.id);
     this.unclaimedTreasury = unclaimed;
+    this.deferredTroops = deferred;
+    this.unclaimedTroops = unclaimedTroops;
   }
 
   voluntarilyDissolve(actorId: PlayerID, empireId: string, disposition: ImperialDisposition): void {
@@ -504,9 +647,8 @@ export class NationalRuntime {
       }
     }
     next.simulationMs = tick * 100;
-    // There is no pooled army in this implementation; national active and
-    // deployed troops remain with their actual owners. Treasury settlement
-    // and retirement of extinct sovereign war layers precede publication.
+    // Settlement distributes treasury and separately owned hybrid reserves.
+    // Active and in-flight national troops retain their actual owners.
     next = evaluateUngovernable(next, tick * 100, disposition !== undefined).state;
     validatePolitics(next);
     this.settleCollapsed(next, disposition);
@@ -812,6 +954,10 @@ export class NationalRuntime {
           a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0),
       } : {}),
       ...(this.unclaimedTreasury > 0n ? { unclaimedTreasury: this.unclaimedTreasury.toString() } : {}),
+      ...(this.deferredTroops.size > 0 ? { deferredTroops: [...this.deferredTroops]
+        .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+        .map(([memberId, amount]) => ({ memberId, amount: amount.toString() })) } : {}),
+      ...(this.unclaimedTroops > 0n ? { unclaimedTroops: this.unclaimedTroops.toString() } : {}),
     });
   }
 
@@ -852,6 +998,13 @@ export class NationalRuntime {
       restored.administration.set(row.empireId, row);
     }
     restored.unclaimedTreasury = BigInt(saved.unclaimedTreasury ?? "0");
+    for (const claim of saved.deferredTroops ?? []) {
+      if (restored.deferredTroops.has(claim.memberId) || BigInt(claim.amount) <= 0n ||
+          !saved.politics.nations.some(n => n.id === claim.memberId && n.alive))
+        throw new Error("NATIONAL: invalid deferred troop claim");
+      restored.deferredTroops.set(claim.memberId, BigInt(claim.amount));
+    }
+    restored.unclaimedTroops = BigInt(saved.unclaimedTroops ?? "0");
     return restored;
   }
 }

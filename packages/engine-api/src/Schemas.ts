@@ -804,6 +804,10 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
     tile: zb.uint(),
   }),
   z.object({ kind: z.literal("dissolve"), empireId: NationalPoliticalId }),
+  z.object({ kind: z.literal("set-army-mode"), empireId: NationalPoliticalId,
+    mode: z.enum(["decentralized", "hybrid"]), thresholdBps: zb.uint({ min: 0, max: 10_000 }) }),
+  z.object({ kind: z.literal("release-imperial-troops"), empireId: NationalPoliticalId,
+    memberId: MappedID, amount: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }) }),
 ]);
 
 export const NationalImperialAdministrationIntentSchema = z.object({

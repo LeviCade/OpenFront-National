@@ -616,7 +616,7 @@ export class GameImpl implements Game {
       this._ticks,
       !this.inSpawnPhase(),
       "preserve-pending",
-      (credits, empireIds) => this.commitImperialDisposition(credits, empireIds),
+      (credits, empireIds, troops) => this.commitImperialDisposition(credits, empireIds, troops),
     );
     this.revokeNationalObserverMemory();
   }
@@ -1052,6 +1052,7 @@ export class GameImpl implements Game {
   private commitImperialDisposition(
     credits: ReadonlyMap<PlayerID, bigint>,
     empireIds: readonly string[],
+    troopCredits: ReadonlyMap<PlayerID, bigint>,
   ): void {
     const staged = PlayerImpl.prepareNationalGoldCredits(
       [...credits].map(([id, amount]) => {
@@ -1061,10 +1062,19 @@ export class GameImpl implements Game {
         return { player, amount };
       }),
     );
+    const stagedTroops = PlayerImpl.prepareNationalTroopCredits(
+      [...troopCredits].map(([id, amount]) => {
+        const player = this._players.get(id);
+        if (!player || !player.hasSpawned() || !player.isAlive())
+          throw new Error("NATIONAL: invalid troop disposition recipient");
+        return { player, amount, capacity: Math.floor(this._config.maxTroops(player)) };
+      }),
+    );
     // Retirement validates the engine tick before changing any layer.
     // Publishing staged credits thereafter cannot invoke external code.
     this._nationalWar?.retireEmpireWars(empireIds, this._ticks);
     staged();
+    stagedTroops();
   }
 
   nationalImperialAdministrationFor(observer: Player): NationalImperialAdministrationView | null {
@@ -1074,7 +1084,7 @@ export class GameImpl implements Game {
     return this._national?.imperialAdministrationFor(observer.id()) ?? null;
   }
 
-  /** Trusted engine entry; external stamped intent wiring remains separate. */
+  /** Trusted engine entry shared by stamped commands and in-engine principals. */
   performNationalImperialAdministration(
     actor: Player,
     command: NationalImperialAdministrationCommand,
@@ -1116,14 +1126,52 @@ export class GameImpl implements Game {
         this.addExecution(ConstructionExecution.forImperialPurchase(this, structure));
         break;
       }
+      case "set-army-mode":
+        this._national.setArmyMode(actor.id(), command.empireId, command.mode, command.thresholdBps,
+          (credits, empireIds, troops) => this.commitImperialDisposition(credits, empireIds, troops));
+        break;
+      case "release-imperial-troops":
+        this._national.releaseImperialTroops(actor.id(), command.empireId, command.memberId, command.amount,
+          (credits, empireIds, troops) => this.commitImperialDisposition(credits, empireIds, troops));
+        break;
       case "dissolve":
         this._national.voluntarilyDissolve(actor.id(), command.empireId,
-          (credits, empireIds) => this.commitImperialDisposition(credits, empireIds));
+          (credits, empireIds, troops) => this.commitImperialDisposition(credits, empireIds, troops));
         this.revokeNationalObserverMemory();
         break;
       default:
         throw new Error("NATIONAL: unsupported administration command");
     }
+  }
+
+  nationalDeferredTroopsFor(observer: Player): string | null {
+    if (!this._national || this._players.get(observer.id()) !== observer ||
+        !observer.hasSpawned() || !observer.isAlive()) return null;
+    return this._national.deferredTroopsFor(observer.id());
+  }
+
+  releaseNationalDeferredTroops(player: Player): void {
+    if (!this._national || this._players.get(player.id()) !== player ||
+        !player.hasSpawned() || !player.isAlive()) return;
+    const capacity = Math.floor(this._config.maxTroops(player));
+    const headroom = BigInt(Math.max(0, capacity - player.troops()));
+    const amount = this._national.redeemDeferredTroops(player.id(), headroom);
+    if (amount > 0n) player.addTroops(Number(amount));
+  }
+
+  creditNationalTroopGrowth(player: Player, gross: number): void {
+    if (!this._national || gross <= 0) { player.addTroops(gross); return; }
+    if (this._players.get(player.id()) !== player)
+      throw new Error("NATIONAL: invalid troop growth owner");
+    const personal = this._national.routeHybridGrowth(player.id(), BigInt(Math.floor(gross)), (ids) =>
+      ids.flatMap(id => {
+        const member = this._players.get(id);
+        return member && member.hasSpawned() && member.isAlive()
+          ? [{ id, capacity: BigInt(Math.floor(this._config.maxTroops(member))), active: BigInt(member.troops()) }]
+          : [];
+      }),
+    );
+    player.addTroops(Number(personal));
   }
 
   creditNationalWorkerIncome(player: Player, gross: bigint): void {

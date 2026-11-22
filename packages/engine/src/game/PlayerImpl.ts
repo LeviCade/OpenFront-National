@@ -1390,6 +1390,22 @@ export class PlayerImpl implements Player {
     };
   }
 
+  static prepareNationalTroopCredits(
+    credits: readonly { player: PlayerImpl; amount: bigint; capacity: number }[],
+  ): () => void {
+    const seen = new Set<PlayerImpl>();
+    const next: { player: PlayerImpl; troops: bigint }[] = [];
+    for (const { player, amount, capacity } of credits) {
+      if (!(player instanceof PlayerImpl) || seen.has(player) || amount <= 0n ||
+          !Number.isSafeInteger(capacity) || capacity < 0 ||
+          player._troops + amount > BigInt(capacity))
+        throw new Error("NATIONAL: invalid pooled troop credit");
+      seen.add(player);
+      next.push({ player, troops: player._troops + amount });
+    }
+    return () => { for (const row of next) row.player._troops = row.troops; };
+  }
+
   static transferNationalActiveTroops(
     source: PlayerImpl,
     destination: PlayerImpl,
