@@ -84,6 +84,8 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     const spy = vi.spyOn(game, "nationalPoliticalAuthority");
     spy.mockImplementation(() => ({
       ...authority,
+      membersOf: (id: string) => authority.membersOf(id),
+      emperorOf: (id: string) => authority.emperorOf(id),
       empireOf: (id: string) =>
         id === ALLY.id ? null : authority.empireOf(id),
     }));
