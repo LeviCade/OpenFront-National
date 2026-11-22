@@ -929,8 +929,8 @@ export function setImperialWarPolicy(
 /**
  * D-011: separate incoming-attack doctrine from accession-time WAR policy.
  * Shares the existing WAR epoch so either amendment revokes queued grants.
- * The active crown is the only writer; the policy survives crown transfer,
- * but the outgoing crown and its old CAS epoch do not.
+ * The current crown is the only writer. Transfer of the crown revokes the
+ * outgoing emperor's doctrine and invalidates all stale policy CAS epochs.
  */
 export function setImperialStandingDefensePolicy(
   world: PoliticsProjection,
