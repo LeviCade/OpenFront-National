@@ -736,10 +736,10 @@ export class NationExecution implements Execution {
                 this.nationalPlannerMemory.lastProcessedEvent === null
                   ? null
                   : { ...this.nationalPlannerMemory.lastProcessedEvent },
-              ...(this.nationalPlannerMemory.political === undefined
-                ? {}
-                : {
-                    political: {
+              political:
+                this.nationalPlannerMemory.political === undefined
+                  ? undefined
+                  : {
                       ...this.nationalPlannerMemory.political,
                       completedCommands: [
                         ...this.nationalPlannerMemory.political.completedCommands,
@@ -749,7 +749,6 @@ export class NationExecution implements Execution {
                           (entry) => ({ ...entry }),
                         ),
                     },
-                  }),
             },
       nationalSightMemory:
         this.nationalSightMemory === null
