@@ -30,6 +30,7 @@ interface ContinuityPage extends TrustedNationalObserverMap {
   readonly unitNextCursor: number | null;
   readonly unitSweepId: number;
   readonly unitReset: boolean;
+  readonly unitOverflow: boolean;
   readonly unitRemovedIds: readonly number[];
 }
 
@@ -47,6 +48,8 @@ export interface NationalObserverMapDelta {
   readonly units: TrustedNationalObserverMap["units"];
   /** True means the current page is part of a larger unit sweep. */
   readonly unitsTruncated: boolean;
+  /** Explicit partial-fidelity state: never silently claim all units. */
+  readonly unitOverflow: boolean;
 }
 
 /** Fail before any graphical state is updated. */
@@ -74,6 +77,7 @@ function pageFromWire(
         raw.unitNextCursor <= raw.unitCursor ||
         raw.unitNextCursor - raw.unitCursor > MAX_UNIT_PAGE)) ||
     typeof raw.unitReset !== "boolean" ||
+    typeof raw.unitOverflow !== "boolean" ||
     !Array.isArray(raw.unitRemovedIds) ||
     raw.unitRemovedIds.length > MAX_UNIT_PAGE ||
     raw.unitRemovedIds.some(
@@ -272,6 +276,7 @@ export class NationalObserverMapContinuity {
       tiles: page.tiles,
       units: page.units,
       unitsTruncated: page.unitsTruncated,
+      unitOverflow: page.unitOverflow,
     };
   }
 }
