@@ -122,6 +122,29 @@ export interface NationalCommandResultViewData {
   readonly reason?: string;
 }
 
+/** Private principal-bound coercive diplomacy; never part of public politics. */
+export interface NationalUltimatumViewData {
+  readonly version: 1;
+  readonly recipientId: PlayerID;
+  readonly items: readonly {
+    readonly id: string;
+    readonly issuerId: PlayerID;
+    readonly empireId: string;
+    readonly targetId: PlayerID;
+    readonly role: "issuer" | "recipient";
+    readonly threat: "embargo" | "imperial-war";
+    readonly issuedTick: number;
+    readonly deadlineTick: number;
+    readonly phase: "pending" | "consented" | "decision-required" | "acceded" | "enforced" | "backed-down" | "withdrawn" | "expired";
+    readonly response: "none" | "accept" | "refuse";
+    readonly credibility: "pending" | "kept" | "broken" | "void";
+    readonly version: number;
+    readonly warId: string | null;
+    readonly imposedMembers: readonly PlayerID[];
+    readonly requestId: string | null;
+  }[];
+}
+
 export interface GameUpdateViewData {
   tick: number;
   updates: GameUpdates;
@@ -132,6 +155,7 @@ export interface GameUpdateViewData {
    * from the public political view. Never synthesize offers from the roster.
    */
   nationalAccessionOffers?: NationalAccessionOffersViewData;
+  nationalUltimatums?: NationalUltimatumViewData;
   nationalPactDisclosure?: NationalPactDisclosureWireData;
   nationalImperialAdministration?: NationalImperialAdministrationWire;
   /**
