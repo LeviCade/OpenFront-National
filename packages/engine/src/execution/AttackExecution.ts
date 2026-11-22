@@ -1,6 +1,7 @@
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   Difficulty,
+  GameType,
   MessageType,
   PlayerID,
   PlayerType,
@@ -51,6 +52,8 @@ export class AttackExecution implements Execution {
   private map: GameMap;
 
   private attack: Attack | null = null;
+  /** Legacy v1 pending human intent has no provable physical session. */
+  private legacyUnstampedPending = false;
 
   // Cached smallIDs for integer owner comparisons in hot loops.
   private ownerSmallID: number;
@@ -87,12 +90,21 @@ export class AttackExecution implements Execution {
     // A queued military action cannot inherit a replacement controller's
     // identity. Match the original server-stamped session BEFORE resolving
     // targets or debiting troops, levies, embargoes or territorial ownership.
-    // Unstamped engine-generated attacks and legacy FFA remain unchanged.
+    // Historical v1 pending human attacks have no recoverable origin;
+    // never promote one to a new authenticated authority on restore. Already
+    // initialized battles, old FFA, and ship landings keep their old behavior.
+    const unprovenLegacyPrivateAttack =
+      this.legacyUnstampedPending &&
+      this.removeTroops &&
+      this.sourceTile === null &&
+      this._owner.type() === PlayerType.Human &&
+      mg.config().gameConfig().gameType === GameType.Private;
     if (
-      this.authenticatedClientID !== null &&
       mg.nationalPoliticalAuthority() !== null &&
-      (this._owner.type() !== PlayerType.Human ||
-        mg.playerByClientID(this.authenticatedClientID) !== this._owner)
+      (unprovenLegacyPrivateAttack ||
+        (this.authenticatedClientID !== null &&
+          (this._owner.type() !== PlayerType.Human ||
+            mg.playerByClientID(this.authenticatedClientID) !== this._owner)))
     ) {
       this.active = false;
       return;
@@ -709,6 +721,7 @@ export class AttackExecution implements Execution {
       sourceTile: this.sourceTile,
       removeTroops: this.removeTroops,
       authenticatedClientID: this.authenticatedClientID,
+      legacyUnstampedPending: this.legacyUnstampedPending,
     });
   }
 
@@ -736,6 +749,7 @@ export class AttackExecution implements Execution {
     this.sourceTile = s.sourceTile;
     this.removeTroops = s.removeTroops;
     this.authenticatedClientID = s.authenticatedClientID;
+    this.legacyUnstampedPending = s.legacyUnstampedPending;
   }
 }
 
@@ -761,6 +775,7 @@ const AttackExecutionStateSchema = z.object({
   sourceTile: zTile().nullable(),
   removeTroops: z.boolean(),
   authenticatedClientID: z.string().nullable(),
+  legacyUnstampedPending: z.boolean(),
 });
 type AttackExecutionState = z.infer<typeof AttackExecutionStateSchema>;
 
@@ -771,7 +786,11 @@ export const AttackExecutionSnapshot = execSnapshotType({
   migrations: {
     // Historical snapshots predate the stamped attack origin. Read them
     // without pretending the archive carries an authenticated principal.
-    1: (old: object) => ({ ...old, authenticatedClientID: null }),
+    1: (old: { initialized?: boolean }) => ({
+      ...old,
+      authenticatedClientID: null,
+      legacyUnstampedPending: old.initialized !== true,
+    }),
   },
   cls: () => AttackExecution,
 });

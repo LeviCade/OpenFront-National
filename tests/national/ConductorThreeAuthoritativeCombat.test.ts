@@ -16,16 +16,18 @@ import {
   StampedIntentSchema,
   type GameConfig,
 } from "@openfront/engine-api/Schemas";
+import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
+import { encodeSnapshotValue } from "@openfront/engine/snapshot/SnapshotCodec";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Client } from "../../src/server/Client";
 import { TrustedNationalMatch } from "../../src/server/national/TrustedNationalMatch";
 import { setup } from "../util/Setup";
-import { roundTrip } from "../util/Snapshot";
+import { restoreTestGame, roundTrip } from "../util/Snapshot";
 import { TestConfig } from "../util/TestConfig";
 
 const MATCH = "C2WAR12A";
@@ -433,14 +435,25 @@ describe("Third Conductor E1 — authoritative attack and succession combat", ()
     m.game.takeoverPlayer(m.game.player(A), NEW_A);
     restored.takeoverPlayer(restored.player(A), NEW_A);
     const oldTiles = m.game.player(A).numTilesOwned();
-    const oldDebit = vi.spyOn(m.game.player(A), "removeTroops");
-    const restoredDebit = vi.spyOn(restored.player(A), "removeTroops");
+    // Direct init isolates the attack's side effects from ordinary per-tick
+    // troop normalization (which can call Player.removeTroops itself).
+    const directOriginal = new AttackExecution(
+      220_000, m.game.player(A), D, null, true, OLD_A,
+    );
+    const directRestored = new AttackExecution(
+      220_000, restored.player(A), D, null, true, OLD_A,
+    );
+    const originalBalance = m.game.player(A).troops();
+    const restoredBalance = restored.player(A).troops();
+    directOriginal.init(m.game, m.game.ticks());
+    directRestored.init(restored, restored.ticks());
+    expect(directOriginal.isActive()).toBe(false);
+    expect(directRestored.isActive()).toBe(false);
+    expect(m.game.player(A).troops()).toBe(originalBalance);
+    expect(restored.player(A).troops()).toBe(restoredBalance);
+    // The REAL queued and snapshotted executions also must not launch.
     m.game.executeNextTick();
     restored.executeNextTick();
-    expect(oldDebit).not.toHaveBeenCalled();
-    expect(restoredDebit).not.toHaveBeenCalled();
-    oldDebit.mockRestore();
-    restoredDebit.mockRestore();
     expect(m.game.player(A).numTilesOwned()).toBe(oldTiles);
     expect(m.game.player(A).outgoingAttacks()).toHaveLength(0);
     expect(restored.player(A).outgoingAttacks()).toHaveLength(0);
@@ -471,6 +484,40 @@ describe("Third Conductor E1 — authoritative attack and succession combat", ()
     replacementHost.tick();
     replacementHost.tick();
     expect(m.game.player(A).troops()).toBeLessThan(beforeTroops);
+  });
+
+  it("fails closed on a pre-stamp v1 queued Private human Attack while preserving archival readability", async () => {
+    const m = await createMatch();
+    await atWar(m);
+    front(m.game, A, D);
+    m.game.addExecution(
+      new Executor(m.game, MATCH, undefined).createExec(
+        StampedIntentSchema.parse({
+          type: "attack",
+          targetID: D,
+          troops: 220_000,
+          clientID: OLD_A,
+        }),
+      ),
+    );
+    const oldRoot = snapshotGameData(m.game);
+    const queued = oldRoot.execs.find((record) => record.t === "Attack");
+    expect(queued).toBeDefined();
+    if (queued === undefined) throw new Error("expected pending Attack");
+    const payload = queued.d as Record<string, unknown>;
+    expect(payload.initialized).toBe(false);
+    // Simulate an authentic older archive written before server-stamped
+    // Attack identity existed; no invented principal may appear in migration.
+    queued.v = 1;
+    delete payload.authenticatedClientID;
+    delete payload.legacyUnstampedPending;
+    const legacyBytes = encodeSnapshotValue(oldRoot);
+    const restored = await restoreTestGame(legacyBytes, "plains", PrivateHostConfig);
+    restored.takeoverPlayer(restored.player(A), NEW_A);
+    const tilesBefore = restored.player(A).numTilesOwned();
+    restored.executeNextTick();
+    expect(restored.player(A).outgoingAttacks()).toHaveLength(0);
+    expect(restored.player(A).numTilesOwned()).toBe(tilesBefore);
   });
 
   it("revokes socket-disconnected pending Attack and refuses forged seat identity", async () => {
