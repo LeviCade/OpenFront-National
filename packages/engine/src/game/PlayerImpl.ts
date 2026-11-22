@@ -1636,6 +1636,40 @@ export class PlayerImpl implements Player {
     this.recordUnitConstructed(unit.type());
   }
 
+  /**
+   * D-011 imperial upgrade: same dynamic price and physical level-change as
+   * ordinary upgrade, but a validated treasury debit replaces personal gold.
+   * The emperor may order work even when the subordinate build decree forbids
+   * the subordinate initiating it.
+   */
+  upgradeImperialStructure(unit: Unit, debit: (cost: Gold) => void): void {
+    if (!this.isAlive() || !unit.isActive() ||
+        !Structures.has(unit.type()) ||
+        this.mg.config().isUnitDisabled(unit.type()) ||
+        !this.canUpgradeUnitType(unit.type()) ||
+        !this.isUnitValidToUpgrade(unit) ||
+        this.mg.owner(unit.tile()) !== this ||
+        !this.mg.isLand(unit.tile()))
+      throw new Error("NATIONAL: invalid member structure upgrade");
+    const cost = this.mg.unitInfo(unit.type()).cost(this.mg, this);
+    debit(cost); // Insufficient treasury throws BEFORE the physical mutation.
+    unit.increaseLevel();
+    this.recordUnitConstructed(unit.type());
+  }
+
+  /** Direct imperial demolition has no fictional fee, refund or cooldown. */
+  demolishImperialStructure(unit: Unit): void {
+    if (!this.isAlive() || !unit.isActive() ||
+        !Structures.has(unit.type()) ||
+        unit.owner() !== this || unit.isMarkedForDeletion() ||
+        this.mg.owner(unit.tile()) !== this ||
+        !this.mg.isLand(unit.tile()))
+      throw new Error("NATIONAL: invalid member structure demolition");
+    // Existing UnitImpl.delete already performs the physical grid/owner removal,
+    // produces a client unit update, and retires registered unit execution state.
+    unit.delete(false);
+  }
+
   public buildableUnits(
     tile: TileRef | null,
     units: readonly PlayerBuildableUnitType[] = PlayerBuildable.types,
