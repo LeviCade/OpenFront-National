@@ -92,6 +92,31 @@ describe("C5 E4 political sovereignty and FOG (AI-01/03/04/05/06, COAL-01..06)",
     });
   });
 
+  it("AI-03 refuses discredited MDA invitations instead of automatic pact admission", () => {
+    const w = politicalWorld();
+    const observation = projectNationalObservation({
+      ...w,
+      imperialOffers: [],
+      sightGrants: [],
+      coalitions: [{
+        id: "mda_b",
+        kind: "mda",
+        leaderId: "bravo",
+        members: ["bravo"],
+        terms: { admission: "leader", expulsion: "forbidden" },
+      }],
+      invitations: [{ coalitionId: "mda_b", recipientId: "alpha" }],
+    }, "alpha");
+    const decision = planAIPoliticalInterest(
+      observation,
+      initialAIPoliticalMemory(),
+      25,
+      [{ nationId: "bravo", credibility: -5 }],
+    );
+    expect(decision.decision?.command?.kind).not.toBe("accept-pact");
+    expect(decision.decision?.command?.kind).not.toBe("accept-empire");
+  });
+
   it("COAL-05 makes Betray an explicit prior command before any protected attack", () => {
     const world: NationalWorld = {
       ...politicalWorld(),
