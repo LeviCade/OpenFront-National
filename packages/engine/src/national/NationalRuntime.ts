@@ -364,8 +364,10 @@ export class NationalRuntime {
     return Object.freeze({
       empireId: empire.id,
       workerIncomeBps: row?.workerIncomeBps ?? 0,
-      allowedConstruction: row?.allowedConstruction == null
-        ? null : Object.freeze([...row.allowedConstruction]),
+      allowedConstruction:
+        row?.allowedConstruction === undefined || row.allowedConstruction === null
+          ? null
+          : Object.freeze([...row.allowedConstruction]),
       treasury: row?.treasury ?? "0",
       canAmend: empire.leaderId === memberId,
       armyMode: row?.military?.mode ?? "decentralized",
@@ -508,7 +510,7 @@ export class NationalRuntime {
     const empire = this.politics.empires.find((e) => e.memberIds.includes(memberId));
     if (!empire || empire.leaderId === memberId) return true;
     const allowed = this.administration.get(empire.id)?.allowedConstruction;
-    return allowed == null || allowed.includes(type);
+    return allowed === null || allowed === undefined || allowed.includes(type);
   }
 
   /** Prepare all dispositions before publishing the new sovereign state. */
