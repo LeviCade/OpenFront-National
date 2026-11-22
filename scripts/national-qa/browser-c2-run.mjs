@@ -158,9 +158,10 @@ function runLocal(modeName) {
     verdict.gameplay = "FAIL";
     if (!verdict.firstFailedStage) {
       verdict.firstFailure = {
-        code: processResult.error.code === "ETIMEDOUT"
-          ? "CHROMIUM_PROCESS_TIMEOUT"
-          : "CHROMIUM_PROCESS_FAILED",
+        code:
+          processResult.error.code === "ETIMEDOUT"
+            ? "CHROMIUM_PROCESS_TIMEOUT"
+            : "CHROMIUM_PROCESS_FAILED",
         owner: "E5",
       };
     }
