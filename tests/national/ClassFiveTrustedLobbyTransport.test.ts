@@ -46,7 +46,7 @@ function verified(index: number): Client {
     publicId: publics[index],
     username: ["Alpha", "Bravo", "Charlie"][index],
     // The real Worker obtains this from a validated signed account token.
-    claims: { sub: "verified-persistent-" + index } as NonNullable<
+    claims: { sub: "verified-persistent-" + index, provider: "google" } as NonNullable<
       Client["claims"]
     >,
   });
@@ -100,7 +100,11 @@ function fixture(
     },
     deps: { createNationalRunner: realRunner, turnIntervalMs: () => 1000 },
   });
-  for (const client of seats) expect(game.joinClient(client)).toBe("joined");
+  for (const client of seats) {
+    expect(game.joinClient(client)).toBe(
+      client.claims === null ? "not_trusted" : "joined",
+    );
+  }
   if (extra) expect(game.joinClient(extra)).toBe("joined");
   return { game, seats };
 }
@@ -271,7 +275,7 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
       clientID: cid("late5"),
       persistentID: "late-person",
       publicId: "verified-late",
-      claims: {} as NonNullable<Client["claims"]>,
+      claims: { sub: "late-person", provider: "google" } as NonNullable<Client["claims"]>,
     });
     expect(game.joinClient(late)).toBe("started");
     expect(game.rejoinClient(makeMockWs() as any, "not-seated")).toBe(false);
@@ -293,10 +297,9 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
       claims: null,
     }) as Client;
     const one = fixture([a, guest, c]);
-    await boot(one.game);
-    expect(one.game.hasEnded()).toBe(true);
+    expect(one.game.activeClients()).not.toContain(guest);
     expect(
-      sent(a).some((m) => m.type === "turn" || m.type === "national_start"),
+      sent(guest).some((m) => m.type === "turn" || m.type === "national_start"),
     ).toBe(false);
     const duplicate = Object.assign(
       Object.create(Object.getPrototypeOf(c)),
@@ -314,7 +317,9 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
     const spectator = makeClient({
       clientID: cid("watch5"),
       spectator: true,
-      claims: {} as NonNullable<Client["claims"]>,
+      claims: { sub: "watch5-account", provider: "google" } as NonNullable<
+        Client["claims"]
+      >,
       publicId: "verified-watcher",
     });
     const { game, seats } = fixture(undefined, spectator);
