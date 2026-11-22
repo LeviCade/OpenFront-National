@@ -209,9 +209,6 @@ test("host teardown must independently account for private logs, CPU slots and J
 test("synthetic Ed25519 signer respects independent dual enrollment and immutable bytes", () => {
   const keys = generateKeyPairSync("ed25519");
   const privatePem = keys.privateKey.export({ format: "pem", type: "pkcs8" });
-  const publicPem = keys.publicKey
-    .export({ format: "pem", type: "spki" })
-    .toString();
   const fp = createHash("sha256")
     .update(keys.publicKey.export({ type: "spki", format: "der" }))
     .digest("hex");
