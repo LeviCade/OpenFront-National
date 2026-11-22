@@ -480,11 +480,13 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     for (let y = 5; y < 86; y++) {
       for (let x = 5; x < 86; x++) {
         const ref = game.ref(x, y);
-        if (game.isLand(ref) && game.owner(ref) !== a)
-          a.conquer(ref);
+        if (game.isLand(ref) && game.owner(ref) !== a) a.conquer(ref);
       }
     }
-    const legallyVisible = collectLiveNationalObservation(game, A.id).visibleTiles;
+    const legallyVisible = collectLiveNationalObservation(
+      game,
+      A.id,
+    ).visibleTiles;
     expect(legallyVisible.size).toBeGreaterThan(4096);
     host.tick();
     const first = view(sockets[0].socket);
@@ -578,7 +580,9 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     host.tick();
     const two = view(sockets[0].socket);
     expect(two.map.unitRemovedIds).not.toContain(neverEmitted.id());
-    expect(two.map.units.some((unit) => unit.id === neverEmitted.id())).toBe(false);
+    expect(two.map.units.some((unit) => unit.id === neverEmitted.id())).toBe(
+      false,
+    );
     const u2 = reader.accept(two.map, two.msg.tick);
     expect(u2.unitSweepComplete).toBe(true);
     expect(u2.clearAllUnits).toBe(false);
@@ -591,7 +595,9 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     host.tick();
     const revoked = view(sockets[0].socket);
     expect(revoked.map.unitRemovedIds).toContain(removed.id());
-    expect(revoked.map.units.find((unit) => unit.id === removed.id())).toBeUndefined();
+    expect(
+      revoked.map.units.find((unit) => unit.id === removed.id()),
+    ).toBeUndefined();
     const delta = reader.accept(revoked.map, revoked.msg.tick);
     expect(delta.removedUnitIds).toContain(removed.id());
     expect(reader.units().some((unit) => unit.id === removed.id())).toBe(false);
@@ -608,13 +614,15 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     const foreignTroops = {
       ...revoked.map,
       tick: revoked.map.tick + 1,
-      units: [{
-        id: removed.id(),
-        ownerId: B.id,
-        kind: "transport",
-        tile: game.ref(195, 195),
-        troops: 9_999_991,
-      }],
+      units: [
+        {
+          id: removed.id(),
+          ownerId: B.id,
+          kind: "transport",
+          tile: game.ref(195, 195),
+          troops: 9_999_991,
+        },
+      ],
     };
     expect(() => reader.accept(foreignTroops, foreignTroops.tick)).toThrow();
     expect(reader.observedUnitCount).toBeGreaterThan(2000);
@@ -630,15 +638,33 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     const empire = "c3_e3_reset_empire";
     const a = game.player(A.id);
     const b = game.player(B.id);
-    game.performNationalCommand(a, { kind: "found-empire", empireId: empire }, A.clientID!);
-    game.performNationalCommand(a, {
-      kind: "offer-empire", empireId: empire, candidateId: B.id,
-    }, A.clientID!);
-    game.performNationalCommand(b, {
-      kind: "accept-empire", empireId: empire, candidateId: B.id,
-    }, B.clientID!);
+    game.performNationalCommand(
+      a,
+      { kind: "found-empire", empireId: empire },
+      A.clientID!,
+    );
+    game.performNationalCommand(
+      a,
+      {
+        kind: "offer-empire",
+        empireId: empire,
+        candidateId: B.id,
+      },
+      A.clientID!,
+    );
+    game.performNationalCommand(
+      b,
+      {
+        kind: "accept-empire",
+        empireId: empire,
+        candidateId: B.id,
+      },
+      B.clientID!,
+    );
     const allyRef = b.spawnTile()!;
-    expect(collectLiveNationalObservation(game, A.id).visibleTiles.has(allyRef)).toBe(true);
+    expect(
+      collectLiveNationalObservation(game, A.id).visibleTiles.has(allyRef),
+    ).toBe(true);
     host.tick();
     const allied = view(sockets[0].socket);
     const reader = new NationalObserverMapContinuity(A.id);
@@ -647,7 +673,9 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     // tile-relinquish elimination used by the existing FOG-06/07 fixture.
     for (const tile of [...b.tiles()]) b.relinquish(tile);
     game.executeNextTick();
-    expect(collectLiveNationalObservation(game, A.id).visibleTiles.has(allyRef)).toBe(false);
+    expect(
+      collectLiveNationalObservation(game, A.id).visibleTiles.has(allyRef),
+    ).toBe(false);
     host.tick();
     const after = view(sockets[0].socket);
     expect(after.map.reset).toBe(true);
@@ -657,8 +685,10 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     expect(d.clearAllTiles).toBe(true);
     expect(d.clearAllUnits).toBe(true);
     expect(reader.tileStatus(allyRef)).toBe("revoked");
-    expect(after.map.tiles.every(([ref]) =>
-      collectLiveNationalObservation(game, A.id).visibleTiles.has(ref)
-    )).toBe(true);
+    expect(
+      after.map.tiles.every(([ref]) =>
+        collectLiveNationalObservation(game, A.id).visibleTiles.has(ref),
+      ),
+    ).toBe(true);
   });
 });
