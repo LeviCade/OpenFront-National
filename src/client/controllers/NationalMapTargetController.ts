@@ -31,6 +31,13 @@ export function isNationalOpponentTile(
   if (!game.isValidCoord(point.x, point.y)) return false;
   const tile = game.ref(point.x, point.y);
   if (!game.isLand(tile)) return false;
+  // Current seat + owner bytes are insufficient: the tile itself must be
+  // present in the authenticated, currently observed recipient map page.
+  if (
+    game.isTrustedNationalProjection?.() === true &&
+    game.trustedTileObserved(tile) !== true
+  )
+    return false;
   const owner = game.owner(tile);
   return owner.isPlayer() && owner.id() === targetPlayerId;
 }
