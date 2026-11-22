@@ -28,11 +28,11 @@ jobs:
         run: |
           npx --no-install vitest run --project node \
             tests/national/C5ImperialCentralCombat.test.ts \
-            tests/national/C5ImperialSpending.test.ts \
+            tests/national/ImperialSpendingClassFive.test.ts \
             tests/national/C5ImperialWarPolicy.test.ts \
             tests/national/C5Class1E5EconomicAI.test.ts \
             tests/national/C5CoastalVisibility.test.ts \
-            tests/national/C5SovereignAIDiplomacy.test.ts \
+            tests/national/C5AIPoliticalGame.test.ts \
             tests/national/C4NativeImperialGate.test.ts \
             tests/national/C4NativePactHost.test.ts \
             tests/national/C4Class2EconomicMaritime.test.ts \
