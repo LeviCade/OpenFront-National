@@ -269,7 +269,9 @@ export function planAIPoliticalInterest(
       .filter((id) =>
         id !== self.id &&
         frontiers.includes(id) &&
-        (reputationById.get(id) ?? 0) <= -3 &&
+        ((reputationById.get(id) ?? 0) <= -3 ||
+          (observation.ownResources.troops >= 40_000 &&
+            self.landPercent >= (nations.get(id)?.landPercent ?? Infinity) * 3)) &&
         (nations.get(id)?.landPercent ?? Infinity) <=
           Math.max(1, self.landPercent * 1.5) &&
         observation.ownResources.troops >= 1_000 &&
