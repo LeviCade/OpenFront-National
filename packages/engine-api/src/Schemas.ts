@@ -792,8 +792,8 @@ export const NationalExpelPactIntentSchema = z.object({
 export const NationalIssueSanctionIntentSchema = z.object({
   type: z.literal("national_issue_sanction"),
   scope: z.enum(["national", "imperial"]),
-  targetId: MappedID,
-  recipientIds: z.array(MappedID).min(1).max(16),
+  targetId: NationalWarId,
+  recipientIds: z.array(NationalWarId).min(1).max(16),
   durationTicks: zb.uint({ min: 1, max: 6000 }),
   requestId: NationalPoliticalRequestId,
 });

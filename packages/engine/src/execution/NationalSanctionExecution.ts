@@ -351,7 +351,7 @@ export class NationalSanctionExecution implements Execution {
         threat: d.threat,
         // Never expose transaction existence or another recipient's response.
         response: own?.response ?? null,
-        requestId: isIssuer ? e.command.requestId : null,
+        requestId: isIssuer && e.actor === observer ? e.command.requestId : null,
       }];
     });
   }
@@ -369,6 +369,10 @@ export class NationalSanctionExecution implements Execution {
         (d.phase !== "decision-required" && d.phase !== "satisfied") ||
         game.ticks() >= d.deadline + RESOLUTION_WINDOW
       ) continue;
+      const issuer = e.controllingIssuer();
+      const target = living(game, d.target);
+      if (!issuer || !target || issuer === target ||
+          (d.empire !== null && game.nationalPoliticalAuthority()?.empireOf(d.target) === d.empire)) continue;
       const other = d.target === a.id() ? b.id() :
         d.target === b.id() ? a.id() : null;
       const row = d.recipients.find((r) => r.id === other);

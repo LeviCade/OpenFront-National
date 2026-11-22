@@ -3,6 +3,7 @@ import {
   PlayerType,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
+import { NationalIssueSanctionIntentSchema } from "@openfront/engine-api/Schemas";
 import { EmbargoExecution } from "@openfront/engine/execution/EmbargoExecution";
 import { NationalSanctionExecution } from "@openfront/engine/execution/NationalSanctionExecution";
 import { PortExecution } from "@openfront/engine/execution/PortExecution";
@@ -406,14 +407,15 @@ describe("C4 Class 2 E3 real NATIONAL economic and maritime execution", () => {
   it("ECON-02/03: demand is voluntary, actual defiant voyage pays, issuer alone enforces", async () => {
     const { game, a, b, c, d, home, enemy, other, own } = await fixture();
     const before = balances(game);
-    game.addExecution(new NationalSanctionExecution(a, {
+    const command = NationalIssueSanctionIntentSchema.parse({
       type: "national_issue_sanction",
       scope: "national",
       targetId: B,
       recipientIds: [C, D],
       durationTicks: 20,
       requestId: "e3-sanction-issue",
-    }));
+    });
+    game.addExecution(new NationalSanctionExecution(a, command));
     ticks(game, 2);
     const rows = NationalSanctionExecution.viewFor(game, a);
     expect(rows).toHaveLength(1);

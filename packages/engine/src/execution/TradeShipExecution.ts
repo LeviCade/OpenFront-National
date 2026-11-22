@@ -291,6 +291,8 @@ export class TradeShipExecution implements Execution {
           this.srcPort.isUnderConstruction() ||
         this.srcPort.owner() !== this.origOwner ||
         !this._dstPort.isActive() ||
+        this._dstPort.isMarkedForDeletion() ||
+        this._dstPort.isUnderConstruction() ||
         !this.origOwner.canTrade(this._dstPort.owner()))
     ) {
       return;
@@ -326,11 +328,13 @@ export class TradeShipExecution implements Execution {
       this._dstPort.owner().addGold(gold, this._dstPort.tile());
       this.srcPort.owner().addTradeGold(gold);
       this._dstPort.owner().addTradeGold(gold);
-      NationalSanctionExecution.paidTrade(
-        this.mg,
-        this.srcPort.owner(),
-        this._dstPort.owner(),
-      );
+      if (gold > 0n) {
+        NationalSanctionExecution.paidTrade(
+          this.mg,
+          this.srcPort.owner(),
+          this._dstPort.owner(),
+        );
+      }
       // Record stats
       this.mg
         .stats()
