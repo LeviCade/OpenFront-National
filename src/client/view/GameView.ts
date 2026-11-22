@@ -842,8 +842,7 @@ export class GameView implements GameLike {
           pu.id === this.trustedPrincipal && pu.clientID !== this._myClientID) return;
       if (
         this._trustedNationalProjection &&
-        pu.id !== this.trustedPrincipal &&
-        pu.clientID !== this._myClientID
+        (pu.id !== this.trustedPrincipal || pu.troops === undefined)
       ) {
         // E3 deliberately strips private enemy fields. The legacy constructor
         // requires arrays and numeric slots; these are inert renderer defaults,
@@ -876,10 +875,10 @@ export class GameView implements GameLike {
             isLobbyCreator: false,
             isAlive: false,
             ...pu,
-            hasSpawned: (pu.tilesOwned ?? 0) > 0,
+            hasSpawned: pu.hasSpawned ?? (pu.tilesOwned ?? 0) > 0,
           };
           pu = publicView;
-        } else if (pu.tilesOwned !== undefined) {
+        } else if (pu.tilesOwned !== undefined && pu.hasSpawned === undefined) {
           pu = { ...pu, hasSpawned: pu.tilesOwned > 0 };
         }
       }

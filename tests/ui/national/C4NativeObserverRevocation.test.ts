@@ -121,19 +121,30 @@ describe("C4 E4: native recipient view revocation", () => {
       nationalPolitics: { empires: [], victory: null },
       nationalConflicts: { recipientId: "", motions: [], layers: [] } };
     expect(() => assertTrustedPublicProjection(packet)).not.toThrow();
+    const own = { type: GameUpdateType.Player, id: self, clientID: "client-a", smallID: 1, name: "Self", playerType: PlayerType.Human, hasSpawned: false };
+    const bound = { ...packet, updates: { [GameUpdateType.Player]: [own] } };
+    expect(() => assertTrustedPublicProjection(bound, self, "client-a")).not.toThrow();
+    expect(() => assertTrustedPublicProjection(bound, enemy, "client-b")).toThrow();
+    expect(() => assertTrustedPublicProjection({ ...bound, updates: { [GameUpdateType.Player]: [{ ...own, troops: 100 }] } }, self, "client-a")).toThrow();
     expect(() => assertTrustedPublicProjection({ ...packet, packedPlayerUpdates: [1, 2, 3, 4, 5] })).toThrow();
     expect(() => assertTrustedPublicProjection({ ...packet, nationalConflicts: { recipientId: self, motions: [], layers: [] } })).toThrow();
     expect(readTrustedVictory(packet, self)).toBe("unresolved");
     const resolved = { ...packet, nationalPolitics: { empires: [], victory: { resolved: true, sovereignPowerCount: 1, prizes: [{ kind: "SovereignVictor", nationId: self }] } } };
     expect(readTrustedVictory(resolved, self)).toBe("victory");
     expect(readTrustedVictory(resolved, enemy)).toBe("defeat");
-    const { view } = setup();
+    const { view, update } = setup();
+    view.update(materializeTrustedNationalUpdate(bound, 0));
+    expect(view.playerByClientID("client-a")?.id()).toBe(self);
+    expect(view.playerByClientID("client-a")?.troops()).toBe(0);
     expect(view.trustedSpawnReady()).toBe(false);
     view.setTrustedSpawnReady(true);
     expect(view.trustedSpawnReady()).toBe(true);
     expect(view.trustedProjectionReady()).toBe(false);
     view.resetTrustedProjectionSight();
     expect(view.trustedSpawnReady()).toBe(false);
+    view.update({ ...update, tick: 2 });
+    expect(view.playerByClientID("client-a")?.id()).toBe(self);
+    expect(view.playerByClientID("client-a")?.hasSpawned()).toBe(true);
   });
 
   it("draws authorized ownership and packed native units, deletes a unit without fake death, and refuses stale attack dispatch", () => {

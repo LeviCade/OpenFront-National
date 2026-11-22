@@ -226,7 +226,7 @@ export function parseTrustedNationalProjection(
  */
 /** E3 intentionally omits the private map for unspawned or eliminated seats.
  * This restricted public frame MUST NOT authorize a private map or commands. */
-export function assertTrustedPublicProjection(packet: TrustedNationalProjection): void {
+export function assertTrustedPublicProjection(packet: TrustedNationalProjection, actor?: string, clientID?: string): void {
   if (packet.nationalObserverMap !== undefined ||
       !Array.isArray(packet.packedTileUpdates) || packet.packedTileUpdates.length !== 0 ||
       ["packedUnitUpdates", "packedPlayerUpdates", "packedMissileTimers", "playerNameViewData",
@@ -235,10 +235,20 @@ export function assertTrustedPublicProjection(packet: TrustedNationalProjection)
     throw new Error("NATIONAL unauthorized public-only projection");
   const allowed = new Set(["type", "id", "name", "displayName", "nationFlag", "playerType", "smallID", "isAlive", "tilesOwned"]);
   const players = packet.updates[GameUpdateType.Player];
-  if (!Array.isArray(players) || players.some((player) => !record(player) ||
-      player.type !== GameUpdateType.Player || typeof player.id !== "string" ||
-      Object.keys(player).some((key) => !allowed.has(key))))
-    throw new Error("NATIONAL public roster contains unauthorized player fields");
+  const seen = new Set<string>();
+  if (!Array.isArray(players)) throw new Error("NATIONAL malformed public roster");
+  for (const player of players) {
+    if (!record(player) || player.type !== GameUpdateType.Player ||
+        typeof player.id !== "string" || seen.has(player.id))
+      throw new Error("NATIONAL invalid public roster");
+    seen.add(player.id);
+    const ownIdentity = actor !== undefined && clientID !== undefined &&
+      player.id === actor && player.clientID === clientID;
+    if (Object.keys(player).some((key) => !allowed.has(key) &&
+      !(ownIdentity && (key === "clientID" || key === "hasSpawned"))) ||
+      (ownIdentity && typeof player.hasSpawned !== "boolean"))
+      throw new Error("NATIONAL public roster contains unauthorized player fields");
+  }
   const conflict = packet.nationalConflicts;
   if (conflict !== undefined && (!record(conflict) || conflict.recipientId !== "" ||
       !Array.isArray(conflict.motions) || conflict.motions.length !== 0))
@@ -253,7 +263,8 @@ export function readTrustedVictory(packet: TrustedNationalProjection, actor: str
   if (victory.resolved !== true || victory.sovereignPowerCount !== 1 ||
       !Array.isArray(victory.prizes) || !victory.prizes.length ||
       victory.prizes.some((p) => !record(p) || typeof p.nationId !== "string" ||
-        typeof p.kind !== "string")) return "unresolved";
+        (p.kind !== "SovereignVictor" && p.kind !== "ImperialVictor" && p.kind !== "EmpireVictor") ||
+        (p.kind !== "SovereignVictor" && typeof p.empireId !== "string"))) return "unresolved";
   return victory.prizes.some((p) => p.nationId === actor) ? "victory" : "defeat";
 }
 

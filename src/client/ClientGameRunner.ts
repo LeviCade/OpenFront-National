@@ -1230,17 +1230,18 @@ export class ClientGameRunner {
       if (observerMap === null) {
         // The authoritative host emits public-only frames before spawn and after
         // elimination. Missing geography during an active life remains fatal.
-        assertTrustedPublicProjection(event.projection);
+        assertTrustedPublicProjection(event.projection, this.trustedPrincipal ?? undefined, this.clientID ?? undefined);
         const update = materializeTrustedNationalUpdate(event.projection, this.trustedLastTick);
         const actor = update.updates[GameUpdateType.Player].find((p) => p.id === this.trustedPrincipal);
         const victory = readTrustedVictory(event.projection, this.trustedPrincipal!);
         const eliminated = actor?.isAlive === false || this.myPlayer?.isAlive() === false;
-        if (this.myPlayer?.hasSpawned() && !eliminated && victory === "unresolved" && !this.gameView.inSpawnPhase())
+        if (this.myPlayer?.hasSpawned() && !eliminated && victory === "unresolved")
           throw new Error("NATIONAL active seat lost mandatory private map");
         const hadPrivate = this.gameView.trustedProjectionReady();
         if (hadPrivate) this.revokeTrustedSight();
         this.gameView.update(update);
-        const spawn = this.gameView.inSpawnPhase() && victory === "unresolved";
+        this.myPlayer = this.clientID ? this.gameView.playerByClientID(this.clientID) : null;
+        const spawn = this.gameView.inSpawnPhase() && victory === "unresolved" && actor?.hasSpawned !== true;
         this.gameView.setTrustedSpawnReady(spawn);
         this.trustedLastTick = update.tick;
         if (this.trustedStatus) {
