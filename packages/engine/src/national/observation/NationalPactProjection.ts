@@ -62,7 +62,11 @@ export function projectNationalPactDisclosure(
   const authority = game.nationalPoliticalAuthority();
   // Older authorized GameRunner projection fixtures omit this newer read.
   // Missing authority is UNKNOWN, never permission to disclose pact terms.
-  if (!authority || typeof authority.alive !== "function" || !authority.alive(observerId))
+  if (
+    !authority ||
+    typeof authority.alive !== "function" ||
+    !authority.alive(observerId)
+  )
     return undefined;
   const bind = (
     view: NationalPactDisclosureViewData,
