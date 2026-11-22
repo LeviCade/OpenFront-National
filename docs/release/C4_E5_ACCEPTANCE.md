@@ -20,4 +20,10 @@ E2: supported real login, same host/game/runner, three independently registered 
 
 E3/E4: independently observed recipient-specific sanitized projection digests, actual browser mouse/touch and rendering, current legal targets and revocation. E6: approved real host access and exact independently verified pre/postflight signer chain. E5: correlate without altering gameplay.
 
-#5: tree confirms 40 font/audio candidates and four absent music files. Directory license is not individual media-origin clearance. #6: exact install reported 10 advisories (4 moderate, 4 high, 2 critical), not a production exposure count. Fresh split audit required; no remediation claimed.
+#5: strict run 44975025594 checked 12 known shell files successfully; 40 media origin reviews (2 fonts, 38 audio) and four missing music resources still block release. Directory license is not individual media-origin clearance.
+
+#6: exact same-lockfile audit on `23f744402a6678c4b77a66af841493fea226318a` reports **zero production-tree advisories** and ten dev-only candidate packages: critical `concurrently`, `shell-quote`; high `brace-expansion`, `source-map-js`, `undici`, `vite`; moderate `@vitest/coverage-v8`, `@vitest/mocker`, `@vitest/ui`, `vitest`. All list fixes available. Risk remains in build, CI and developer environments; this is not an exploitability determination. Strict audit failed as required. No remediation claimed.
+
+Audit archive 14735475520, SHA-256 `ffe932cd49f342f23fa12df4ff4a3395057a0ac8d6eec59b54d52317ab0cb8c5`.
+
+Exact source control job 137062878651: 20 new controls and 53 total tests passed, lint zero errors, formatter failed on three new files; the following commit applies the exact CI-generated formatter patch.

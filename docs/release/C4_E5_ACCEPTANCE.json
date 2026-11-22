@@ -122,16 +122,65 @@
       "gameplay-3.mp3",
       "menu-theme.mp3"
     ],
-    "mediaOriginPending": 40
+    "mediaOriginPending": 40,
+    "exactAuditedSource": "23f744402a6678c4b77a66af841493fea226318a",
+    "knownShellChecks": 12,
+    "knownShellStatus": "PASS",
+    "fontsPending": 2,
+    "audioPending": 38,
+    "strictRelease": "FAIL"
   },
   "dependencyGate": {
     "issue": 6,
-    "installReportedAdvisories": {
+    "exactAuditedSource": "23f744402a6678c4b77a66af841493fea226318a",
+    "productionAdvisories": {
+      "total": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0
+    },
+    "allInstalledAdvisories": {
       "total": 10,
       "moderate": 4,
       "high": 4,
       "critical": 2
     },
-    "productionClassification": "PENDING exact npm audit --omit=dev"
+    "devOnlyCandidates": {
+      "critical": [
+        "concurrently",
+        "shell-quote"
+      ],
+      "high": [
+        "brace-expansion",
+        "source-map-js",
+        "undici",
+        "vite"
+      ],
+      "moderate": [
+        "@vitest/coverage-v8",
+        "@vitest/mocker",
+        "@vitest/ui",
+        "vitest"
+      ]
+    },
+    "strictRelease": "FAIL",
+    "classification": "Production-tree audit zero; development/build/CI exposure remains open and not equivalent to proven exploitation",
+    "lockfileUnchangedFromFounding": true
+  },
+  "auditArtifact": {
+    "runId": 44975025594,
+    "jobId": 137062878375,
+    "artifactId": 14735475520,
+    "archiveSha256": "ffe932cd49f342f23fa12df4ff4a3395057a0ac8d6eec59b54d52317ab0cb8c5",
+    "url": "https://github.com/LeviCade/OpenFront-National/actions/runs/44975025594/artifacts/14735475520"
+  },
+  "oracleTestEvidence": {
+    "exactSource": "23f744402a6678c4b77a66af841493fea226318a",
+    "runId": 44975025594,
+    "jobId": 137062878651,
+    "newTestsPassed": 20,
+    "totalTestsPassed": 53,
+    "lint": "PASS",
+    "formatter": "FAIL (corrected from exact CI diff in next commit)"
   }
 }
