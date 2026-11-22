@@ -315,6 +315,25 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     );
     expect(restored.nationalWarAuthority()?.atWar(B, D)).toBe(true);
     expect(balances(restored)).toEqual(balances(m.game));
+
+    // WAR-09: the final independent layer now ends through bilateral peace.
+    // There must be NO surviving offensive permission for any constituent.
+    act(m, 3, {
+      type: "national_propose_peace",
+      warId: nationalId,
+      requestId: "c5_final_national_offer",
+    });
+    const nationalOffer = military(m, D, "c5_final_national_offer");
+    expect(nationalOffer.accepted).toBe(true);
+    act(m, 1, {
+      type: "national_accept_peace",
+      motionId: nationalOffer.motionId!,
+      requestId: "c5_final_national_accept",
+    });
+    expect(military(m, B, "c5_final_national_accept").accepted).toBe(true);
+    expect(war(m, nationalId).endedTick).not.toBeNull();
+    expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(false);
+    expect(m.game.nationalWarAuthority()?.authorizeOffensiveAction(B, D)).toBe(false);
   });
 
   it("denies stale delegated requests after revocation and old emperor after crown transfer, preserving identical queued replay", async () => {
