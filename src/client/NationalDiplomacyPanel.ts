@@ -1252,13 +1252,13 @@ export class NationalDiplomacyPanel extends LitElement {
       this.imperialStatus = "Policy or authority changed; review the current decree.";
       return;
     }
-    const requestId = createNationalPoliticalRequestId();
-    if (!requestId) { this.imperialStatus = "Cannot generate a secure command identifier."; return; }
+    let requestId: string;
+    try { requestId = createNationalPoliticalRequestId(); } catch { this.imperialStatus = "Cannot generate a secure command identifier."; return; }
     const intent = parseImperialCommand(command, requestId);
     if (!intent) { this.imperialStatus = "Invalid policy or command schema unavailable."; return; }
     this.imperialAttempt = { gameId: game.gameID(), actorId: actor.id(), pactId: view.empireId, type: "national_imperial_administration", tick: game.ticks(), requestId };
     this.imperialStatus = "Pending authoritative policy receipt.";
-    this.eventBus.emit(new SendNationalImperialPolicyIntentEvent(intent));
+    try { this.eventBus.emit(new SendNationalImperialPolicyIntentEvent(intent)); } catch { this.imperialAttempt = null; this.imperialStatus = "Command transport failed; outcome unconfirmed."; }
   }
   private renderImperialPolicyControls(view: NationalImperialAdministrationView) {
     if (!view.canAmend || !imperialPolicyIntentAvailable(view, "set-policy")) return nothing;

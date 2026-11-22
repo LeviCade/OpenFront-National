@@ -6,7 +6,7 @@ export type ImperialPolicyCommand =
   | { kind: "set-policy"; empireId: string; policy: { workerIncomeBps: number; allowedConstruction: UnitType[] | null } }
   | { kind: "set-army-mode"; empireId: string; mode: "decentralized" | "hybrid"; thresholdBps: number };
 
-export const imperialConstructionCategories = [...new Set([...Structures.types, UnitType.Warship])];
+export const imperialConstructionCategories: readonly UnitType[] = [...new Set([...Structures.types, UnitType.Warship])];
 /** E1 owns the exact appended intent schema. Standalone E4 must not create an
  * alternative wire command or show a functional control before it exists. */
 export function parseImperialCommand(command: ImperialPolicyCommand, requestId: string): Intent | null {

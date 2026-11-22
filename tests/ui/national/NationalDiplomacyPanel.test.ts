@@ -10,9 +10,11 @@ import type {
   NationalFoundingResult,
   NationalPublicPolitics,
 } from "../../../src/client/NationalDiplomacyState";
+import { imperialPolicyIntentAvailable } from "../../../src/client/NationalImperialState";
 import type { PactReceipt } from "../../../src/client/NationalPactState";
 import {
   SendNationalPactIntentEvent,
+  SendNationalImperialPolicyIntentEvent,
   SendNationalFoundEmpireIntentEvent,
 } from "../../../src/client/Transport";
 import type { GameView } from "../../../src/client/view";
@@ -882,7 +884,9 @@ describe("C4 E4 native constitutional controls", () => {
     expect(new Set(requests.map((r) => r.intent.requestId)).size).toBe(5);
   });
   it("shows treasury only for the current member and never offers unilateral imperial secession", async () => {
-    const { element, optionsState } = await mount();
+    const { element, optionsState, eventBus } = await mount();
+    const commands: SendNationalImperialPolicyIntentEvent[] = [];
+    eventBus.on(SendNationalImperialPolicyIntentEvent, (e) => commands.push(e));
     optionsState.politics = {
       empires: [
         {
@@ -914,7 +918,23 @@ describe("C4 E4 native constitutional controls", () => {
     expect(admin?.textContent).toContain("900719925474099399");
     expect(admin?.textContent).toContain("12.50%");
     expect(admin?.textContent).toContain("No regulated construction");
-    expect(admin?.querySelector("button")).toBeNull();
+    const policyAvailable = imperialPolicyIntentAvailable(optionsState.administration, "set-policy");
+    const policy = admin?.querySelector<HTMLButtonElement>('[data-national-imperial-action="set-policy"]');
+    if (policyAvailable) {
+      expect(policy).toBeTruthy();
+      const form = policy!.closest("form")!;
+      form.querySelector<HTMLInputElement>('[name="basisPoints"]')!.value = "2500";
+      form.querySelector<HTMLInputElement>('[name="confirm"]')!.checked = true;
+      policy!.click();
+      await element.updateComplete;
+      expect(commands).toHaveLength(1);
+      expect(commands[0].intent).toMatchObject({type: "national_imperial_administration", command: {kind: "set-policy", empireId: "empire", policy: {workerIncomeBps: 2500, allowedConstruction: []}}});
+      expect(admin?.textContent).toContain("Pending authoritative policy receipt");
+      expect(admin?.textContent).toContain("12.50%");
+    } else {
+      expect(policy ?? null).toBeNull();
+      expect(commands).toHaveLength(0);
+    }
     expect(
       element.querySelector('[data-national-pact-action="betray"]'),
     ).toBeNull();
