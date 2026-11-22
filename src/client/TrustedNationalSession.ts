@@ -320,3 +320,8 @@ export class TrustedNationalStartedEvent implements GameEvent {
 export class TrustedNationalProjectionEvent implements GameEvent {
   constructor(public readonly projection: TrustedNationalProjection) {}
 }
+
+/** The authenticated wire carried a malformed projection. Fail closed, not silent. */
+export class TrustedNationalProjectionRejectedEvent implements GameEvent {
+  constructor(public readonly gameID: string) {}
+}
