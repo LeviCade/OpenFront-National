@@ -490,3 +490,36 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
     expect(defaultPending.victoryRoster()).toBeNull();
   });
 });
+
+describe("Class Two E1 COAL-02/07 recipient pact reads", () => {
+  it("separates public metadata, actionable invitations, and member votes", async () => {
+    const game = await realGame(3);
+    const n = game.player(N), s = game.player(S), w = game.player(W);
+    game.performNationalCommand(n, {
+      kind: "found-pact", pactId: "e1-pact", name: "E1 Pact",
+      pactKind: "MDA", terms: { admission: "unanimous", expulsion: "leader" },
+    });
+    game.performNationalCommand(n, { kind: "invite-pact", pactId: "e1-pact", candidateId: S });
+    expect(game.nationalPublicPactRoster()[0]).not.toHaveProperty("terms");
+    expect(game.nationalPactViewsFor(w)).toEqual([]);
+    expect(game.nationalPactViewsFor(s)[0].canAccept).toBe(true);
+    game.performNationalCommand(s, { kind: "accept-pact", pactId: "e1-pact" });
+    game.performNationalCommand(n, { kind: "invite-pact", pactId: "e1-pact", candidateId: W });
+    expect(game.nationalPactViewsFor(w)).toEqual([]);
+    expect(game.nationalPactViewsFor(n)[0].invitations[0].authorized).toBe(false);
+    game.performNationalCommand(n, {
+      kind: "propose-pact-amendment", pactId: "e1-pact",
+      terms: { admission: "leader", expulsion: "forbidden" }, administratorId: N,
+    });
+    expect(game.nationalPactViewsFor(s)[0].canApproveAmendment).toBe(true);
+    expect(game.nationalPactViewsFor(n)[0].pendingAmendment?.ownVote).toBe(true);
+    expect(game.nationalPactViewsFor(w)).toEqual([]);
+    expect(Object.isFrozen(game.nationalPactViewsFor(n)[0].terms)).toBe(true);
+    const { restored } = await roundTrip(game, "plains");
+    expect(restored.nationalPactViewsFor(restored.player(N))).toEqual(game.nationalPactViewsFor(n));
+    game.performNationalCommand(s, { kind: "approve-pact-amendment", pactId: "e1-pact" });
+    expect(game.nationalPactViewsFor(w)[0].canAccept).toBe(true);
+    expect(game.nationalPactViewsFor(n)[0].pendingAmendment).toBeNull();
+    expect(game.nationalPactViewsFor(n)[0].expellableMemberIds).toEqual([]);
+  });
+});

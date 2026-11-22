@@ -56,6 +56,8 @@ import type {
   NationalCommand,
   NationalAccessionOfferView,
   NationalPublicPoliticalView,
+  NationalPublicPactView,
+  NationalRecipientPactView,
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
@@ -611,6 +613,8 @@ export interface Game extends GameLike {
   > | null;
   /** Enumerates public empire leaders/members and warning/victory facts only. */
   nationalPublicPoliticalView(): NationalPublicPoliticalView | null;
+  nationalPublicPactRoster(): readonly NationalPublicPactView[];
+  nationalPactViewsFor(observer: Player): readonly NationalRecipientPactView[];
   /** Private pending invitations addressed only to this authenticated human. */
   nationalAccessionOffers(
     observer: Player,

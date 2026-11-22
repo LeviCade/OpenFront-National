@@ -83,6 +83,8 @@ import {
   type NationalAccessionOfferView,
   type NationalPublicPoliticalView,
   type NationalUngovernableWarning,
+  type NationalPublicPactView,
+  type NationalRecipientPactView,
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import {
@@ -1020,6 +1022,16 @@ export class GameImpl implements Game {
       const player = this._players.get(id);
       return player !== undefined && player.hasSpawned() && player.isAlive();
     });
+  }
+
+  nationalPublicPactRoster(): readonly NationalPublicPactView[] {
+    return this._national?.publicPactRoster() ?? [];
+  }
+
+  nationalPactViewsFor(observer: Player): readonly NationalRecipientPactView[] {
+    if (this._players.get(observer.id()) !== observer ||
+        !observer.hasSpawned() || !observer.isAlive()) return [];
+    return this._national?.pactViewsFor(observer.id()) ?? [];
   }
 
   /** Complete NATIONAL victor roster; old game Winner schema stays unchanged. */

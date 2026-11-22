@@ -186,6 +186,34 @@ export interface NationalAccessionOfferView {
   readonly recipientId: PlayerID;
 }
 
+export interface NationalPublicPactView {
+  readonly id: string;
+  readonly name: string;
+  readonly kind: PactKind;
+  readonly memberIds: readonly PlayerID[];
+  readonly administratorId: PlayerID | null;
+}
+
+export interface NationalRecipientPactView extends NationalPublicPactView {
+  readonly role: "member" | "invited";
+  readonly terms: Readonly<PactTerms>;
+  readonly invitations: readonly {
+    readonly targetId: PlayerID;
+    readonly approvedBy: readonly PlayerID[];
+    readonly authorized: boolean;
+  }[];
+  readonly pendingAmendment: {
+    readonly terms: Readonly<PactTerms>;
+    readonly administratorId: PlayerID | null;
+    readonly approvedBy: readonly PlayerID[];
+    readonly ownVote: boolean;
+  } | null;
+  readonly canAccept: boolean;
+  readonly canApproveAmendment: boolean;
+  readonly canBetray: boolean;
+  readonly expellableMemberIds: readonly PlayerID[];
+}
+
 export interface NationalPublicPoliticalView {
   readonly empires: readonly {
     readonly id: string;
@@ -389,6 +417,68 @@ export class NationalRuntime {
               ? 1
               : 0),
       );
+  }
+
+  /** D-017: public facts only, no terms or pending votes. */
+  publicPactRoster(): readonly NationalPublicPactView[] {
+    return Object.freeze(
+      this.politics.pacts.map((p) => Object.freeze({
+        id: p.id,
+        name: p.name,
+        kind: p.kind,
+        memberIds: Object.freeze([...p.memberIds].sort()),
+        administratorId: p.administratorId,
+      })).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+    );
+  }
+
+  /** D-007/D-017: partial unanimous approval is not an actionable invitation. */
+  pactViewsFor(recipientId: PlayerID): readonly NationalRecipientPactView[] {
+    if (!this.politics.nations.some((n) => n.id === recipientId && n.alive))
+      return [];
+    if (this.politics.empires.some((e) => e.memberIds.includes(recipientId)))
+      return [];
+    const publicById = new Map(this.publicPactRoster().map((p) => [p.id, p]));
+    const views: NationalRecipientPactView[] = [];
+    for (const p of this.politics.pacts) {
+      const member = p.memberIds.includes(recipientId);
+      const authorized = (approvedBy: readonly PlayerID[]) =>
+        p.terms.admission === "leader"
+          ? p.administratorId !== null && approvedBy.includes(p.administratorId)
+          : p.memberIds.every((id) => approvedBy.includes(id));
+      const invited = !member && p.invitations.some((i) =>
+        i.targetId === recipientId && authorized(i.approvedBy));
+      if (!member && !invited) continue;
+      const pending = member ? p.pendingAmendment : undefined;
+      views.push(Object.freeze({
+        ...publicById.get(p.id)!,
+        role: member ? "member" : "invited",
+        terms: Object.freeze({ ...p.terms }),
+        invitations: Object.freeze(member ? p.invitations.map((i) =>
+          Object.freeze({
+            targetId: i.targetId,
+            approvedBy: Object.freeze([...i.approvedBy].sort()),
+            authorized: authorized(i.approvedBy),
+          })) : []),
+        pendingAmendment: pending ? Object.freeze({
+          terms: Object.freeze({ ...pending.terms }),
+          administratorId: pending.administratorId,
+          approvedBy: Object.freeze([...pending.approvedBy].sort()),
+          ownVote: pending.approvedBy.includes(recipientId),
+        }) : null,
+        canAccept: invited,
+        canApproveAmendment: pending !== undefined &&
+          !pending.approvedBy.includes(recipientId),
+        canBetray: member,
+        // The stamped command cannot impersonate other voters. A two-member
+        // unanimous pact has only one remaining voter, the requesting member.
+        expellableMemberIds: Object.freeze(member && (
+          (p.terms.expulsion === "leader" && p.administratorId === recipientId) ||
+          (p.terms.expulsion === "unanimous" && p.memberIds.length === 2)
+        ) ? p.memberIds.filter((id) => id !== recipientId).sort() : []),
+      }));
+    }
+    return Object.freeze(views.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   }
 
   /** Copy-only, opt-in NATIONAL public facts for E3/E4's trusted UI bridge. */
