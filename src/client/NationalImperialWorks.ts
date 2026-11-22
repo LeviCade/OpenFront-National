@@ -1,4 +1,7 @@
-import { Structures, type UnitType } from "@openfront/engine-api/game/GameTypes";
+import {
+  Structures,
+  type UnitType,
+} from "@openfront/engine-api/game/GameTypes";
 import type { NationalImperialAdministrationView } from "@openfront/engine-api/game/NationalImperialView";
 import type { GameView } from "./view";
 
@@ -62,7 +65,6 @@ export function imperialStructureChoices(
     }
   }
   return choices.sort(
-    (a, b) =>
-      a.memberId.localeCompare(b.memberId) || a.unitId - b.unitId,
+    (a, b) => a.memberId.localeCompare(b.memberId) || a.unitId - b.unitId,
   );
 }

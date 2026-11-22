@@ -294,7 +294,9 @@ describe("R11 actual NATIONAL map input and target-aware radial projection", () 
     expect(document.querySelector("[data-national-map-target-id]")).toBeNull();
     state.observedTile = true;
     locator.tick();
-    expect(document.querySelector("[data-national-map-target-id]")).not.toBeNull();
+    expect(
+      document.querySelector("[data-national-map-target-id]"),
+    ).not.toBeNull();
     state.trustedReady = false; // E3 revoked sight or socket disconnected.
     locator.tick();
     expect(isNationalOpponentTile(game, transform, "nation-b", x, y)).toBe(

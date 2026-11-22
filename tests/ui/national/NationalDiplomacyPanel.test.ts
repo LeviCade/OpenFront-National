@@ -1087,12 +1087,10 @@ describe("C4 E4 native constitutional controls", () => {
       '[data-national-imperial-action="demolish-structure"]',
     )!;
     const demolishForm = demolition.closest("form")!;
-    demolishForm.querySelector<HTMLSelectElement>(
-      '[name="structure"]',
-    )!.value = "42";
-    demolishForm.querySelector<HTMLInputElement>(
-      '[name="confirm"]',
-    )!.checked = true;
+    demolishForm.querySelector<HTMLSelectElement>('[name="structure"]')!.value =
+      "42";
+    demolishForm.querySelector<HTMLInputElement>('[name="confirm"]')!.checked =
+      true;
     demolition.click();
     await element.updateComplete;
     expect(commands).toHaveLength(2);
@@ -1164,10 +1162,7 @@ describe("C4 E4 native constitutional controls", () => {
     };
     const players = element.game!.players();
     Object.assign(element.game!, {
-      players: () => [
-        players[0],
-        { ...players[1], units: () => [city] },
-      ],
+      players: () => [players[0], { ...players[1], units: () => [city] }],
     });
     element.refresh();
     await element.updateComplete;
@@ -1181,9 +1176,7 @@ describe("C4 E4 native constitutional controls", () => {
     upgrade.click();
     await element.updateComplete;
     expect(commands).toHaveLength(0);
-    expect(element.textContent).toContain(
-      "Policy or authority changed",
-    );
+    expect(element.textContent).toContain("Policy or authority changed");
     optionsState.politics = {
       empires: [
         {
@@ -1201,11 +1194,14 @@ describe("C4 E4 native constitutional controls", () => {
     element.refresh();
     await element.updateComplete;
     expect(
-      element.querySelector('[data-national-imperial-action="upgrade-structure"]'),
+      element.querySelector(
+        '[data-national-imperial-action="upgrade-structure"]',
+      ),
     ).toBeNull();
     expect(
-      element.querySelector('[data-national-imperial-action="demolish-structure"]'),
+      element.querySelector(
+        '[data-national-imperial-action="demolish-structure"]',
+      ),
     ).toBeNull();
   });
-
 });

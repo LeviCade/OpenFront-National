@@ -1314,8 +1314,10 @@ export class NationalDiplomacyPanel extends LitElement {
       view = this.currentImperialView(),
       actor = game?.myPlayer();
     const permitted =
-      game && view && (command.kind === "upgrade-structure" ||
-      command.kind === "demolish-structure")
+      game &&
+      view &&
+      (command.kind === "upgrade-structure" ||
+        command.kind === "demolish-structure")
         ? imperialStructureChoices(game, view).some(
             (choice) =>
               choice.memberId === command.memberId &&
@@ -1472,7 +1474,8 @@ export class NationalDiplomacyPanel extends LitElement {
         }}
       >
         <label>
-          ${kind === "upgrade-structure" ? "Upgrade" : "Demolish"} member structure
+          ${kind === "upgrade-structure" ? "Upgrade" : "Demolish"} member
+          structure
           <select
             required
             name="structure"
@@ -1480,17 +1483,20 @@ export class NationalDiplomacyPanel extends LitElement {
           >
             <option value="">Select a currently visible structure</option>
             ${structures.map(
-              (unit) => html`<option value=${String(unit.unitId)}>
-                ${unit.label}
-              </option>`,
+              (unit) =>
+                html`<option value=${String(unit.unitId)}>
+                  ${unit.label}
+                </option>`,
             )}
           </select>
         </label>
         <label>
           <input type="checkbox" name="confirm" required />
-          ${kind === "upgrade-structure"
-            ? "Confirm treasury-funded upgrade (cost determined by the game)"
-            : "Confirm permanent demolition (no refund)"}
+          ${
+            kind === "upgrade-structure"
+              ? "Confirm treasury-funded upgrade (cost determined by the game)"
+              : "Confirm permanent demolition (no refund)"
+          }
         </label>
         <button
           type="submit"
@@ -1649,14 +1655,16 @@ export class NationalDiplomacyPanel extends LitElement {
         >
           <h3 class="font-semibold">Imperial treasury works</h3>
           <p class="text-xs text-slate-300">
-            Only structures currently disclosed for living imperial members
-            are listed. The game rechecks ownership, available treasury and
+            Only structures currently disclosed for living imperial members are
+            listed. The game rechecks ownership, available treasury and
             authority when executing. A form submission is not a completed work.
           </p>
-          ${workForm("upgrade-structure")}
-          ${workForm("demolish-structure")}
+          ${workForm("upgrade-structure")} ${workForm("demolish-structure")}
         </section>
-        <p>Reserve transfers and imperial-funded new construction have no controls here yet.</p>
+        <p>
+          Reserve transfers and imperial-funded new construction have no
+          controls here yet.
+        </p>
       </div>`,
     );
   }

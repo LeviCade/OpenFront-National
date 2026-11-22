@@ -881,7 +881,8 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     await panel.updateComplete;
     expect(panel.querySelector("[data-national-map-combat]")).toBeNull();
     expect(
-      panel.querySelector<HTMLSelectElement>("#national-peace-war-id")?.textContent,
+      panel.querySelector<HTMLSelectElement>("#national-peace-war-id")
+        ?.textContent,
     ).toContain("member-national-war");
 
     state.conflicts = {
@@ -899,5 +900,4 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     await panel.updateComplete;
     expect(panel.querySelector("[data-national-map-combat]")).not.toBeNull();
   });
-
 });

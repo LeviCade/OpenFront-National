@@ -39,7 +39,7 @@ jobs:
       - run: npm run typecheck
       - name: Native human interaction, war and private visibility
         run: |
-          npx --no-install vitest run --project client \
+          npx --no-install vitest run --project node \
             tests/ui/national/NationalDiplomacyPanel.test.ts \
             tests/ui/national/NationalHumanMapInputR11.test.ts \
             tests/ui/national/NationalWarWire.test.ts \
