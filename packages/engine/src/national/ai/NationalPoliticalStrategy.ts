@@ -359,8 +359,22 @@ export function planAIPoliticalInterest(
         return result({ command, reason: "invite-neighbor" });
     }
   }
+  // Do not override an independent nation's credible existing military
+  // opportunity with an automatic NAP. This preserves the inherited lawful
+  // WAR planner and prevents diplomacy from making every frontier passive.
+  const militaryOpportunity =
+    !existential &&
+    observation.ownResources.troops >= 500 &&
+    frontiers.some((id) => {
+      const target = nations.get(id)!;
+      return (
+        target.status === "independent" &&
+        target.landPercent <= Math.max(6, self.landPercent * 2.5) &&
+        !warSides.allies.has(id)
+      );
+    });
   // One pact per country until genuine admissions change the opportunity.
-  if (ownPacts.length === 0) {
+  if (ownPacts.length === 0 && !militaryOpportunity) {
     const neighbor = frontiers.find((id) => {
       const target = nations.get(id)!;
       return target.status === "independent" &&
