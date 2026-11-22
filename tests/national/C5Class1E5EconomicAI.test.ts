@@ -226,7 +226,8 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
       expect(NationalSanctionExecution.viewFor(game, c)).toEqual([]);
       game.convertHumanToNation(b, "c5-e5-recipient-" + seed);
       until(game, () =>
-        NationalSanctionExecution.viewFor(game, b)[0]?.response !== "none",
+        NationalSanctionExecution.viewFor(game, b)[0]?.response !== undefined &&
+        NationalSanctionExecution.viewFor(game, b)[0].response !== "none",
       50);
       expect(NationalSanctionExecution.viewFor(game, b)[0].response).toBe("comply");
       expect(b.canTrade(c)).toBe(false);
@@ -255,7 +256,8 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     until(game, () => NationalSanctionExecution.viewFor(game, a).length > 0, 60);
     game.convertHumanToNation(b, "c5-e5-recipient-113");
     until(game, () =>
-      NationalSanctionExecution.viewFor(game, b)[0]?.response !== "none",
+      NationalSanctionExecution.viewFor(game, b)[0]?.response !== undefined &&
+        NationalSanctionExecution.viewFor(game, b)[0].response !== "none",
     60);
     expect(NationalSanctionExecution.viewFor(game, b)[0].response).toBe("refuse");
     expect(b.canTrade(c)).toBe(true);
