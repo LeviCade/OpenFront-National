@@ -135,6 +135,55 @@ describe("C4 E3 bounded continuity algorithm", () => {
     expect(next.delta.units[0].id).toBe(6199);
   });
 
+  it("invalidates previously shared strength even when a foreign marker stays in sight", () => {
+    const { emit, reader } = rig();
+    const all = assets(6200, 1);
+    const allied: Assets = all.map((asset) =>
+      asset.id === "0"
+        ? {
+            ...asset,
+            source: "empire",
+            sourceNationId: "b",
+            strength: 7654321,
+          }
+        : asset,
+    );
+    const one = emit([1], allied);
+    expect(one.delta.units[0].id).toBe(0);
+    expect(one.delta.units[0]).not.toHaveProperty("troops");
+    const two = emit([1], all);
+    expect(two.page.unitCursor).toBe(2048);
+    expect(two.delta.removedUnitIds).toContain(0);
+    expect(reader.units().some((unit) => unit.id === 0)).toBe(false);
+    emit([1], all);
+    emit([1], all);
+    const next = emit([1], all);
+    expect(next.delta.units[0].id).toBe(0);
+    expect(next.delta.units[0]).not.toHaveProperty("troops");
+  });
+
+  it("rejects forged early terminal cursors and changed frozen totals atomically", () => {
+    const { emit } = rig();
+    const all = assets(6200, 1);
+    const first = emit(count(16000), all);
+    expect(first.page.tileSweepSlots).toBe(16000);
+    expect(first.page.unitSweepSlots).toBe(6200);
+    const peer = new NationalObserverMapContinuity("a", "seam-a");
+    expect(() => peer.accept({ ...first.page, nextCursor: null }, first.page.tick)).toThrow();
+    expect(() => peer.accept({ ...first.page, unitNextCursor: null }, first.page.tick)).toThrow();
+    expect(peer.lastAcceptedTick).toBe(-1);
+    peer.accept(first.page, first.page.tick);
+    const second = emit(count(16000), all);
+    expect(() => peer.accept({
+      ...second.page, tileSweepSlots: 8192, nextCursor: null,
+    }, second.page.tick)).toThrow();
+    expect(() => peer.accept({
+      ...second.page, unitSweepSlots: 4096, unitNextCursor: null,
+    }, second.page.tick)).toThrow();
+    expect(peer.lastAcceptedTick).toBe(first.page.tick);
+    expect(peer.accept(second.page, second.page.tick).usable).toBe(true);
+  });
+
   it("rotates the bounded overflow window, exposing high IDs without overflowing cache", () => {
     const { emit, reader } = rig();
     const all = assets(NATIONAL_OBSERVER_MAX_TRACKED_UNITS + 1, 1);

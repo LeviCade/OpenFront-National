@@ -805,13 +805,29 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
       B.clientID!,
     );
     const allyRef = b.spawnTile()!;
+    const foreignTile = game.ref(90, 105);
+    const c = game.player(C.id);
+    c.conquer(foreignTile);
+    const foreignCity = c.buildUnit(UnitType.City, foreignTile, {});
+    expect(
+      collectLiveNationalObservation(game, A.id).observation.visibleAssets
+        .some((asset) => asset.id === String(foreignCity.id())),
+    ).toBe(true);
     expect(
       collectLiveNationalObservation(game, A.id).visibleTiles.has(allyRef),
     ).toBe(true);
     host.tick();
     const allied = view(sockets[0].socket);
+    expect(game.unit(foreignCity.id())).toBeDefined();
+    expect(
+      collectLiveNationalObservation(game, A.id).observation.visibleAssets
+        .some((asset) => asset.id === String(foreignCity.id())),
+    ).toBe(true);
     const reader = new NationalObserverMapContinuity(A.id);
-    reader.accept(allied.map, allied.msg.tick);
+    reader.acceptProjection(
+      parseTrustedNationalProjection(allied.msg.payload, allied.msg.tick),
+    );
+    expect(reader.units().some((unit) => unit.id === foreignCity.id())).toBe(true);
     // A reciprocal member is removed by the same real authoritative
     // tile-relinquish elimination used by the existing FOG-06/07 fixture.
     for (const tile of [...b.tiles()]) b.relinquish(tile);
@@ -821,14 +837,31 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     ).toBe(false);
     host.tick();
     const after = view(sockets[0].socket);
-    const d = reader.accept(after.map, after.msg.tick);
+    const d = reader.acceptProjection(
+      parseTrustedNationalProjection(after.msg.payload, after.msg.tick),
+    );
     expect(d.clearAllTiles || d.removedTileRefs.includes(allyRef)).toBe(true);
+    expect(d.clearAllUnits || d.removedUnitIds.includes(foreignCity.id())).toBe(true);
+    expect(reader.units().some((unit) => unit.id === foreignCity.id())).toBe(false);
+    expect(after.map.units.some((unit) => unit.id === foreignCity.id())).toBe(false);
     expect(reader.tileStatus(allyRef)).toBe("revoked");
     expect(
       after.map.tiles.every(([ref]) =>
         collectLiveNationalObservation(game, A.id).visibleTiles.has(ref),
       ),
     ).toBe(true);
+    // Independent direct sight can legitimately reacquire the former shared
+    // asset, without resurrecting the revoked cache or sharing its strength.
+    a.conquer(game.ref(90, 104));
+    host.tick();
+    const reacquired = view(sockets[0].socket);
+    reader.acceptProjection(
+      parseTrustedNationalProjection(reacquired.msg.payload, reacquired.msg.tick),
+    );
+    expect(reader.units().find((unit) => unit.id === foreignCity.id())).toEqual(
+      expect.objectContaining({ ownerId: C.id, tile: foreignTile }),
+    );
+    expect(reader.units().find((unit) => unit.id === foreignCity.id())).not.toHaveProperty("troops");
   });
 });
 

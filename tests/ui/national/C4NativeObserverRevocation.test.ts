@@ -67,7 +67,8 @@ function page(tick: number, overrides: Record<string, unknown> = {}) {
     visibleBorders: [],
     ...overrides,
   };
-  return { ...result, tilePageSlots: result.tiles.length, unitPageSlots: result.units.length };
+  return { ...result, tilePageSlots: result.tiles.length, unitPageSlots: result.units.length,
+    tileSweepSlots: result.tiles.length, unitSweepSlots: result.units.length };
 }
 
 function setup() {

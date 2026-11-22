@@ -85,6 +85,7 @@ function pageFromWire(
     cursor: true,
     nextCursor: true,
     tilePageSlots: true,
+    tileSweepSlots: true,
     tileRemovedRefs: true,
     tilePartial: true,
     tiles: true,
@@ -93,6 +94,7 @@ function pageFromWire(
     unitNextCursor: true,
     unitSweepId: true,
     unitPageSlots: true,
+    unitSweepSlots: true,
     unitPartial: true,
     unitReset: true,
     unitRemovedIds: true,
@@ -211,6 +213,8 @@ export class NationalObserverMapContinuity {
   private observerSmallId = -1;
   private sweepId = 0;
   private sweepTick = -1;
+  private tileSweepSlots = 0;
+  private unitSweepSlots = 0;
   private nextCursor: number | null = null;
   private unitSweepId = 0;
   private nextUnitCursor: number | null = null;
@@ -308,7 +312,8 @@ export class NationalObserverMapContinuity {
         if (
           this.nextCursor === null ||
           page.cursor !== this.nextCursor ||
-          page.sweepTick !== this.sweepTick
+          page.sweepTick !== this.sweepTick ||
+          page.tileSweepSlots !== this.tileSweepSlots
         )
           throw new Error("NATIONAL missing/out-of-order tile page");
       } else if (
@@ -321,7 +326,8 @@ export class NationalObserverMapContinuity {
       if (page.unitSweepId === this.unitSweepId) {
         if (
           this.nextUnitCursor === null ||
-          page.unitCursor !== this.nextUnitCursor
+          page.unitCursor !== this.nextUnitCursor ||
+          page.unitSweepSlots !== this.unitSweepSlots
         )
           throw new Error("NATIONAL missing/out-of-order unit page");
       } else if (
@@ -405,6 +411,8 @@ export class NationalObserverMapContinuity {
     this.observerSmallId = page.observerSmallId;
     this.sweepId = page.sweepId;
     this.sweepTick = page.sweepTick;
+    this.tileSweepSlots = page.tileSweepSlots;
+    this.unitSweepSlots = page.unitSweepSlots;
     this.nextCursor = page.nextCursor;
     this.unitSweepId = page.unitSweepId;
     this.nextUnitCursor = page.unitNextCursor;
