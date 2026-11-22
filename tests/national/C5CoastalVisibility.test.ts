@@ -529,4 +529,84 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
       + " foreignShipId=" + foreignShip.id(),
     );
   });
+
+  it("FOG-04/06/07 shares real allied warship coverage but denies an outsider private ship sight", async () => {
+    const game = await setup("world", { nationalMode: true }, [
+      VIEWER,
+      ALLY,
+      OUTSIDER,
+    ]);
+    game.addExecution(
+      new SpawnExecution("c5-empire-navy", VIEWER, game.ref(375, 272)),
+      new SpawnExecution("c5-empire-navy", ALLY, game.ref(925, 186)),
+      new SpawnExecution("c5-empire-navy", OUTSIDER, game.ref(1004, 250)),
+    );
+    game.executeNextTick();
+    game.executeNextTick();
+    game.endSpawnPhase();
+    const viewer = game.player(VIEWER.id);
+    game.performNationalCommand(viewer, {
+      kind: "found-empire",
+      empireId: "c5_e6_naval_alliance",
+    });
+    game.performNationalCommand(viewer, {
+      kind: "offer-empire",
+      empireId: "c5_e6_naval_alliance",
+      candidateId: ALLY.id,
+    });
+    game.performNationalCommand(game.player(ALLY.id), {
+      kind: "accept-empire",
+      empireId: "c5_e6_naval_alliance",
+      candidateId: ALLY.id,
+    });
+    const patrol = game.ref(1, 1);
+    const contact = game.ref(201, 1);
+    const retreat = game.ref(800, 1);
+    expect(game.isLand(patrol)).toBe(false);
+    expect(game.isLand(contact)).toBe(false);
+    expect(game.isLand(retreat)).toBe(false);
+    const alliedWarship = game.player(ALLY.id).buildUnit(
+      UnitType.Warship,
+      patrol,
+      { patrolTile: patrol },
+    );
+    const contacted = game.player(OUTSIDER.id).buildUnit(
+      UnitType.TransportShip,
+      contact,
+      { troops: 9_876_543 },
+    );
+    const seen = collectLiveNationalObservation(game, VIEWER.id);
+    const inherited = seen.observation.visibleAssets.find(
+      (asset) => asset.id === String(contacted.id()),
+    );
+    expect(inherited?.source).toBe("empire");
+    expect(inherited?.sourceNationId).toBe(ALLY.id);
+    expect(inherited).not.toHaveProperty("strength");
+    const outsider = collectLiveNationalObservation(game, OUTSIDER.id);
+    expect(outsider.observation.visibleAssets.some(
+      (asset) => asset.id === String(alliedWarship.id()),
+    )).toBe(false);
+    const pager = new NationalObserverMapPager(
+      game,
+      VIEWER.id,
+      "c5-e6-empire-navy",
+    );
+    const disclosed = pager.page(seen);
+    expect(disclosed.units.some((unit) => unit.id === contacted.id())).toBe(true);
+    alliedWarship.move(retreat);
+    game.executeNextTick();
+    const lost = collectLiveNationalObservation(game, VIEWER.id);
+    expect(lost.observation.visibleAssets.some(
+      (asset) => asset.id === String(contacted.id()),
+    )).toBe(false);
+    const revoked = pager.page(lost);
+    expect(revoked.unitRemovedIds).toContain(contacted.id());
+    console.info(
+      "[C5 FOG-06 naval empire] sensorId=" + alliedWarship.id()
+      + " transportId=" + contacted.id()
+      + " patrolTile=" + patrol
+      + " contactTile=" + contact
+      + " retreatTile=" + retreat,
+    );
+  });
 });
