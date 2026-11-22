@@ -1177,10 +1177,12 @@ export class ClientGameRunner {
   private healthIndicators: GameHealthIndicators | null = null;
   private trustedLastTick = -1;
   private trustedProjectionActive = false;
+  private trustedHadPrivatePage = false;
   private trustedContinuity: NationalObserverMapContinuity | null = null;
   private trustedPrincipal: string | null = null;
   /** Drop pointer-transparent enemy markers in the same event turn as sight loss. */
   private revokeTrustedSight(): void {
+    this.trustedHadPrivatePage = false;
     this.gameView.resetTrustedProjectionSight();
     this.eventBus.emit(new TrustedNationalSightRevokedEvent());
     this.eventBus.emit(new NationalMapTargetSelectedEvent(null));
@@ -1249,13 +1251,13 @@ export class ClientGameRunner {
         const eliminated =
           actor?.isAlive === false || this.myPlayer?.isAlive() === false;
         if (
-          this.myPlayer?.hasSpawned() &&
+          this.trustedHadPrivatePage &&
           !eliminated &&
           victory === "unresolved"
         )
           throw new Error("NATIONAL active seat lost mandatory private map");
-        const hadPrivate = this.gameView.trustedProjectionReady();
-        if (hadPrivate) this.revokeTrustedSight();
+        // Independent unit pages may still be present when no tile is usable.
+        if (this.trustedHadPrivatePage) this.revokeTrustedSight();
         this.gameView.update(update);
         this.myPlayer = this.clientID
           ? this.gameView.playerByClientID(this.clientID)
@@ -1345,6 +1347,7 @@ export class ClientGameRunner {
         this.myPlayer?.id() === this.trustedPrincipal &&
         this.gameView.inSpawnPhase();
       this.gameView.setTrustedSpawnReady(spawnReady);
+      this.trustedHadPrivatePage = true;
       this.trustedLastTick = update.tick;
       if (this.trustedStatus) {
         this.trustedStatus.dataset.trustedNationalMap = pageComplete
