@@ -73,8 +73,10 @@ export class TrustedNationalMatch {
     private readonly checkpoint?: DurableNationalCheckpoint,
     recovered = false,
   ) {
-    this.replayCommitment = checkpoint?.state.replayDigest ?? initialNationalReplayDigest(gameID);
-    if (recovered && !checkpoint) throw new Error("NATIONAL recovery requires durable checkpoint");
+    this.replayCommitment =
+      checkpoint?.state.replayDigest ?? initialNationalReplayDigest(gameID);
+    if (recovered && !checkpoint)
+      throw new Error("NATIONAL recovery requires durable checkpoint");
     const config = runner.game.config().gameConfig();
     if (
       config.nationalMode !== true ||
@@ -126,13 +128,19 @@ export class TrustedNationalMatch {
     // Register projections only after validating every seat. The GameRunner
     // itself verifies clientID -> real PlayerID on each subsequent tick.
     if (checkpoint) {
-      if (checkpoint.seats.length !== admittedPlayers.length ||
-          checkpoint.seats.some((seat) => {
-            const client = this.seats.get(seat.clientID);
-            return !client || client.persistentID !== seat.subject ||
-              client.publicId !== seat.accountId ||
-              runner.game.playerByClientID(seat.clientID)?.id() !== seat.playerID;
-          })) throw new Error("NATIONAL durable seat binding mismatch");
+      if (
+        checkpoint.seats.length !== admittedPlayers.length ||
+        checkpoint.seats.some((seat) => {
+          const client = this.seats.get(seat.clientID);
+          return (
+            !client ||
+            client.persistentID !== seat.subject ||
+            client.publicId !== seat.accountId ||
+            runner.game.playerByClientID(seat.clientID)?.id() !== seat.playerID
+          );
+        })
+      )
+        throw new Error("NATIONAL durable seat binding mismatch");
       for (const [requestId, owner] of checkpoint.state.requestOwners) {
         this.requestOwners.set(requestId, owner);
         this.requestIds.get(owner)!.add(requestId);
@@ -229,7 +237,6 @@ export class TrustedNationalMatch {
           update.id === identity.id ? { ...update, ...identity } : update,
         );
         if (!ownPresent) bound.push(identity);
-        if (this.deliveryQueue === null) throw new Error("NATIONAL projection outside authoritative tick");
         const projected = {
           ...packet,
           updates: {
@@ -237,9 +244,17 @@ export class TrustedNationalMatch {
             [GameUpdateType.Player]: bound,
           },
         };
-        this.deliveryQueue.push(() => {
-          if (active()) this.deliver(client, projected);
-        });
+        if (this.deliveryQueue === null) {
+          // The non-durable runner retains its inherited direct-delivery
+          // contract. A durable match cannot bypass the commit boundary.
+          if (this.checkpoint)
+            throw new Error("NATIONAL projection outside authoritative tick");
+          this.deliver(client, projected);
+        } else {
+          this.deliveryQueue.push(() => {
+            if (active()) this.deliver(client, projected);
+          });
+        }
       },
     );
   }
@@ -279,7 +294,12 @@ export class TrustedNationalMatch {
     if ("requestId" in stamped && stamped.requestId !== undefined) {
       const seen = this.requestIds.get(sender.clientID)!;
       const owner = this.requestOwners.get(stamped.requestId);
-      if (seen.has(stamped.requestId) || owner !== undefined || this.requestOwners.size >= MAX_NATIONAL_REQUEST_IDS) return false;
+      if (
+        seen.has(stamped.requestId) ||
+        owner !== undefined ||
+        this.requestOwners.size >= MAX_NATIONAL_REQUEST_IDS
+      )
+        return false;
       seen.add(stamped.requestId);
       this.requestOwners.set(stamped.requestId, sender.clientID);
       // The ID is reserved durably even if its socket disconnects before the tick.

@@ -1,11 +1,21 @@
-import { GameMode, GameType, PlayerType } from "@openfront/engine-api/game/GameTypes";
+import {
+  GameMode,
+  GameType,
+  PlayerType,
+} from "@openfront/engine-api/game/GameTypes";
 import type { MapFiles } from "@openfront/engine-api/game/MapFiles";
 import type { GameRunner } from "@openfront/engine/WinnerReplay";
-import { WireGameStartInfoSchema, type WireGameStartInfo } from "@openfront/shared/WireSchemas";
+import {
+  WireGameStartInfoSchema,
+  type WireGameStartInfo,
+} from "@openfront/shared/WireSchemas";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Client } from "../Client";
-import { DurableNationalStore, type DurableNationalRecord } from "./DurableNationalStore";
+import {
+  DurableNationalStore,
+  type DurableNationalRecord,
+} from "./DurableNationalStore";
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const sourceRevision = z.string().regex(/^[a-f0-9]{40}$/);
@@ -19,7 +29,9 @@ const Seat = z.strictObject({
 });
 const State = z.strictObject({
   replayDigest: digest,
-  requestOwners: z.array(z.tuple([identity, identity])).max(MAX_NATIONAL_REQUEST_IDS),
+  requestOwners: z
+    .array(z.tuple([identity, identity]))
+    .max(MAX_NATIONAL_REQUEST_IDS),
   kicked: z.array(identity).max(512),
   paused: z.boolean(),
 });
@@ -41,37 +53,62 @@ export function nationalMapDigest(files: MapFiles): string {
   const hash = (bytes?: Uint8Array) =>
     bytes ? createHash("sha256").update(bytes).digest("hex") : null;
   return createHash("sha256")
-    .update(JSON.stringify([files.map, files.mapSize, files.manifest,
-      hash(files.mapBin), hash(files.map4xBin), hash(files.map16xBin)]))
+    .update(
+      JSON.stringify([
+        files.map,
+        files.mapSize,
+        files.manifest,
+        hash(files.mapBin),
+        hash(files.map4xBin),
+        hash(files.map16xBin),
+      ]),
+    )
     .digest("hex");
 }
 
 export function initialNationalReplayDigest(gameID: string): string {
-  return createHash("sha256").update("trusted-national-durable-v1\n" + gameID).digest("hex");
+  return createHash("sha256")
+    .update("trusted-national-durable-v1\n" + gameID)
+    .digest("hex");
 }
 
 function validatePayload(payload: CheckpointPayload, gameID: string): void {
   const { info, seats, state } = payload;
-  if (info.gameID !== gameID || info.config.nationalMode !== true ||
-      info.config.gameType !== GameType.Private || info.config.gameMode !== GameMode.FFA ||
-      info.config.rankedType !== undefined || info.config.tutorial === true || info.listed === true ||
-      info.players.length !== seats.length || info.players.filter((p) => p.isLobbyCreator).length !== 1 ||
-      !seats.every((seat, index) => seat.clientID === info.players[index]?.clientID) ||
-      new Set(seats.map((s) => s.clientID)).size !== seats.length ||
-      new Set(seats.map((s) => s.subject)).size !== seats.length ||
-      new Set(seats.map((s) => s.accountId)).size !== seats.length ||
-      new Set(seats.map((s) => s.playerID)).size !== seats.length) {
+  if (
+    info.gameID !== gameID ||
+    info.config.nationalMode !== true ||
+    info.config.gameType !== GameType.Private ||
+    info.config.gameMode !== GameMode.FFA ||
+    info.config.rankedType !== undefined ||
+    info.config.tutorial === true ||
+    info.listed === true ||
+    info.players.length !== seats.length ||
+    info.players.filter((p) => p.isLobbyCreator).length !== 1 ||
+    !seats.every(
+      (seat, index) => seat.clientID === info.players[index]?.clientID,
+    ) ||
+    new Set(seats.map((s) => s.clientID)).size !== seats.length ||
+    new Set(seats.map((s) => s.subject)).size !== seats.length ||
+    new Set(seats.map((s) => s.accountId)).size !== seats.length ||
+    new Set(seats.map((s) => s.playerID)).size !== seats.length
+  ) {
     throw new Error("NATIONAL invalid durable roster or start info");
   }
   const clients = new Set(seats.map((s) => s.clientID));
-  if (new Set(state.requestOwners.map(([id]) => id)).size !== state.requestOwners.length ||
-      state.requestOwners.some(([, owner]) => !clients.has(owner)) ||
-      new Set(state.kicked).size !== state.kicked.length ||
-      state.kicked.some((id) => !clients.has(id))) {
+  if (
+    new Set(state.requestOwners.map(([id]) => id)).size !==
+      state.requestOwners.length ||
+    state.requestOwners.some(([, owner]) => !clients.has(owner)) ||
+    new Set(state.kicked).size !== state.kicked.length ||
+    state.kicked.some((id) => !clients.has(id))
+  ) {
     throw new Error("NATIONAL invalid durable command ownership");
   }
   // Reject noncanonical Base64, including partial/ambiguous encodings.
-  if (Buffer.from(payload.snapshot, "base64").toString("base64") !== payload.snapshot) {
+  if (
+    Buffer.from(payload.snapshot, "base64").toString("base64") !==
+    payload.snapshot
+  ) {
     throw new Error("NATIONAL invalid durable snapshot encoding");
   }
 }
@@ -86,50 +123,100 @@ export class DurableNationalCheckpoint {
   ) {}
 
   static create(
-    store: DurableNationalStore, source: string, mapDigest: string,
-    info: WireGameStartInfo, clients: readonly Client[], runner: GameRunner,
+    store: DurableNationalStore,
+    source: string,
+    mapDigest: string,
+    info: WireGameStartInfo,
+    clients: readonly Client[],
+    runner: GameRunner,
   ): DurableNationalCheckpoint {
     const data = Payload.parse({
-      format: 1, source, mapDigest, info,
+      format: 1,
+      source,
+      mapDigest,
+      info,
       seats: clients.map((client) => ({
-        subject: client.persistentID, accountId: client.publicId,
-        clientID: client.clientID, playerID: runner.game.playerByClientID(client.clientID)?.id(),
+        subject: client.persistentID,
+        accountId: client.publicId,
+        clientID: client.clientID,
+        playerID: runner.game.playerByClientID(client.clientID)?.id(),
       })),
       snapshot: Buffer.from(runner.snapshot(source)).toString("base64"),
       state: {
         replayDigest: initialNationalReplayDigest(info.gameID),
-        requestOwners: [], kicked: [], paused: false,
+        requestOwners: [],
+        kicked: [],
+        paused: false,
       },
     });
     validatePayload(data, info.gameID);
-    const record = store.write(info.gameID, 0, runner.game.ticks(), JSON.stringify(data));
+    const record = store.write(
+      info.gameID,
+      0,
+      runner.game.ticks(),
+      JSON.stringify(data),
+    );
     return new DurableNationalCheckpoint(store, record, data);
   }
 
-  static load(store: DurableNationalStore, record: DurableNationalRecord, source: string): DurableNationalCheckpoint {
+  static load(
+    store: DurableNationalStore,
+    record: DurableNationalRecord,
+    source: string,
+  ): DurableNationalCheckpoint {
     const parsed = Payload.safeParse(JSON.parse(record.payload));
-    if (!parsed.success || parsed.data.source !== source || !sourceRevision.safeParse(source).success) {
+    if (
+      !parsed.success ||
+      parsed.data.source !== source ||
+      !sourceRevision.safeParse(source).success
+    ) {
       throw new Error("NATIONAL incompatible durable checkpoint");
     }
     validatePayload(parsed.data, record.gameID);
     return new DurableNationalCheckpoint(store, record, parsed.data);
   }
 
-  get info(): WireGameStartInfo { return this.data.info; }
-  get seats(): readonly DurableNationalSeat[] { return this.data.seats; }
-  get state(): DurableNationalState { return this.data.state; }
-  get tick(): number { return this.record.tick; }
-  get source(): string { return this.data.source; }
-  get mapDigest(): string { return this.data.mapDigest; }
-  get snapshot(): Uint8Array { return Buffer.from(this.data.snapshot, "base64"); }
-  get commitment(): string { return this.record.digest; }
+  get info(): WireGameStartInfo {
+    return this.data.info;
+  }
+  get seats(): readonly DurableNationalSeat[] {
+    return this.data.seats;
+  }
+  get state(): DurableNationalState {
+    return this.data.state;
+  }
+  get tick(): number {
+    return this.record.tick;
+  }
+  get source(): string {
+    return this.data.source;
+  }
+  get mapDigest(): string {
+    return this.data.mapDigest;
+  }
+  get snapshot(): Uint8Array {
+    return Buffer.from(this.data.snapshot, "base64");
+  }
+  get commitment(): string {
+    return this.record.digest;
+  }
 
   validateRunner(runner: GameRunner): void {
-    if (runner.game.ticks() !== this.tick || this.seats.some((seat) => {
-      const player = runner.game.playerByClientID(seat.clientID);
-      return player?.type() !== PlayerType.Human || player.id() !== seat.playerID;
-    })) throw new Error("NATIONAL durable engine seat or tick mismatch");
-    if (!Buffer.from(runner.snapshot(this.source)).equals(Buffer.from(this.snapshot))) {
+    if (
+      runner.game.ticks() !== this.tick ||
+      this.seats.some((seat) => {
+        const player = runner.game.playerByClientID(seat.clientID);
+        return (
+          player?.type() !== PlayerType.Human || player.id() !== seat.playerID
+        );
+      })
+    )
+      throw new Error("NATIONAL durable engine seat or tick mismatch");
+    if (
+      !Buffer.from(runner.snapshot(this.source)).equals(
+        Buffer.from(this.snapshot),
+      )
+    ) {
       throw new Error("NATIONAL durable engine roundtrip mismatch");
     }
   }
@@ -141,19 +228,28 @@ export class DurableNationalCheckpoint {
   }
 
   commit(runner: GameRunner, state: DurableNationalState): void {
-    if (runner.game.ticks() !== this.tick + 1) throw new Error("NATIONAL nonconsecutive durable tick");
+    if (runner.game.ticks() !== this.tick + 1)
+      throw new Error("NATIONAL nonconsecutive durable tick");
     this.replace(runner.game.ticks(), {
-      ...this.data, state,
+      ...this.data,
+      state,
       snapshot: Buffer.from(runner.snapshot(this.source)).toString("base64"),
     });
   }
 
   private replace(tick: number, data: CheckpointPayload): void {
     validatePayload(data, this.record.gameID);
-    const next = this.store.write(this.record.gameID, this.record.generation, tick, JSON.stringify(data));
+    const next = this.store.write(
+      this.record.gameID,
+      this.record.generation,
+      tick,
+      JSON.stringify(data),
+    );
     this.record = next;
     this.data = data;
   }
 
-  retire(): void { this.store.retire(this.record.gameID, this.record.generation); }
+  retire(): void {
+    this.store.retire(this.record.gameID, this.record.generation);
+  }
 }
