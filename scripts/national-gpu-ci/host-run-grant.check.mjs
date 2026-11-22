@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { verifyRunGrant } from "./host-run-grant.mjs";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { publishHostRecordOnce, verifyRunGrant } from "./host-run-grant.mjs";
 
 const ref = "stage3/conductor4-class2-integration-20261122";
 const expected = {
@@ -54,5 +57,26 @@ test("reject unsigned mode substitution, completed preflight, and incomplete or 
   assert.throws(() => check(grant, { ...times, jobCompletedAtMs: now }), /PHASE_INVALID/);
   for (const completion of [null, now + 1, now - 1500]) {
     assert.throws(() => verifyRunGrant(grant, expected, { ...times, jobCompletedAtMs: completion }, "postflight", undefined, now), /PHASE_INVALID/);
+  }
+});
+
+test("grant digest binds issuance window and identities, not JSON ordering", () => {
+  const digest = check();
+  assert.match(digest, /^[a-f0-9]{64}$/);
+  assert.equal(digest, check(Object.fromEntries(Object.entries(grant).reverse())));
+  assert.notEqual(digest, check({ ...grant, issuedAtMs: now - 999 }));
+  assert.notEqual(digest, check({ ...grant, expiresAtMs: now + 60001 }));
+});
+test("durable host record publication refuses replacement and symlink targets", () => {
+  const dir = mkdtempSync(join(tmpdir(), "host-record-once-"));
+  try {
+    publishHostRecordOnce(dir, "reservation.json", { first: true });
+    assert.throws(() => publishHostRecordOnce(dir, "reservation.json", { first: false }), /EEXIST/);
+    assert.equal(JSON.parse(readFileSync(join(dir, "reservation.json"), "utf8")).first, true);
+    symlinkSync(join(dir, "missing.json"), join(dir, "dangling.json"));
+    assert.throws(() => publishHostRecordOnce(dir, "dangling.json", {}), /EEXIST/);
+    assert.throws(() => publishHostRecordOnce(dir, "../escape.json", {}), /NAME_INVALID/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

@@ -59,6 +59,7 @@ function fixture() {
     runnerName: "skybot-gpu-openfront-national-452d86d9",
     runnerId: "12345",
     challenge,
+    runGrantSha256: "c".repeat(64),
     runStartedAtMs: RUN_START,
     jobCompletedAtMs: COMPLETE,
   };
@@ -499,5 +500,17 @@ test("missing, reordered, copied or forged mode-specific proofs cannot certify",
     }
   } finally {
     f.dispose();
+  }
+});
+
+test("valid signatures under another operator grant cannot certify this run", () => {
+  const f = fixture();
+  try {
+    assert.equal(verifyIndependentRelease({ ...f.args, expected: { ...f.args.expected, runGrantSha256: "d".repeat(64) } }).reason, "SIGNATURE_RUN_BINDING_MISMATCH");
+    const modePreflights = [...f.args.modePreflights];
+    modePreflights[2] = f.wrap({ ...modePreflights[2].payload, runGrantSha256: "d".repeat(64) });
+    assert.equal(verifyIndependentRelease({ ...f.args, modePreflights }).accepted, false);
+  } finally {
+    rmSync(f.root, { recursive: true, force: true });
   }
 });

@@ -24,6 +24,51 @@ jobs:
       - name: Test exact run grant and hardware workflow contract
         run: |
           node --check scripts/national-gpu-ci/skybot-host-witness.mjs
-          node --test scripts/national-gpu-ci/host-run-grant.check.mjs scripts/national-gpu-ci/verify-workflow.mjs
+          node --check scripts/national-gpu-ci/verify-independent-release.mjs
+          node --test scripts/national-gpu-ci/host-run-grant.check.mjs scripts/national-gpu-ci/owner-functional-witness.check.mjs scripts/national-gpu-ci/verify-workflow.mjs
           bash -n scripts/national-gpu-ci/run-four-modes.sh
           echo 'SOURCE_ONLY; no GPU or signing authority exercised'
+
+  regression:
+    name: Pinned E6 crypto and full source regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact source
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@49933ea5288ca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - name: Pinned dependency installation
+        run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - name: Inherited and new E6 cryptography and evidence tests
+        run: |
+          npx --no-install vitest run --project node \
+            scripts/national-gpu-ci/skybot-host-witness.test.mjs \
+            scripts/national-gpu-ci/wait-host-proof.test.mjs \
+            scripts/national-gpu-ci/verify-independent-release.test.mjs \
+            scripts/national-gpu-ci/sanitize-browser-evidence.test.mjs
+      - name: Format reviewed E6 files
+        if: ${{ !cancelled() }}
+        run: |
+          npx --no-install oxfmt --write scripts/national-gpu-ci/host-run-grant.mjs scripts/national-gpu-ci/host-run-grant.check.mjs scripts/national-gpu-ci/owner-functional-witness.mjs scripts/national-gpu-ci/owner-functional-witness.check.mjs scripts/national-gpu-ci/skybot-host-witness.mjs scripts/national-gpu-ci/skybot-host-witness.test.mjs scripts/national-gpu-ci/verify-independent-release.mjs scripts/national-gpu-ci/verify-independent-release.test.mjs
+          git diff --exit-code
+          npm run format:check
+      - name: Full source typecheck
+        if: ${{ !cancelled() }}
+        run: npm run typecheck
+      - name: Full source lint
+        if: ${{ !cancelled() }}
+        run: npm run lint
+      - name: Production build
+        if: ${{ !cancelled() }}
+        run: npm run build-prod

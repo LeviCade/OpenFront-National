@@ -13,3 +13,17 @@ Only the independently reviewed final tip of `stage3/conductor4-class2-integrati
 This is an additional control, not a replacement for live control-plane and physical verification. The reviewable grant is issued after the job is assigned because ephemeral runner ID and job ID are unknown before scheduling. Do not publish grant/challenge or host credentials in GitHub comments.
 
 Local source checks: node --test scripts/national-gpu-ci/host-run-grant.check.mjs scripts/national-gpu-ci/verify-workflow.mjs. The private operator preflight is a separate reviewed infrastructure change.
+
+## Separate owner-functional witness (no Skybot acceptance)
+
+On an authorized owner-controlled physical machine, independently inspect the actual GPU device, use a fresh detached checkout of the approved collective staging SHA with dependencies installed and a reviewed real Chromium executable, and invoke:
+
+```sh
+CHROME_BIN=/absolute/path/to/real/chromium node scripts/national-gpu-ci/owner-functional-witness.mjs APPROVED_FINAL_SHA
+```
+
+This local tool checks the official live staging ref, exact tracked checkout and absence of stale report directory; runs explicit NATIONAL Solo desktop/mobile (`--solo`) and Legacy FFA desktop/mobile, without requesting signed-hardware mode or enabling software CDP; requires real renderer and both shader pixels and authentic E5 gameplay success events. It rejects software/ambiguous renderers, incomplete phases, stale reports and wrong source. It writes an immutable local owner-functional summary. It does NOT independently attest physical inventory, provide a second witness, certify GPU hardware, prove a win, sign a preflight, upload artifacts, or verify teardown. Browser-provided observation is not an independent host observation. Independent operator review and E5's separate end-to-end victory/Private witness remain mandatory.
+
+Integration warning: at founding SHA, browser-gameplay.mjs checks PEM text instead of canonical DER fingerprint and the formal four-mode runner invokes the three-principal path. E5 and Conductor must reconcile those contracts before formal dispatch; this local functional lane does not weaken the existing signed release gate.
+
+The second source revision cryptographically binds the exact approved grant digest to every signed record and checks previously signed ordered mode prefixes before invoking the HSM. The standalone verifier requires the same root-owned policy digest. Reservation publication uses no-overwrite atomic linking and fsync before any HSM invocation. A changed grant or incomplete reservation is quarantined, not automatically refreshed.
