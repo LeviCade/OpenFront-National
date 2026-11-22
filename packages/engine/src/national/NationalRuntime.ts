@@ -463,7 +463,7 @@ export class NationalRuntime {
       workerIncomeBps: row?.workerIncomeBps ?? 0,
       nonWorkerIncomeBps: row?.nonWorkerIncomeBps ?? 0,
       allowedConstruction:
-        row?.allowedConstruction == null
+        row?.allowedConstruction === null || row?.allowedConstruction === undefined
           ? null
           : Object.freeze([...row.allowedConstruction]),
       treasury: row?.treasury ?? "0",
@@ -811,7 +811,7 @@ export class NationalRuntime {
     );
     if (!empire || empire.leaderId === memberId) return true;
     const allowed = this.administration.get(empire.id)?.allowedConstruction;
-    return allowed == null || allowed.includes(type);
+    return allowed === null || allowed === undefined || allowed.includes(type);
   }
 
   /** Prepare all dispositions before publishing the new sovereign state. */

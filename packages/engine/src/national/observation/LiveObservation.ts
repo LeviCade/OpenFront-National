@@ -319,7 +319,7 @@ export function collectLiveNationalObservation(
     }
 
   // All diplomacy is whitelisted by the same Game authority for humans/bots.
-  const diplomacy = authority?.recipientDiplomacy(observerId);
+  const diplomacy = authority?.recipientDiplomacy?.(observerId);
   const invitations: NationalWorld["invitations"][number][] = [];
   for (const pact of diplomacy?.pacts ?? []) {
     if (coalitionIds.has(pact.id)) continue;

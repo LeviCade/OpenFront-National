@@ -73,7 +73,7 @@ export function projectNationalPactDisclosure(
   if (authority.empireOf(observerId))
     return bind({ version: 1, recipientId: observerId, pacts: [] });
   const source = (game as PactGame).nationalPactDisclosure?.(actor);
-  if (source == null) return undefined;
+  if (source === null || source === undefined) return undefined;
   // Strictly reject foreign recipients and unexpected private nested data.
   const safe = readNationalPactDisclosure(source, observerId, roster, false);
   if (!safe) throw new Error("NATIONAL invalid authoritative pact disclosure");

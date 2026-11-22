@@ -35,7 +35,7 @@ for (let count = 0; count <= 30; count++)
         a.equal(x.credits.get(leader), gold);
       if (!ids.length) a.equal(x.unclaimed, gold);
       if (ids.length && !ids.includes(leader)) {
-        const values = ids.map((id) => x.credits.get(id) || 0n);
+        const values = ids.map((id) => x.credits.get(id) ?? 0n);
         a(values.every((v) => values.every((w) => v - w <= 1n)));
       }
       checks++;
