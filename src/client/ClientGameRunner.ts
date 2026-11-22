@@ -334,7 +334,9 @@ export function joinLobby(
           currentGameRunner = runner;
           runner.start();
           if (rejectedTrustedProjection) {
-            eventBus.emit(new TrustedNationalProjectionRejectedEvent(lobbyConfig.gameID));
+            eventBus.emit(
+              new TrustedNationalProjectionRejectedEvent(lobbyConfig.gameID),
+            );
           } else {
             for (const buffered of bufferedTrustedProjections) {
               eventBus.emit(buffered);
@@ -374,8 +376,12 @@ export function joinLobby(
         // clickable political controls. Never log the recipient's payload.
         rejectedTrustedProjection = true;
         bufferedTrustedProjections = [];
-        eventBus.emit(new TrustedNationalProjectionRejectedEvent(lobbyConfig.gameID));
-        console.warn("NATIONAL rejected malformed projection; new host admission required");
+        eventBus.emit(
+          new TrustedNationalProjectionRejectedEvent(lobbyConfig.gameID),
+        );
+        console.warn(
+          "NATIONAL rejected malformed projection; new host admission required",
+        );
         return;
       }
       if (currentGameRunner) {
