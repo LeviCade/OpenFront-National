@@ -56,7 +56,7 @@ async function liveGame() {
     new SpawnExecution("recon-e5", BUYER, game.ref(20, 100)),
     new SpawnExecution("recon-e5", TARGET, game.ref(185, 175)),
     new SpawnExecution("recon-e5", ALLY, game.ref(20, 15)),
-    new SpawnExecution("recon-e5", STRANGER, game.ref(205, 15)),
+    new SpawnExecution("recon-e5", STRANGER, game.ref(195, 15)),
   );
   game.executeNextTick();
   game.executeNextTick();
