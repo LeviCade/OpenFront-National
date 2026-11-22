@@ -169,17 +169,35 @@ describe("C4 E3 bounded continuity algorithm", () => {
     expect(first.page.tileSweepSlots).toBe(16000);
     expect(first.page.unitSweepSlots).toBe(6200);
     const peer = new NationalObserverMapContinuity("a", "seam-a");
-    expect(() => peer.accept({ ...first.page, nextCursor: null }, first.page.tick)).toThrow();
-    expect(() => peer.accept({ ...first.page, unitNextCursor: null }, first.page.tick)).toThrow();
+    expect(() =>
+      peer.accept({ ...first.page, nextCursor: null }, first.page.tick),
+    ).toThrow();
+    expect(() =>
+      peer.accept({ ...first.page, unitNextCursor: null }, first.page.tick),
+    ).toThrow();
     expect(peer.lastAcceptedTick).toBe(-1);
     peer.accept(first.page, first.page.tick);
     const second = emit(count(16000), all);
-    expect(() => peer.accept({
-      ...second.page, tileSweepSlots: 8192, nextCursor: null,
-    }, second.page.tick)).toThrow();
-    expect(() => peer.accept({
-      ...second.page, unitSweepSlots: 4096, unitNextCursor: null,
-    }, second.page.tick)).toThrow();
+    expect(() =>
+      peer.accept(
+        {
+          ...second.page,
+          tileSweepSlots: 8192,
+          nextCursor: null,
+        },
+        second.page.tick,
+      ),
+    ).toThrow();
+    expect(() =>
+      peer.accept(
+        {
+          ...second.page,
+          unitSweepSlots: 4096,
+          unitNextCursor: null,
+        },
+        second.page.tick,
+      ),
+    ).toThrow();
     expect(peer.lastAcceptedTick).toBe(first.page.tick);
     expect(peer.accept(second.page, second.page.tick).usable).toBe(true);
   });

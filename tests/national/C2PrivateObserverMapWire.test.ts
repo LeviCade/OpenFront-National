@@ -810,8 +810,9 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     c.conquer(foreignTile);
     const foreignCity = c.buildUnit(UnitType.City, foreignTile, {});
     expect(
-      collectLiveNationalObservation(game, A.id).observation.visibleAssets
-        .some((asset) => asset.id === String(foreignCity.id())),
+      collectLiveNationalObservation(game, A.id).observation.visibleAssets.some(
+        (asset) => asset.id === String(foreignCity.id()),
+      ),
     ).toBe(true);
     expect(
       collectLiveNationalObservation(game, A.id).visibleTiles.has(allyRef),
@@ -820,14 +821,17 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     const allied = view(sockets[0].socket);
     expect(game.unit(foreignCity.id())).toBeDefined();
     expect(
-      collectLiveNationalObservation(game, A.id).observation.visibleAssets
-        .some((asset) => asset.id === String(foreignCity.id())),
+      collectLiveNationalObservation(game, A.id).observation.visibleAssets.some(
+        (asset) => asset.id === String(foreignCity.id()),
+      ),
     ).toBe(true);
     const reader = new NationalObserverMapContinuity(A.id);
     reader.acceptProjection(
       parseTrustedNationalProjection(allied.msg.payload, allied.msg.tick),
     );
-    expect(reader.units().some((unit) => unit.id === foreignCity.id())).toBe(true);
+    expect(reader.units().some((unit) => unit.id === foreignCity.id())).toBe(
+      true,
+    );
     // A reciprocal member is removed by the same real authoritative
     // tile-relinquish elimination used by the existing FOG-06/07 fixture.
     for (const tile of [...b.tiles()]) b.relinquish(tile);
@@ -841,9 +845,15 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
       parseTrustedNationalProjection(after.msg.payload, after.msg.tick),
     );
     expect(d.clearAllTiles || d.removedTileRefs.includes(allyRef)).toBe(true);
-    expect(d.clearAllUnits || d.removedUnitIds.includes(foreignCity.id())).toBe(true);
-    expect(reader.units().some((unit) => unit.id === foreignCity.id())).toBe(false);
-    expect(after.map.units.some((unit) => unit.id === foreignCity.id())).toBe(false);
+    expect(d.clearAllUnits || d.removedUnitIds.includes(foreignCity.id())).toBe(
+      true,
+    );
+    expect(reader.units().some((unit) => unit.id === foreignCity.id())).toBe(
+      false,
+    );
+    expect(after.map.units.some((unit) => unit.id === foreignCity.id())).toBe(
+      false,
+    );
     expect(reader.tileStatus(allyRef)).toBe("revoked");
     expect(
       after.map.tiles.every(([ref]) =>
@@ -856,12 +866,17 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     host.tick();
     const reacquired = view(sockets[0].socket);
     reader.acceptProjection(
-      parseTrustedNationalProjection(reacquired.msg.payload, reacquired.msg.tick),
+      parseTrustedNationalProjection(
+        reacquired.msg.payload,
+        reacquired.msg.tick,
+      ),
     );
     expect(reader.units().find((unit) => unit.id === foreignCity.id())).toEqual(
       expect.objectContaining({ ownerId: C.id, tile: foreignTile }),
     );
-    expect(reader.units().find((unit) => unit.id === foreignCity.id())).not.toHaveProperty("troops");
+    expect(
+      reader.units().find((unit) => unit.id === foreignCity.id()),
+    ).not.toHaveProperty("troops");
   });
 });
 
