@@ -10,6 +10,10 @@ import {
 import { findClosestBy } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player, Unit } from "../game/Game";
+import {
+  nearestReturnPort,
+  neutralBlockader,
+} from "../national/conflict/NationalMaritime";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathStatus } from "../pathfinding/types";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
@@ -24,11 +28,16 @@ import type {
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
 
+import { NationalSanctionExecution } from "./NationalSanctionExecution";
+
 export class TradeShipExecution implements Execution {
   private active = true;
   private mg: Game;
   private tradeShip: Unit | undefined;
   private wasCaptured = false;
+  // A failed neutral journey remains revenue-ineligible even after peace.
+  private returningHome = false;
+  private failedReturnPorts: number[] = [];
   private pathFinder: WaterPathFinder;
   private tilesTraveled = 0;
   private motionPlanId = 1;
@@ -52,6 +61,20 @@ export class TradeShipExecution implements Execution {
     }
 
     if (this.tradeShip === undefined) {
+      if (
+        this.mg.nationalWarAuthority() !== null &&
+        (!this.srcPort.isActive() ||
+          this.srcPort.isMarkedForDeletion() ||
+          this.srcPort.isUnderConstruction() ||
+          this.srcPort.owner() !== this.origOwner ||
+          !this._dstPort.isActive() ||
+          this._dstPort.isMarkedForDeletion() ||
+          this._dstPort.isUnderConstruction() ||
+          !this.origOwner.canTrade(this._dstPort.owner()))
+      ) {
+        this.active = false;
+        return;
+      }
       const spawn = this.origOwner.canBuild(
         UnitType.TradeShip,
         this.srcPort.tile(),
@@ -73,6 +96,7 @@ export class TradeShipExecution implements Execution {
       return;
     }
 
+    const national = this.mg.nationalWarAuthority() !== null;
     const tradeShipOwner = this.tradeShip.owner();
     const dstPortOwner = this._dstPort.owner();
     if (this.wasCaptured !== true && this.origOwner !== tradeShipOwner) {
@@ -89,17 +113,39 @@ export class TradeShipExecution implements Execution {
       );
     }
 
-    // If a player captures another player's port while trading we should delete
-    // the ship.
-    if (dstPortOwner.id() === this.srcPort.owner().id()) {
+    // Legacy capture logic remains unchanged. In NATIONAL, losing the home
+    // port cancels a commercial voyage but lets the existing hull return
+    // via another eligible owned port instead of paying its new owner.
+    if (
+      national &&
+      !this.returningHome &&
+      !this.wasCaptured &&
+      (!this.srcPort.isActive() ||
+        this.srcPort.isMarkedForDeletion() ||
+        this.srcPort.isUnderConstruction() ||
+        this.srcPort.owner() !== this.origOwner)
+    ) {
+      this.returningHome = true;
+      if (!this.chooseReturnPort()) return;
+    }
+    if (
+      !this.returningHome &&
+      (!national || !this.wasCaptured) &&
+      dstPortOwner.id() === this.srcPort.owner().id()
+    ) {
       this.tradeShip.delete(false);
       this.active = false;
       return;
     }
 
     if (
+      !this.returningHome &&
       !this.wasCaptured &&
-      (!this._dstPort.isActive() || !tradeShipOwner.canTrade(dstPortOwner))
+      (!this._dstPort.isActive() ||
+        (national &&
+          (this._dstPort.isMarkedForDeletion() ||
+            this._dstPort.isUnderConstruction())) ||
+        !tradeShipOwner.canTrade(dstPortOwner))
     ) {
       this.tradeShip.delete(false);
       this.active = false;
@@ -109,6 +155,26 @@ export class TradeShipExecution implements Execution {
     const curTile = this.tradeShip.tile();
 
     if (
+      national &&
+      !this.returningHome &&
+      !this.wasCaptured &&
+      neutralBlockader(this.mg, this.tradeShip, this._dstPort)
+    ) {
+      this.returningHome = true;
+      if (!this.chooseReturnPort()) return;
+    }
+
+    if (this.returningHome) {
+      // Ownership or construction status can change after the interception.
+      if (
+        this._dstPort.owner() !== tradeShipOwner ||
+        !this._dstPort.isActive() ||
+        this._dstPort.isMarkedForDeletion() ||
+        this._dstPort.isUnderConstruction()
+      ) {
+        if (!this.chooseReturnPort()) return;
+      }
+    } else if (
       this.wasCaptured &&
       (tradeShipOwner !== dstPortOwner || !this._dstPort.isActive())
     ) {
@@ -168,9 +234,22 @@ export class TradeShipExecution implements Execution {
         this.tilesTraveled++;
         break;
       case PathStatus.COMPLETE:
+        if (this.returningHome && result.node !== dst) {
+          this.failedReturnPorts.push(this._dstPort.id());
+          this.chooseReturnPort();
+          return;
+        }
+        if (this.returningHome && curTile !== dst) this.tradeShip.move(dst);
         this.complete();
         return;
       case PathStatus.NOT_FOUND:
+        if (this.returningHome) {
+          // At most one attempt per port ID for this journey; never bounce
+          // between unreachable ports or resume the blocked commercial leg.
+          this.failedReturnPorts.push(this._dstPort.id());
+          this.chooseReturnPort();
+          return;
+        }
         console.warn("captured trade ship cannot find route");
         if (this.tradeShip.isActive()) {
           this.tradeShip.delete(false);
@@ -180,9 +259,44 @@ export class TradeShipExecution implements Execution {
     }
   }
 
+  private chooseReturnPort(): boolean {
+    const port =
+      this.failedReturnPorts.length >= 8
+        ? undefined
+        : nearestReturnPort(this.mg, this.tradeShip!, this.failedReturnPorts);
+    if (port === undefined) {
+      // OPEN 5: no reachable owned home remains. Retire the voyage without
+      // a captor, combat event, refund, or any trade/piracy credit.
+      this.tradeShip!.delete(false);
+      this.active = false;
+      return false;
+    }
+    this._dstPort = port;
+    this.tradeShip!.setTargetUnit(port);
+    this.tradeShip!.touch();
+    this.pathFinder.invalidate();
+    this.motionPlanDst = null;
+    return true;
+  }
+
   private complete() {
     this.active = false;
     this.tradeShip!.delete(false);
+    if (this.returningHome) return;
+    if (
+      this.mg.nationalWarAuthority() !== null &&
+      !this.wasCaptured &&
+      (!this.srcPort.isActive() ||
+        this.srcPort.isMarkedForDeletion() ||
+        this.srcPort.isUnderConstruction() ||
+        this.srcPort.owner() !== this.origOwner ||
+        !this._dstPort.isActive() ||
+        this._dstPort.isMarkedForDeletion() ||
+        this._dstPort.isUnderConstruction() ||
+        !this.origOwner.canTrade(this._dstPort.owner()))
+    ) {
+      return;
+    }
     const gold = this.mg
       .config()
       .tradeShipGold(this.tilesTraveled, this.tradeShip!.owner());
@@ -230,6 +344,7 @@ export class TradeShipExecution implements Execution {
       );
       this.srcPort.owner().addTradeGold(gold);
       this._dstPort.owner().addTradeGold(gold);
+      if (gold > 0n) NationalSanctionExecution.paidTrade(this.mg, this.srcPort.owner(), this._dstPort.owner());
       // Record stats
       this.mg
         .stats()
@@ -256,6 +371,8 @@ export class TradeShipExecution implements Execution {
       initialized: this.mg !== undefined,
       tradeShip: this.tradeShip === undefined ? null : w.unit(this.tradeShip),
       wasCaptured: this.wasCaptured,
+      returningHome: this.returningHome,
+      failedReturnPorts: [...this.failedReturnPorts],
       pathFinder:
         this.pathFinder === undefined
           ? null
@@ -274,6 +391,8 @@ export class TradeShipExecution implements Execution {
     if (s.initialized) this.mg = r.game;
     this.tradeShip = s.tradeShip === null ? undefined : r.unit(s.tradeShip);
     this.wasCaptured = s.wasCaptured;
+    this.returningHome = s.returningHome;
+    this.failedReturnPorts = [...s.failedReturnPorts];
     if (s.pathFinder !== null) {
       this.pathFinder = restoreWaterPathFinder(r.game, s.pathFinder);
     }
@@ -291,6 +410,8 @@ const TradeShipExecutionStateSchema = z.object({
   initialized: z.boolean(),
   tradeShip: zRef().nullable(),
   wasCaptured: z.boolean(),
+  returningHome: z.boolean(),
+  failedReturnPorts: z.array(zInt()),
   /** Null before init(). */
   pathFinder: WaterPathFinderSchema.nullable(),
   tilesTraveled: zInt(),
@@ -304,7 +425,14 @@ type TradeShipExecutionState = z.infer<typeof TradeShipExecutionStateSchema>;
 
 export const TradeShipExecutionSnapshot = execSnapshotType({
   name: "TradeShip",
-  version: 1,
+  version: 2,
+  migrations: {
+    1: (data: unknown) => ({
+      ...(data as Record<string, unknown>),
+      returningHome: false,
+      failedReturnPorts: [],
+    }),
+  },
   schema: TradeShipExecutionStateSchema,
   cls: () => TradeShipExecution,
 });
