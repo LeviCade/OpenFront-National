@@ -30,13 +30,15 @@ jobs:
         run: npx --no-install vitest run tests/ui/national/NationalDiplomacyPanel.test.ts
       - name: Exact pinned formatting
         run: |
-          npx --no-install oxfmt --check \
+          npx --no-install oxfmt --write \
             packages/engine-api/src/game/NationalImperialView.ts \
             packages/engine/src/national/observation/NationalPactProjection.ts \
             src/client/NationalImperialState.ts \
             src/client/NationalDiplomacyPanel.ts \
             tests/national/C4NativeImperialGate.test.ts \
             tests/ui/national/NationalDiplomacyPanel.test.ts
+          git diff -- src/client/NationalDiplomacyPanel.ts tests/ui/national/NationalDiplomacyPanel.test.ts
+          git diff --exit-code -- packages/engine-api/src/game/NationalImperialView.ts packages/engine/src/national/observation/NationalPactProjection.ts src/client/NationalImperialState.ts src/client/NationalDiplomacyPanel.ts tests/national/C4NativeImperialGate.test.ts tests/ui/national/NationalDiplomacyPanel.test.ts
       - name: Full static lint
         run: npm run lint
       - name: Production build
