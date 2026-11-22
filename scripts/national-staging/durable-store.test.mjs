@@ -12,7 +12,7 @@ import {
 
 const dir = mkdtempSync(join(tmpdir(), "national-durable-"));
 const moduleURL = new URL("../../src/server/national/DurableNationalStore.ts", import.meta.url).href;
-const childCode = `import { DurableNationalStore } from ${JSON.stringify(moduleURL)}; const store = new DurableNationalStore(process.argv[1], 0); if (process.argv[2] === 'create') { store.write('world', 0, 0, 'genesis'); store.write('world', 1, 1, 'tick-one'); } else if (process.argv[2] === 'replace') { const old=store.read('world'); store.write('world', old.generation, old.tick+1, 'tick-two'); } console.log('ready'); setInterval(()=>{}, 1000);`;
+const childCode = `import { DurableNationalStore } from ${JSON.stringify(moduleURL)}; const store = new DurableNationalStore(process.argv[1], 0, 262144, process.argv[2] === 'create'); if (process.argv[2] === 'create') { store.write('world', 0, 0, 'genesis'); store.write('world', 1, 1, 'tick-one'); } else if (process.argv[2] === 'replace') { const old=store.read('world'); store.write('world', old.generation, old.tick+1, 'tick-two'); } console.log('ready'); setInterval(()=>{}, 1000);`;
 const args = ["--experimental-strip-types", "--input-type=module", "-e"];
 let child;
 async function start(code, mode) {
@@ -45,6 +45,7 @@ async function kill(p) {
   assert.equal(signal, "SIGKILL");
 }
 try {
+  assert.throws(() => new DurableNationalStore(dir, 0), /ENOENT/);
   child = await start(childCode, "create");
   assert.throws(() => new DurableNationalStore(dir, 0), /already owned/);
   const competitor = spawnSync(process.execPath, [...args, childCode, dir, "replace"], { timeout: 5000 });
@@ -88,7 +89,7 @@ try {
   symlinkSync(rawPath, join(dir, "worker-1.sqlite"));
   assert.throws(() => new DurableNationalStore(dir, 1), /unsafe/);
   console.log("PASS unsafe permissions and symlink rejected");
-  const limited = new DurableNationalStore(dir, 2, 16);
+  const limited = new DurableNationalStore(dir, 2, 16, true);
   const before = limited.write("quota", 0, 0, "init");
   assert.throws(() => limited.write("quota", 1, 1, "x".repeat(200000)), /full/i);
   assert.throws(() => limited.read("quota"), /writer failed/);
@@ -96,7 +97,7 @@ try {
   assert.equal(independent.prepare("SELECT digest FROM checkpoints WHERE gameID='quota'").get().digest, before.digest);
   independent.close();
   console.log("PASS SQLITE_FULL transaction rolls back and writer fences");
-  const fenced = new DurableNationalStore(dir, 3);
+  const fenced = new DurableNationalStore(dir, 3, 262144, true);
   fenced.write("inode", 0, 0, "init");
   renameSync(join(dir, "worker-3.lock"), join(dir, "detached.lock"));
   assert.throws(() => fenced.write("inode", 1, 1, "unsafe"), /ENOENT|ownership path/);

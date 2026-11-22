@@ -10,7 +10,7 @@ import {
 } from "@openfront/shared/ZbinWire";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join as joinPath } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { setTimeout as delay } from "node:timers/promises";
@@ -38,7 +38,7 @@ const fixture = makeEnvironment();
 const durable = process.env.NATIONAL_TEST_DURABLE_RECOVERY === "1";
 const worldRoot = joinPath(fixture.dir, "world");
 if (durable) {
-  mkdirSync(worldRoot, { mode: 0o700 });
+  execFileSync(process.execPath, ["--experimental-strip-types", "scripts/national-staging/init-durable-world.mjs", worldRoot, "1"], { env: fixture.env, stdio: ["ignore", "pipe", "pipe"] });
   fixture.env.NATIONAL_RECOVERY_ROOT = worldRoot;
 }
 

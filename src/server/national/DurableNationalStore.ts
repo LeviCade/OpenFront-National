@@ -5,7 +5,11 @@ import {
   closeSync,
   fstatSync,
   lstatSync,
+  mkdirSync,
   openSync,
+  fsyncSync,
+  readFileSync,
+  writeFileSync,
   realpathSync,
   statfsSync,
 } from "node:fs";
@@ -29,8 +33,8 @@ function validID(id: string): void {
     throw new Error("NATIONAL invalid game ID");
 }
 
-function privateFile(path: string): void {
-  try {
+function privateFile(path: string, create: boolean): void {
+  if (create) try {
     closeSync(
       openSync(
         path,
@@ -98,7 +102,7 @@ export class DurableNationalStore {
   private readonly db: DatabaseSync;
   private failed = false;
 
-  constructor(root: string, worker: number, maxPages = MAX_PAGES) {
+  constructor(root: string, worker: number, maxPages = MAX_PAGES, initialize = false) {
     if (
       process.platform !== "linux" ||
       !Number.isSafeInteger(worker) ||
@@ -127,8 +131,8 @@ export class DurableNationalStore {
     const dbPath = join(root, `worker-${worker}.sqlite`);
     this.lockPath = lockPath;
     this.dbPath = dbPath;
-    privateFile(lockPath);
-    privateFile(dbPath);
+    privateFile(lockPath, initialize);
+    privateFile(dbPath, initialize);
     this.lockFD = openSync(lockPath, constants.O_RDWR | constants.O_NOFOLLOW);
     let db: DatabaseSync | undefined;
     try {
@@ -146,9 +150,11 @@ export class DurableNationalStore {
       db.exec(
         `PRAGMA busy_timeout=0; PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA secure_delete=ON; PRAGMA max_page_count=${maxPages};`,
       );
-      db.exec(
-        "CREATE TABLE IF NOT EXISTS checkpoints (gameID TEXT PRIMARY KEY, generation INTEGER NOT NULL, tick INTEGER NOT NULL, payload TEXT NOT NULL, digest TEXT NOT NULL) STRICT",
-      );
+      if (initialize) {
+        db.exec("CREATE TABLE checkpoints (gameID TEXT PRIMARY KEY, generation INTEGER NOT NULL, tick INTEGER NOT NULL, payload TEXT NOT NULL, digest TEXT NOT NULL) STRICT");
+      }
+      // Do not silently create a missing schema in a lost or empty DB.
+      db.prepare("SELECT gameID, generation, tick, payload, digest FROM checkpoints LIMIT 0");
       if (db.prepare("PRAGMA page_size").get()?.page_size !== 4096)
         throw new Error("NATIONAL unsupported database page size");
       this.db = db;
@@ -267,4 +273,35 @@ export class DurableNationalStore {
       throw error;
     }
   }
+}
+
+export function assertDurableNationalRoot(root: string, workers: number): void {
+  const path = join(root, "manifest.json");
+  if (!isAbsolute(root) || resolve(root) !== root || realpathSync(root) !== root)
+    throw new Error("NATIONAL unsafe recovery root");
+  const dir = lstatSync(root);
+  if (!dir.isDirectory() || (dir.mode & 0o777) !== 0o700 || dir.uid !== process.getuid?.())
+    throw new Error("NATIONAL recovery directory must be private");
+  privateFile(path, false);
+  const metadata = readFileSync(path, "utf8");
+  if (metadata !== JSON.stringify({ format: 1, workers }))
+    throw new Error("NATIONAL recovery manifest or worker count incompatible");
+}
+
+/** Offline, explicit, one-time provisioning. Never invoke during Worker boot.
+ * A partially provisioned root has no manifest and cannot become authority. */
+export function initializeDurableNationalRoot(root: string, workers: number): void {
+  if (!isAbsolute(root) || resolve(root) !== root || !Number.isSafeInteger(workers) || workers < 1 || workers > 128)
+    throw new Error("NATIONAL invalid recovery initialization");
+  mkdirSync(root, { mode: 0o700 });
+  for (let worker = 0; worker < workers; worker++)
+    new DurableNationalStore(root, worker, MAX_PAGES, true);
+  const path = join(root, "manifest.json");
+  const fd = openSync(path, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW, 0o600);
+  try {
+    writeFileSync(fd, JSON.stringify({ format: 1, workers }));
+    fsyncSync(fd);
+  } finally { closeSync(fd); }
+  const dir = openSync(root, constants.O_RDONLY | constants.O_DIRECTORY);
+  try { fsyncSync(dir); } finally { closeSync(dir); }
 }

@@ -62,7 +62,7 @@ import { resolveVerifiedJoin } from "./Privilege";
 
 import { loadGatekeeper } from "./Gatekeeper";
 import { MapPlaylist } from "./MapPlaylist";
-import { DurableNationalStore } from "./national/DurableNationalStore";
+import { assertDurableNationalRoot, DurableNationalStore } from "./national/DurableNationalStore";
 import { isNationalSignedInAccount } from "./national/NationalAccountGate";
 import { watchNationalAccount } from "./national/NationalAccountLease";
 import { setNoStoreHeaders } from "./NoStoreHeaders";
@@ -307,12 +307,33 @@ export async function startWorker() {
   // Every replacement of this worker shard must acquire the same local
   // kernel lock before recovery or any listener can become available.
   const recoveryRoot = process.env.NATIONAL_RECOVERY_ROOT;
-  const nationalStore =
-    recoveryRoot === undefined
-      ? undefined
-      : new DurableNationalStore(recoveryRoot, workerId);
+  let nationalStore: DurableNationalStore | undefined;
+  try {
+    if (recoveryRoot !== undefined) {
+      assertDurableNationalRoot(recoveryRoot, ServerEnv.numWorkers());
+      nationalStore = new DurableNationalStore(recoveryRoot, workerId);
+    }
+  } catch (error) {
+    log.error("NATIONAL durable recovery refused", { stage: "ownership-or-root" });
+    throw error;
+  }
   const gm = new GameManager(log, gatekeeper, nationalStore);
-  await gm.restoreDurableNationalMatches(workerId);
+  try {
+    await gm.restoreDurableNationalMatches(workerId);
+  } catch (error) {
+    // Fixed reason classes only; never log private row payloads or identity.
+    log.error("NATIONAL durable recovery refused", {
+      stage: "record-or-snapshot",
+      reason: error instanceof Error && [
+        "NATIONAL invalid checkpoint integrity",
+        "NATIONAL incompatible durable checkpoint",
+        "NATIONAL durable map mismatch",
+        "NATIONAL trusted snapshot header incompatible",
+        "NATIONAL durable engine roundtrip mismatch",
+      ].includes(error.message) ? error.message : "invalid durable record or snapshot",
+    });
+    throw error;
+  }
 
   // Initialize lobby service (handles WebSocket upgrade routing)
   const lobbyService = new WorkerLobbyService(server, wss, gm, log);
