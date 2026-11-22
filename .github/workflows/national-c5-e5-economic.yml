@@ -1,0 +1,103 @@
+name: NATIONAL C5 E5 — economic AI authoritative source proof
+on:
+  push:
+    branches:
+      - feature/c5-class1-e5-ai-economic-20261122
+  pull_request:
+    branches:
+      - stage3/conductor5-class1-integration-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  economic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Exact SHA
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          echo "C5_E5_SOURCE_SHA=$SOURCE_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: npm run typecheck
+      - name: Economic AI and inherited transaction scenarios
+        if: success() || failure()
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/C5Class1E5EconomicAI.test.ts \
+            tests/national/C4Class2EconomicMaritime.test.ts \
+            tests/national/C4Class2EconomicIngress.test.ts \
+            tests/national/NationalAIRealWar.test.ts \
+            tests/core/executions/TradeShipExecution.test.ts \
+            tests/core/executions/TrainExecution.test.ts \
+            tests/core/snapshot/NationExecutions.test.ts
+      - name: Changed-file format
+        if: success() || failure()
+        run: |
+          FILES=(
+            packages/engine/src/national/ai/NationalEconomicPlanner.ts
+            packages/engine/src/execution/NationExecution.ts
+            tests/national/C5Class1E5EconomicAI.test.ts
+          )
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            echo C5_E5_FORMAT_PATCH_BEGIN
+            git -c color.ui=false diff -- "${FILES[@]}"
+            echo C5_E5_FORMAT_PATCH_END
+            exit 1
+          fi
+      - name: Changed-file lint
+        if: success() || failure()
+        run: |
+          npx --no-install oxlint \
+            packages/engine/src/national/ai/NationalEconomicPlanner.ts \
+            packages/engine/src/execution/NationExecution.ts \
+            tests/national/C5Class1E5EconomicAI.test.ts
+
+  full:
+    name: Whole-tree regression, production build and compatibility audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Verify whole-tree exact source
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          echo "C5_E5_FULL_SOURCE_SHA=$SOURCE_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Entire cross-mode Vitest suite
+        run: npm test
+      - name: Production compilation
+        if: success() || failure()
+        run: npm run build-prod
+      - name: Complete lint
+        if: success() || failure()
+        run: npm run lint
+      - name: Complete formatting
+        if: success() || failure()
+        run: npm run format:check
