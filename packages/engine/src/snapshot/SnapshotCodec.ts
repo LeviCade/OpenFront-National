@@ -127,7 +127,14 @@ class SnapshotByteWriter {
 
   f64(n: number): void {
     this.ensure(8);
-    this.view.setFloat64(this.pos, n, true);
+    // JavaScript NaN is one semantic scalar value, but V8 can preserve
+    // distinct IEEE payload/sign bits through arithmetic and decode. Fix a
+    // canonical quiet NaN encoding so equal states really hash identically.
+    if (Number.isNaN(n)) {
+      this.view.setBigUint64(this.pos, 0x7ff8000000000000n, true);
+    } else {
+      this.view.setFloat64(this.pos, n, true);
+    }
     this.pos += 8;
   }
 
