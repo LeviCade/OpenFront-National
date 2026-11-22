@@ -48,7 +48,11 @@ jobs:
           printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
           node scripts/national-staging/identity-check.mjs
   worker:
-    name: Real Master and Worker — 3 independent local account sessions
+    name: Real Master and Worker — ${{ matrix.journey }} — 3 independent local account sessions
+    strategy:
+      fail-fast: false
+      matrix:
+        journey: [legacy, durable]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -64,8 +68,10 @@ jobs:
       - run: npm install --global --ignore-scripts npm@12.1.0
       - run: npm run inst
       - name: Bound account lease unit regressions
+        if: matrix.journey == 'legacy'
         run: npx --no-install vitest run --project node tests/server/NationalAccountLease.test.ts tests/national/TrustedNationalServerAuthority.test.ts
       - name: Verify exact source and execute actual Master/Worker process journey
+        if: matrix.journey == 'legacy'
         env:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
@@ -73,11 +79,21 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
           node --import tsx scripts/national-staging/worker-journey.mjs
-      - name: Owned source formatter and lint (independent of journey)
-        if: always()
+      - name: Durable store faults and real SIGKILL recovery journey
+        if: matrix.journey == 'durable'
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          FILES=(src/server/Worker.ts src/server/GameServer.ts src/server/ServerEnv.ts src/server/Server.ts src/server/Master.ts src/server/JoinVerify.ts src/server/national/NationalAccountLease.ts src/server/national/TrustedNationalMatch.ts scripts/national-staging/*.mjs tests/server/NationalAccountLease.test.ts tests/national/TrustedNationalServerAuthority.test.ts vite.config.ts)
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
+          node --experimental-strip-types scripts/national-staging/durable-store.test.mjs
+          NATIONAL_TEST_DURABLE_RECOVERY=1 node --import tsx scripts/national-staging/worker-journey.mjs
+      - name: Owned source formatter and lint (independent of journey)
+        if: always() && matrix.journey == 'durable'
+        run: |
+          set -euo pipefail
+          FILES=(src/server/Worker.ts src/server/GameServer.ts src/server/ServerEnv.ts src/server/Server.ts src/server/Master.ts src/server/JoinVerify.ts src/server/national/NationalAccountLease.ts src/server/national/TrustedNationalMatch.ts src/server/national/DurableNationalCheckpoint.ts src/server/national/DurableNationalStore.ts scripts/national-staging/*.mjs tests/server/NationalAccountLease.test.ts tests/national/TrustedNationalServerAuthority.test.ts vite.config.ts)
           if ! npx --no-install oxfmt --check "${FILES[@]}"; then
             npx --no-install oxfmt --write "${FILES[@]}"
             echo E2_FORMAT_REPAIR_BEGIN

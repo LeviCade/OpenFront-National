@@ -127,7 +127,14 @@ class SnapshotByteWriter {
 
   f64(n: number): void {
     this.ensure(8);
-    this.view.setFloat64(this.pos, n, true);
+    // JavaScript NaN is one semantic scalar value, but V8 can preserve
+    // distinct IEEE payload/sign bits through arithmetic and decode. Fix a
+    // canonical quiet NaN encoding so equal states really hash identically.
+    if (Number.isNaN(n)) {
+      this.view.setBigUint64(this.pos, 0x7ff8000000000000n, true);
+    } else {
+      this.view.setFloat64(this.pos, n, true);
+    }
     this.pos += 8;
   }
 
@@ -351,7 +358,9 @@ export function decodeSnapshotValue(bytes: Uint8Array): unknown {
           throw new SnapshotCodecError(`misaligned ${C.name} payload`);
         }
         // Copy so the result is aligned and does not pin the input buffer.
-        const copy = r.readBytes(byteLength).slice();
+        // Buffer.slice() aliases storage rather than copying. A checkpoint can
+        // arrive as a Node Buffer with a nonzero byte offset.
+        const copy = new Uint8Array(r.readBytes(byteLength));
         return new C(copy.buffer, 0, byteLength / C.BYTES_PER_ELEMENT);
       }
       default:
