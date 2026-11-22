@@ -637,8 +637,9 @@ export class GameImpl implements Game {
         return this._national.snapshot().politics;
       },
       (memberId, action) =>
-        action === "peace" &&
-        this._national?.hasDelegatedNationalPeace(memberId) === true,
+        action === "peace"
+          ? this._national?.hasDelegatedNationalPeace(memberId) === true
+          : this._national?.hasDelegatedNationalDeclaration(memberId) === true,
     );
     return this._nationalAuthority;
   }
