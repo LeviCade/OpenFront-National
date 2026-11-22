@@ -22,12 +22,11 @@ import {
   readFileSync,
   readdirSync,
   readlinkSync,
-
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { verifyIndependentRelease } from "./verify-independent-release.mjs";
 import { publishHostRecordOnce, verifyRunGrant } from "./host-run-grant.mjs";
+import { verifyIndependentRelease } from "./verify-independent-release.mjs";
 
 export const HOST_ROOT = "/etc/skybot-ci/national-gpu-release";
 export const REPOSITORY = "LeviCade/OpenFront-National";
@@ -468,15 +467,31 @@ function liveHardwareSigner(message) {
  * preflights before an after-job release certificate can be published. A
  * one-mode HSM signature cannot certify three later unsigned browser runs. */
 export function verifyFourModeHostProofs(proofs, publicPem, expected, times) {
-  return verifyModeProofPrefix(proofs, publicPem, expected, times,
-    PROOF_MODES.length, times.jobCompletedAtMs);
+  return verifyModeProofPrefix(
+    proofs,
+    publicPem,
+    expected,
+    times,
+    PROOF_MODES.length,
+    times.jobCompletedAtMs,
+  );
 }
 
-export function verifyModeProofPrefix(proofs, publicPem, expected, times, count, latest) {
+export function verifyModeProofPrefix(
+  proofs,
+  publicPem,
+  expected,
+  times,
+  count,
+  latest,
+) {
   requireTrue(
-    Number.isSafeInteger(count) && count >= 0 && count <= PROOF_MODES.length &&
+    Number.isSafeInteger(count) &&
+      count >= 0 &&
+      count <= PROOF_MODES.length &&
       Number.isSafeInteger(latest) &&
-      Array.isArray(proofs) && proofs.length === count,
+      Array.isArray(proofs) &&
+      proofs.length === count,
     "FOUR_SIGNED_HOST_PREFLIGHTS_MISSING",
   );
   const key = createPublicKey(publicPem);
@@ -704,9 +719,14 @@ async function main() {
   const hostSign = (payload) => {
     requireTrue(checkGrant() === grantSha, "HOST_RUN_GRANT_CHANGED");
     const name = phase === "postflight" ? "postflight" : mode;
-    const existing = phase === "postflight" ? "controller-postflight.json" :
-      "controller-preflight-" + mode + ".json";
-    requireTrue(!existsSync(join(HOST_ROOT, existing)), "HOST_PROOF_OVERWRITE_FORBIDDEN");
+    const existing =
+      phase === "postflight"
+        ? "controller-postflight.json"
+        : "controller-preflight-" + mode + ".json";
+    requireTrue(
+      !existsSync(join(HOST_ROOT, existing)),
+      "HOST_PROOF_OVERWRITE_FORBIDDEN",
+    );
     // Reserve once before HSM use. A crash or partial signing remains in
     // quarantine; never issue a replacement signature from this same slot.
     safeWrite("signing-reserved-" + name + ".json", {
@@ -730,7 +750,14 @@ async function main() {
     const earlier = PROOF_MODES.slice(0, modeIndex).map((item) =>
       readRootJson("controller-preflight-" + item + ".json"),
     );
-    verifyModeProofPrefix(earlier, pem, grantedExpected, times, modeIndex, Date.now());
+    verifyModeProofPrefix(
+      earlier,
+      pem,
+      grantedExpected,
+      times,
+      modeIndex,
+      Date.now(),
+    );
     const physical = probePhysicalPreflight(expected);
     const observed = readRootJson("controller-gpu-observation.json");
     requireTrue(

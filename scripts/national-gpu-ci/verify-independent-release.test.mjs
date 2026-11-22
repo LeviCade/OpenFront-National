@@ -506,10 +506,22 @@ test("missing, reordered, copied or forged mode-specific proofs cannot certify",
 test("valid signatures under another operator grant cannot certify this run", () => {
   const f = fixture();
   try {
-    assert.equal(verifyIndependentRelease({ ...f.args, expected: { ...f.args.expected, runGrantSha256: "d".repeat(64) } }).reason, "SIGNATURE_RUN_BINDING_MISMATCH");
+    assert.equal(
+      verifyIndependentRelease({
+        ...f.args,
+        expected: { ...f.args.expected, runGrantSha256: "d".repeat(64) },
+      }).reason,
+      "SIGNATURE_RUN_BINDING_MISMATCH",
+    );
     const modePreflights = [...f.args.modePreflights];
-    modePreflights[2] = f.wrap({ ...modePreflights[2].payload, runGrantSha256: "d".repeat(64) });
-    assert.equal(verifyIndependentRelease({ ...f.args, modePreflights }).accepted, false);
+    modePreflights[2] = f.wrap({
+      ...modePreflights[2].payload,
+      runGrantSha256: "d".repeat(64),
+    });
+    assert.equal(
+      verifyIndependentRelease({ ...f.args, modePreflights }).accepted,
+      false,
+    );
   } finally {
     rmSync(f.root, { recursive: true, force: true });
   }

@@ -447,12 +447,34 @@ test("postflight requires four distinct signed, source-bound and non-replayed mo
       times,
     ),
   );
-  assert.equal(verifyModeProofPrefix(signedModes.slice(0, 2), publicPem, expected, times, 2, NOW + 100000), true);
-  rejectWith("FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED", () =>
-    verifyModeProofPrefix(signedModes.slice(0, 2), publicPem, expected, times, 2, NOW + 1),
+  assert.equal(
+    verifyModeProofPrefix(
+      signedModes.slice(0, 2),
+      publicPem,
+      expected,
+      times,
+      2,
+      NOW + 100000,
+    ),
+    true,
   );
   rejectWith("FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED", () =>
-    verifyFourModeHostProofs(signedModes, publicPem, { ...expected, runGrantSha256: "d".repeat(64) }, times),
+    verifyModeProofPrefix(
+      signedModes.slice(0, 2),
+      publicPem,
+      expected,
+      times,
+      2,
+      NOW + 1,
+    ),
+  );
+  rejectWith("FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED", () =>
+    verifyFourModeHostProofs(
+      signedModes,
+      publicPem,
+      { ...expected, runGrantSha256: "d".repeat(64) },
+      times,
+    ),
   );
   const tampered = structuredClone(signedModes);
   tampered[3].payload.sourceSha = "f".repeat(40);

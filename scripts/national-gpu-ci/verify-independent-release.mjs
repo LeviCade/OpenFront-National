@@ -380,16 +380,26 @@ if (
   const rootDir = "/etc/skybot-ci/national-gpu-release";
   const readJson = (path) => {
     const st = lstatSync(path);
-    if (!st.isFile() || st.uid !== 0 || st.gid !== 0 || (st.mode & 0o777) !== 0o600)
+    if (
+      !st.isFile() ||
+      st.uid !== 0 ||
+      st.gid !== 0 ||
+      (st.mode & 0o777) !== 0o600
+    )
       throw Error("ROOT_EVIDENCE_FILE_UNTRUSTED");
     return JSON.parse(readFileSync(path, "utf8"));
   };
   let output;
   try {
     const rootStat = lstatSync(rootDir);
-    if (process.getuid?.() !== 0 || !rootStat.isDirectory() || rootStat.uid !== 0 ||
-        rootStat.gid !== 0 || (rootStat.mode & 0o777) !== 0o700 ||
-        process.env.GITHUB_ACTIONS === "true")
+    if (
+      process.getuid?.() !== 0 ||
+      !rootStat.isDirectory() ||
+      rootStat.uid !== 0 ||
+      rootStat.gid !== 0 ||
+      (rootStat.mode & 0o777) !== 0o700 ||
+      process.env.GITHUB_ACTIONS === "true"
+    )
       throw Error("REFUSED_IN_GITHUB_ACTIONS_GUEST");
     const ctx = readJson(join(rootDir, "trusted-github-run-context.json"));
     const receipt = readJson(
@@ -411,9 +421,15 @@ if (
     const hosted = readJson(join(rootDir, "host-trust-policy.json"));
     const postflight = readJson(join(rootDir, "controller-postflight.json"));
     const grantSha = verifyRunGrant(
-      readJson(join(rootDir, "approved-physical-run.json")), ctx,
-      { runStartedAtMs: receipt.runStartedAtMs, jobCompletedAtMs: receipt.jobCompletedAtMs },
-      "postflight", undefined, postflight.payload?.observedAtMs,
+      readJson(join(rootDir, "approved-physical-run.json")),
+      ctx,
+      {
+        runStartedAtMs: receipt.runStartedAtMs,
+        jobCompletedAtMs: receipt.jobCompletedAtMs,
+      },
+      "postflight",
+      undefined,
+      postflight.payload?.observedAtMs,
     );
     const checked = verifyIndependentRelease({
       summaryBytes: readFileSync(
