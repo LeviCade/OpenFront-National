@@ -30,6 +30,7 @@ import {
   proposeEmpireAccession,
   proposePactAmendment,
   setNationalPeaceDelegation,
+  setImperialWarPolicy,
   transferCrown,
   validatePolitics,
   type LastSovereignResult,
@@ -94,6 +95,9 @@ const politicsSchema = z.object({
       crisisDeadlineMs: counter.nullable(),
       // Older GameSnapshot v1 politics omit this; absent means DENY.
       delegatedNationalPeace: z.array(z.string()).optional(),
+      delegatedNationalDeclarations: z.array(z.string()).optional(),
+      accessionWarResponse: z.enum(["none", "imperial"]).optional(),
+      warPolicyVersion: counter.optional(),
     }),
   ),
   accessionOffers: z.array(
@@ -132,7 +136,10 @@ export type NationalImperialAdministrationCommand =
   | { kind: "build-structure"; empireId: string; memberId: PlayerID; type: UnitType; tile: number }
   | { kind: "dissolve"; empireId: string }
   | { kind: "set-army-mode"; empireId: string; mode: "decentralized" | "hybrid"; thresholdBps: number }
-  | { kind: "release-imperial-troops"; empireId: string; memberId: PlayerID; amount: number };
+  | { kind: "release-imperial-troops"; empireId: string; memberId: PlayerID; amount: number }
+  | { kind: "set-war-policy"; empireId: string; expectedVersion: number;
+      response: "none" | "imperial"; declarationDelegates: PlayerID[];
+      peaceDelegates: PlayerID[] };
 
 export interface NationalImperialAdministrationView extends ImperialPolicy {
   readonly empireId: string;
@@ -142,6 +149,10 @@ export interface NationalImperialAdministrationView extends ImperialPolicy {
   readonly hybridThresholdBps: number;
   readonly imperialTroops: string;
   readonly imperialTroopCapacity: string;
+  readonly warPolicyVersion: number;
+  readonly accessionWarResponse: "none" | "imperial";
+  readonly nationalDeclarationDelegates: readonly PlayerID[];
+  readonly nationalPeaceDelegates: readonly PlayerID[];
 }
 
 type ImperialDisposition = (
@@ -362,6 +373,10 @@ export class NationalRuntime {
       imperialTroops: row?.military?.pool ?? "0",
       imperialTroopCapacity: row?.military?.mode === "hybrid"
         ? hybridPoolCapacity(this.armySlots(this.politics, empire.memberIds), row.military.thresholdBps).toString() : "0",
+      warPolicyVersion: empire.warPolicyVersion ?? 0,
+      accessionWarResponse: empire.accessionWarResponse ?? "none",
+      nationalDeclarationDelegates: Object.freeze([...(empire.delegatedNationalDeclarations ?? [])]),
+      nationalPeaceDelegates: Object.freeze([...(empire.delegatedNationalPeace ?? [])]),
     });
   }
 
@@ -550,7 +565,9 @@ export class NationalRuntime {
     return new PoliticalAuthorityAdapter(
       () => this.politics,
       (memberId, action) =>
-        action === "peace" && this.hasDelegatedNationalPeace(memberId),
+        action === "peace"
+          ? this.hasDelegatedNationalPeace(memberId)
+          : this.hasDelegatedNationalDeclaration(memberId),
     );
   }
 
@@ -561,6 +578,31 @@ export class NationalRuntime {
         e.leaderId !== memberId &&
         e.memberIds.includes(memberId) &&
         (e.delegatedNationalPeace ?? []).includes(memberId),
+    );
+  }
+
+  hasDelegatedNationalDeclaration(memberId: PlayerID): boolean {
+    return this.politics.empires.some((e) =>
+      e.leaderId !== memberId && e.memberIds.includes(memberId) &&
+      (e.delegatedNationalDeclarations ?? []).includes(memberId),
+    );
+  }
+
+  /** Canonical WAR-policy epoch for a current constituent; null for sovereign outsiders. */
+  warPolicyVersionFor(memberId: PlayerID): number | null {
+    const empire = this.politics.empires.find((e) => e.memberIds.includes(memberId));
+    return empire ? (empire.warPolicyVersion ?? 0) : null;
+  }
+
+  accessionWarResponseFor(empireId: string): "none" | "imperial" {
+    return this.politics.empires.find((e) => e.id === empireId)?.accessionWarResponse ?? "none";
+  }
+
+  setWarPolicy(actorId: PlayerID, command: Extract<NationalImperialAdministrationCommand,
+    {kind: "set-war-policy"}>): void {
+    this.politics = setImperialWarPolicy(
+      this.politics, command.empireId, actorId, command.expectedVersion,
+      command.response, command.declarationDelegates, command.peaceDelegates,
     );
   }
 
