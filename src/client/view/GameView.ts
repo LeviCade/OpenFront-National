@@ -37,6 +37,7 @@ import { TerraNulliusImpl } from "@openfront/engine-lib/game/TerraNulliusImpl";
 import { UnitGrid } from "@openfront/engine-lib/game/UnitGrid";
 import { PlayerCosmetics, WirePlayer } from "@openfront/shared/WireSchemas";
 import type { NationalObserverMapContinuity, NationalObserverMapDelta } from "../NationalObserverMapContinuity";
+import type { TrustedNationalObserverMap } from "../TrustedNationalSession";
 import {
   readNationalAccessionOffers,
   readNationalConflicts,
@@ -105,7 +106,19 @@ export class GameView implements GameLike {
   public setTrustedPrincipal(principal: string | null): void {
     this.trustedPrincipal = principal;
   }
-  private readonly trustedUnitIds = new Set<number>();
+  private readonly trustedUnitMarkers = new Map<number, TrustedNationalObserverMap["units"][number]>();
+  private trustedMarkerRevision = 0;
+
+  public trustedObserverMarkerRevision(): number {
+    return this.trustedMarkerRevision;
+  }
+
+  /** Fallback geometry is explicitly coarse; never fabricate a UnitType or private strength. */
+  public *trustedObserverFallbackMarkers(): Iterable<TrustedNationalObserverMap["units"][number]> {
+    for (const marker of this.trustedUnitMarkers.values()) {
+      if (!this._units.has(marker.id)) yield marker;
+    }
+  }
   private readonly trustedOriginalTerrain = new Map<TileRef, number>();
 
   /** Strictly a view of the E3 recipient packet, NEVER a browser GameRunner. */
@@ -143,7 +156,8 @@ export class GameView implements GameLike {
     this._map.tileStateBuffer().fill(0);
     this.updatedTiles = [];
     this.nukeImpactTiles = [];
-    this.trustedUnitIds.clear();
+    this.trustedUnitMarkers.clear();
+    this.trustedMarkerRevision++;
     this.trailManager.reset();
     this.spiralTrails.reset();
     this.railroadCache.reset();
@@ -151,14 +165,15 @@ export class GameView implements GameLike {
     const frame = this._frame as { -readonly [K in keyof FrameData]: FrameData[K] };
     frame.changedTiles = null;
     frame.structuresDirty = true;
+    frame.railroadDirty = true;
     frame.events.deadUnits.length = 0;
     frame.events.conquestEvents.length = 0;
     frame.events.bonusEvents.length = 0;
     frame.attackRings = [];
     frame.nukeTelegraphs = [];
     frame.playerStatus = new Map();
-    frame.relationMatrix = new Uint8Array(0);
-    frame.relationSize = 0;
+    frame.relationMatrix = new Uint8Array(1024 * 1024);
+    frame.relationSize = 1024;
     frame.relationsDirty = true;
     frame.allianceClusters = new Map();
     this._relationsDirty = true;
@@ -181,9 +196,10 @@ export class GameView implements GameLike {
   public reconcileTrustedUnitVisibility(clear: boolean, removed: readonly number[]): void {
     if (!this._trustedNationalProjection) return;
     const ids = clear ? [...this._units.keys()] : removed;
-    if (clear) this.trustedUnitIds.clear();
+    if (clear) this.trustedUnitMarkers.clear();
+    if (clear || removed.length > 0) this.trustedMarkerRevision++;
     for (const id of ids) {
-      this.trustedUnitIds.delete(id);
+      this.trustedUnitMarkers.delete(id);
       const unit = this._units.get(id);
       if (unit) this.unitGrid.removeUnit(unit);
       this._units.delete(id);
@@ -199,17 +215,35 @@ export class GameView implements GameLike {
 
   /** Keep exact native unit DTOs only after the independently accepted marker authorizes their ID. */
   public applyTrustedUnitPage(update: GameUpdateViewData, delta: NationalObserverMapDelta, receiver: NationalObserverMapContinuity): void {
-    for (const marker of delta.units) this.trustedUnitIds.add(marker.id);
+    for (const marker of delta.units) {
+      const previous = this.trustedUnitMarkers.get(marker.id);
+      if (previous?.tile !== marker.tile || previous.ownerId !== marker.ownerId || previous.kind !== marker.kind) this.trustedMarkerRevision++;
+      this.trustedUnitMarkers.set(marker.id, marker);
+      // Coarse sight is independent from the detailed PackedUnit lane. If
+      // the latter disappears, never leave an old detailed unit position.
+      const native = this._units.get(marker.id);
+      if (native && native.tile() !== marker.tile) {
+        this.reconcileTrustedUnitVisibility(false, [marker.id]);
+        this.trustedUnitMarkers.set(marker.id, marker);
+      }
+    }
     if (!update.packedUnitUpdates) return;
     const kept: number[] = [];
     const buffer = update.packedUnitUpdates;
     for (let offset = 0; offset < buffer.length; offset += UNIT_UPDATE_STRIDE) {
       const decoded = new PackedUnitUpdateDecoder(buffer, offset);
-      if (!this.trustedUnitIds.has(decoded.id)) continue;
+      const marker = this.trustedUnitMarkers.get(decoded.id);
+      if (!marker) continue;
       if (!decoded.isActive || receiver.tileStatus(decoded.pos) !== "observed") {
         this.reconcileTrustedUnitVisibility(false, [decoded.id]);
         continue;
       }
+      if (decoded.pos !== marker.tile) {
+        // A current packed position can advance a previously disclosed unit;
+        // the position itself was independently checked against known sight.
+        this.trustedUnitMarkers.set(decoded.id, { ...marker, tile: decoded.pos });
+      }
+      if (!this._units.has(decoded.id)) this.trustedMarkerRevision++;
       for (let i = 0; i < UNIT_UPDATE_STRIDE; i++) kept.push(buffer[offset + i]);
     }
     update.packedUnitUpdates = Float64Array.from(kept);

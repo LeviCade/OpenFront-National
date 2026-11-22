@@ -57,6 +57,7 @@ import {
 import { rememberLobbyPublicGameType } from "./LobbyPublicGameType";
 import { rememberLobbyRoster } from "./LobbyRosterLevels";
 import { NationalObserverMapContinuity } from "./NationalObserverMapContinuity";
+import { NationalObserverMarkerLayer } from "./render/NationalObserverMarkerLayer";
 import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
 import { pagePin } from "./PagePin";
 import { groupTokenOf, loggableStartMessage } from "./PresenceGroup";
@@ -106,6 +107,7 @@ import {
   TrustedNationalProjectionEvent,
   TrustedNationalProjectionRejectedEvent,
   TrustedNationalStartedEvent,
+  TrustedNationalSightRevokedEvent,
   trustedNationalPrincipal,
 } from "./TrustedNationalSession";
 import {
@@ -741,6 +743,9 @@ function mountWebGLFrameLoop(
   });
   resizeObs.observe(glCanvas);
 
+  const observerMarkers = gameView.isTrustedNationalProjection()
+    ? new NationalObserverMarkerLayer(gameView, transformHandler, glCanvas)
+    : null;
   const syncCamera = (): void => {
     const scale = transformHandler.scale;
     const dpr = renderDpr();
@@ -759,6 +764,7 @@ function mountWebGLFrameLoop(
     const cb = cachedWebGLFrameCallback.current;
     cachedWebGLFrameCallback.current = null;
     cb?.(performance.now());
+    observerMarkers?.draw(cachedCanvasW, cachedCanvasH, dpr);
   };
 
   // Move-target chevrons: when the player issues a warship move, show the
@@ -797,6 +803,7 @@ function mountWebGLFrameLoop(
       rafId = null;
     }
     resizeObs.disconnect();
+    observerMarkers?.dispose();
   };
 
   const builder = new WebGLFrameBuilder(view);
@@ -1168,6 +1175,7 @@ export class ClientGameRunner {
   /** Drop pointer-transparent enemy markers in the same event turn as sight loss. */
   private revokeTrustedSight(): void {
     this.gameView.resetTrustedProjectionSight();
+    this.eventBus.emit(new TrustedNationalSightRevokedEvent());
     this.eventBus.emit(new NationalMapTargetSelectedEvent(null));
     // Disconnect/rejection does not deliver another server tick. Push the
     // emptied name/territory view now so stale enemy labels cannot remain

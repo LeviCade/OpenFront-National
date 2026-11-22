@@ -352,6 +352,9 @@ export class TrustedNationalStartedEvent implements GameEvent {
   constructor(public readonly start: ServerNationalStartMessage) {}
 }
 
+/** Close native menus holding coordinates and requests from an expired sight lease. */
+export class TrustedNationalSightRevokedEvent implements GameEvent {}
+
 export class TrustedNationalProjectionEvent implements GameEvent {
   constructor(public readonly projection: TrustedNationalProjection) {}
 }
