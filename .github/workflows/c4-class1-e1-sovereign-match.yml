@@ -1,0 +1,91 @@
+name: C4 E1 - complete sovereign match source acceptance
+
+on:
+  push:
+    branches:
+      - feature/c4-class1-e1-lifelike-war-victory-20261121
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c4-e1-source
+  cancel-in-progress: true
+
+jobs:
+  sovereign-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact E1 head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 12
+      - name: Record source SHA
+        run: echo C4_E1_SOURCE_SHA=$(git rev-parse HEAD)
+      - name: Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - name: Install pinned dependencies
+        id: install
+        run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - name: Exact candidate complete match and focused sovereign test
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          npx --no-install vitest run --project node tests/national/ConductorFourSovereignMatch.test.ts
+      - name: Historical real authority, combat, levy and AI regression
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/ConductorThreeAuthoritativeCombat.test.ts \
+            tests/national/ConductorTwoCrownWarContinuity.test.ts \
+            tests/national/LiveLevyCombatRound5.test.ts \
+            tests/national/RoundTenLiveCombatRunner.test.ts \
+            tests/national/RoundEightWarInFlight.test.ts \
+            tests/national/NationalAIRealWar.test.ts \
+            tests/national/RoundEightSovereigntyGame.test.ts
+      - name: Legacy FFA regression
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          npx --no-install vitest run --project node \
+            tests/Attack.test.ts \
+            tests/AttackScenarios.test.ts \
+            tests/core/executions/WinCheckExecution.test.ts
+      - name: Full workspace typecheck
+        if: always() && steps.install.outcome == 'success'
+        run: npm run typecheck
+      - name: Owned source formatter witness
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          npx --no-install oxfmt --write \
+            packages/engine/src/execution/AttackExecution.ts \
+            packages/engine/src/execution/PlayerExecution.ts \
+            tests/national/ConductorFourSovereignMatch.test.ts
+          git -c color.ui=false diff -- \
+            packages/engine/src/execution/AttackExecution.ts \
+            packages/engine/src/execution/PlayerExecution.ts \
+            tests/national/ConductorFourSovereignMatch.test.ts
+          git diff --exit-code -- \
+            packages/engine/src/execution/AttackExecution.ts \
+            packages/engine/src/execution/PlayerExecution.ts \
+            tests/national/ConductorFourSovereignMatch.test.ts
+      - name: Prove the focused regression detects the founding source defect
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          set -eu
+          git show 7ba909572739bd0778c9cf34074008f1bf244124:packages/engine/src/execution/AttackExecution.ts > packages/engine/src/execution/AttackExecution.ts
+          git show 7ba909572739bd0778c9cf34074008f1bf244124:packages/engine/src/execution/PlayerExecution.ts > packages/engine/src/execution/PlayerExecution.ts
+          if npx --no-install vitest run --project node tests/national/ConductorFourSovereignMatch.test.ts -t 'tiny defender' > /tmp/c4-e1-founding.log 2>&1; then
+            cat /tmp/c4-e1-founding.log
+            echo '::error::Founding source unexpectedly passes regression'
+            exit 1
+          fi
+          cat /tmp/c4-e1-founding.log
+          grep -E 'AssertionError|AssertionError:' /tmp/c4-e1-founding.log
+          echo C4_E1_FOUNDING_TARGETED_REGRESSION_FAILED=1
