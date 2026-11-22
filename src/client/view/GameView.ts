@@ -680,7 +680,10 @@ export class GameView implements GameLike {
           terrain === ((state >>> 16) & 0xff)
         )
           continue;
-        if (!this.trustedOriginalTerrain.has(tile))
+        if (
+          terrain !== ((state >>> 16) & 0xff) &&
+          !this.trustedOriginalTerrain.has(tile)
+        )
           this.trustedOriginalTerrain.set(tile, terrain);
       }
       const terrainChanged = this.updateTile(tile, state);

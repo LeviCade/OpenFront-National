@@ -356,6 +356,7 @@ export class Transport {
   // True once the server has responded to join/rejoin (via start or lobby_info),
   // proving the session is admitted and ready to accept gameplay intents.
   private isSessionReady = false;
+  private nationalStreamRejected = false;
   /** Exact server start seat on this socket, not a lobby-config assertion. */
   private trustedNationalStart: {
     gameStartInfo: NonNullable<LobbyConfig["gameStartInfo"]>;
@@ -397,6 +398,11 @@ export class Transport {
       this.onBreakAllianceRequestUIEvent(e),
     );
     this.subscribe(SetIntentGateEvent, (e) => (this.intentGate = e.gate));
+    this.subscribe(TrustedNationalProjectionRejectedEvent, (e) => {
+      if (e.gameID !== this.lobbyConfig.gameID || this.isLocal) return;
+      if (!this.trustedNationalStart && !hasTrustedNationalPrivateCapability(this.eventBus, e.gameID)) return;
+      this.rejectNationalStream();
+    });
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
     this.subscribe(SendNationalFoundEmpireIntentEvent, (e) =>
       this.onSendNationalFoundEmpireIntent(e),
@@ -477,14 +483,19 @@ export class Transport {
       this.onSendToggleGameStartTimer(e),
     );
     this.subscribe(SendSpectateEvent, (e) => {
+      const hadTrustedSeat = hasTrustedNationalPrivateCapability(
+        this.eventBus,
+        this.lobbyConfig.gameID,
+      );
       revokeTrustedNationalPrivateCapability(
         this.eventBus,
         this.lobbyConfig.gameID,
       );
       this.dropBufferedNationalIntents();
-      this.eventBus.emit(
-        new NationalTransportStatusEvent(false, this.lobbyConfig.gameID),
-      );
+      if (hadTrustedSeat)
+        this.eventBus.emit(
+          new NationalTransportStatusEvent(false, this.lobbyConfig.gameID),
+        );
       this.lobbyConfig.spectator = e.spectator;
       this.sendMsg({
         type: "spectate",
@@ -604,7 +615,7 @@ export class Transport {
     this.socket = socket;
     let openedAt: number | null = null;
     let nationalStartSeen = false;
-    let nationalStreamRejected = false;
+    this.nationalStreamRejected = false;
     // Every frame is a zbin payload; without this they would arrive as Blobs.
     this.socket.binaryType = "arraybuffer";
     this.onconnect = onconnect;
@@ -619,7 +630,7 @@ export class Transport {
       onconnect();
     };
     this.socket.onmessage = (event: MessageEvent) => {
-      if (this.socket !== socket || nationalStreamRejected) return;
+      if (this.socket !== socket || this.nationalStreamRejected) return;
       // A frame from the server is the proof the connection is real; onopen
       // is not (a proxy can accept and drop us in a loop). It resets the
       // budget and settles any retry the watchdog scheduled while this
@@ -717,13 +728,7 @@ export class Transport {
         this.onmessage(msg);
       } catch (e) {
         if (nationalStartSeen) {
-          nationalStreamRejected = true;
-          this.isSessionReady = false;
-          revokeTrustedNationalPrivateCapability(
-            this.eventBus,
-            this.lobbyConfig.gameID,
-          );
-          this.dropBufferedNationalIntents();
+          this.rejectNationalStream();
           this.eventBus.emit(
             new TrustedNationalProjectionRejectedEvent(this.lobbyConfig.gameID),
           );
@@ -1057,6 +1062,7 @@ export class Transport {
       cfg.gameType === GameType.Private &&
       !this.isLocal &&
       this.isSessionReady &&
+      !this.nationalStreamRejected &&
       this.socket?.readyState === WebSocket.OPEN &&
       this.lobbyConfig.spectator !== true &&
       hasTrustedNationalPrivateCapability(
@@ -1064,6 +1070,15 @@ export class Transport {
         this.lobbyConfig.gameID,
       )
     );
+  }
+
+  /** The renderer and decoder share one fail-closed transport boundary. */
+  private rejectNationalStream(): void {
+    this.nationalStreamRejected = true;
+    this.isSessionReady = false;
+    this.trustedNationalStart = null;
+    revokeTrustedNationalPrivateCapability(this.eventBus, this.lobbyConfig.gameID);
+    this.dropBufferedNationalIntents();
   }
 
   /** Never replay national commands buffered before a socket disconnect. */

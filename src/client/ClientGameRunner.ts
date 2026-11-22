@@ -409,6 +409,9 @@ export function joinLobby(
         // A missing buffered page invalidates the epoch; never silently skip it.
         rejectedTrustedProjection = true;
         bufferedTrustedProjections = [];
+        eventBus.emit(
+          new TrustedNationalProjectionRejectedEvent(lobbyConfig.gameID),
+        );
       }
       return;
     }
@@ -1199,6 +1202,7 @@ export class ClientGameRunner {
     this.trustedLastTick = -1;
     this.trustedContinuity = null;
     this.trustedPrincipal = null;
+    this.gameView.setTrustedPrincipal(null);
     this.revokeTrustedSight();
     if (this.trustedStatus) {
       this.trustedStatus.dataset.trustedNationalMap = "blocked";
@@ -1313,15 +1317,9 @@ export class ClientGameRunner {
     } catch {
       // A malformed or out-of-order packet may never re-enable controls by
       // accident. Fail closed; E2 must resync and provide a fresh trusted start.
-      this.trustedProjectionActive = false;
-      this.trustedContinuity = null;
-      this.trustedPrincipal = null;
-      this.revokeTrustedSight();
-      if (this.trustedStatus) {
-        this.trustedStatus.dataset.trustedNationalMap = "blocked";
-        this.trustedStatus.textContent =
-          "NATIONAL · Invalid server projection — controls disabled";
-      }
+      this.eventBus.emit(
+        new TrustedNationalProjectionRejectedEvent(this.lobby.gameID),
+      );
       console.warn(
         "NATIONAL projected view rejected; fresh admission required",
       );
@@ -1339,6 +1337,7 @@ export class ClientGameRunner {
     this.trustedProjectionActive = false;
     this.trustedContinuity = null;
     this.trustedPrincipal = null;
+    this.gameView.setTrustedPrincipal(null);
     this.revokeTrustedSight();
     try {
       this.trustedPrincipal = trustedNationalPrincipal(event.start);
@@ -1349,7 +1348,7 @@ export class ClientGameRunner {
       this.trustedLastTick = -1;
       this.trustedProjectionActive = true;
     } catch {
-      this.onTrustedProjectionRejected(
+      this.eventBus.emit(
         new TrustedNationalProjectionRejectedEvent(this.lobby.gameID),
       );
       return;
@@ -1374,6 +1373,7 @@ export class ClientGameRunner {
     this.trustedProjectionActive = false;
     this.trustedContinuity = null;
     this.trustedPrincipal = null;
+    this.gameView.setTrustedPrincipal(null);
     this.revokeTrustedSight();
     if (this.trustedStatus) {
       this.trustedStatus.dataset.trustedNationalMap = "disconnected";
@@ -2001,6 +2001,9 @@ export class ClientGameRunner {
   }
 
   private doRetaliateAttackMostRecent(): void {
+    // The shortcut has no currently sighted target coordinate. In Private
+    // NATIONAL, retaliation must use the same visible map path as an attack.
+    if (this.trustedNationalProjection) return;
     if (!this.isActive || this.gameView.inSpawnPhase()) {
       return;
     }
