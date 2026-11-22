@@ -381,6 +381,19 @@ if (
     if (process.env.GITHUB_ACTIONS === "true")
       throw Error("REFUSED_IN_GITHUB_ACTIONS_GUEST");
     const ctx = readJson(join(rootDir, "trusted-github-run-context.json"));
+    const receipt = readJson(
+      join(rootDir, "verified-artifacts", "import-receipt.json"),
+    );
+    if (
+      receipt.kind !== "skybot-github-artifact-custody-v1" ||
+      receipt.sourceSha !== ctx.sourceSha ||
+      String(receipt.runId) !== String(ctx.runId) ||
+      String(receipt.runAttempt) !== String(ctx.runAttempt) ||
+      String(receipt.jobId) !== String(ctx.jobId) ||
+      String(receipt.runnerId) !== String(ctx.runnerId) ||
+      receipt.challenge !== ctx.challenge
+    )
+      throw Error("HOST_ARTIFACT_CUSTODY_UNVERIFIED");
     const pinned = readJson(
       join(repoRoot, "scripts/national-qa/trusted-gpu-keys.json"),
     );
@@ -401,7 +414,11 @@ if (
       ),
       enrolledFingerprints: pinned.trustedEd25519PublicKeySha256,
       hostTrustedFingerprints: hosted.trustedEd25519PublicKeySha256,
-      expected: ctx,
+      expected: {
+        ...ctx,
+        runStartedAtMs: receipt.runStartedAtMs,
+        jobCompletedAtMs: receipt.jobCompletedAtMs,
+      },
     });
     output = checked;
   } catch {

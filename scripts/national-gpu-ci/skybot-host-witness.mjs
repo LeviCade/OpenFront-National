@@ -144,7 +144,7 @@ export function verifyControllerRun({
 
 /** Root-owned files can originate from the controller only. Guest uploads
  * are NEVER read from these paths and guest paths are NEVER accepted. */
-export function verifyArtifactCustody(receipt, expected, bytes) {
+export function verifyArtifactCustody(receipt, expected, bytes, times) {
   requireTrue(
     receipt?.kind === "skybot-github-artifact-custody-v1" &&
       Number.isSafeInteger(receipt.artifactId) &&
@@ -156,7 +156,11 @@ export function verifyArtifactCustody(receipt, expected, bytes) {
       same(receipt.runAttempt, expected.runAttempt) &&
       same(receipt.jobId, expected.jobId) &&
       same(receipt.runnerId, expected.runnerId) &&
-      receipt.challenge === expected.challenge,
+      receipt.challenge === expected.challenge &&
+      Number.isSafeInteger(receipt.runStartedAtMs) &&
+      Number.isSafeInteger(receipt.jobCompletedAtMs) &&
+      receipt.runStartedAtMs === times.runStartedAtMs &&
+      receipt.jobCompletedAtMs === times.jobCompletedAtMs,
     "HOST_ARTIFACT_CUSTODY_UNVERIFIED",
   );
 }
@@ -745,6 +749,7 @@ async function main() {
       readRootJson("verified-artifacts/import-receipt.json"),
       expected,
       summaryBytes,
+      times,
     );
     payload = createHostPostflight(
       expected,

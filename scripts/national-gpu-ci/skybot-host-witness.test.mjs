@@ -465,6 +465,10 @@ test("preflight phase is signed separately from postflight", () => {
 
 test("root artifact receipt binds exact bytes and numeric execution identity", () => {
   const bytes = Buffer.from("reviewed artifact summary");
+  const times = {
+    runStartedAtMs: NOW,
+    jobCompletedAtMs: NOW + 120_000,
+  };
   const receipt = {
     kind: "skybot-github-artifact-custody-v1",
     artifactId: 7,
@@ -476,8 +480,11 @@ test("root artifact receipt binds exact bytes and numeric execution identity", (
     jobId: expected.jobId,
     runnerId: expected.runnerId,
     challenge: expected.challenge,
+    ...times,
   };
-  assert.doesNotThrow(() => verifyArtifactCustody(receipt, expected, bytes));
+  assert.doesNotThrow(() =>
+    verifyArtifactCustody(receipt, expected, bytes, times),
+  );
   for (const key of [
     "artifactId",
     "archiveSha256",
@@ -488,13 +495,20 @@ test("root artifact receipt binds exact bytes and numeric execution identity", (
     "jobId",
     "runnerId",
     "challenge",
+    "runStartedAtMs",
+    "jobCompletedAtMs",
   ]) {
     rejectWith("HOST_ARTIFACT_CUSTODY_UNVERIFIED", () =>
-      verifyArtifactCustody({ ...receipt, [key]: "invalid" }, expected, bytes),
+      verifyArtifactCustody(
+        { ...receipt, [key]: "invalid" },
+        expected,
+        bytes,
+        times,
+      ),
     );
   }
   rejectWith("HOST_ARTIFACT_CUSTODY_UNVERIFIED", () =>
-    verifyArtifactCustody(receipt, expected, Buffer.from("tampered")),
+    verifyArtifactCustody(receipt, expected, Buffer.from("tampered"), times),
   );
   const failed = proof();
   failed.job.status = "completed";

@@ -293,10 +293,7 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       ),
     );
     assert.equal(missing.evidenceReadyForHostReview, false);
-    assert.equal(
-      missing.modes["national-mobile"].reason,
-      "SCREENSHOT_MISSING",
-    );
+    assert.equal(missing.modes["national-mobile"].reason, "SCREENSHOT_MISSING");
     const changed = sample();
     changed.exactSource = "b".repeat(40);
     writeFileSync(
