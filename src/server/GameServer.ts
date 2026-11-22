@@ -1731,7 +1731,7 @@ export class GameServer {
         player.clanTag ?? null,
         // ws v8's server-side constructor expects an options object
         // even when the address is null (as WebSocketServer supplies).
-        new WebSocket(null, undefined, {}),
+        Reflect.construct(WebSocket, [null, undefined, {}]) as WebSocket,
         player.cosmetics,
         seat.accountId,
         player.friends ?? [],
