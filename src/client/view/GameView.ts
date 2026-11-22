@@ -813,7 +813,7 @@ export class GameView implements GameLike {
                 : undefined,
             );
       this._nationalPactReceipts =
-        gu.tick < previousTick || this._nationalPactDisclosure === null
+        gu.tick < previousTick || (this._nationalPactDisclosure === null && this._nationalImperialAdministration === null)
           ? []
           : retainPactReceipts(
               this._nationalPactReceipts,

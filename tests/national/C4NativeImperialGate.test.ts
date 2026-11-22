@@ -1,3 +1,4 @@
+import { imperialPolicyIntentAvailable, imperialPolicyKey, parseImperialCommand } from "../../src/client/NationalImperialState";
 import { UnitType } from "@openfront/engine-api/game/GameTypes";
 import {
   readNationalImperialAdministration,
@@ -49,6 +50,16 @@ describe("C4 E4 imperial administration recipient boundary", () => {
     expect(readNationalImperialAdministration({ ...source, ...military }, politics, "a", 8, "epoch")).toMatchObject(military);
     for (const bad of [{ armyMode: "hybrid" }, { ...military, armyMode: "centralized" }, { ...military, armyMode: "decentralized" }, { ...military, imperialTroops: -1 }, { ...military, hybridThresholdBps: 10001 }])
       expect(readNationalImperialAdministration({ ...source, ...bad }, politics, "a", 8, "epoch")).toBeNull();
+  });
+  it("offers stamped policy only when the canonical E1 schema exists, never for subordinates", () => {
+    const view = readNationalImperialAdministration(source, politics, "a", 8, "epoch")!;
+    const command = { kind: "set-policy", empireId: "empire", policy: { workerIncomeBps: 1250, allowedConstruction: [UnitType.Warship] } } as const;
+    const parsed = parseImperialCommand({ ...command, policy: { ...command.policy, allowedConstruction: [...command.policy.allowedConstruction] } }, "np_" + "3".repeat(32));
+    if (process.env.NATIONAL_C4_REQUIRE_PACT_READ === "1") expect(parsed).not.toBeNull();
+    expect(imperialPolicyIntentAvailable(view, "set-policy")).toBe(parsed !== null);
+    expect(imperialPolicyIntentAvailable({ ...view, canAmend: false }, "set-policy")).toBe(false);
+    expect(imperialPolicyKey(view)).toBe(imperialPolicyKey({ ...view, treasury: "12" }));
+    expect(imperialPolicyKey(view)).not.toBe(imperialPolicyKey({ ...view, workerIncomeBps: 999 }));
   });
   it("rejects stale epochs, outsiders, superseded leaders and hostile values", () => {
     for (const bad of [

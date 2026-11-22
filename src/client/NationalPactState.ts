@@ -23,7 +23,7 @@ export type PactAction = PactIntent extends infer T
     : never
   : never;
 export interface PactReceipt {
-  type: PactIntent["type"];
+  type: PactIntent["type"] | "national_imperial_administration";
   actorId: string;
   recipientId: string;
   requestId: string;
@@ -41,6 +41,7 @@ const types = new Set<string>([
   "national_propose_pact_amendment",
   "national_approve_pact_amendment",
   "national_expel_pact",
+  "national_imperial_administration",
 ]);
 export function readPactReceipts(
   input: unknown,
@@ -170,7 +171,7 @@ export function reconcilePactReceipt(
     requestId: string;
     actorId: string;
     pactId: string;
-    type: PactIntent["type"];
+    type: PactReceipt["type"];
     tick: number;
   },
   tick: number,
