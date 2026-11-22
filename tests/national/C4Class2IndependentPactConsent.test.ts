@@ -133,55 +133,121 @@ describe("E5 Class Two: stamped constitutional consent and defensive membership"
       issue(m, actor, { ...intent, pactId, requestId });
       expect(political(m.game, id, requestId).accepted).toBe(accepted);
     }
-    command(m.a, A, "e5_found", {
-      type: "national_found_pact",
-      name: "Witness MDA",
-      pactKind: "MDA",
-      terms,
-    }, true);
-    command(m.a, A, "e5_invite_b", {
-      type: "national_invite_pact",
-      candidateId: B,
-    }, true);
-    command(m.d, D, "e5_outsider_accept", {
-      type: "national_accept_pact",
-      clientID: BCLIENT,
-    }, false);
+    command(
+      m.a,
+      A,
+      "e5_found",
+      {
+        type: "national_found_pact",
+        name: "Witness MDA",
+        pactKind: "MDA",
+        terms,
+      },
+      true,
+    );
+    command(
+      m.a,
+      A,
+      "e5_invite_b",
+      {
+        type: "national_invite_pact",
+        candidateId: B,
+      },
+      true,
+    );
+    command(
+      m.d,
+      D,
+      "e5_outsider_accept",
+      {
+        type: "national_accept_pact",
+        clientID: BCLIENT,
+      },
+      false,
+    );
     expect(m.game.nationalMdaAllies(A)).toEqual([]);
-    command(m.b, B, "e5_accept_b", {
-      type: "national_accept_pact",
-    }, true);
+    command(
+      m.b,
+      B,
+      "e5_accept_b",
+      {
+        type: "national_accept_pact",
+      },
+      true,
+    );
     expect(m.game.nationalMdaAllies(A)).toEqual([B]);
-    command(m.a, A, "e5_invite_c", {
-      type: "national_invite_pact",
-      candidateId: C,
-    }, true);
-    command(m.c, C, "e5_accept_c", {
-      type: "national_accept_pact",
-    }, true);
+    command(
+      m.a,
+      A,
+      "e5_invite_c",
+      {
+        type: "national_invite_pact",
+        candidateId: C,
+      },
+      true,
+    );
+    command(
+      m.c,
+      C,
+      "e5_accept_c",
+      {
+        type: "national_accept_pact",
+      },
+      true,
+    );
     expect(new Set(m.game.nationalMdaAllies(A))).toEqual(new Set([B, C]));
     const expel = { type: "national_expel_pact", memberId: C };
     command(m.a, A, "e5_forbidden_expel", expel, false);
-    command(m.a, A, "e5_amend", {
-      type: "national_propose_pact_amendment",
-      terms: { admission: "leader", expulsion: "leader" },
-      administratorId: A,
-    }, true);
-    command(m.d, D, "e5_outsider_vote", {
-      type: "national_approve_pact_amendment",
-      clientID: CCLIENT,
-    }, false);
-    command(m.b, B, "e5_bravo_vote", {
-      type: "national_approve_pact_amendment",
-    }, true);
-    command(m.b, B, "e5_bravo_repeat", {
-      type: "national_approve_pact_amendment",
-    }, true);
+    command(
+      m.a,
+      A,
+      "e5_amend",
+      {
+        type: "national_propose_pact_amendment",
+        terms: { admission: "leader", expulsion: "leader" },
+        administratorId: A,
+      },
+      true,
+    );
+    command(
+      m.d,
+      D,
+      "e5_outsider_vote",
+      {
+        type: "national_approve_pact_amendment",
+        clientID: CCLIENT,
+      },
+      false,
+    );
+    command(
+      m.b,
+      B,
+      "e5_bravo_vote",
+      {
+        type: "national_approve_pact_amendment",
+      },
+      true,
+    );
+    command(
+      m.b,
+      B,
+      "e5_bravo_repeat",
+      {
+        type: "national_approve_pact_amendment",
+      },
+      true,
+    );
     command(m.a, A, "e5_missing_charlie_vote", expel, false);
     expect(new Set(m.game.nationalMdaAllies(A))).toEqual(new Set([B, C]));
-    command(m.c, C, "e5_charlie_vote", {
-      type: "national_approve_pact_amendment",
-    }, true);
+    command(
+      m.c,
+      C,
+      "e5_charlie_vote",
+      {
+        type: "national_approve_pact_amendment",
+      },
+      true,
+    );
     command(m.b, B, "e5_nonadmin_expel", expel, false);
     command(m.a, A, "e5_lawful_expel", expel, true);
     expect(m.game.nationalMdaAllies(A)).toEqual([B]);
@@ -193,12 +259,14 @@ describe("E5 Class Two: stamped constitutional consent and defensive membership"
     const { bytes, restored, again } = await roundTrip(m.game, "plains");
     expect(again).toEqual(bytes);
     expect(restored.nationalMdaAllies(A)).toEqual([]);
-    expect(restored.nationalPoliticalCommandResults(restored.player(B))).toEqual(
-      m.game.nationalPoliticalCommandResults(m.game.player(B)),
-    );
+    expect(
+      restored.nationalPoliticalCommandResults(restored.player(B)),
+    ).toEqual(m.game.nationalPoliticalCommandResults(m.game.player(B)));
     // This asserts recipient isolation of the private command result, not
     // invited UI availability of constitutional terms (a separate lane).
-    const outside = JSON.stringify(m.received.get(DCLIENT));
+    const outside = JSON.stringify(m.received.get(DCLIENT), (_key, value) =>
+      typeof value === "bigint" ? value.toString() : value,
+    );
     expect(outside).not.toContain("e5_charlie_vote");
     expect(outside).not.toContain("e5_lawful_expel");
     expect(outside).not.toContain("e5_leave_again");
