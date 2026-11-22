@@ -28,6 +28,12 @@ import {
   type NationalPlannerMemory,
 } from "../national/ai/NationalPlanner";
 import {
+  initialAIPoliticalMemory,
+  planAIPoliticalInterest,
+  recordAIPoliticalOutcome,
+  type AIPoliticalMemory,
+} from "../national/ai/NationalPoliticalStrategy";
+import {
   collectLiveNationalObservation,
   liveNationalWarAuthority,
 } from "../national/observation/LiveObservation";
@@ -71,6 +77,7 @@ type NationalExecutionPlannerMemory = NationalPlannerMemory & {
     readonly retryAfterTick: number;
   }[];
   readonly lastWarOutcomeSequence?: number;
+  readonly political?: AIPoliticalMemory;
 };
 
 export class NationExecution implements Execution {
@@ -353,7 +360,61 @@ export class NationExecution implements Execution {
       this.nationalPlannerMemory ?? initialNationalPlannerMemory(player.id()),
       30,
     );
-    this.nationalPlannerMemory = result.memory;
+    // Strategy sees the same human-filtered observation; only GameImpl may
+    // accept a proposed political command. Keep outcomes in THIS snapshotted
+    // NationExecution, not a second global AI political ledger.
+    const political = planAIPoliticalInterest(
+      observation,
+      this.nationalPlannerMemory?.political ?? initialAIPoliticalMemory(),
+      25,
+      result.memory.reputation,
+    );
+    this.nationalPlannerMemory = {
+      ...result.memory,
+      political: political.memory,
+    };
+    if (
+      political.decision?.command !== null &&
+      political.decision?.command !== undefined
+    ) {
+      try {
+        const outcome = this.mg.performNationalPoliticalCommandWithOutcome(
+          player,
+          political.decision.command,
+        );
+        this.nationalPlannerMemory = {
+          ...this.nationalPlannerMemory,
+          political: recordAIPoliticalOutcome(
+            observation,
+            this.nationalPlannerMemory.political!,
+            political.decision.command,
+            outcome,
+          ),
+        };
+        if (outcome.accepted) {
+          // Fresh projection is mandatory after Betray, pact admission or
+          // imperial accession. Never act militarily on the pre-command view.
+          this.nationalPlannerMemory = {
+            ...this.nationalPlannerMemory,
+            nextPlanningTick: Math.min(
+              this.nationalPlannerMemory.nextPlanningTick,
+              ticks + 5,
+            ),
+          };
+          return;
+        }
+      } catch {
+        // Absent authority or exhausted canonical command journal fails
+        // closed; never reroute the AI through direct political mutation.
+        this.nationalPlannerMemory = {
+          ...this.nationalPlannerMemory,
+          political: {
+            ...this.nationalPlannerMemory.political!,
+            nextPlanningTick: ticks + 180,
+          },
+        };
+      }
+    }
     // A small nation under an observed active-war threat must still defend.
     // The old branch discarded every "defend" decision and left a real
     // front idle. Both attack and defense use the same E2 validator.
@@ -665,18 +726,50 @@ export class NationExecution implements Execution {
         this.nationalPlannerMemory === null
           ? null
           : {
-              ...this.nationalPlannerMemory,
-              reputation: this.nationalPlannerMemory.reputation.map(
-                (entry) => ({ ...entry }),
-              ),
-              rejectedWarTargets:
-                this.nationalPlannerMemory.rejectedWarTargets?.map((entry) => ({
-                  ...entry,
-                })),
+              // Stable explicit snapshot key order, irrespective of which
+              // legal planner transition last spread the mutable memory.
+              // Snapshot -> restore -> snapshot must be byte-identical.
+              observerId: this.nationalPlannerMemory.observerId,
+              objective: this.nationalPlannerMemory.objective,
+              targetId: this.nationalPlannerMemory.targetId,
+              nextPlanningTick: this.nationalPlannerMemory.nextPlanningTick,
               lastProcessedEvent:
                 this.nationalPlannerMemory.lastProcessedEvent === null
                   ? null
                   : { ...this.nationalPlannerMemory.lastProcessedEvent },
+              reputation: this.nationalPlannerMemory.reputation.map(
+                (entry) => ({ ...entry }),
+              ),
+              ...(this.nationalPlannerMemory.rejectedWarTargets === undefined
+                ? {}
+                : {
+                    rejectedWarTargets:
+                      this.nationalPlannerMemory.rejectedWarTargets.map(
+                        (entry) => ({ ...entry }),
+                      ),
+                  }),
+              ...(this.nationalPlannerMemory.lastWarOutcomeSequence ===
+              undefined
+                ? {}
+                : {
+                    lastWarOutcomeSequence:
+                      this.nationalPlannerMemory.lastWarOutcomeSequence,
+                  }),
+              ...(this.nationalPlannerMemory.political === undefined
+                ? {}
+                : {
+                    political: {
+                      ...this.nationalPlannerMemory.political,
+                      completedCommands: [
+                        ...this.nationalPlannerMemory.political
+                          .completedCommands,
+                      ],
+                      rejectedCommands:
+                        this.nationalPlannerMemory.political.rejectedCommands.map(
+                          (entry) => ({ ...entry }),
+                        ),
+                    },
+                  }),
             },
       nationalSightMemory:
         this.nationalSightMemory === null
@@ -810,6 +903,21 @@ const NationStateSchema = z.object({
         .max(16)
         .optional(),
       lastWarOutcomeSequence: z.number().int().min(-1).optional(),
+      political: z
+        .object({
+          nextPlanningTick: z.number().int().nonnegative(),
+          lastOutcomeSequence: z.number().int().min(-1),
+          completedCommands: z.array(z.string()).max(64),
+          rejectedCommands: z
+            .array(
+              z.object({
+                key: z.string(),
+                retryAfterTick: z.number().int().nonnegative(),
+              }),
+            )
+            .max(64),
+        })
+        .optional(),
     })
     .nullable(),
   nationalSightMemory: z

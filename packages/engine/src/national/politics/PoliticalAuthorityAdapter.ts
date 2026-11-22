@@ -13,9 +13,33 @@
 import type { PlayerID } from "@openfront/engine-api/game/GameTypes";
 import {
   lastSovereignVictory,
+  viewPact,
   type LastSovereignResult,
   type PoliticsProjection,
 } from "./sovereignty";
+
+/** The same Game-owned recipient filter serves both humans and AI nations. */
+export interface NationalRecipientDiplomacy {
+  readonly pacts: readonly {
+    readonly id: string;
+    readonly kind: "NAP" | "MDA";
+    readonly leaderId: string;
+    readonly members: readonly string[];
+    readonly terms?: {
+      readonly admission: "leader" | "unanimous";
+      readonly expulsion: "leader" | "unanimous" | "forbidden";
+    };
+    readonly invited: boolean;
+    /** Only an incumbent member sees its pact's unaccepted invitees. */
+    readonly pendingInvitees?: readonly string[];
+  }[];
+  readonly empireOffers: readonly {
+    readonly empireId: string;
+    readonly candidateId: string;
+    readonly proposerId: string;
+    readonly recipientId: string;
+  }[];
+}
 
 export type NationalWarAction = "declare" | "peace";
 
@@ -73,6 +97,59 @@ export class PoliticalAuthorityAdapter
     private readonly readCurrent: () => Readonly<PoliticsProjection>,
     private readonly readDelegation?: NationalDelegationReader,
   ) {}
+
+  /**
+   * Whitelist only public pact rosters, own/member clauses and incoming
+   * invitations. Never release other actors' terms, ballots or offers.
+   * The Game-facing observation collector must validate its real principal.
+   */
+  recipientDiplomacy(observerId: PlayerID): NationalRecipientDiplomacy {
+    const state = this.readCurrent();
+    if (!knownLiving(state, observerId)) return { pacts: [], empireOffers: [] };
+    const pacts = state.pacts
+      .map((p) => {
+        const publicPact = viewPact(state, p.id, observerId);
+        const member = p.memberIds.includes(observerId);
+        const pending = p.invitations.find((i) => i.targetId === observerId);
+        const invited =
+          pending !== undefined &&
+          (p.terms.admission === "leader"
+            ? p.administratorId !== null &&
+              pending.approvedBy.includes(p.administratorId)
+            : p.memberIds.every((id) => pending.approvedBy.includes(id)));
+        return {
+          id: publicPact.id,
+          kind: publicPact.kind,
+          leaderId: publicPact.administratorId ?? [...p.memberIds].sort()[0],
+          members: [...publicPact.memberIds].sort(),
+          ...(publicPact.terms === undefined
+            ? {}
+            : { terms: { ...publicPact.terms } }),
+          invited,
+          ...(member
+            ? {
+                pendingInvitees: p.invitations
+                  .map((inv) => inv.targetId)
+                  .sort(),
+              }
+            : {}),
+        };
+      })
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const empireOffers = state.accessionOffers
+      .filter((offer) => offer.recipientId === observerId)
+      .map((offer) => ({ ...offer }))
+      .sort(
+        (a, b) =>
+          (a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0) ||
+          (a.candidateId < b.candidateId
+            ? -1
+            : a.candidateId > b.candidateId
+              ? 1
+              : 0),
+      );
+    return { pacts, empireOffers };
+  }
 
   empireOf(id: PlayerID): string | null {
     const state = this.readCurrent();

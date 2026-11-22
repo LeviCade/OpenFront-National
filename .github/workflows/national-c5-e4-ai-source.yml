@@ -1,0 +1,73 @@
+name: C5 E4 — sovereign AI source acceptance
+on:
+  push:
+    branches:
+      - feature/c5-class1-e4-ai-constitutional-20261122
+  pull_request:
+    branches:
+      - stage3/conductor5-class1-integration-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exact-ai:
+    name: Exact-head AI typecheck, game scenarios, lint, format and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Pin authoritative source
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'AI_SOURCE_SHA=%s\n' "$EXPECTED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Whole-project typecheck
+        run: npm run typecheck
+      - name: Authoritative political gameplay and regression tests
+        if: success() || failure()
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/C5AIPoliticalStrategy.test.ts \
+            tests/national/C5AIPoliticalGame.test.ts \
+            tests/national/NationalPlanner.test.ts \
+            tests/national/NationalAIRealWar.test.ts \
+            tests/national/RoundTenNationExecutionBridge.test.ts \
+            tests/national/NationalObservation.test.ts
+      - name: Lint source
+        if: success() || failure()
+        run: npm run lint
+      - name: Verify E4 touched files format
+        if: success() || failure()
+        run: |
+          FILES=(
+            packages/engine/src/national/ai/NationalPoliticalStrategy.ts
+            packages/engine/src/national/politics/PoliticalAuthorityAdapter.ts
+            packages/engine/src/national/observation/LiveObservation.ts
+            packages/engine/src/national/observation/NationalObservation.ts
+            packages/engine/src/execution/NationExecution.ts
+            tests/national/C5AIPoliticalStrategy.test.ts
+            tests/national/C5AIPoliticalGame.test.ts
+          )
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            for path in "${FILES[@]}"; do
+              printf 'C5AI_FORMAT_BEGIN:%s\n' "$path"
+              base64 -w76 "$path" | sed 's/^/C5AI_BASE64:/'
+              printf 'C5AI_FORMAT_END:%s\n' "$path"
+            done
+            exit 1
+          fi
+      - name: Production compile
+        if: success() || failure()
+        run: npm run build-prod
