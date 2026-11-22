@@ -589,7 +589,7 @@ export class GameImpl implements Game {
   }
 
   /** Sync the identity/territory picture after executions have changed it. */
-  private synchronizeNationalState(): void {
+  private synchronizeNationalState(tick = this._ticks): void {
     if (this._national === null) return;
     // Read the eight live facts from real engine players after each tick.
     const standingCount = (player: Player, type: UnitType): number =>
@@ -613,10 +613,10 @@ export class GameImpl implements Game {
           warships: standingCount(p, UnitType.Warship),
         },
       })),
-      this._ticks,
+      tick,
       !this.inSpawnPhase(),
       "preserve-pending",
-      (credits, empireIds, troops) => this.commitImperialDisposition(credits, empireIds, troops),
+      (credits, empireIds, troops) => this.commitImperialDisposition(credits, empireIds, troops, tick),
     );
     this.revokeNationalObserverMemory();
   }
@@ -1053,6 +1053,7 @@ export class GameImpl implements Game {
     credits: ReadonlyMap<PlayerID, bigint>,
     empireIds: readonly string[],
     troopCredits: ReadonlyMap<PlayerID, bigint>,
+    tick = this._ticks,
   ): void {
     const staged = PlayerImpl.prepareNationalGoldCredits(
       [...credits].map(([id, amount]) => {
@@ -1555,7 +1556,9 @@ export class GameImpl implements Game {
     }
 
     this.removeInactiveExecutions();
-    this.synchronizeNationalState();
+    // Reconcile at the completed tick's clock; observer reads cannot advance
+    // a crisis or distribute assets simply by requesting a view.
+    this.synchronizeNationalState(this._ticks + 1);
 
     for (const player of this._playersBySmallID) {
       // Sampled before toUpdate so the reading is of the tick that just ran.

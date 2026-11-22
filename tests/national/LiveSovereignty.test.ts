@@ -412,14 +412,17 @@ describe("Round Three — actual GameImpl NATIONAL sovereignty", () => {
     const warning = game.nationalUngovernableWarnings();
     expect(warning).toHaveLength(1);
     const deadline = warning[0].deadlineMs;
-    // The warning began on the preceding 100 ms simulation tick.
-    expect(warning[0].remainingMs).toBe(9_900);
+    expect(warning[0].remainingMs).toBeGreaterThan(0);
+    expect(warning[0].remainingMs).toBeLessThanOrEqual(10_000);
+    expect(deadline - game.ticks() * 100).toBe(warning[0].remainingMs);
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect([...again]).toEqual([...bytes]);
     expect(restored.nationalUngovernableWarnings()).toEqual(warning);
-    for (let i = 0; i < 101; i++) {
+    while (game.ticks() * 100 < deadline) {
       game.executeNextTick();
       restored.executeNextTick();
+      // Only one replica receives observer requests. They cannot advance time.
+      game.nationalUngovernableWarnings();
     }
     expect(game.ticks() * 100).toBeGreaterThanOrEqual(deadline);
     expect(game.nationalUngovernableWarnings()).toEqual([]);
@@ -697,6 +700,37 @@ describe("Class Two E1 M5 administration", () => {
     expect(() => game.performNationalImperialAdministration(n, { ...command, destinationId: W })).toThrow();
     expect(() => game.performNationalImperialAdministration(s, command)).toThrow();
     expect([n.troops(), s.troops()]).toEqual([90, 11]);
+  });
+
+  it("D-011 hybrid production, authorized release, conversion and snapshot conserve actual troops", async () => {
+    const game = await realGame(3);
+    foundAndJoined(game);
+    const n = game.player(N), s = game.player(S);
+    n.setTroops(1); s.setTroops(1);
+    game.performNationalImperialAdministration(n, { kind: "set-army-mode", empireId: "empire-r3", mode: "hybrid", thresholdBps: 0 });
+    const before = s.troops();
+    const execution = new PlayerExecution(s);
+    execution.init(game, game.ticks());
+    execution.tick(game.ticks());
+    const pool = BigInt(game.nationalImperialAdministrationFor(n)!.imperialTroops);
+    expect(pool).toBeGreaterThan(0n);
+    expect(s.troops()).toBe(before);
+    const release = {kind: "release-imperial-troops" as const, empireId: "empire-r3", memberId: N, amount: 1};
+    expect(() => game.performNationalImperialAdministration(s, release)).toThrow();
+    expect(() => game.performNationalImperialAdministration(n, {...release, memberId: W})).toThrow();
+    game.performNationalImperialAdministration(n, release);
+    expect(n.troops()).toBe(2);
+    expect(BigInt(game.nationalImperialAdministrationFor(n)!.imperialTroops)).toBe(pool - 1n);
+    const { restored } = await roundTrip(game, "plains");
+    for (const g of [game, restored]) {
+      const active = BigInt(g.player(N).troops() + g.player(S).troops());
+      const reserve = BigInt(g.nationalImperialAdministrationFor(g.player(N))!.imperialTroops);
+      g.performNationalImperialAdministration(g.player(N), {kind: "set-army-mode", empireId: "empire-r3", mode: "decentralized", thresholdBps: 0});
+      const claims = BigInt(g.nationalDeferredTroopsFor(g.player(N)) ?? "0") + BigInt(g.nationalDeferredTroopsFor(g.player(S)) ?? "0");
+      expect(BigInt(g.player(N).troops() + g.player(S).troops()) + claims).toBe(active + reserve);
+      expect(g.nationalImperialAdministrationFor(g.player(N))!.imperialTroops).toBe("0");
+    }
+    expect(snapshot(restored)).toEqual(snapshot(game));
   });
 
   it("legacy worker production credits the entire actual gold grant", async () => {
