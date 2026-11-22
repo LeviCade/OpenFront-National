@@ -25,8 +25,8 @@ import { TestConfig } from "../util/TestConfig";
 
 const MATCH = "C5_C2_ULTIMATUM";
 const EMPIRE = "c5_c2_empire";
-const IDS = ["C5C2_Emperor", "C5C2_Target", "C5C2_Observer", "C5C2_Member"];
-const CLIENTS = ["C5C2_CLIENT_A", "C5C2_CLIENT_B", "C5C2_CLIENT_C", "C5C2_CLIENT_D"];
+const IDS = ["C5EMPEROR", "C5TARGET0", "C5OUTSIDE", "C5MEMBER0"];
+const CLIENTS = ["C5CLIENT1", "C5CLIENT2", "C5CLIENT3", "C5CLIENT4"];
 const roster = IDS.map((id, i) =>
   new PlayerInfo(id, PlayerType.Human, CLIENTS[i], id),
 );
@@ -167,7 +167,8 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(game.player(IDS[0]).canTrade(game.player(IDS[1]))).toBe(false);
     expect(game.player(IDS[3]).canTrade(game.player(IDS[1]))).toBe(false);
     expect(game.player(IDS[2]).canTrade(game.player(IDS[1]))).toBe(true);
-    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
+    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(true);
+    expect(game.nationalWarState()!.wars.layers.length).toBe(originalLayers);
     expect(assets(game)).toEqual(before);
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
@@ -209,29 +210,22 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
   });
 
-  it("WAR threat is a bluff under treaty protection; lawful refusal can declare real WAR", async () => {
+  it("already-open WAR cannot be duplicated by a threat; a new lawful WAR follows refusal", async () => {
     const { game, act, view } = await fixture();
     establish(act);
-    // Existing NAP protection is law, not something an ultimatum can erase.
+    // A WAR threat is not permission to create duplicate legal conflict layers.
     act(0, {
-      type: "national_found_pact", pactId: "c5_c2_nap",
-      name: "C5 Pact", pactKind: "NAP",
-      terms: { admission: "leader", expulsion: "leader" },
-      requestId: "c5_c2_nap_found",
+      type: "national_declare_war", scope: "imperial",
+      nationId: IDS[0], targetId: IDS[1], targetKind: "nation",
+      requestId: "c5_c2_prior_war",
     });
-    act(0, {
-      type: "national_invite_pact", pactId: "c5_c2_nap",
-      candidateId: IDS[1], requestId: "c5_c2_nap_invite",
-    });
-    act(1, {
-      type: "national_accept_pact", pactId: "c5_c2_nap",
-      requestId: "c5_c2_nap_accept",
-    });
+    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(true);
+    const originalLayers = game.nationalWarState()!.wars.layers.length;
     const before = assets(game);
     act(0, issue("imperial-war", IDS[1], "c5_c2_protected"));
     const protectedId = view(0)[0].id;
     act(1, respond(protectedId, "refuse", "c5_c2_protected_refuse"));
-    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
+    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(true);
     act(0, resolve(protectedId, "enforce", "c5_c2_protected_enforce"));
     expect(view(0)[0]).toMatchObject({
       phase: "backed-down", credibility: "broken", warId: null,
@@ -255,7 +249,7 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
     console.info("C5_C2_ULTIMATUM_WAR_WITNESS=" + JSON.stringify({
       before, after: assets(game),
-      illegalWar: game.nationalWarAuthority()?.atWar(IDS[0], IDS[1]),
+      duplicateWarDenied: game.nationalWarState()!.wars.layers.length === originalLayers + 1,
       lawfulWar: game.nationalWarAuthority()?.atWar(IDS[0], IDS[2]),
       warId: enforced.warId,
     }));
