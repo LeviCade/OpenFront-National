@@ -23,20 +23,18 @@ jobs:
         with:
           node-version: "24.15.0"
       - run: npm install --global --ignore-scripts npm@12.1.0
-      - name: Review raw advisory ranges and non-forced lockfile candidate
+      - name: Review exact Vitest patch-level upgrade
         run: |
           set -euo pipefail
-          npm audit --json > /tmp/c4-before.json || true
-          node --input-type=module -e 'import fs from "node:fs"; const r=JSON.parse(fs.readFileSync("/tmp/c4-before.json")); if(r.error || !r.metadata || !r.vulnerabilities) process.exit(1); for(const [name,v] of Object.entries(r.vulnerabilities)) console.log(JSON.stringify({name,range:v.range,severity:v.severity,fix:v.fixAvailable,via:v.via.map(x=>typeof x==="string"?x:{title:x.title,range:x.range,url:x.url})}));'
-          npm audit fix --package-lock-only --ignore-scripts --no-fund || true
-          test -z "$(git diff --name-only -- ':!package-lock.json')"
-          echo C4_LOCK_DIFF_BEGIN
-          git -c color.ui=false diff -- package-lock.json
-          echo C4_LOCK_DIFF_END
-          echo C4_LOCK_HASH
-          git hash-object package-lock.json
+          npm install --package-lock-only --ignore-scripts --no-fund --save-dev --save-prefix='^' vitest@4.1.12 @vitest/ui@4.1.12 @vitest/coverage-v8@4.1.12
+          test -z "$(git diff --name-only -- ':!package-lock.json' ':!package.json')"
+          echo C4_VITEST_DIFF_BEGIN
+          git -c color.ui=false diff -- package.json package-lock.json
+          echo C4_VITEST_DIFF_END
+          echo C4_VITEST_HASHES
+          git hash-object package.json package-lock.json
           npm audit --json > /tmp/c4-after.json || true
-          node --input-type=module -e 'import fs from "node:fs"; for(const p of ["before","after"]){const r=JSON.parse(fs.readFileSync("/tmp/c4-"+p+".json")); if(r.error || !r.metadata)process.exit(1); console.log(p,JSON.stringify(r.metadata.vulnerabilities));}'
+          node --input-type=module -e 'import fs from "node:fs";const r=JSON.parse(fs.readFileSync("/tmp/c4-after.json"));if(r.error||!r.metadata)process.exit(1);console.log("after",JSON.stringify(r.metadata.vulnerabilities));'
       - run: npm run inst
       - run: npm run typecheck
       - name: Verify both advisory trees after install
@@ -44,3 +42,6 @@ jobs:
       - name: Candidate build verification
         if: success() || failure()
         run: npm run build-prod
+      - name: Full suite on proposed development toolchain
+        if: success() || failure()
+        run: npm test
