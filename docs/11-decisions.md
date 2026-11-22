@@ -73,6 +73,7 @@
 
 Every change must cite an ID, explain national-interest consequences, provide enforceable state transitions, respect fair AI visibility and add acceptance scenarios. "It seems realistic" is not enough if it creates contradictory wars or invisible unlimited liabilities.
 
+
 ## Class Two M5 engineering resolution (D-011/D-012; partial)
 
 - Worker production is routed once at PlayerExecution, not generic addGold (which also credits transfers, conquest and trade). Rate is integer basis points; floor each contribution and keep residual personal. Other revenue sources and imperial spending remain open.
@@ -86,3 +87,10 @@ Every change must cite an ID, explain national-interest consequences, provide en
 
 - Imperial construction orders can purchase actual structures on a live constituent's territory. Existing placement rules, unit cost, construction completion execution and snapshot schema are reused; personal gold is unchanged. Construction order acceptance is authoritative. Imperial upgrade/demolition orders remain separate work.
 - The shared intent union appends one `national_imperial_administration` variant without moving existing discriminants. Executor resolves the stamped client, the existing Game-owned political journal enforces request identity and idempotence, and the canonical result type is `national_imperial_administration`. Recipient UI wiring is separately owned by E4.
+
+### Fifth Conductor Class One E2 — D-011 commercial allocation and direct works
+
+- E1's imperial-funded construction and worker treasury are inherited. This class adds two append-only administration command kinds: `upgrade-structure` and `demolish-structure`. The incumbent, authenticated emperor targets a real living constituent's owned structure by unit ID; authority and ownership are reevaluated at the executable tick. Imperial upgrades debit the existing dynamic unit price from the treasury before changing the unit level; demolition immediately removes the real unit and carries no invented refund or fee. Subordinate construction restrictions do not remove direct sovereign works authority.
+- Optional `nonWorkerIncomeBps` (0–10000, default zero in historic commands/snapshots) applies only at existing trade-ship, train-stop and captured-ship payout sites. Gross payout is conserved between the recipient's personal wallet and the persisted empire treasury; original gross trade/train/piracy statistics remain gross. Generic `addGold`, personal donations and conquest remain unlevied. Ordinary mode never instantiates the NATIONAL levy.
+- Existing authenticated political request journaling serializes same-tick orders and prevents duplicate charges; a second differently identified order must independently meet live ownership and treasury requirements. Accepted orders have no deferred authority after execution. Queued order snapshots carry existing stamped identity and request ID; dissolution, lost membership, changed crown or deleted units cause deterministic rejection at execution rather than spending.
+- M5 tests must prove real Game/Player unit levels/removal, ledger exactness, negative/foreign/stale rejection, same-tick competition, production payout routing, snapshot/replay and FFA.
