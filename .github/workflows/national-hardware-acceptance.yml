@@ -60,18 +60,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p national-qa-artifacts/gpu
-          BASE_SHA=03463cb2ee6fb508e0ae83ce87aedbc6ee996d29
-          staging=refs/remotes/origin/stage3/class4-six-owner-reciprocal-20261121
+          BASE_SHA=2cfe3d4f91f28df61c7ebd7c429c9fdca674daf0
+          staging=refs/remotes/origin/stage3/conductor2-class1-engineering-20261121
           git fetch --no-tags origin \
-            '+refs/heads/stage3/class4-six-owner-reciprocal-20261121:'"$staging"
+            '+refs/heads/stage3/conductor2-class1-engineering-20261121:'"$staging"
           git cat-file -e "$NATIONAL_GPU_CANDIDATE_SHA^{commit}"
           git merge-base --is-ancestor "$BASE_SHA" "$NATIONAL_GPU_CANDIDATE_SHA" || {
-            echo 'REFUSED: candidate diverges from accepted Class Four base' >&2
+            echo 'REFUSED: candidate diverges from accepted Second Conductor first-class base' >&2
             exit 1
           }
           # No stale or earlier source: one exact reviewed Conductor staging tip.
           test "$(git rev-parse "$staging")" = "$NATIONAL_GPU_CANDIDATE_SHA" || {
-            echo 'REFUSED: candidate is not the exact Class Four staging HEAD' >&2
+            echo 'REFUSED: candidate is not the exact Second Conductor first-class staging HEAD' >&2
             exit 1
           }
           printf '%s\n' "$staging" > national-qa-artifacts/gpu/approved-staging-ref.txt
@@ -124,23 +124,13 @@ jobs:
           } > national-qa-artifacts/gpu/guest-inventory.txt
           (glxinfo -B || true) > national-qa-artifacts/gpu/glxinfo.txt 2>&1
           # A guest-produced JSON object is NOT independent host evidence.
-          # E5 requires a controller/operator-signed short-lived proof and
-          # out-of-band trusted public key; no fake proof is generated here.
-          if [[ -z "${NATIONAL_GPU_ATTESTATION_FILE:-}" ||
-                -z "${NATIONAL_GPU_PUBLIC_KEY_FILE:-}" ||
-                -z "${NATIONAL_GPU_ATTESTATION_CHALLENGE:-}" ||
-                ! -r "$NATIONAL_GPU_ATTESTATION_FILE" ||
-                ! -r "$NATIONAL_GPU_PUBLIC_KEY_FILE" ]]; then
-            echo 'BLOCKED: trusted host-signed attestation not provisioned for this job' |
-              tee national-qa-artifacts/gpu/attestation-blocker.txt
-            exit 1
-          fi
-          [[ "$NATIONAL_GPU_ATTESTATION_CHALLENGE" =~ ^[0-9a-f]{64}$ ]] || {
-            echo 'BLOCKED: hardware challenge must be 64 hex characters' >&2
-            exit 1
-          }
-          echo 'HOST_SIGNED_PROOF_PRESENT=TRUE; VERIFICATION_DEFERRED_TO_E5_BROWSER' |
-            tee national-qa-artifacts/gpu/proof-presence.txt
+          # The trusted host must deliver four fresh signed PUBLIC proofs
+          # AFTER the single dependency install, one for EACH browser process.
+          # Per-mode wait-host-proof.mjs checks Ed25519 enrollment, exact
+          # SHA/run/attempt/runner/nonce/mode and 120-second expiry before E5.
+          # NATIONAL_GPU_ATTESTATION_FILE, NATIONAL_GPU_PUBLIC_KEY_FILE,
+          # NATIONAL_GPU_ATTESTATION_CHALLENGE are set per-mode by E6 runner.
+          echo 'HOST_PROOF_GATE=DEFERRED_TO_PER_MODE_SIGNED_VERIFIER'
 
       - name: Set up pinned Node 24
         uses: actions/setup-node@v4
