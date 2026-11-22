@@ -33,6 +33,13 @@ jobs:
         run: |
           npm install --global --ignore-scripts npm@12.1.0
           npm run inst
+      - name: Pinned formatter on E1-owned changes
+        run: |
+          npx --no-install oxfmt --check \
+            packages/engine/src/execution/AttackExecution.ts \
+            packages/engine/src/execution/ExecutionManager.ts \
+            tests/national/ConductorTwoCrownWarContinuity.test.ts \
+            tests/national/ConductorThreeAuthoritativeCombat.test.ts
       - name: Typecheck
         run: npm run typecheck
       - name: Real combat and adversarial regression
