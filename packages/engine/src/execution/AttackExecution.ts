@@ -1,4 +1,5 @@
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
+import type { ClientID } from "@openfront/engine-api/Schemas";
 import {
   Difficulty,
   MessageType,
@@ -64,6 +65,8 @@ export class AttackExecution implements Execution {
     private _targetID: PlayerID | null,
     private sourceTile: TileRef | null = null,
     private removeTroops: boolean = true,
+    /** Original server-stamped seat of an authenticated human attack. */
+    private authenticatedClientID: ClientID | null = null,
   ) {}
 
   public targetID(): PlayerID | null {
@@ -80,6 +83,20 @@ export class AttackExecution implements Execution {
     }
     this.mg = mg;
     this.map = mg.map();
+
+    // A queued military action cannot inherit a replacement controller's
+    // identity. Match the original server-stamped session BEFORE resolving
+    // targets or debiting troops, levies, embargoes or territorial ownership.
+    // Unstamped engine-generated attacks and legacy FFA remain unchanged.
+    if (
+      this.authenticatedClientID !== null &&
+      mg.nationalPoliticalAuthority() !== null &&
+      (this._owner.type() !== PlayerType.Human ||
+        mg.playerByClientID(this.authenticatedClientID) !== this._owner)
+    ) {
+      this.active = false;
+      return;
+    }
 
     if (this._targetID !== null && !mg.hasPlayer(this._targetID)) {
       console.warn(`target ${this._targetID} not found`);
@@ -691,6 +708,7 @@ export class AttackExecution implements Execution {
       targetID: this._targetID,
       sourceTile: this.sourceTile,
       removeTroops: this.removeTroops,
+      authenticatedClientID: this.authenticatedClientID,
     });
   }
 
@@ -717,6 +735,7 @@ export class AttackExecution implements Execution {
     this._targetID = s.targetID;
     this.sourceTile = s.sourceTile;
     this.removeTroops = s.removeTroops;
+    this.authenticatedClientID = s.authenticatedClientID;
   }
 }
 
@@ -741,12 +760,18 @@ const AttackExecutionStateSchema = z.object({
   targetID: z.string().nullable(),
   sourceTile: zTile().nullable(),
   removeTroops: z.boolean(),
+  authenticatedClientID: z.string().nullable(),
 });
 type AttackExecutionState = z.infer<typeof AttackExecutionStateSchema>;
 
 export const AttackExecutionSnapshot = execSnapshotType({
   name: "Attack",
-  version: 1,
+  version: 2,
   schema: AttackExecutionStateSchema,
+  migrations: {
+    // Historical snapshots predate the stamped attack origin. Read them
+    // without pretending the archive carries an authenticated principal.
+    1: (old: object) => ({ ...old, authenticatedClientID: null }),
+  },
   cls: () => AttackExecution,
 });
