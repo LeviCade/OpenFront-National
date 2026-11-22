@@ -170,9 +170,15 @@ export type NationalRespondSanctionIntent = z.infer<
 export type NationalResolveSanctionIntent = z.infer<
   typeof NationalResolveSanctionIntentSchema
 >;
-export type NationalIssueUltimatumIntent = z.infer<typeof NationalIssueUltimatumIntentSchema>;
-export type NationalRespondUltimatumIntent = z.infer<typeof NationalRespondUltimatumIntentSchema>;
-export type NationalResolveUltimatumIntent = z.infer<typeof NationalResolveUltimatumIntentSchema>;
+export type NationalIssueUltimatumIntent = z.infer<
+  typeof NationalIssueUltimatumIntentSchema
+>;
+export type NationalRespondUltimatumIntent = z.infer<
+  typeof NationalRespondUltimatumIntentSchema
+>;
+export type NationalResolveUltimatumIntent = z.infer<
+  typeof NationalResolveUltimatumIntentSchema
+>;
 
 export type Turn = z.infer<typeof TurnSchema>;
 export type GameConfig = z.infer<typeof GameConfigSchema>;
