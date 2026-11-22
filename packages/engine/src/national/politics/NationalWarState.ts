@@ -96,6 +96,10 @@ export type NationalWarCommand =
     }
   | { kind: "propose-peace"; motionId: string; warId: string }
   | { kind: "accept-peace"; motionId: string };
+/** Executions may additionally carry the policy epoch captured at admission. */
+export type VersionedNationalWarCommand = NationalWarCommand & {
+  readonly policyVersion?: number;
+};
 
 /** Read-only port for E2 attack acceptance and E3 authorized observation. */
 export interface NationalWarAuthority {
@@ -149,6 +153,15 @@ export class NationalWarStateService {
 
   retireEmpireWars(empireIds: readonly string[], tick: number): void {
     this.wars.retireEmpireWars(empireIds, tick);
+  }
+
+  assertAccessionCompatible(empireId: string, candidateId: string): void {
+    this.wars.assertAccessionCompatible(empireId, candidateId);
+  }
+
+  /** Apply the policy after actual consent, without replacing original WAR. */
+  escalateAccessionWars(empireId: string, candidateId: string, tick: number): string[] {
+    return this.wars.escalateAccessionWars(empireId, candidateId, tick);
   }
 
   /** Validate BOTH ledgers before touching the live state. */
