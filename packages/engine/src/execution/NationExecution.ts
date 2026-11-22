@@ -359,7 +359,8 @@ export class NationExecution implements Execution {
         d.target,
         ...(d.authorityId === null ? [] : [d.authorityId]),
         ...d.recipientIds,
-        ...(observation.coalitions.find((c) => c.id === d.empire)?.members ?? []),
+        ...(observation.coalitions.find((c) => c.id === d.empire)?.members ??
+          []),
       ]),
     );
     const voyages = new Map<string, number>();
@@ -378,8 +379,8 @@ export class NationExecution implements Execution {
         player.canTrade(this.mg.player(partnerId)),
       activeOwnVoyages: voyages.get(partnerId) ?? 0,
     }));
-    const priorEconomic = this.nationalEconomicMemory ??
-      initialNationalEconomicMemory(player.id());
+    const priorEconomic =
+      this.nationalEconomicMemory ?? initialNationalEconomicMemory(player.id());
     this.nationalEconomicMemory = updateNationalEconomicMemory(
       observation,
       demands,
@@ -392,33 +393,35 @@ export class NationExecution implements Execution {
       this.nationalEconomicMemory,
     );
     if (economic) {
-      const identity = economic.kind === "issue"
-        ? economic.targetId + ":" + economic.recipientIds.join(",")
-        : economic.sanctionId;
+      const identity =
+        economic.kind === "issue"
+          ? economic.targetId + ":" + economic.recipientIds.join(",")
+          : economic.sanctionId;
       const requestId =
         "ai-econ-" + simpleHash(player.id() + ":" + identity + ":" + ticks);
-      const command = economic.kind === "issue"
-        ? {
-            type: "national_issue_sanction" as const,
-            scope: economic.scope,
-            targetId: economic.targetId,
-            recipientIds: [...economic.recipientIds],
-            durationTicks: economic.durationTicks,
-            requestId,
-          }
-        : economic.kind === "respond"
+      const command =
+        economic.kind === "issue"
           ? {
-              type: "national_respond_sanction" as const,
-              sanctionId: economic.sanctionId,
-              decision: economic.decision,
+              type: "national_issue_sanction" as const,
+              scope: economic.scope,
+              targetId: economic.targetId,
+              recipientIds: [...economic.recipientIds],
+              durationTicks: economic.durationTicks,
               requestId,
             }
-          : {
-              type: "national_resolve_sanction" as const,
-              sanctionId: economic.sanctionId,
-              decision: economic.decision,
-              requestId,
-            };
+          : economic.kind === "respond"
+            ? {
+                type: "national_respond_sanction" as const,
+                sanctionId: economic.sanctionId,
+                decision: economic.decision,
+                requestId,
+              }
+            : {
+                type: "national_resolve_sanction" as const,
+                sanctionId: economic.sanctionId,
+                decision: economic.decision,
+                requestId,
+              };
       this.mg.addExecution(new NationalSanctionExecution(player, command));
     }
     const remembered = advanceLastKnown(
@@ -764,8 +767,12 @@ export class NationExecution implements Execution {
         : {
             nationalEconomicMemory: {
               observerId: this.nationalEconomicMemory.observerId,
-              processedDemandIds: [...this.nationalEconomicMemory.processedDemandIds],
-              credibility: this.nationalEconomicMemory.credibility.map((entry) => ({ ...entry })),
+              processedDemandIds: [
+                ...this.nationalEconomicMemory.processedDemandIds,
+              ],
+              credibility: this.nationalEconomicMemory.credibility.map(
+                (entry) => ({ ...entry }),
+              ),
             },
           }),
       nationalSightMemory:
@@ -907,12 +914,18 @@ const NationStateSchema = z.object({
     .object({
       observerId: z.string(),
       processedDemandIds: z.array(z.string()).max(128),
-      credibility: z.array(z.object({
-        issuerId: z.string(),
-        score: z.number().int().min(-6).max(6),
-        lastObservedTick: z.number().int().nonnegative(),
-      })).max(16),
-    }).nullable().optional(),
+      credibility: z
+        .array(
+          z.object({
+            issuerId: z.string(),
+            score: z.number().int().min(-6).max(6),
+            lastObservedTick: z.number().int().nonnegative(),
+          }),
+        )
+        .max(16),
+    })
+    .nullable()
+    .optional(),
   nationalSightMemory: z
     .object({
       observerId: z.string(),
