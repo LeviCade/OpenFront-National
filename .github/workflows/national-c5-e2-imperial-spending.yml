@@ -64,6 +64,38 @@ jobs:
             tests/economy/ConstructionGold.test.ts \
             tests/GoldDonationStats.test.ts
 
+  full-source:
+    name: E2 whole repository tests, lint, build and format
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: All repository unit and source tests
+        run: npm test
+      - name: Whole-repository lint
+        if: success() || failure()
+        run: npm run lint
+      - name: Full production bundle
+        if: success() || failure()
+        run: npm run build-prod
+      - name: Whole-repository oxfmt
+        if: success() || failure()
+        run: |
+          if ! npm run format:check; then
+            npx --no-install oxfmt --write .
+            git -c color.ui=false diff --
+            exit 1
+          fi
+
   format:
     name: E2 touched-source format check
     runs-on: ubuntu-latest
