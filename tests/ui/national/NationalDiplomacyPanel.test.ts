@@ -932,8 +932,9 @@ describe("C4 E4 native constitutional controls", () => {
       const form = policy!.closest("form")!;
       form.querySelector<HTMLInputElement>('[name="basisPoints"]')!.value =
         "2500";
-      form.querySelector<HTMLInputElement>('[name="commercialBasisPoints"]')!.value =
-        "3000";
+      form.querySelector<HTMLInputElement>(
+        '[name="commercialBasisPoints"]',
+      )!.value = "3000";
       form.querySelector<HTMLInputElement>('[name="confirm"]')!.checked = true;
       policy!.click();
       await element.updateComplete;

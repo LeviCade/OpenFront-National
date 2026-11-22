@@ -1422,20 +1422,22 @@ export class NationalDiplomacyPanel extends LitElement {
               .value=${String(view.workerIncomeBps)}
               class="w-full rounded bg-slate-900 px-2 py-2"
           /></label>
-          ${view.nonWorkerIncomeBps === undefined
-            ? nothing
-            : html`<label
-                >Commercial allocation basis points (trade, rail, piracy)
-                <input
-                  name="commercialBasisPoints"
-                  type="number"
-                  min="0"
-                  max="10000"
-                  step="1"
-                  required
-                  .value=${String(view.nonWorkerIncomeBps)}
-                  class="w-full rounded bg-slate-900 px-2 py-2"
-                /></label>`}
+          ${
+            view.nonWorkerIncomeBps === undefined
+              ? nothing
+              : html`<label
+                  >Commercial allocation basis points (trade, rail, piracy)
+                  <input
+                    name="commercialBasisPoints"
+                    type="number"
+                    min="0"
+                    max="10000"
+                    step="1"
+                    required
+                    .value=${String(view.nonWorkerIncomeBps)}
+                    class="w-full rounded bg-slate-900 px-2 py-2"
+                /></label>`
+          }
           <label
             >Construction policy
             <select
@@ -1569,12 +1571,14 @@ export class NationalDiplomacyPanel extends LitElement {
         Worker income allocated to treasury:
         ${(view.workerIncomeBps / 100).toFixed(2)}%
       </p>
-      ${view.nonWorkerIncomeBps === undefined
-        ? nothing
-        : html`<p>
-            Trade, rail and piracy income allocated to treasury:
-            ${(view.nonWorkerIncomeBps / 100).toFixed(2)}%
-          </p>`}
+      ${
+        view.nonWorkerIncomeBps === undefined
+          ? nothing
+          : html`<p>
+              Trade, rail and piracy income allocated to treasury:
+              ${(view.nonWorkerIncomeBps / 100).toFixed(2)}%
+            </p>`
+      }
       <p>
         Member construction authority:
         ${view.allowedConstruction === null ? "All regulated construction categories permitted" : view.allowedConstruction.length ? view.allowedConstruction.join(", ") : "No regulated construction categories permitted"}
