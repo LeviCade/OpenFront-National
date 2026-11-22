@@ -1044,7 +1044,11 @@ describe("C4 E4 native constitutional controls", () => {
         unitId: 42,
       },
     });
-    expect(commands[0].intent.requestId).toMatch(/^np_[0-9a-f]{32}$/);
+    const firstRequestId =
+      "requestId" in commands[0].intent
+        ? String(commands[0].intent.requestId)
+        : "";
+    expect(firstRequestId).toMatch(/^np_[0-9a-f]{32}$/);
     expect(element.textContent).toContain(
       "Pending authoritative imperial works receipt",
     );
@@ -1055,7 +1059,7 @@ describe("C4 E4 native constitutional controls", () => {
         type: "national_imperial_administration",
         actorId: "nation-c",
         recipientId: "nation-c",
-        requestId: commands[0].intent.requestId,
+        requestId: firstRequestId,
         commandTargetId: "empire",
         tick: optionsState.tick,
         sequence: 1,
@@ -1101,15 +1105,18 @@ describe("C4 E4 native constitutional controls", () => {
         unitId: 42,
       },
     });
-    expect(commands[1].intent.requestId).not.toBe(
-      commands[0].intent.requestId,
-    );
+    const secondRequestId =
+      "requestId" in commands[1].intent
+        ? String(commands[1].intent.requestId)
+        : "";
+    expect(secondRequestId).toMatch(/^np_[0-9a-f]{32}$/);
+    expect(secondRequestId).not.toBe(firstRequestId);
     optionsState.pactReceipts = [
       {
         type: "national_imperial_administration",
         actorId: "nation-a",
         recipientId: "nation-a",
-        requestId: commands[1].intent.requestId,
+        requestId: secondRequestId,
         commandTargetId: "empire",
         tick: optionsState.tick,
         sequence: 2,
