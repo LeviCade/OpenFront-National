@@ -12,10 +12,14 @@ import { TrainExecution } from "@openfront/engine/execution/TrainExecution";
 import type { Game, Unit } from "@openfront/engine/game/Game";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
 import { TrainStation } from "@openfront/engine/game/TrainStation";
-import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
+import {
+  snapshotGame,
+  snapshotGameData,
+} from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
-import { roundTrip } from "../util/Snapshot";
+import { restoreTestGame, roundTrip } from "../util/Snapshot";
+import { TrustedNationalSaveStore } from "../../src/server/national/TrustedNationalSaveStore";
 
 /** D-011 M5: all actors, structures, gold and authority are actual Game objects. */
 const roster = [
@@ -313,6 +317,90 @@ describe("Fifth Conductor / Class One / E2 — executable imperial spending (D-0
       });
     }
     expect(national(restored)).toEqual(national(game));
+  });
+
+  it("trusted host save and restore preserves a queued paid order, ledger and replay lock", async () => {
+    const game = await liveGame();
+    join(game);
+    const member = game.player(S);
+    const unit = city(game);
+    policy(game, 10_000);
+    const cost = game.unitInfo(UnitType.City).cost(game, member);
+    workerIncome(game, cost + 3n);
+    policy(game, 0);
+    queue(game, "c5-host-upgrade", {
+      kind: "upgrade-structure",
+      empireId,
+      memberId: S,
+      unitId: unit.id(),
+    });
+    const owner = {
+      accountId: "c5-test-account",
+      playerId: N,
+      clientID: game.player(N).clientID()!,
+    };
+    // The server-owned, session-bound SAVE adapter protects bytes, digest,
+    // ownership and tick. Its storage is in memory, NOT a disk-restart claim.
+    const store = new TrustedNationalSaveStore<Game>(
+      (session, id) =>
+        session === "c5-authorized-session" && id === "c5-host"
+          ? owner
+          : null,
+      (g, id) => snapshotGame(g, { gameID: id }),
+    );
+    expect(() => store.save("c5-host", "forged-session", game)).toThrow(
+      /unauthorized/,
+    );
+    const saved = store.save("c5-host", "c5-authorized-session", game);
+    await expect(
+      store.restore(
+        saved.id,
+        "forged-session",
+        (bytes) => restoreTestGame(bytes, "plains"),
+      ),
+    ).rejects.toThrow(/unauthorized/);
+    const restored = await store.restore(
+      saved.id,
+      "c5-authorized-session",
+      (bytes) => restoreTestGame(bytes, "plains"),
+    );
+    expect(treasury(restored)).toBe(cost + 3n);
+    for (const g of [game, restored]) {
+      g.executeNextTick();
+      g.executeNextTick();
+      expect(g.player(S).units(UnitType.City)[0].level()).toBe(2);
+      expect(
+        BigInt(g.nationalImperialAdministrationFor(g.player(N))!.treasury),
+      ).toBe(3n);
+      expect(political(g, "c5-host-upgrade")).toMatchObject({
+        accepted: true,
+        recipientId: N,
+      });
+    }
+    expect(national(restored)).toEqual(national(game));
+    const after = store.save("c5-host", "c5-authorized-session", restored);
+    const reloaded = await store.restore(
+      after.id,
+      "c5-authorized-session",
+      (bytes) => restoreTestGame(bytes, "plains"),
+    );
+    queue(reloaded, "c5-host-upgrade", {
+      kind: "upgrade-structure",
+      empireId,
+      memberId: S,
+      unitId: unit.id(),
+    });
+    reloaded.executeNextTick();
+    reloaded.executeNextTick();
+    expect(reloaded.player(S).units(UnitType.City)[0].level()).toBe(2);
+    expect(
+      BigInt(reloaded.nationalImperialAdministrationFor(reloaded.player(N))!.treasury),
+    ).toBe(3n);
+    expect(
+      reloaded
+        .nationalPoliticalCommandResults(reloaded.player(N))
+        .filter((receipt) => receipt.requestId === "c5-host-upgrade"),
+    ).toHaveLength(1);
   });
 
   it("rejects insufficient funds, outsiders, other members, inactive units and former crown without mutations", async () => {
