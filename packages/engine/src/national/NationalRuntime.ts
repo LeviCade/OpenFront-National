@@ -887,11 +887,22 @@ export class NationalRuntime {
     return new PoliticalAuthorityAdapter(
       () => this.politics,
       (memberId, action) =>
-        action === "peace" && this.hasDelegatedNationalPeace(memberId),
+        action === "peace"
+          ? this.hasDelegatedNationalPeace(memberId)
+          : this.hasDelegatedNationalDeclaration(memberId),
     );
   }
 
   /** Canonical persisted policy, never a second resource/authority registry. */
+  hasDelegatedNationalDeclaration(memberId: PlayerID): boolean {
+    return this.politics.empires.some(
+      (e) =>
+        e.leaderId !== memberId &&
+        e.memberIds.includes(memberId) &&
+        (e.delegatedNationalDeclarations ?? []).includes(memberId),
+    );
+  }
+
   hasDelegatedNationalPeace(memberId: PlayerID): boolean {
     return this.politics.empires.some(
       (e) =>
