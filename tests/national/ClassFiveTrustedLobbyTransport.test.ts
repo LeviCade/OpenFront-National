@@ -46,9 +46,10 @@ function verified(index: number): Client {
     publicId: publics[index],
     username: ["Alpha", "Bravo", "Charlie"][index],
     // The real Worker obtains this from a validated signed account token.
-    claims: { sub: "verified-persistent-" + index, provider: "google" } as NonNullable<
-      Client["claims"]
-    >,
+    claims: {
+      sub: "verified-persistent-" + index,
+      provider: "google",
+    } as NonNullable<Client["claims"]>,
   });
 }
 
@@ -275,7 +276,9 @@ describe("Class Five authenticated NATIONAL GameServer session", () => {
       clientID: cid("late5"),
       persistentID: "late-person",
       publicId: "verified-late",
-      claims: { sub: "late-person", provider: "google" } as NonNullable<Client["claims"]>,
+      claims: { sub: "late-person", provider: "google" } as NonNullable<
+        Client["claims"]
+      >,
     });
     expect(game.joinClient(late)).toBe("started");
     expect(game.rejoinClient(makeMockWs() as any, "not-seated")).toBe(false);

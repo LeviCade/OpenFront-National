@@ -17,13 +17,17 @@ describe("NATIONAL signed-account browser boundary", () => {
     expect(isNationalSignedInAccount(claims("a"))).toBe(false);
     expect(isNationalSignedInAccount(claims("a", "guest"))).toBe(false);
     expect(isNationalSignedInAccount(claims("a", " "))).toBe(false);
-    expect(isNationalSignedInAccount(claims("a", "google", "banned"))).toBe(false);
+    expect(isNationalSignedInAccount(claims("a", "google", "banned"))).toBe(
+      false,
+    );
     expect(isNationalSignedInAccount(claims("", "google"))).toBe(false);
   });
 
   it("recognizes provider-bearing signed account claims", () => {
     for (const provider of ["google", "discord", "steam", "email"]) {
-      expect(isNationalSignedInAccount(claims("verified-sub", provider))).toBe(true);
+      expect(isNationalSignedInAccount(claims("verified-sub", provider))).toBe(
+        true,
+      );
     }
   });
 
@@ -37,30 +41,58 @@ describe("NATIONAL signed-account browser boundary", () => {
       nations: "disabled",
     });
     expect(isPrivateGameInput(parsed)).toBe(true);
-    expect(CreateGameInputSchema.safeParse({
-      nationalMode: true, gameType: GameType.Public,
-    }).success).toBe(false);
-    expect(CreateGameInputSchema.safeParse({
-      nationalMode: true, admin: true,
-    }).success).toBe(false);
+    expect(
+      CreateGameInputSchema.safeParse({
+        nationalMode: true,
+        gameType: GameType.Public,
+      }).success,
+    ).toBe(false);
+    expect(
+      CreateGameInputSchema.safeParse({
+        nationalMode: true,
+        admin: true,
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects guests and account identity mismatches at actual GameServer admission", () => {
     const game = makeGame({
-      config: { nationalMode: true, gameType: GameType.Private, gameMode: GameMode.FFA },
+      config: {
+        nationalMode: true,
+        gameType: GameType.Private,
+        gameMode: GameMode.FFA,
+      },
     });
-    expect(game.joinClient(makeClient({
-      clientID: cid("guest1"), persistentID: "guest-a",
-      publicId: "asserted-guest", claims: claims("guest-a", "guest"),
-    }))).toBe("not_trusted");
-    expect(game.joinClient(makeClient({
-      clientID: cid("mismatch"), persistentID: "subject-A",
-      publicId: "asserted-other", claims: claims("subject-B", "google"),
-    }))).toBe("not_trusted");
-    expect(game.joinClient(makeClient({
-      clientID: cid("valid1"), persistentID: "subject-A",
-      publicId: "api-verified-public", claims: claims("subject-A", "google"),
-    }))).toBe("joined");
+    expect(
+      game.joinClient(
+        makeClient({
+          clientID: cid("guest1"),
+          persistentID: "guest-a",
+          publicId: "asserted-guest",
+          claims: claims("guest-a", "guest"),
+        }),
+      ),
+    ).toBe("not_trusted");
+    expect(
+      game.joinClient(
+        makeClient({
+          clientID: cid("mismatch"),
+          persistentID: "subject-A",
+          publicId: "asserted-other",
+          claims: claims("subject-B", "google"),
+        }),
+      ),
+    ).toBe("not_trusted");
+    expect(
+      game.joinClient(
+        makeClient({
+          clientID: cid("valid1"),
+          persistentID: "subject-A",
+          publicId: "api-verified-public",
+          claims: claims("subject-A", "google"),
+        }),
+      ),
+    ).toBe("joined");
   });
 
   it("allows mode opt-in with valid creator but rejects invalid subsequent mode", () => {
@@ -69,13 +101,34 @@ describe("NATIONAL signed-account browser boundary", () => {
       creatorPersistentID: "verified-host",
       config: { gameType: GameType.Private, gameMode: GameMode.FFA },
     });
-    expect(game.joinClient(makeClient({
-      clientID: id, persistentID: "verified-host",
-      publicId: "api-host", claims: claims("verified-host", "google"),
-    }))).toBe("joined");
-    const actor = { clientID: id, isLobbyCreator: true, isAdmin: false, isAdminBot: false };
-    expect(game.handleIntent({ type: "update_game_config", config: { nationalMode: true } }, actor).status).toBe(200);
+    expect(
+      game.joinClient(
+        makeClient({
+          clientID: id,
+          persistentID: "verified-host",
+          publicId: "api-host",
+          claims: claims("verified-host", "google"),
+        }),
+      ),
+    ).toBe("joined");
+    const actor = {
+      clientID: id,
+      isLobbyCreator: true,
+      isAdmin: false,
+      isAdminBot: false,
+    };
+    expect(
+      game.handleIntent(
+        { type: "update_game_config", config: { nationalMode: true } },
+        actor,
+      ).status,
+    ).toBe(200);
     expect(game.gameConfig.nationalMode).toBe(true);
-    expect(game.handleIntent({ type: "update_game_config", config: { gameMode: GameMode.Team } }, actor).status).toBe(403);
+    expect(
+      game.handleIntent(
+        { type: "update_game_config", config: { gameMode: GameMode.Team } },
+        actor,
+      ).status,
+    ).toBe(403);
   });
 });

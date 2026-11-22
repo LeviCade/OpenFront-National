@@ -536,8 +536,7 @@ export class GameServer {
         // A private lobby may opt in only while every seated human carries
         // API-backed signed account authority. No in-place guest promotion.
         const national =
-          stamped.config.nationalMode ??
-          (this.gameConfig.nationalMode === true);
+          stamped.config.nationalMode ?? this.gameConfig.nationalMode === true;
         if (national) {
           const mode = stamped.config.gameMode ?? this.gameConfig.gameMode;
           if (
@@ -545,12 +544,14 @@ export class GameServer {
             this.isListed() ||
             mode !== GameMode.FFA ||
             this.gameConfig.tutorial === true ||
-            this.clients.players().some(
-              (c) =>
-                !isNationalSignedInAccount(c.claims) ||
-                !c.publicId ||
-                c.claims?.sub !== c.persistentID,
-            )
+            this.clients
+              .players()
+              .some(
+                (c) =>
+                  !isNationalSignedInAccount(c.claims) ||
+                  !c.publicId ||
+                  c.claims?.sub !== c.persistentID,
+              )
           ) {
             return finish({
               status: 403,

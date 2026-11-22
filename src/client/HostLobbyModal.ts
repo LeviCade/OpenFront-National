@@ -836,13 +836,17 @@ export class HostLobbyModal extends BaseModal {
             ClientEnv.env() !== GameEnv.Prod &&
             this.gameMode === GameMode.FFA &&
             !this.publiclyListed
-              ? html`<label class="flex gap-3 items-center mt-5 p-4 rounded-lg border border-white/20 text-sm text-white">
+              ? html`<label
+                  class="flex gap-3 items-center mt-5 p-4 rounded-lg border border-white/20 text-sm text-white"
+                >
                   <input
                     type="checkbox"
                     aria-label="Private NATIONAL authoritative multiplayer"
                     .checked=${this.nationalMode}
                     @change=${(event: Event) => {
-                      this.nationalMode = (event.target as HTMLInputElement).checked;
+                      this.nationalMode = (
+                        event.target as HTMLInputElement
+                      ).checked;
                       if (this.nationalMode) {
                         // The ordinary private-host defaults include 400 bots;
                         // the three-human NATIONAL host must start unburdened.

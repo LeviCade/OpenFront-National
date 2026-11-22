@@ -19,7 +19,12 @@ const PrivateNationalCreateSchema = z
 
 export const CreateGameInputSchema = GameConfigSchema.omit({ pool: true })
   .or(PrivateNationalCreateSchema)
-  .or(z.object({}).strict().transform(() => undefined));
+  .or(
+    z
+      .object({})
+      .strict()
+      .transform(() => undefined),
+  );
 
 export type CreateGameInput = z.infer<typeof CreateGameInputSchema>;
 

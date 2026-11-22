@@ -61,8 +61,8 @@ import { registerPlayerProfileRoute } from "./PlayerProfileRoute";
 import { resolveVerifiedJoin } from "./Privilege";
 
 import { loadGatekeeper } from "./Gatekeeper";
-import { isNationalSignedInAccount } from "./national/NationalAccountGate";
 import { MapPlaylist } from "./MapPlaylist";
+import { isNationalSignedInAccount } from "./national/NationalAccountGate";
 import { setNoStoreHeaders } from "./NoStoreHeaders";
 import { PrivilegeRefresher } from "./PrivilegeRefresher";
 import { startRankedCheckinLoops } from "./RankedCheckin";
@@ -472,7 +472,7 @@ export async function startWorker() {
           .status(account.status === 401 || account.status === 403 ? 401 : 503)
           .json({ error: "national_account_verification_failed" });
       }
-      if (!account.response.player.publicId || account.response.ban != null) {
+      if (!account.response.player.publicId || Boolean(account.response.ban)) {
         return res.status(403).json({ error: "national_account_unavailable" });
       }
     }
@@ -742,7 +742,7 @@ export async function startWorker() {
             ws.close(close.code, close.reason);
             return;
           }
-          if (account.response.ban != null) {
+          if (Boolean(account.response.ban)) {
             ws.close(CloseCode.Unauthorized, CloseReason.LoginRequired);
             return;
           }
@@ -946,7 +946,7 @@ export async function startWorker() {
           }
           if (
             game?.gameConfig.nationalMode === true &&
-            result.response.ban != null
+            Boolean(result.response.ban)
           ) {
             admissionGuard.rollback();
             ws.close(CloseCode.Unauthorized, CloseReason.LoginRequired);
