@@ -335,6 +335,8 @@ export async function startWorker() {
     // Fixed reason classes only; never log private row payloads or identity.
     log.error("NATIONAL durable recovery refused", {
       stage: "record-or-snapshot",
+      diagnostic: error instanceof Error ? (error.stack ?? "").split("\n").slice(1, 12).flatMap(line => line.match(/(?:src|packages)\/[A-Za-z0-9_./-]+\.ts:\d+:\d+/g) ?? []) : [],
+      errorType: error instanceof Error ? error.name : "unknown",
       reason:
         error instanceof Error &&
         [

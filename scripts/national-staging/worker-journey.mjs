@@ -116,7 +116,7 @@ async function startHost() {
         assert(process.alive(), "Master exited before Worker ready");
         const refusal = process.messages.find(m => m.message === "NATIONAL durable recovery refused");
         if (refusal) {
-          console.error("SAFE_RECOVERY_REFUSAL " + JSON.stringify({stage: refusal.stage, reason: refusal.reason}));
+          console.error("SAFE_RECOVERY_REFUSAL " + JSON.stringify({stage: refusal.stage, reason: refusal.reason, diagnostic: refusal.diagnostic, errorType: refusal.errorType}));
           throw new Error("explicit Worker recovery refusal");
         }
         return (

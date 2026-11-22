@@ -119,6 +119,8 @@ export function launch(args, env, executable = process.execPath) {
             replayDigest: log.replayDigest,
             stage: log.stage,
             reason: log.reason,
+            diagnostic: log.diagnostic,
+            errorType: log.errorType,
             code: log.code,
             queuedIntents: log.queuedIntents,
           });
