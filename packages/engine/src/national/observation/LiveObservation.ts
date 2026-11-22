@@ -367,6 +367,9 @@ export function collectLiveNationalObservation(
   const sightGrants: NationalWorld["sightGrants"][number][] = [];
   const tick = game.ticks();
   const allUnits = game.units();
+  // Freeze actual terrain/adjacent-border sight BEFORE unit discoveries.
+  // Otherwise a recon-sighted target could reveal any co-located stranger.
+  const geographicVisibleTiles = new Set(visibleTiles);
   // An observing warship is itself legitimate first-party (or current
   // empire-shared) intelligence. Never use an enemy warship as a sensor.
   for (const unit of allUnits) {
@@ -397,7 +400,7 @@ export function collectLiveNationalObservation(
       // hidden transports. FOG-05 forbids granting an unseen invasion
       // force a free 100-tile detection radius just because its tile is
       // near a country's distant frontier.
-      const fromBorder = visibleTiles.has(tile)
+      const fromBorder = geographicVisibleTiles.has(tile)
         ? (sightOrigin.get(tile) ?? observerId)
         : kind(unit.type()) === "structure"
           ? nearestSightContributor(borderSight, x, y, BORDER_SIGHT_RADIUS)
