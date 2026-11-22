@@ -92,6 +92,7 @@ export interface GameViewStubOptions {
   myClanTag?: string | null;
   humans?: Player[];
   config?: Config;
+  trustedProjection?: boolean;
 }
 
 /** Construct a GameView with minimal dependencies. */
@@ -105,6 +106,8 @@ export function makeGameView(opts: GameViewStubOptions = {}): GameView {
     opts.myClanTag ?? null,
     "test-game",
     opts.humans ?? [],
+    false,
+    opts.trustedProjection ?? false,
   );
 }
 
