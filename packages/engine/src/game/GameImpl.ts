@@ -68,6 +68,7 @@ import {
 } from "../execution/nation/SharedWaterCache";
 import { NationExecution } from "../execution/NationExecution";
 import { ConstructionExecution } from "../execution/ConstructionExecution";
+import { AttackExecution } from "../execution/AttackExecution";
 import { SpawnTimerExecution } from "../execution/SpawnTimerExecution";
 import { TribeExecution } from "../execution/TribeExecution";
 import type {
@@ -1128,13 +1129,50 @@ export class GameImpl implements Game {
         break;
       }
       case "set-army-mode":
-        this._national.setArmyMode(actor.id(), command.empireId, command.mode, command.thresholdBps,
-          (credits, empireIds, troops) => this.commitImperialDisposition(credits, empireIds, troops));
+        if (command.mode === "centralized") {
+          const ids = this._national.authority().membersOf(command.empireId);
+          const balances = ids.map(memberId => {
+            const member = this._players.get(memberId);
+            if (!member || !member.hasSpawned() || !member.isAlive())
+              throw new Error("NATIONAL: inactive constituent cannot contribute troops");
+            return { memberId, member, balance: member.troops() };
+          });
+          this._national.centralizeImperialArmy(actor.id(), command.empireId,
+            command.thresholdBps, balances, () =>
+              PlayerImpl.commitNationalTroopDebits(balances.filter(b => b.balance > 0)
+                .map(b => ({ player: b.member, expectedBalance: b.balance,
+                  debit: b.balance, resultingBalance: 0 }))));
+        } else {
+          this._national.setArmyMode(actor.id(), command.empireId, command.mode, command.thresholdBps,
+            (credits, empireIds, troops) => this.commitImperialDisposition(credits, empireIds, troops));
+        }
         break;
       case "release-imperial-troops":
         this._national.releaseImperialTroops(actor.id(), command.empireId, command.memberId, command.amount,
           (credits, empireIds, troops) => this.commitImperialDisposition(credits, empireIds, troops));
         break;
+      case "imperial-attack": {
+        // No virtual attackers: transfer this empire-owned reserve to the
+        // actual constituent, then use ordinary AttackExecution and WAR/LEVY.
+        const member = this._players.get(command.memberId);
+        const target = this._players.get(command.targetId);
+        if (!member || !target || member === target ||
+            !member.hasSpawned() || !member.isAlive() ||
+            !target.hasSpawned() || !target.isAlive() ||
+            this._national.authority().empireOf(member.id()) !== command.empireId ||
+            this._national.authority().empireOf(target.id()) === command.empireId ||
+            !member.sharesBorderWith(target) ||
+            member.isFriendly(target) || !member.canAttackPlayer(target) ||
+            this._nationalWar?.authority.authorizeOffensiveAction(member.id(), target.id()) !== true)
+          throw new Error("NATIONAL: imperial attack requires a live lawful bordered WAR target");
+        this._national.releaseImperialTroops(actor.id(), command.empireId,
+          member.id(), command.amount,
+          (credits, empireIds, troops) => this.commitImperialDisposition(credits, empireIds, troops));
+        // A later peace or crown change can abort the queued attack, but
+        // it cannot cause reserve troops to be credited twice.
+        this.addExecution(new AttackExecution(command.amount, member, target.id()));
+        break;
+      }
       case "dissolve":
         this._national.voluntarilyDissolve(actor.id(), command.empireId,
           (credits, empireIds, troops) => this.commitImperialDisposition(credits, empireIds, troops));
