@@ -72,6 +72,9 @@ export async function getUserMe(
   try {
     // Get the user object
     const response = await fetch(ServerEnv.jwtIssuer() + "/users/@me", {
+      // Do not wait forever for account authority or redirect bearer tokens.
+      signal: AbortSignal.timeout(5000),
+      redirect: "error",
       headers: {
         authorization: `Bearer ${token}`,
         "x-api-key": ServerEnv.apiKey(),
