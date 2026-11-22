@@ -407,4 +407,99 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     expect(m.game.nationalWarAuthority()?.atWar(A, D)).toBe(false);
     expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(true);
   });
+  it("rejects wartime accession against an existing constituent BEFORE committing consent", async () => {
+    const m = await match();
+    found(m);
+    join(m, 2);
+    // B is independent; C is a member of the empire. Neither is secretly
+    // converted into an empire-wide belligerent when their NATIONAL war starts.
+    act(m, 1, {
+      type: "national_declare_war",
+      scope: "national",
+      nationId: B,
+      targetId: C,
+      targetKind: "nation",
+      requestId: "c5_member_enemy_national",
+    });
+    const original = military(m, B, "c5_member_enemy_national");
+    expect(original.accepted).toBe(true);
+    const originalLayer = war(m, original.warId!);
+    const before = m.game.nationalWarState();
+    act(m, 0, {
+      type: "national_offer_empire",
+      empireId: IMP,
+      candidateId: B,
+      requestId: "c5_propose_enemy_admission",
+    });
+    act(m, 1, {
+      type: "national_accept_empire",
+      empireId: IMP,
+      candidateId: B,
+      requestId: "c5_illegal_enemy_acceptance",
+    });
+    expect(political(m, B, "c5_illegal_enemy_acceptance").accepted).toBe(
+      false,
+    );
+    expect(m.game.nationalPoliticalAuthority()?.empireOf(B)).toBeNull();
+    expect(m.game.nationalPoliticalAuthority()?.empireOf(C)).toBe(IMP);
+    expect(war(m, original.warId!)).toEqual(originalLayer);
+    expect(m.game.nationalWarState()).toEqual(before);
+    expect(m.game.nationalWarAuthority()?.atWar(B, C)).toBe(true);
+    const { restored } = await roundTrip(m.game, "plains");
+    expect(snapshotGameData(restored)).toEqual(snapshotGameData(m.game));
+  });
+
+  it("cancels an authorized pending WAR on physical-socket revocation and does not recycle the request ID", async () => {
+    const m = await match();
+    found(m);
+    join(m, 1);
+    act(m, 0, {
+      ...policy(0, "none", [B], []),
+      requestId: "c5_disconnect_grant",
+    });
+    const before = balances(m.game);
+    const pending = {
+      type: "national_declare_war",
+      scope: "national",
+      nationId: B,
+      targetId: D,
+      targetKind: "nation",
+      requestId: "c5_cancel_pending",
+    };
+    admit(m, 1, pending);
+    // A departed physical socket cannot leave a queued command to execute.
+    m.host.revokeRecipient(m.hostClients[1]);
+    m.host.recordServerDisconnect(clients[1], true);
+    expect(m.host.submit(m.hostClients[1], {
+      ...pending,
+      requestId: "c5_socket_revoked",
+    })).toBe(false);
+    expect(m.host.tick().committedIntents).toBe(1);
+    m.host.tick();
+    expect(
+      m.game
+        .nationalWarCommandResults(m.game.player(B))
+        .some((result) => result.requestId === "c5_cancel_pending"),
+    ).toBe(false);
+    expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(false);
+    assertNeutralDiplomacyBalances(before, balances(m.game));
+    // Reconnect of the same verified seat does not resurrect cancelled
+    // commands, and the originally admitted nonce remains permanently spent.
+    expect(m.host.resumeRecipient(m.hostClients[1])).toBe(true);
+    expect(m.host.submit(m.hostClients[1], pending)).toBe(false);
+    m.host.recordServerDisconnect(clients[1], false);
+    expect(m.host.tick().committedIntents).toBe(1);
+    m.host.tick();
+    act(m, 1, {
+      ...pending,
+      requestId: "c5_authorized_after_resume",
+    });
+    expect(military(m, B, "c5_authorized_after_resume").accepted).toBe(
+      true,
+    );
+    expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(true);
+    const { restored } = await roundTrip(m.game, "plains");
+    expect(snapshotGameData(restored)).toEqual(snapshotGameData(m.game));
+  });
+
 });
