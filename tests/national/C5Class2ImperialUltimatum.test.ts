@@ -74,17 +74,21 @@ async function fixture() {
   return { game, host, sockets, view, act };
 }
 
-function establish(game: Game) {
-  game.performNationalCommand(game.player(IDS[0]), {
-    kind: "found-empire", empireId: EMPIRE,
+type Action = (index: number, intent: Record<string, unknown>) => void;
+function establish(act: Action) {
+  act(0, {
+    type: "national_found_empire", empireId: EMPIRE,
+    requestId: "c5_c2_found_empire",
   });
 }
-function recruit(game: Game, index = 3) {
-  game.performNationalCommand(game.player(IDS[0]), {
-    kind: "offer-empire", empireId: EMPIRE, candidateId: IDS[index],
+function recruit(act: Action, index = 3) {
+  act(0, {
+    type: "national_offer_empire", empireId: EMPIRE,
+    candidateId: IDS[index], requestId: "c5_c2_recruit_offer_" + index,
   });
-  game.performNationalCommand(game.player(IDS[index]), {
-    kind: "accept-empire", empireId: EMPIRE, candidateId: IDS[index],
+  act(index, {
+    type: "national_accept_empire", empireId: EMPIRE,
+    candidateId: IDS[index], requestId: "c5_c2_recruit_join_" + index,
   });
 }
 function issue(
@@ -121,8 +125,8 @@ function assets(game: Game) {
 describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
   it("refusal enforces real empire-member embargo; outsiders and sockets never see terms", async () => {
     const { game, act, view } = await fixture();
-    establish(game);
-    recruit(game);
+    establish(act);
+    recruit(act);
     const before = assets(game);
     expect(game.player(IDS[0]).canTrade(game.player(IDS[1]))).toBe(true);
     expect(game.player(IDS[3]).canTrade(game.player(IDS[1]))).toBe(true);
@@ -178,7 +182,7 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
 
   it("acceptance is only consent until the original emperor-offer + recipient-accept both execute", async () => {
     const { game, act, view } = await fixture();
-    establish(game);
+    establish(act);
     const before = assets(game);
     act(0, issue("imperial-war"));
     const id = view(1)[0].id;
@@ -200,24 +204,28 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     act(0, resolve(id, "enforce", "c5_c2_no_war_after_accession"));
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
     expect(assets(game)).toEqual(before);
-    expect((await roundTrip(game, "plains")).again)
-      .toEqual((await roundTrip(game, "plains")).bytes);
+    const { bytes, again, restored } = await roundTrip(game, "plains");
+    expect(again).toEqual(bytes);
+    expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
   });
 
   it("WAR threat is a bluff under treaty protection; lawful refusal can declare real WAR", async () => {
     const { game, act, view } = await fixture();
-    establish(game);
+    establish(act);
     // Existing NAP protection is law, not something an ultimatum can erase.
-    game.performNationalCommand(game.player(IDS[0]), {
-      kind: "found-pact", pactId: "c5_c2_nap",
+    act(0, {
+      type: "national_found_pact", pactId: "c5_c2_nap",
       name: "C5 Pact", pactKind: "NAP",
       terms: { admission: "leader", expulsion: "leader" },
+      requestId: "c5_c2_nap_found",
     });
-    game.performNationalCommand(game.player(IDS[0]), {
-      kind: "invite-pact", pactId: "c5_c2_nap", candidateId: IDS[1],
+    act(0, {
+      type: "national_invite_pact", pactId: "c5_c2_nap",
+      candidateId: IDS[1], requestId: "c5_c2_nap_invite",
     });
-    game.performNationalCommand(game.player(IDS[1]), {
-      kind: "accept-pact", pactId: "c5_c2_nap",
+    act(1, {
+      type: "national_accept_pact", pactId: "c5_c2_nap",
+      requestId: "c5_c2_nap_accept",
     });
     const before = assets(game);
     act(0, issue("imperial-war", IDS[1], "c5_c2_protected"));
@@ -255,8 +263,8 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
 
   it("rejects subordinate issuer, impersonation, reused ID, stale deadline and crown succession", async () => {
     const { game, act, view, host, sockets } = await fixture();
-    establish(game);
-    recruit(game);
+    establish(act);
+    recruit(act);
     const before = assets(game);
     act(3, issue("embargo", IDS[1], "subordinate_issue"));
     expect(view(1)).toEqual([]);
@@ -272,8 +280,9 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(view(1)[0]).toMatchObject({
       phase: "decision-required", response: "none",
     });
-    game.performNationalCommand(game.player(IDS[0]), {
-      kind: "transfer-crown", empireId: EMPIRE, successorId: IDS[3],
+    act(0, {
+      type: "national_transfer_crown", empireId: EMPIRE,
+      successorId: IDS[3], requestId: "c5_c2_transfer",
     });
     host.tick();
     expect(view(0)).toEqual([]);
@@ -295,7 +304,7 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
 
   it("snapshot/replay executes the exact same queued refusal and resolution without duplicate cost", async () => {
     const { game, act, view } = await fixture();
-    establish(game);
+    establish(act);
     act(0, issue("embargo"));
     const id = view(1)[0].id;
     const { restored, bytes, again } = await roundTrip(game, "plains");
