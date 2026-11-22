@@ -3,9 +3,9 @@ import type { TileRef } from "@openfront/engine-api/game/GameMap";
  * NATIONAL live observation adapter. Authoritative engine references enter
  * only here; the planner and packet consumers receive copied whitelisted data.
  *
- * P4 is still OPEN. The sight radius is intentionally limited to territory
- * already owned plus one cardinal tile from a real border. This is a
- * conservative, verifiable subset, not an invented 100/200-tile policy.
+ * FOG-03/04: actual owned borders, coastal fronts and active owned warships
+ * produce current-tick grants. Foreign position/strength never becomes a
+ * substitute for a legitimate sensor; reciprocal empire sharing is mandatory.
  */
 import { PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import type { Game, Player } from "../../game/Game";
@@ -101,26 +101,29 @@ function kind(type: UnitType): AssetKind {
   }
 }
 
+/** A sole, reciprocal membership rule feeds BOTH sensors and projections. */
+function reciprocalEmpireMembers(
+  authority: PoliticalReadFacade,
+  empireId: string,
+): readonly string[] {
+  return [...new Set(authority.membersOf(empireId))]
+    .filter((id) => authority.empireOf(id) === empireId)
+    .sort();
+}
+
 function activeEmpireMembers(
   authority: PoliticalReadFacade | null,
   observer: Player,
 ): { empire: string | null; members: readonly string[] } {
   const empire = authority?.empireOf(observer.id()) ?? null;
-  if (empire === null) return { empire: null, members: [observer.id()] };
-  const members = authority?.membersOf(empire) ?? [];
-  // A missing/inconsistent read must fail closed. Do not infer access from
-  // a client-provided, cached or historic membership list.
+  if (empire === null || authority === null)
+    return { empire: null, members: [observer.id()] };
+  const members = reciprocalEmpireMembers(authority, empire);
+  // An inconsistent current read must fail closed, not reuse a historic list.
   if (!members.includes(observer.id())) {
     return { empire: null, members: [observer.id()] };
   }
-  // Trust reciprocal, current membership for every contributor, not only
-  // the observer. A stale/forged roster cannot grant another nation's sight.
-  return {
-    empire,
-    members: [...new Set(members)]
-      .filter((id) => authority?.empireOf(id) === empire)
-      .sort(),
-  };
+  return { empire, members };
 }
 
 /**
@@ -308,7 +311,9 @@ export function collectLiveNationalObservation(
         id,
         kind: "empire",
         leaderId: leader,
-        members: [...authority.membersOf(id)],
+        // A stale membersOf roster is NOT authorization to disclose a
+        // departed nation's units, ships or troops in the projection.
+        members: reciprocalEmpireMembers(authority, id),
         terms: {}, // No E1 permission to read treaty clauses.
       });
     }
@@ -357,7 +362,8 @@ export function collectLiveNationalObservation(
       kind: kind(unit.type()),
       x: game.x(tile),
       y: game.y(tile),
-      strength: unit.troops(),
+      // Foreign troop counts must not even be read by the observer adapter.
+      strength: allowedPrincipals.has(ownerId) ? unit.troops() : undefined,
     });
     if (!allowedPrincipals.has(ownerId)) {
       const x = game.x(tile);
@@ -403,6 +409,21 @@ export function collectLiveNationalObservation(
         });
       }
     }
+  }
+
+  // Every currently authorized first-party or reciprocal-empire unit is a
+  // legitimate point observation even outside national territory. In
+  // particular, an isolated owned warship must appear in the native map
+  // while sailing in the open ocean with no foreign target nearby.
+  //
+  // Defer these point grants until AFTER foreign asset attribution. Otherwise
+  // a foreign ship sharing an owned warship's tile could be misclassified as
+  // a land-border sighting instead of a real "warship" observation.
+  // No new radius, remote terrain sweep, enemy reconnaissance or stale
+  // empire membership is introduced by this final point-sight pass.
+  for (const unit of allUnits) {
+    const memberId = unit.owner().id();
+    if (allowedPrincipals.has(memberId)) markVisible(unit.tile(), memberId);
   }
 
   // Public war IDs/sides come ONLY from the current Game-owned canonical

@@ -1,0 +1,72 @@
+name: C5 E6 — coastal observation source and recipient regression
+
+on:
+  pull_request:
+    branches:
+      - stage3/conductor5-class1-integration-20261122
+  push:
+    branches:
+      - feature/c5-class1-e6-coastal-visibility-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c5-e6-source-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sight:
+    name: Exact-head FOG-03 through FOG-07 authority witness
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Verify tested head SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "SOURCE_SHA=$EXPECTED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: npm run typecheck
+      - name: Genuine moving-world and reciprocal-empire observation
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/C5CoastalVisibility.test.ts \
+            tests/national/NationalGeographicFogR8.test.ts \
+            tests/national/NationalLiveObservation.test.ts \
+            tests/national/NationalObservation.test.ts \
+            tests/national/C4ContinuousFogAlgorithm.test.ts
+      - name: Native-client revocation and private-map guard regressions
+        run: |
+          npx --no-install vitest run \
+            tests/ui/national/C4NativeObserverRevocation.test.ts \
+            tests/ui/national/TrustedNationalProjectionMapC2.test.ts \
+            tests/ui/national/NationalHumanMapInputR11.test.ts
+      - name: Focused lint and formatting
+        run: |
+          npx --no-install oxlint packages/engine/src/national/observation/LiveObservation.ts tests/national/C5CoastalVisibility.test.ts
+          FILES=(
+            packages/engine/src/national/observation/LiveObservation.ts
+            tests/national/C5CoastalVisibility.test.ts
+            docs/release/NATIONAL_C5_E6_COASTAL_VISIBILITY.md
+            .github/workflows/c5-e6-coastal-observation.yml
+          )
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            echo C5_E6_FORMAT_PATCH_BEGIN
+            git -c color.ui=false diff -- "${FILES[@]}"
+            echo C5_E6_FORMAT_PATCH_END
+            exit 1
+          fi
