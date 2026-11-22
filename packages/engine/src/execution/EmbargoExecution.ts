@@ -1,5 +1,5 @@
-import type { ClientID } from "@openfront/engine-api/Schemas";
 import { PlayerID } from "@openfront/engine-api/game/GameTypes";
+import type { ClientID } from "@openfront/engine-api/Schemas";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";

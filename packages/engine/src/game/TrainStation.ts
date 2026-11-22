@@ -32,7 +32,11 @@ class TradeStationStopHandler implements TrainStopHandler {
   ): void {
     const stationOwner = station.unit.owner();
     const trainOwner = trainExecution.owner();
-    if (mg.nationalWarAuthority() !== null && !station.tradeAvailable(trainOwner)) return;
+    if (
+      mg.nationalWarAuthority() !== null &&
+      !station.tradeAvailable(trainOwner)
+    )
+      return;
     const gold = mg
       .config()
       .trainGold(
@@ -45,11 +49,13 @@ class TradeStationStopHandler implements TrainStopHandler {
       stationOwner.addGold(gold, station.tile());
       stationOwner.addTrainGold(gold);
       mg.stats().trainExternalTrade(stationOwner, gold);
-      NationalSanctionExecution.paidTrade(mg, trainOwner, stationOwner);
     }
     trainOwner.addGold(gold, station.tile());
     trainOwner.addTrainGold(gold);
     mg.stats().trainSelfTrade(trainOwner, gold);
+    if (gold > 0n && trainOwner !== stationOwner) {
+      NationalSanctionExecution.paidTrade(mg, trainOwner, stationOwner);
+    }
   }
 }
 

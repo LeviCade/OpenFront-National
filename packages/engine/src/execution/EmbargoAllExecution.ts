@@ -1,5 +1,5 @@
-import type { ClientID } from "@openfront/engine-api/Schemas";
 import { PlayerType } from "@openfront/engine-api/game/GameTypes";
+import type { ClientID } from "@openfront/engine-api/Schemas";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
@@ -33,7 +33,9 @@ export class EmbargoAllExecution implements Execution {
       if (me.isAlliedWith(p)) continue;
 
       if (this.action === "start") {
-        if (national ? !me.hasManualEmbargoAgainst(p) : !me.hasEmbargoAgainst(p)) {
+        if (
+          national ? !me.hasManualEmbargoAgainst(p) : !me.hasEmbargoAgainst(p)
+        ) {
           me.addEmbargo(p, false);
         }
       } else {
@@ -80,7 +82,10 @@ export const EmbargoAllExecutionSnapshot = execSnapshotType({
   name: "EmbargoAll",
   version: 2,
   migrations: {
-    1: (data: unknown) => ({ ...(data as Record<string, unknown>), clientId: null }),
+    1: (data: unknown) => ({
+      ...(data as Record<string, unknown>),
+      clientId: null,
+    }),
   },
   schema: EmbargoAllStateSchema,
   cls: () => EmbargoAllExecution,

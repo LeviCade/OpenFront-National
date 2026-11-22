@@ -49,7 +49,6 @@ import type {
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
 import { AttackExecution } from "./AttackExecution";
-import { NationalSanctionExecution } from "./NationalSanctionExecution";
 import { NationAllianceBehavior } from "./nation/NationAllianceBehavior";
 import { NationAttackBehavior } from "./nation/NationAttackBehavior";
 import { NationEmojiBehavior } from "./nation/NationEmojiBehavior";
@@ -59,6 +58,7 @@ import { NationStructureBehavior } from "./nation/NationStructureBehavior";
 import { NationWarshipBehavior } from "./nation/NationWarshipBehavior";
 import { tutorialCollapse } from "./nation/TutorialCollapse";
 import { tutorialSilo, tutorialWarship } from "./nation/TutorialSilo";
+import { NationalSanctionExecution } from "./NationalSanctionExecution";
 import { SpawnExecution } from "./SpawnExecution";
 
 /**
@@ -353,7 +353,8 @@ export class NationExecution implements Execution {
           d.target,
           ...(d.authorityId === null ? [] : [d.authorityId]),
           ...d.recipientIds,
-          ...(observation.coalitions.find((c) => c.id === d.empire)?.members ?? []),
+          ...(observation.coalitions.find((c) => c.id === d.empire)?.members ??
+            []),
         ]),
       );
       partners.delete(player.id());
@@ -374,22 +375,23 @@ export class NationExecution implements Execution {
       }));
       const economic = planNationalEconomicDecision(observation, demands, ties);
       if (economic) {
-        const requestId = "ai-econ-" + simpleHash(
-          player.id() + ":" + economic.sanctionId + ":" + ticks,
-        );
-        const command = economic.kind === "respond"
-          ? {
-              type: "national_respond_sanction" as const,
-              sanctionId: economic.sanctionId,
-              decision: economic.decision,
-              requestId,
-            }
-          : {
-              type: "national_resolve_sanction" as const,
-              sanctionId: economic.sanctionId,
-              decision: economic.decision,
-              requestId,
-            };
+        const requestId =
+          "ai-econ-" +
+          simpleHash(player.id() + ":" + economic.sanctionId + ":" + ticks);
+        const command =
+          economic.kind === "respond"
+            ? {
+                type: "national_respond_sanction" as const,
+                sanctionId: economic.sanctionId,
+                decision: economic.decision,
+                requestId,
+              }
+            : {
+                type: "national_resolve_sanction" as const,
+                sanctionId: economic.sanctionId,
+                decision: economic.decision,
+                requestId,
+              };
         this.mg.addExecution(new NationalSanctionExecution(player, command));
       }
     }

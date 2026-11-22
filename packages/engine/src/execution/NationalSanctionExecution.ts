@@ -125,10 +125,12 @@ export class NationalSanctionExecution implements Execution {
   }
 
   private static records(game: Game): NationalSanctionExecution[] {
-    return game.executions().filter(
-      (e): e is NationalSanctionExecution =>
-        e instanceof NationalSanctionExecution && e.demand !== null,
-    );
+    return game
+      .executions()
+      .filter(
+        (e): e is NationalSanctionExecution =>
+          e instanceof NationalSanctionExecution && e.demand !== null,
+      );
   }
 
   private controllingIssuer(): Player | null {
@@ -140,9 +142,7 @@ export class NationalSanctionExecution implements Execution {
       const emperor = politics.emperorOf(d.empire);
       return emperor === null ? null : living(game, emperor);
     }
-    return politics.empireOf(d.issuer) === null
-      ? living(game, d.issuer)
-      : null;
+    return politics.empireOf(d.issuer) === null ? living(game, d.issuer) : null;
   }
 
   private recipient(id: string): Player | null {
@@ -182,12 +182,18 @@ export class NationalSanctionExecution implements Execution {
         ? "decision-required"
         : "satisfied";
     }
-    if (d.phase === "decision-required" && tick >= d.deadline + RESOLUTION_WINDOW) {
+    if (
+      d.phase === "decision-required" &&
+      tick >= d.deadline + RESOLUTION_WINDOW
+    ) {
       d.phase = "expired";
     }
   }
 
-  private issue(command: Extract<Command, { type: "national_issue_sanction" }>, tick: number): void {
+  private issue(
+    command: Extract<Command, { type: "national_issue_sanction" }>,
+    tick: number,
+  ): void {
     const game = this.game!;
     const politics = game.nationalPoliticalAuthority()!;
     const actor = this.actor.id();
@@ -196,33 +202,42 @@ export class NationalSanctionExecution implements Execution {
       (command.scope === "national" && empire !== null) ||
       (command.scope === "imperial" &&
         (empire === null || politics.emperorOf(empire) !== actor))
-    ) return;
+    )
+      return;
     const target = living(game, command.targetId);
     if (
       !target ||
       target === this.actor ||
       (empire !== null && politics.empireOf(target.id()) === empire)
-    ) return;
+    )
+      return;
     const ids = [...new Set(command.recipientIds)].sort();
     if (
       ids.length !== command.recipientIds.length ||
-      ids.some((id) =>
-        id === actor || id === target.id() ||
-        politics.empireOf(id) !== null || living(game, id) === null
+      ids.some(
+        (id) =>
+          id === actor ||
+          id === target.id() ||
+          politics.empireOf(id) !== null ||
+          living(game, id) === null,
       )
-    ) return;
+    )
+      return;
     const records = NationalSanctionExecution.records(game);
     const scopeRecords = records.filter((e) =>
-      empire !== null ? e.demand!.empire === empire :
-        e.demand!.empire === null && e.demand!.issuer === actor
+      empire !== null
+        ? e.demand!.empire === empire
+        : e.demand!.empire === null && e.demand!.issuer === actor,
     );
     if (
       records.length >= MAX_DEMANDS ||
       scopeRecords.length >= MAX_PER_ISSUER ||
-      records.some((e) =>
-        e.actor.id() === actor && e.command.requestId === command.requestId
+      records.some(
+        (e) =>
+          e.actor.id() === actor && e.command.requestId === command.requestId,
       )
-    ) return;
+    )
+      return;
     const ordinal = game.executions().indexOf(this);
     if (ordinal < 0) return;
     const id = `sanction-${tick}-${this.actor.smallID()}-${ordinal}`;
@@ -260,16 +275,18 @@ export class NationalSanctionExecution implements Execution {
   private resolve(actor: Player, decision: "enforce" | "back-down"): void {
     const d = this.demand!;
     const game = this.game!;
-    if (d.phase !== "decision-required" || this.controllingIssuer() !== actor) return;
+    if (d.phase !== "decision-required" || this.controllingIssuer() !== actor)
+      return;
     if (decision === "back-down") {
       d.phase = "backed-down";
       return;
     }
-    const owners = d.empire === null
-      ? [actor]
-      : (game.nationalPoliticalAuthority()?.membersOf(d.empire) ?? [])
-          .map((id) => living(game, id))
-          .filter((p): p is Player => p !== null);
+    const owners =
+      d.empire === null
+        ? [actor]
+        : (game.nationalPoliticalAuthority()?.membersOf(d.empire) ?? [])
+            .map((id) => living(game, id))
+            .filter((p): p is Player => p !== null);
     let imposed = false;
     for (const row of d.recipients) {
       if (!row.noncompliant) continue;
@@ -335,24 +352,27 @@ export class NationalSanctionExecution implements Execution {
       if (!isIssuer && (!own || e.recipient(observer.id()) !== observer)) {
         return [];
       }
-      return [{
-        id: d.id,
-        issuer: d.issuer,
-        authorityId: e.controllingIssuer()?.id() ?? null,
-        empire: d.empire,
-        role: isIssuer ? ("issuer" as const) : ("recipient" as const),
-        recipientIds: isIssuer
-          ? d.recipients.map((row) => row.id)
-          : [observer.id()],
-        target: d.target,
-        deadline: d.deadline,
-        phase: d.phase,
-        trigger: d.trigger,
-        threat: d.threat,
-        // Never expose transaction existence or another recipient's response.
-        response: own?.response ?? null,
-        requestId: isIssuer && e.actor === observer ? e.command.requestId : null,
-      }];
+      return [
+        {
+          id: d.id,
+          issuer: d.issuer,
+          authorityId: e.controllingIssuer()?.id() ?? null,
+          empire: d.empire,
+          role: isIssuer ? ("issuer" as const) : ("recipient" as const),
+          recipientIds: isIssuer
+            ? d.recipients.map((row) => row.id)
+            : [observer.id()],
+          target: d.target,
+          deadline: d.deadline,
+          phase: d.phase,
+          trigger: d.trigger,
+          threat: d.threat,
+          // Never expose transaction existence or another recipient's response.
+          response: own?.response ?? null,
+          requestId:
+            isIssuer && e.actor === observer ? e.command.requestId : null,
+        },
+      ];
     });
   }
 
@@ -368,13 +388,20 @@ export class NationalSanctionExecution implements Execution {
       if (
         (d.phase !== "decision-required" && d.phase !== "satisfied") ||
         game.ticks() >= d.deadline + RESOLUTION_WINDOW
-      ) continue;
+      )
+        continue;
       const issuer = e.controllingIssuer();
       const target = living(game, d.target);
-      if (!issuer || !target || issuer === target ||
-          (d.empire !== null && game.nationalPoliticalAuthority()?.empireOf(d.target) === d.empire)) continue;
-      const other = d.target === a.id() ? b.id() :
-        d.target === b.id() ? a.id() : null;
+      if (
+        !issuer ||
+        !target ||
+        issuer === target ||
+        (d.empire !== null &&
+          game.nationalPoliticalAuthority()?.empireOf(d.target) === d.empire)
+      )
+        continue;
+      const other =
+        d.target === a.id() ? b.id() : d.target === b.id() ? a.id() : null;
       const row = d.recipients.find((r) => r.id === other);
       if (row && e.recipient(row.id)) {
         row.continuedTrade = true;

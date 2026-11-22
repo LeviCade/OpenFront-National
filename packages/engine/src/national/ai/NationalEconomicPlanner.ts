@@ -12,10 +12,18 @@ export interface OwnEconomicTie {
 }
 
 export type EconomicDecision =
-  | { readonly kind: "respond"; readonly sanctionId: string; readonly decision: "comply" | "refuse" }
-  | { readonly kind: "resolve"; readonly sanctionId: string; readonly decision: "enforce" | "back-down" };
+  | {
+      readonly kind: "respond";
+      readonly sanctionId: string;
+      readonly decision: "comply" | "refuse";
+    }
+  | {
+      readonly kind: "resolve";
+      readonly sanctionId: string;
+      readonly decision: "enforce" | "back-down";
+    };
 
-const cmp = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
+const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 /** No human/AI controller field exists in the inputs. */
 export function planNationalEconomicDecision(
@@ -24,8 +32,8 @@ export function planNationalEconomicDecision(
   ties: readonly OwnEconomicTie[],
 ): EconomicDecision | null {
   const self = observation.observerId;
-  const sorted = [...demands].sort((a, b) =>
-    a.deadline - b.deadline || cmp(a.id, b.id),
+  const sorted = [...demands].sort(
+    (a, b) => a.deadline - b.deadline || cmp(a.id, b.id),
   );
   const tradeValue = (ids: readonly string[]): number =>
     ties
@@ -33,55 +41,85 @@ export function planNationalEconomicDecision(
       .reduce((sum, t) => sum + 1 + Math.min(8, t.activeOwnVoyages) * 3, 0);
   for (const d of sorted) {
     if (d.authorityId === null) continue;
-    if (d.role === "issuer" && d.authorityId === self &&
-        d.phase === "decision-required") {
+    if (
+      d.role === "issuer" &&
+      d.authorityId === self &&
+      d.phase === "decision-required"
+    ) {
       // An issuer cannot assume coercion succeeds. Preserve actual trade
       // when the threatened embargo is more costly than its strategic reach.
       const cost = tradeValue(d.recipientIds);
       const strategicReach = observation.frontiers.some(
         (f) => f.targetId === d.target,
-      ) ? 3 : 0;
+      )
+        ? 3
+        : 0;
       return {
         kind: "resolve",
         sanctionId: d.id,
         decision: cost <= strategicReach ? "enforce" : "back-down",
       };
     }
-    if (d.role !== "recipient" || !d.recipientIds.includes(self) ||
-        d.phase !== "pending" || d.response !== "none" ||
-        d.deadline <= observation.tick + 1) continue;
-    const issuerIds = d.empire === null
-      ? [d.authorityId]
-      : observation.coalitions.find((c) =>
-          c.kind === "empire" && c.id === d.empire,
-        )?.members ?? [d.authorityId];
+    if (
+      d.role !== "recipient" ||
+      !d.recipientIds.includes(self) ||
+      d.phase !== "pending" ||
+      d.response !== "none" ||
+      d.deadline <= observation.tick + 1
+    )
+      continue;
+    const issuerIds =
+      d.empire === null
+        ? [d.authorityId]
+        : (observation.coalitions.find(
+            (c) => c.kind === "empire" && c.id === d.empire,
+          )?.members ?? [d.authorityId]);
     const lossOfIssuerTrade = tradeValue(issuerIds);
     const lossOfTargetTrade = tradeValue([d.target]);
-    const history = sorted.filter((past) =>
-      past.id !== d.id &&
-      past.role === "recipient" &&
-      (d.empire === null
-        ? past.empire === null && past.issuer === d.issuer
-        : past.empire === d.empire),
+    const history = sorted.filter(
+      (past) =>
+        past.id !== d.id &&
+        past.role === "recipient" &&
+        (d.empire === null
+          ? past.empire === null && past.issuer === d.issuer
+          : past.empire === d.empire),
     );
     // Only previously addressed outcomes are available. No global reputation
     // or automatic economic penalty follows a bluff.
-    const credibility = Math.max(-6, Math.min(6, history.reduce(
-      (score, past) => score + (past.phase === "enforced" ? 2 :
-        past.phase === "backed-down" ? -3 : 0), 0,
-    )));
-    const reach = observation.frontiers.some((f) =>
-      issuerIds.includes(f.targetId) &&
-      observation.visibleAssets.some((a) =>
-        a.ownerId === f.targetId &&
-        (f.access === "naval" ? a.kind === "warship" : a.kind === "army"),
+    const credibility = Math.max(
+      -6,
+      Math.min(
+        6,
+        history.reduce(
+          (score, past) =>
+            score +
+            (past.phase === "enforced"
+              ? 2
+              : past.phase === "backed-down"
+                ? -3
+                : 0),
+          0,
+        ),
       ),
-    ) ? 1 : 0;
+    );
+    const reach = observation.frontiers.some(
+      (f) =>
+        issuerIds.includes(f.targetId) &&
+        observation.visibleAssets.some(
+          (a) =>
+            a.ownerId === f.targetId &&
+            (f.access === "naval" ? a.kind === "warship" : a.kind === "army"),
+        ),
+    )
+      ? 1
+      : 0;
     return {
       kind: "respond",
       sanctionId: d.id,
-      decision: lossOfIssuerTrade + credibility + reach > lossOfTargetTrade
-        ? "comply" : "refuse",
+      decision:
+        lossOfIssuerTrade + credibility + reach > lossOfTargetTrade
+          ? "comply"
+          : "refuse",
     };
   }
   return null;

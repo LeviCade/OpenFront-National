@@ -287,8 +287,8 @@ export class TradeShipExecution implements Execution {
       this.mg.nationalWarAuthority() !== null &&
       !this.wasCaptured &&
       (!this.srcPort.isActive() ||
-          this.srcPort.isMarkedForDeletion() ||
-          this.srcPort.isUnderConstruction() ||
+        this.srcPort.isMarkedForDeletion() ||
+        this.srcPort.isUnderConstruction() ||
         this.srcPort.owner() !== this.origOwner ||
         !this._dstPort.isActive() ||
         this._dstPort.isMarkedForDeletion() ||

@@ -286,7 +286,12 @@ export class Executor {
       case "donate_gold":
         return new DonateGoldExecution(player, intent.recipient, intent.gold);
       case "embargo":
-        return new EmbargoExecution(player, intent.targetID, intent.action, intent.clientID);
+        return new EmbargoExecution(
+          player,
+          intent.targetID,
+          intent.action,
+          intent.clientID,
+        );
       case "embargo_all":
         return new EmbargoAllExecution(player, intent.action, intent.clientID);
       case "build_unit":
