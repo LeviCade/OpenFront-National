@@ -20,7 +20,12 @@ import {
 import { assertNever, simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
-import { planNationalEconomicDecision } from "../national/ai/NationalEconomicPlanner";
+import {
+  initialNationalEconomicMemory,
+  planNationalEconomicDecision,
+  updateNationalEconomicMemory,
+  type NationalEconomicMemory,
+} from "../national/ai/NationalEconomicPlanner";
 import {
   deriveNationalWarSides,
   initialNationalPlannerMemory,
@@ -102,6 +107,8 @@ export class NationExecution implements Execution {
   // access to an unrestricted Game/Player observation.
   private nationalPlannerMemory: NationalExecutionPlannerMemory | null = null;
   private nationalSightMemory: NationalSightMemory | null = null;
+  // Economic memory is principal-local, bounded and persisted for replay.
+  private nationalEconomicMemory: NationalEconomicMemory | null = null;
 
   constructor(
     private gameID: GameID,
@@ -344,56 +351,75 @@ export class NationExecution implements Execution {
       return;
     const verified = collectLiveNationalObservation(this.mg, player.id());
     const observation = verified.observation;
-    // Economic strategy receives only a recipient/issuer-bound demand view,
-    // the same verified sight as territorial strategy, and own trade routes.
+    // Both AI and humans have access to identical authenticated observations
+    // and own trading permissions. No global foreign route or balance scan.
     const demands = NationalSanctionExecution.viewFor(this.mg, player);
-    if (demands.length > 0) {
-      const partners = new Set(
-        demands.flatMap((d) => [
-          d.target,
-          ...(d.authorityId === null ? [] : [d.authorityId]),
-          ...d.recipientIds,
-          ...(observation.coalitions.find((c) => c.id === d.empire)?.members ??
-            []),
-        ]),
-      );
-      partners.delete(player.id());
-      const voyages = new Map<string, number>();
-      for (const ship of player.units(UnitType.TradeShip)) {
-        if (ship.owner() !== player || !ship.isActive()) continue;
-        const id = ship.targetUnit()?.owner().id();
-        if (id !== undefined && partners.has(id)) {
-          voyages.set(id, (voyages.get(id) ?? 0) + 1);
-        }
-      }
-      const ties = [...partners].sort().map((partnerId) => ({
-        partnerId,
-        tradePermitted:
-          this.mg.hasPlayer(partnerId) &&
-          player.canTrade(this.mg.player(partnerId)),
-        activeOwnVoyages: voyages.get(partnerId) ?? 0,
-      }));
-      const economic = planNationalEconomicDecision(observation, demands, ties);
-      if (economic) {
-        const requestId =
-          "ai-econ-" +
-          simpleHash(player.id() + ":" + economic.sanctionId + ":" + ticks);
-        const command =
-          economic.kind === "respond"
-            ? {
-                type: "national_respond_sanction" as const,
-                sanctionId: economic.sanctionId,
-                decision: economic.decision,
-                requestId,
-              }
-            : {
-                type: "national_resolve_sanction" as const,
-                sanctionId: economic.sanctionId,
-                decision: economic.decision,
-                requestId,
-              };
-        this.mg.addExecution(new NationalSanctionExecution(player, command));
-      }
+    const partners = new Set(
+      demands.flatMap((d) => [
+        d.target,
+        ...(d.authorityId === null ? [] : [d.authorityId]),
+        ...d.recipientIds,
+        ...(observation.coalitions.find((c) => c.id === d.empire)?.members ?? []),
+      ]),
+    );
+    const voyages = new Map<string, number>();
+    for (const ship of player.units(UnitType.TradeShip)) {
+      if (ship.owner() !== player || !ship.isActive()) continue;
+      const id = ship.targetUnit()?.owner().id();
+      if (id === undefined || id === player.id()) continue;
+      partners.add(id);
+      voyages.set(id, (voyages.get(id) ?? 0) + 1);
+    }
+    partners.delete(player.id());
+    const ties = [...partners].sort().map((partnerId) => ({
+      partnerId,
+      tradePermitted:
+        this.mg.hasPlayer(partnerId) &&
+        player.canTrade(this.mg.player(partnerId)),
+      activeOwnVoyages: voyages.get(partnerId) ?? 0,
+    }));
+    const priorEconomic = this.nationalEconomicMemory ??
+      initialNationalEconomicMemory(player.id());
+    this.nationalEconomicMemory = updateNationalEconomicMemory(
+      observation,
+      demands,
+      priorEconomic,
+    );
+    const economic = planNationalEconomicDecision(
+      observation,
+      demands,
+      ties,
+      this.nationalEconomicMemory,
+    );
+    if (economic) {
+      const identity = economic.kind === "issue"
+        ? economic.targetId + ":" + economic.recipientIds.join(",")
+        : economic.sanctionId;
+      const requestId =
+        "ai-econ-" + simpleHash(player.id() + ":" + identity + ":" + ticks);
+      const command = economic.kind === "issue"
+        ? {
+            type: "national_issue_sanction" as const,
+            scope: economic.scope,
+            targetId: economic.targetId,
+            recipientIds: [...economic.recipientIds],
+            durationTicks: economic.durationTicks,
+            requestId,
+          }
+        : economic.kind === "respond"
+          ? {
+              type: "national_respond_sanction" as const,
+              sanctionId: economic.sanctionId,
+              decision: economic.decision,
+              requestId,
+            }
+          : {
+              type: "national_resolve_sanction" as const,
+              sanctionId: economic.sanctionId,
+              decision: economic.decision,
+              requestId,
+            };
+      this.mg.addExecution(new NationalSanctionExecution(player, command));
     }
     const remembered = advanceLastKnown(
       observation,
@@ -731,6 +757,14 @@ export class NationExecution implements Execution {
                   ? null
                   : { ...this.nationalPlannerMemory.lastProcessedEvent },
             },
+      nationalEconomicMemory:
+        this.nationalEconomicMemory === null
+          ? null
+          : {
+              observerId: this.nationalEconomicMemory.observerId,
+              processedDemandIds: [...this.nationalEconomicMemory.processedDemandIds],
+              credibility: this.nationalEconomicMemory.credibility.map((entry) => ({ ...entry })),
+            },
       nationalSightMemory:
         this.nationalSightMemory === null
           ? null
@@ -780,6 +814,7 @@ export class NationExecution implements Execution {
     this.spawnExecAdded = s.spawnExecAdded;
     this.nationalPlannerMemory = s.nationalPlannerMemory;
     this.nationalSightMemory = s.nationalSightMemory;
+    this.nationalEconomicMemory = s.nationalEconomicMemory ?? null;
     this.behaviorsInitialized = s.behaviors !== null;
     const b = s.behaviors;
     const player = this.player;
@@ -865,6 +900,16 @@ const NationStateSchema = z.object({
       lastWarOutcomeSequence: z.number().int().min(-1).optional(),
     })
     .nullable(),
+  nationalEconomicMemory: z
+    .object({
+      observerId: z.string(),
+      processedDemandIds: z.array(z.string()).max(128),
+      credibility: z.array(z.object({
+        issuerId: z.string(),
+        score: z.number().int().min(-6).max(6),
+        lastObservedTick: z.number().int().nonnegative(),
+      })).max(16),
+    }).nullable().optional(),
   nationalSightMemory: z
     .object({
       observerId: z.string(),
