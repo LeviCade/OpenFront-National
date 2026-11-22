@@ -46,14 +46,22 @@ class TradeStationStopHandler implements TrainStopHandler {
       );
     // Share revenue with the station owner if it's not the current player
     if (trainOwner !== stationOwner) {
-      mg.creditNationalCommercialIncome(stationOwner, gold, station.tile());
+      if (mg.nationalWarAuthority() === null)
+        stationOwner.addGold(gold, station.tile());
+      else mg.creditNationalCommercialIncome(stationOwner, gold, station.tile());
       stationOwner.addTrainGold(gold);
       mg.stats().trainExternalTrade(stationOwner, gold);
     }
-    mg.creditNationalCommercialIncome(trainOwner, gold, station.tile());
+    if (mg.nationalWarAuthority() === null)
+      trainOwner.addGold(gold, station.tile());
+    else mg.creditNationalCommercialIncome(trainOwner, gold, station.tile());
     trainOwner.addTrainGold(gold);
     mg.stats().trainSelfTrade(trainOwner, gold);
-    if (gold > 0n && trainOwner !== stationOwner) NationalSanctionExecution.paidTrade(mg, trainOwner, stationOwner);
+    if (
+      mg.nationalWarAuthority() !== null &&
+      gold > 0n &&
+      trainOwner !== stationOwner
+    ) NationalSanctionExecution.paidTrade(mg, trainOwner, stationOwner);
   }
 }
 
