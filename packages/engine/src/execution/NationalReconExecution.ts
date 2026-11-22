@@ -88,8 +88,8 @@ const NationalReconExecutionStateSchema = z.object({
   initialized: z.boolean(),
   actor: zPlayerRef(),
   targetId: z.string().min(1).max(256),
-  centerX: z.number().int().safe().nonnegative(),
-  centerY: z.number().int().safe().nonnegative(),
+  centerX: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  centerY: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   requestId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/),
   authenticatedClientID: z.string().min(1).max(256),
 });
