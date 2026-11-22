@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: national-c3-e2-${{ github.event.pull_request.head.sha || github.sha }}
+  group: national-c3-e2-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -54,16 +54,6 @@ jobs:
         run: npm install --global --ignore-scripts npm@12.1.0
       - name: Install exact dependencies
         run: npm run inst
-      - name: Validate formatting of E2-owned code only
-        run: |
-          npx --no-install oxfmt --check \
-            src/server/Worker.ts src/server/GameServer.ts \
-            src/server/Client.ts src/server/jwt.ts \
-            src/server/ConfigPatch.ts src/server/national/NationalAccountGate.ts \
-            src/client/HostLobbyModal.ts packages/shared/src/WorkerSchemas.ts \
-            tests/server/NationalAccountGate.test.ts \
-            tests/server/TrustedNationalRealWebSocket.test.ts \
-            tests/national/ClassFiveTrustedLobbyTransport.test.ts
       - name: Check all TypeScript workspaces
         run: npm run typecheck
       - name: Targeted exact-head live WebSocket and national authority regression
@@ -83,3 +73,24 @@ jobs:
             tests/server/NationalAccountGate.test.ts \
             tests/server/TrustedNationalRealWebSocket.test.ts \
             tests/national/ClassFiveTrustedLobbyTransport.test.ts
+
+      - name: Validate formatting and print exact candidate repairs on failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILES=(
+            src/server/Worker.ts src/server/GameServer.ts
+            src/server/Client.ts src/server/jwt.ts
+            src/server/ConfigPatch.ts src/server/national/NationalAccountGate.ts
+            src/client/HostLobbyModal.ts packages/shared/src/WorkerSchemas.ts
+            tests/server/NationalAccountGate.test.ts
+            tests/server/TrustedNationalRealWebSocket.test.ts
+            tests/national/ClassFiveTrustedLobbyTransport.test.ts
+          )
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            echo "E2_EXACT_FORMAT_REPAIR_BEGIN"
+            npx --no-install oxfmt --write "${FILES[@]}"
+            git -c color.ui=false diff -- "${FILES[@]}"
+            echo "E2_EXACT_FORMAT_REPAIR_END"
+            exit 1
+          fi
