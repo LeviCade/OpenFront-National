@@ -30,6 +30,7 @@ import { ClientEnv } from "../client/ClientEnv";
 import { reloadForUpdate, translateText } from "../client/Utils";
 import { rememberAdmitted } from "./AdmittedLobbies";
 import { MapLayerController } from "./controllers/MapLayerController";
+import { NationalMapTargetSelectedEvent } from "./controllers/NationalMapTargetController";
 import { isDesktopShell } from "./DesktopShell";
 import { GameHealth } from "./GameHealth";
 import { GameMetrics } from "./GameMetrics";
@@ -1132,6 +1133,13 @@ export class ClientGameRunner {
   private trustedLastTick = -1;
   private trustedProjectionActive = false;
   private trustedExpectedCursor = 0;
+  /** Drop pointer-transparent enemy markers in the same event turn as sight loss. */
+  private revokeTrustedSight(): void {
+    this.gameView.resetTrustedProjectionSight();
+    this.eventBus.emit(new NationalMapTargetSelectedEvent(null));
+    this.trustedMapResetUpload?.();
+  }
+
   private readonly onTrustedProjectionRejected = (
     event: TrustedNationalProjectionRejectedEvent,
   ): void => {
@@ -1140,8 +1148,7 @@ export class ClientGameRunner {
     this.trustedProjectionActive = false;
     this.trustedLastTick = -1;
     this.trustedExpectedCursor = 0;
-    this.gameView.resetTrustedProjectionSight();
-    this.trustedMapResetUpload?.();
+    this.revokeTrustedSight();
     if (this.trustedStatus) {
       this.trustedStatus.dataset.trustedNationalMap = "blocked";
       this.trustedStatus.textContent =
@@ -1174,7 +1181,7 @@ export class ClientGameRunner {
             "NATIONAL observer-map dimensions or page cursor mismatch",
           );
         if (observerMap.reset) {
-          this.gameView.resetTrustedProjectionSight();
+          this.revokeTrustedSight();
           this.webglBuilder?.clearCaches();
           this.trustedExpectedCursor = 0;
         }
@@ -1200,10 +1207,16 @@ export class ClientGameRunner {
         );
       if (observerMap !== null) {
         this.trustedExpectedCursor = observerMap.nextCursor ?? 0;
-        if (observerMap.reset) this.trustedMapResetUpload?.();
+        const pageComplete = completedTrustedObserverMap(
+          observerMap,
+          this.myPlayer?.id() ?? null,
+        );
         if (this.trustedStatus) {
-          this.trustedStatus.dataset.trustedNationalMap =
-            observerMap.nextCursor === null ? "visible" : "paging";
+          this.trustedStatus.dataset.trustedNationalMap = pageComplete
+            ? "visible"
+            : observerMap.nextCursor === null
+              ? "loading"
+              : "paging";
           const publicAlive = observerMap.countries.filter(
             (c) => c.alive,
           ).length;
@@ -1211,9 +1224,11 @@ export class ClientGameRunner {
             "👑 NATIONAL · TICK " +
             update.tick +
             " · " +
-            (observerMap.nextCursor === null
+            (pageComplete
               ? "Visible terrain synchronized"
-              : "Loading visible terrain…") +
+              : observerMap.nextCursor === null
+                ? "Waiting for authorized player identity…"
+                : "Loading visible terrain…") +
             " · " +
             publicAlive +
             " nations" +
@@ -1245,8 +1260,7 @@ export class ClientGameRunner {
       // A malformed or out-of-order packet may never re-enable controls by
       // accident. Fail closed; E2 must resync and provide a fresh trusted start.
       this.trustedProjectionActive = false;
-      this.gameView.resetTrustedProjectionSight();
-      this.trustedMapResetUpload?.();
+      this.revokeTrustedSight();
       if (this.trustedStatus) {
         this.trustedStatus.dataset.trustedNationalMap = "blocked";
         this.trustedStatus.textContent =
@@ -1270,8 +1284,7 @@ export class ClientGameRunner {
       this.trustedProjectionActive = true;
       this.trustedLastTick = -1;
       this.trustedExpectedCursor = 0;
-      this.gameView.resetTrustedProjectionSight();
-      this.trustedMapResetUpload?.();
+      this.revokeTrustedSight();
       if (this.trustedStatus) {
         this.trustedStatus.dataset.trustedNationalMap = "loading";
         this.trustedStatus.textContent =
@@ -1280,8 +1293,7 @@ export class ClientGameRunner {
       return;
     }
     this.trustedProjectionActive = false;
-    this.gameView.resetTrustedProjectionSight();
-    this.trustedMapResetUpload?.();
+    this.revokeTrustedSight();
     if (this.trustedStatus) {
       this.trustedStatus.dataset.trustedNationalMap = "disconnected";
       this.trustedStatus.textContent =
