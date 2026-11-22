@@ -11,7 +11,10 @@ import type {
 import type { NationalPoliticalCommandResult } from "../politics/NationalGovernanceState";
 import { deriveNationalWarSides } from "./NationalPlanner";
 
-export type AIPoliticalCommand = Exclude<NationalCommand, { kind: "found-empire" }>;
+export type AIPoliticalCommand = Exclude<
+  NationalCommand,
+  { kind: "found-empire" }
+>;
 export type PoliticalReason =
   | "accept-mutual-defense"
   | "accept-nonaggression"
@@ -47,8 +50,7 @@ export interface AIPoliticalPlan {
   readonly memory: AIPoliticalMemory;
 }
 
-const compare = (a: string, b: string): number =>
-  a < b ? -1 : a > b ? 1 : 0;
+const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const MAX_HISTORY = 64;
 const COMMAND_RETRY_TICKS = 180;
 
@@ -102,8 +104,9 @@ export function recordAIPoliticalOutcome(
     throw new Error("NATIONAL political AI: nonprincipal command result");
   if (outcome.sequence <= previous.lastOutcomeSequence) return previous;
   const key = politicalCommandKey(command);
-  const rejectedCommands = previous.rejectedCommands
-    .filter((entry) => entry.retryAfterTick > observation.tick && entry.key !== key);
+  const rejectedCommands = previous.rejectedCommands.filter(
+    (entry) => entry.retryAfterTick > observation.tick && entry.key !== key,
+  );
   const completedCommands = [...previous.completedCommands];
   if (outcome.accepted) {
     // Only invitations have lasting issued-intent identity. A founding or
@@ -121,7 +124,9 @@ export function recordAIPoliticalOutcome(
     lastOutcomeSequence: outcome.sequence,
     completedCommands: [...new Set(completedCommands)].slice(-MAX_HISTORY),
     rejectedCommands: rejectedCommands
-      .sort((a, b) => a.retryAfterTick - b.retryAfterTick || compare(a.key, b.key))
+      .sort(
+        (a, b) => a.retryAfterTick - b.retryAfterTick || compare(a.key, b.key),
+      )
       .slice(-MAX_HISTORY),
   };
 }
@@ -144,7 +149,10 @@ export function planAIPoliticalInterest(
   observation: NationalObservation,
   previous: AIPoliticalMemory,
   cadenceTicks: number,
-  reputation: readonly { readonly nationId: NationId; readonly credibility: number }[] = [],
+  reputation: readonly {
+    readonly nationId: NationId;
+    readonly credibility: number;
+  }[] = [],
 ): AIPoliticalPlan {
   if (!Number.isSafeInteger(cadenceTicks) || cadenceTicks < 1)
     throw new Error("NATIONAL political AI: invalid cadence");
@@ -168,11 +176,13 @@ export function planAIPoliticalInterest(
 
   const nations = new Map(observation.nations.map((n) => [n.id, n]));
   const warSides = deriveNationalWarSides(observation.wars, self.id);
-  const frontiers = [...new Set(
-    observation.frontiers
-      .filter((f) => f.access === "land" && nations.get(f.targetId)?.alive)
-      .map((f) => f.targetId),
-  )].sort(compare);
+  const frontiers = [
+    ...new Set(
+      observation.frontiers
+        .filter((f) => f.access === "land" && nations.get(f.targetId)?.alive)
+        .map((f) => f.targetId),
+    ),
+  ].sort(compare);
   const reputationById = new Map(
     reputation.map((entry) => [entry.nationId, entry.credibility]),
   );
@@ -202,13 +212,15 @@ export function planAIPoliticalInterest(
   const viableIndependence =
     !existential &&
     (observation.unownedFrontier === true ||
-      (observation.ownResources.troops >= 4_000 &&
-        self.landPercent >= 0.4));
+      (observation.ownResources.troops >= 4_000 && self.landPercent >= 0.4));
   const empires = observation.coalitions
     .filter((p) => p.kind === "empire")
     .sort((a, b) => compare(a.id, b.id));
   const empireLand = (members: readonly string[]): number =>
-    members.reduce((total, id) => total + (nations.get(id)?.landPercent ?? 0), 0);
+    members.reduce(
+      (total, id) => total + (nations.get(id)?.landPercent ?? 0),
+      0,
+    );
   const safeEmpire = (empire: (typeof empires)[number]): boolean =>
     empireLand(empire.members) >= Math.max(0.25, greatestThreat * 0.7) &&
     !empire.members.some((id) => warSides.enemies.has(id));
@@ -219,8 +231,8 @@ export function planAIPoliticalInterest(
     // unowned land continues through the pre-existing NationExecution loop.
     if (myEmpire.leaderId !== self.id) return idle("serve-empire");
     // As emperor, handle a candidate's explicitly addressed consent offer.
-    for (const offer of [...(observation.imperialOffers ?? [])].sort(
-      (a, b) => compare(a.candidateId, b.candidateId),
+    for (const offer of [...(observation.imperialOffers ?? [])].sort((a, b) =>
+      compare(a.candidateId, b.candidateId),
     )) {
       const candidate = nations.get(offer.candidateId);
       if (
@@ -230,7 +242,8 @@ export function planAIPoliticalInterest(
         !candidate?.alive ||
         candidate.status !== "independent" ||
         candidate.landPercent <= 0
-      ) continue;
+      )
+        continue;
       const command: AIPoliticalCommand = {
         kind: "accept-empire",
         empireId: myEmpire.id,
@@ -247,7 +260,8 @@ export function planAIPoliticalInterest(
         candidate.landPercent <= 0 ||
         warSides.enemies.has(targetId) ||
         (reputationById.get(targetId) ?? 0) < -2
-      ) continue;
+      )
+        continue;
       const command: AIPoliticalCommand = {
         kind: "offer-empire",
         empireId: myEmpire.id,
@@ -263,30 +277,38 @@ export function planAIPoliticalInterest(
   // attack inside a still-active pact. Each Betray is a validated transition;
   // offensive WAR must be declared separately on a later observation.
   for (const pact of observation.coalitions
-    .filter((c) => (c.kind === "nap" || c.kind === "mda") && c.members.includes(self.id))
+    .filter(
+      (c) =>
+        (c.kind === "nap" || c.kind === "mda") && c.members.includes(self.id),
+    )
     .sort((a, b) => compare(a.id, b.id))) {
     const hostile = pact.members
-      .filter((id) =>
-        id !== self.id &&
-        frontiers.includes(id) &&
-        ((reputationById.get(id) ?? 0) <= -3 ||
-          (observation.ownResources.troops >= 40_000 &&
-            self.landPercent >= (nations.get(id)?.landPercent ?? Infinity) * 3)) &&
-        (nations.get(id)?.landPercent ?? Infinity) <=
-          Math.max(1, self.landPercent * 1.5) &&
-        observation.ownResources.troops >= 1_000 &&
-        observation.unownedFrontier !== true,
+      .filter(
+        (id) =>
+          id !== self.id &&
+          frontiers.includes(id) &&
+          ((reputationById.get(id) ?? 0) <= -3 ||
+            (observation.ownResources.troops >= 40_000 &&
+              self.landPercent >=
+                (nations.get(id)?.landPercent ?? Infinity) * 3)) &&
+          (nations.get(id)?.landPercent ?? Infinity) <=
+            Math.max(1, self.landPercent * 1.5) &&
+          observation.ownResources.troops >= 1_000 &&
+          observation.unownedFrontier !== true,
       )
       .sort(compare);
     if (hostile.length === 0) continue;
-    const command: AIPoliticalCommand = { kind: "betray-pact", pactId: pact.id };
+    const command: AIPoliticalCommand = {
+      kind: "betray-pact",
+      pactId: pact.id,
+    };
     if (!alreadyAttempted(command, memory))
       return result({ command, reason: "renounce-hostile-pact" });
   }
 
   // Offers are addressed to the candidate; never discover foreign offers.
-  for (const offer of [...(observation.imperialOffers ?? [])].sort(
-    (a, b) => compare(a.empireId, b.empireId),
+  for (const offer of [...(observation.imperialOffers ?? [])].sort((a, b) =>
+    compare(a.empireId, b.empireId),
   )) {
     if (offer.recipientId !== self.id || offer.candidateId !== self.id)
       continue;
@@ -303,8 +325,10 @@ export function planAIPoliticalInterest(
   // An unthreatened small state can still be a viable independent power.
   // A refusal is a deliberate *non-acceptance*. The current constitution
   // offers no decline-empire transition and this planner may not invent one.
-  if ((observation.imperialOffers ?? []).some((o) => o.candidateId === self.id) &&
-      viableIndependence)
+  if (
+    (observation.imperialOffers ?? []).some((o) => o.candidateId === self.id) &&
+    viableIndependence
+  )
     return idle("preserve-independence");
 
   // With credible danger but no offer, seek consent instead of auto-joining.
@@ -327,22 +351,30 @@ export function planAIPoliticalInterest(
     if (
       !pact.terms ||
       pact.members.some(
-        (id) =>
-          warSides.enemies.has(id) ||
-          (reputationById.get(id) ?? 0) <= -3,
+        (id) => warSides.enemies.has(id) || (reputationById.get(id) ?? 0) <= -3,
       ) ||
       pact.members.every((id) => !frontiers.includes(id))
-    ) continue;
-    const command: AIPoliticalCommand = { kind: "accept-pact", pactId: pact.id };
+    )
+      continue;
+    const command: AIPoliticalCommand = {
+      kind: "accept-pact",
+      pactId: pact.id,
+    };
     if (!alreadyAttempted(command, memory))
       return result({
         command,
-        reason: pact.kind === "mda" ? "accept-mutual-defense" : "accept-nonaggression",
+        reason:
+          pact.kind === "mda"
+            ? "accept-mutual-defense"
+            : "accept-nonaggression",
       });
   }
 
   const ownPacts = observation.coalitions
-    .filter((p) => (p.kind === "nap" || p.kind === "mda") && p.members.includes(self.id))
+    .filter(
+      (p) =>
+        (p.kind === "nap" || p.kind === "mda") && p.members.includes(self.id),
+    )
     .sort((a, b) => compare(a.id, b.id));
   for (const pact of ownPacts) {
     for (const targetId of frontiers) {
@@ -353,7 +385,8 @@ export function planAIPoliticalInterest(
         pact.pendingInvitees?.includes(targetId) ||
         warSides.enemies.has(targetId) ||
         (reputationById.get(targetId) ?? 0) < -2
-      ) continue;
+      )
+        continue;
       const command: AIPoliticalCommand = {
         kind: "invite-pact",
         pactId: pact.id,
@@ -381,9 +414,11 @@ export function planAIPoliticalInterest(
   if (ownPacts.length === 0 && !militaryOpportunity) {
     const neighbor = frontiers.find((id) => {
       const target = nations.get(id)!;
-      return target.status === "independent" &&
+      return (
+        target.status === "independent" &&
         !warSides.enemies.has(id) &&
-        (reputationById.get(id) ?? 0) >= -2;
+        (reputationById.get(id) ?? 0) >= -2
+      );
     });
     if (neighbor !== undefined) {
       const kind = existential ? "MDA" : "NAP";

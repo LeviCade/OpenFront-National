@@ -356,8 +356,16 @@ export function projectNationalObservation(
             .map((offer) => ({ ...offer }))
             .sort(
               (a, b) =>
-                (a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0) ||
-                (a.candidateId < b.candidateId ? -1 : a.candidateId > b.candidateId ? 1 : 0),
+                (a.empireId < b.empireId
+                  ? -1
+                  : a.empireId > b.empireId
+                    ? 1
+                    : 0) ||
+                (a.candidateId < b.candidateId
+                  ? -1
+                  : a.candidateId > b.candidateId
+                    ? 1
+                    : 0),
             ),
         }),
     // Copy only M0-approved public fields. Never serialize raw war records.

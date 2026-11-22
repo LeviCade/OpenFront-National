@@ -21,18 +21,18 @@ import { assertNever, simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
 import {
-  initialAIPoliticalMemory,
-  planAIPoliticalInterest,
-  recordAIPoliticalOutcome,
-  type AIPoliticalMemory,
-} from "../national/ai/NationalPoliticalStrategy";
-import {
   deriveNationalWarSides,
   initialNationalPlannerMemory,
   planNationalInterest,
   recordNationalWarOutcome,
   type NationalPlannerMemory,
 } from "../national/ai/NationalPlanner";
+import {
+  initialAIPoliticalMemory,
+  planAIPoliticalInterest,
+  recordAIPoliticalOutcome,
+  type AIPoliticalMemory,
+} from "../national/ai/NationalPoliticalStrategy";
 import {
   collectLiveNationalObservation,
   liveNationalWarAuthority,
@@ -373,8 +373,10 @@ export class NationExecution implements Execution {
       ...result.memory,
       political: political.memory,
     };
-    if (political.decision?.command !== null &&
-        political.decision?.command !== undefined) {
+    if (
+      political.decision?.command !== null &&
+      political.decision?.command !== undefined
+    ) {
       try {
         const outcome = this.mg.performNationalPoliticalCommandWithOutcome(
           player,
@@ -746,7 +748,8 @@ export class NationExecution implements Execution {
                         (entry) => ({ ...entry }),
                       ),
                   }),
-              ...(this.nationalPlannerMemory.lastWarOutcomeSequence === undefined
+              ...(this.nationalPlannerMemory.lastWarOutcomeSequence ===
+              undefined
                 ? {}
                 : {
                     lastWarOutcomeSequence:
@@ -758,7 +761,8 @@ export class NationExecution implements Execution {
                     political: {
                       ...this.nationalPlannerMemory.political,
                       completedCommands: [
-                        ...this.nationalPlannerMemory.political.completedCommands,
+                        ...this.nationalPlannerMemory.political
+                          .completedCommands,
                       ],
                       rejectedCommands:
                         this.nationalPlannerMemory.political.rejectedCommands.map(

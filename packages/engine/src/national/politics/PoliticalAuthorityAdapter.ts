@@ -105,42 +105,48 @@ export class PoliticalAuthorityAdapter
    */
   recipientDiplomacy(observerId: PlayerID): NationalRecipientDiplomacy {
     const state = this.readCurrent();
-    if (!knownLiving(state, observerId))
-      return { pacts: [], empireOffers: [] };
-    const pacts = state.pacts.map((p) => {
-      const publicPact = viewPact(state, p.id, observerId);
-      const member = p.memberIds.includes(observerId);
-      const pending = p.invitations.find((i) => i.targetId === observerId);
-      const invited =
-        pending !== undefined &&
-        (p.terms.admission === "leader"
-          ? p.administratorId !== null &&
-            pending.approvedBy.includes(p.administratorId)
-          : p.memberIds.every((id) => pending.approvedBy.includes(id)));
-      return {
-        id: publicPact.id,
-        kind: publicPact.kind,
-        leaderId: publicPact.administratorId ?? [...p.memberIds].sort()[0],
-        members: [...publicPact.memberIds].sort(),
-        ...(publicPact.terms === undefined
-          ? {}
-          : { terms: { ...publicPact.terms } }),
-        invited,
-        ...(member
-          ? {
-              pendingInvitees: p.invitations
-                .map((inv) => inv.targetId)
-                .sort(),
-            }
-          : {}),
-      };
-    }).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    if (!knownLiving(state, observerId)) return { pacts: [], empireOffers: [] };
+    const pacts = state.pacts
+      .map((p) => {
+        const publicPact = viewPact(state, p.id, observerId);
+        const member = p.memberIds.includes(observerId);
+        const pending = p.invitations.find((i) => i.targetId === observerId);
+        const invited =
+          pending !== undefined &&
+          (p.terms.admission === "leader"
+            ? p.administratorId !== null &&
+              pending.approvedBy.includes(p.administratorId)
+            : p.memberIds.every((id) => pending.approvedBy.includes(id)));
+        return {
+          id: publicPact.id,
+          kind: publicPact.kind,
+          leaderId: publicPact.administratorId ?? [...p.memberIds].sort()[0],
+          members: [...publicPact.memberIds].sort(),
+          ...(publicPact.terms === undefined
+            ? {}
+            : { terms: { ...publicPact.terms } }),
+          invited,
+          ...(member
+            ? {
+                pendingInvitees: p.invitations
+                  .map((inv) => inv.targetId)
+                  .sort(),
+              }
+            : {}),
+        };
+      })
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     const empireOffers = state.accessionOffers
       .filter((offer) => offer.recipientId === observerId)
       .map((offer) => ({ ...offer }))
-      .sort((a, b) =>
-        (a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0) ||
-        (a.candidateId < b.candidateId ? -1 : a.candidateId > b.candidateId ? 1 : 0),
+      .sort(
+        (a, b) =>
+          (a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0) ||
+          (a.candidateId < b.candidateId
+            ? -1
+            : a.candidateId > b.candidateId
+              ? 1
+              : 0),
       );
     return { pacts, empireOffers };
   }

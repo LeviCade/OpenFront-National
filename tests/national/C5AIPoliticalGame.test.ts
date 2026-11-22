@@ -61,7 +61,12 @@ async function seeded(
     for (let x = 0; x < game.width(); x++) {
       const tile = game.ref(x, y);
       if (!game.isLand(tile) || game.isImpassable(tile)) continue;
-      if (openNeutral && y > game.height() / 2 && x >= first - 2 && x < first + 1)
+      if (
+        openNeutral &&
+        y > game.height() / 2 &&
+        x >= first - 2 &&
+        x < first + 1
+      )
         continue;
       const id = x < first ? A : x < second ? B : H;
       game.player(id).conquer(tile);
@@ -80,9 +85,10 @@ function humanTurn(
 ): void {
   runner.addTurn({
     turnNumber: game.ticks(),
-    intents: intent === undefined ? [] : [
-      StampedIntentSchema.parse({ ...intent, clientID: CLIENT }),
-    ],
+    intents:
+      intent === undefined
+        ? []
+        : [StampedIntentSchema.parse({ ...intent, clientID: CLIENT })],
   });
   expect(runner.executeNextTick()).toBe(true);
 }
@@ -110,21 +116,30 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
     let established = false;
     for (let t = 0; t < 90; t++) {
       humanTurn(runner, game);
-      established ||= game.nationalPoliticalAuthority()?.protectedByTreaty(A, B) === true;
+      established ||=
+        game.nationalPoliticalAuthority()?.protectedByTreaty(A, B) === true;
       if (established) break;
     }
     expect(established).toBe(true);
     const live = collectLiveNationalObservation(game, A).observation;
     const pact = live.coalitions.find(
-      (c) => (c.kind === "nap" || c.kind === "mda") &&
-        c.members.includes(A) && c.members.includes(B),
+      (c) =>
+        (c.kind === "nap" || c.kind === "mda") &&
+        c.members.includes(A) &&
+        c.members.includes(B),
     );
     expect(pact).toBeDefined();
-    expect(game.nationalPoliticalAuthority()?.protectedByTreaty(A, B)).toBe(true);
-    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(A, B)).toBe(false);
+    expect(game.nationalPoliticalAuthority()?.protectedByTreaty(A, B)).toBe(
+      true,
+    );
+    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(A, B)).toBe(
+      false,
+    );
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect([...bytes]).toEqual([...again]);
-    expect(restored.nationalPoliticalAuthority()?.protectedByTreaty(A, B)).toBe(true);
+    expect(restored.nationalPoliticalAuthority()?.protectedByTreaty(A, B)).toBe(
+      true,
+    );
     for (let i = 0; i < 6; i++) {
       game.executeNextTick();
       restored.executeNextTick();
@@ -160,23 +175,28 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
     let accepted = false;
     for (let i = 0; i < 70; i++) {
       humanTurn(runner, game);
-      accepted = game.nationalPoliticalAuthority()?.empireOf(A) === "c5_human_crown";
+      accepted =
+        game.nationalPoliticalAuthority()?.empireOf(A) === "c5_human_crown";
       if (accepted) break;
     }
     expect(accepted).toBe(true);
-    const empire = game.nationalPublicPoliticalView()?.empires.find(
-      (entry) => entry.id === "c5_human_crown",
-    );
+    const empire = game
+      .nationalPublicPoliticalView()
+      ?.empires.find((entry) => entry.id === "c5_human_crown");
     expect(empire?.memberIds).toContain(A);
     expect(empire?.leaderId).toBe(H);
     const postAccession = collectLiveNationalObservation(game, A).observation;
-    expect(postAccession.nations.find((n) => n.id === A)?.status).toBe("member");
+    expect(postAccession.nations.find((n) => n.id === A)?.status).toBe(
+      "member",
+    );
     expect(postAccession.unownedFrontier).toBe(true);
     // Military survival during an existing hostile WAR is not equivalent
     // to immediate net territorial gain. Accession must remain legal and
     // durable even when the neighbor continues the original real attack.
     const { restored } = await roundTrip(game, "plains");
-    expect(restored.nationalPoliticalAuthority()?.empireOf(A)).toBe("c5_human_crown");
+    expect(restored.nationalPoliticalAuthority()?.empireOf(A)).toBe(
+      "c5_human_crown",
+    );
   });
 
   it("an imperial AI member executes useful neutral expansion, retaining the real crown", async () => {
@@ -203,9 +223,13 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
     const runner = runnerFor(game);
     for (let i = 0; i < 80; i++) humanTurn(runner, game);
     expect(game.player(A).numTilesOwned()).toBeGreaterThan(before);
-    expect(game.nationalPoliticalAuthority()?.empireOf(A)).toBe("c5_growth_crown");
+    expect(game.nationalPoliticalAuthority()?.empireOf(A)).toBe(
+      "c5_growth_crown",
+    );
     const { restored } = await roundTrip(game, "plains");
-    expect(restored.nationalPoliticalAuthority()?.empireOf(A)).toBe("c5_growth_crown");
+    expect(restored.nationalPoliticalAuthority()?.empireOf(A)).toBe(
+      "c5_growth_crown",
+    );
   });
 
   it("an addressed but hostile live NAP invitation is observed and refused", async () => {
@@ -230,18 +254,26 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
     });
     expect(war.accepted).toBe(true);
     const observer = collectLiveNationalObservation(game, A).observation;
-    expect(observer.coalitions.find(
-      (c) => c.id === "c5_hostile_invite",
-    )?.invited).toBe(true);
-    const dispatch = vi.spyOn(game, "performNationalPoliticalCommandWithOutcome");
+    expect(
+      observer.coalitions.find((c) => c.id === "c5_hostile_invite")?.invited,
+    ).toBe(true);
+    const dispatch = vi.spyOn(
+      game,
+      "performNationalPoliticalCommandWithOutcome",
+    );
     const runner = runnerFor(game);
     for (let i = 0; i < 35; i++) humanTurn(runner, game);
-    expect(game.nationalPoliticalAuthority()?.protectedByTreaty(A, B)).toBe(false);
-    expect(dispatch.mock.calls.some(
-      (args) => args[0].id() === A &&
-        args[1].kind === "accept-pact" &&
-        args[1].pactId === "c5_hostile_invite",
-    )).toBe(false);
+    expect(game.nationalPoliticalAuthority()?.protectedByTreaty(A, B)).toBe(
+      false,
+    );
+    expect(
+      dispatch.mock.calls.some(
+        (args) =>
+          args[0].id() === A &&
+          args[1].kind === "accept-pact" &&
+          args[1].pactId === "c5_hostile_invite",
+      ),
+    ).toBe(false);
     dispatch.mockRestore();
   });
 
@@ -251,40 +283,68 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
     const neighbor = game.player(B);
     const crown = "c5_pact_betray";
     for (const [player, command] of [
-      [actor, { kind: "found-pact", pactId: crown, name: "Treaty", pactKind: "NAP", terms: { admission: "leader", expulsion: "forbidden" } }],
+      [
+        actor,
+        {
+          kind: "found-pact",
+          pactId: crown,
+          name: "Treaty",
+          pactKind: "NAP",
+          terms: { admission: "leader", expulsion: "forbidden" },
+        },
+      ],
       [actor, { kind: "invite-pact", pactId: crown, candidateId: B }],
       [neighbor, { kind: "accept-pact", pactId: crown }],
     ] as const) {
       game.performNationalCommand(player, command);
     }
-    expect(game.nationalPoliticalAuthority()?.protectedByTreaty(A, B)).toBe(true);
+    expect(game.nationalPoliticalAuthority()?.protectedByTreaty(A, B)).toBe(
+      true,
+    );
     const blocked = new AttackExecution(2_000, actor, B);
     blocked.init(game, game.ticks());
     expect(blocked.isActive()).toBe(false);
     const troopsBefore = actor.troops();
-    const politics = vi.spyOn(game, "performNationalPoliticalCommandWithOutcome");
+    const politics = vi.spyOn(
+      game,
+      "performNationalPoliticalCommandWithOutcome",
+    );
     const wars = vi.spyOn(game, "performNationalWarCommandWithOutcome");
     let betrayalTick: number | null = null;
     let warTick: number | null = null;
     for (let i = 0; i < 95; i++) {
       game.executeNextTick();
-      if (betrayalTick === null && politics.mock.calls.some((args, index) =>
-        args[0].id() === A && args[1].kind === "betray-pact" &&
-        politics.mock.results[index].type === "return" &&
-        politics.mock.results[index].value?.accepted === true
-      )) betrayalTick = game.ticks();
-      if (warTick === null && wars.mock.calls.some((args, index) =>
-        args[0].id() === A && args[1].kind === "declare-national" &&
-        args[1].targetId === B &&
-        wars.mock.results[index].type === "return" &&
-        wars.mock.results[index].value?.accepted === true
-      )) warTick = game.ticks();
+      if (
+        betrayalTick === null &&
+        politics.mock.calls.some(
+          (args, index) =>
+            args[0].id() === A &&
+            args[1].kind === "betray-pact" &&
+            politics.mock.results[index].type === "return" &&
+            politics.mock.results[index].value?.accepted === true,
+        )
+      )
+        betrayalTick = game.ticks();
+      if (
+        warTick === null &&
+        wars.mock.calls.some(
+          (args, index) =>
+            args[0].id() === A &&
+            args[1].kind === "declare-national" &&
+            args[1].targetId === B &&
+            wars.mock.results[index].type === "return" &&
+            wars.mock.results[index].value?.accepted === true,
+        )
+      )
+        warTick = game.ticks();
       if (betrayalTick !== null && warTick !== null) break;
     }
     politics.mockRestore();
     wars.mockRestore();
     expect(betrayalTick).not.toBeNull();
-    expect(game.nationalPoliticalAuthority()?.protectedByTreaty(A, B)).toBe(false);
+    expect(game.nationalPoliticalAuthority()?.protectedByTreaty(A, B)).toBe(
+      false,
+    );
     expect(warTick).not.toBeNull();
     expect(warTick!).toBeGreaterThan(betrayalTick!);
     expect(game.nationalWarAuthority()?.atWar(A, B)).toBe(true);
