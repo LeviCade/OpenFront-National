@@ -56,7 +56,10 @@ jobs:
             src/client/NationalDiplomacyPanel.ts \
             src/client/NationalImperialState.ts \
             src/client/NationalImperialWorks.ts \
+            src/client/view/GameView.ts \
+            src/client/controllers/NationalMapTargetController.ts \
             tests/ui/national/NationalDiplomacyPanel.test.ts \
+            tests/ui/national/NationalHumanMapInputR11.test.ts \
             .github/workflows/c5-class2-e1-native-gameplay.yml
   source-regression:
     name: Full source, lint and build (non-GPU)
