@@ -62,6 +62,7 @@ export function encodeNationalRecipientProjection(
       !Number.isSafeInteger(map.unitSweepId) ||
       map.unitSweepId < 1 ||
       typeof map.unitReset !== "boolean" ||
+      typeof map.unitOverflow !== "boolean" ||
       (map.unitReset && map.unitCursor !== 0) ||
       !Array.isArray(map.unitRemovedIds) ||
       map.unitRemovedIds.length > NATIONAL_OBSERVER_MAX_UNITS ||
@@ -180,6 +181,7 @@ export function encodeNationalRecipientProjection(
             unitReset: map.unitReset,
             unitRemovedIds: [...map.unitRemovedIds],
             unitsTruncated: map.unitsTruncated,
+            unitOverflow: map.unitOverflow,
             visibleBorders: map.visibleBorders.map((frontier) => ({
               targetId: frontier.targetId,
               access: frontier.access,
