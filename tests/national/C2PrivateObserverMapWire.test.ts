@@ -31,6 +31,7 @@ import {
   encodeServerMessage,
 } from "@openfront/shared/ZbinWire";
 import { describe, expect, it } from "vitest";
+import { NationalObserverMapContinuity } from "../../src/client/NationalObserverMapContinuity";
 import { Client } from "../../src/server/Client";
 import {
   encodeNationalRecipientProjection,
@@ -456,5 +457,201 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     expect(
       collectLiveNationalObservation(game, A.id).visibleTiles.has(water!),
     ).toBe(true);
+  });
+});
+
+/**
+ * C3 E3 independent regression: the real host/authoritative Game/encoded Zbin
+ * now carry separate server-owned map and unit sweeps. The synthetic attacker
+ * objects below are malicious *incoming* packets, never substituted for the
+ * authoritative Game or for the legitimate first decoded wire.
+ */
+describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
+  it("sweeps more than 4096 authorized real tiles without duplicates or lost pages, and fails closed on replay/cursor/stream forgery", async () => {
+    const init = await setup("big_plains", { nationalMode: true }, P);
+    const { game, host, sockets } = await rig("big_plains", [
+      init.ref(20, 100),
+      init.ref(150, 150),
+      init.ref(190, 190),
+    ]);
+    // This is the genuine server-owned map and Player.conquer path, not a
+    // fabricated GameSnapshot or manually granted browser visibility.
+    const a = game.player(A.id);
+    for (let y = 5; y < 86; y++) {
+      for (let x = 5; x < 86; x++) {
+        const ref = game.ref(x, y);
+        if (game.isLand(ref) && game.owner(ref).id() !== A.id)
+          a.conquer(ref);
+      }
+    }
+    const legallyVisible = collectLiveNationalObservation(game, A.id).visibleTiles;
+    expect(legallyVisible.size).toBeGreaterThan(4096);
+    host.tick();
+    const first = view(sockets[0].socket);
+    const b = view(sockets[1].socket);
+    const c = view(sockets[2].socket);
+    expect(first.map.streamId).toBeTruthy();
+    expect(first.map.streamId).not.toBe(b.map.streamId);
+    expect(first.map.streamId).not.toBe(c.map.streamId);
+    expect(first.map.reset).toBe(true);
+    expect(first.map.cursor).toBe(0);
+    expect(first.map.tiles).toHaveLength(4096);
+    expect(first.map.nextCursor).toBe(4096);
+    const reader = new NationalObserverMapContinuity(A.id);
+    const accepted = reader.accept(first.map, first.msg.tick);
+    expect(accepted.clearAllTiles).toBe(true);
+    expect(accepted.sweepComplete).toBe(false);
+    expect(reader.tileStatus(first.map.tiles[0][0])).toBe("observed");
+
+    const tickBeforeAttack = reader.lastAcceptedTick;
+    for (const fake of [
+      { ...first.map, tick: first.map.tick + 1 },
+      { ...first.map, observerId: B.id, tick: first.map.tick + 1 },
+      { ...first.map, streamId: "malicious-socket", tick: first.map.tick + 1 },
+      { ...first.map, cursor: 0, tick: first.map.tick + 1 },
+      { ...first.map, reset: true, tick: first.map.tick + 1 },
+    ]) {
+      expect(() => reader.accept(fake, first.msg.tick + 1)).toThrow();
+      expect(reader.lastAcceptedTick).toBe(tickBeforeAttack);
+    }
+
+    const sentRefs = new Set(first.map.tiles.map(([ref]) => ref));
+    const sweepId = first.map.sweepId;
+    let last = first;
+    for (let steps = 0; steps < 20 && last.map.nextCursor !== null; steps++) {
+      host.tick();
+      last = view(sockets[0].socket);
+      const delta = reader.accept(last.map, last.msg.tick);
+      expect(last.map.sweepId).toBe(sweepId);
+      expect(delta.clearAllTiles).toBe(false);
+      for (const [ref] of last.map.tiles) {
+        expect(sentRefs.has(ref)).toBe(false);
+        expect(legallyVisible.has(ref)).toBe(true);
+        sentRefs.add(ref);
+      }
+    }
+    expect(last.map.nextCursor).toBeNull();
+    expect(sentRefs.size).toBe(legallyVisible.size);
+    expect(reader.tileStatus(first.map.tiles[0][0])).toBe("observed");
+    host.tick();
+    const repeated = view(sockets[0].socket);
+    expect(repeated.map.sweepId).toBeGreaterThan(sweepId);
+    expect(repeated.map.cursor).toBe(0);
+    expect(repeated.map.sweepTick).toBe(repeated.map.tick);
+    reader.accept(repeated.map, repeated.msg.tick);
+    expect(() => reader.accept(last.map, last.msg.tick)).toThrow();
+    expect(b.map.observerId).toBe(B.id);
+    expect(c.map.observerId).toBe(C.id);
+  });
+
+  it("pages >2048 real visible units, removes revoked enemy markers immediately and rejects hostile troop/count or revocation forgeries", async () => {
+    const init = await setup("big_plains", { nationalMode: true }, P);
+    const { game, host, sockets } = await rig("big_plains", [
+      init.ref(20, 100),
+      init.ref(80, 100),
+      init.ref(190, 190),
+    ]);
+    const target = game.ref(80, 100);
+    // Real Game units at a visible border structure location; intentionally
+    // overloaded to exercise a single-tick pagination cap, NOT a browser mock.
+    const foreign = [];
+    for (let i = 0; i < 2051; i++) {
+      foreign.push(game.player(B.id).buildUnit(UnitType.City, target, {}));
+    }
+    game.player(B.id).setTroops(8_876_543);
+    host.tick();
+    const one = view(sockets[0].socket);
+    const reader = new NationalObserverMapContinuity(A.id);
+    expect(one.map.unitsTruncated).toBe(true);
+    expect(one.map.units).toHaveLength(2048);
+    expect(one.map.unitNextCursor).toBe(2048);
+    const u1 = reader.accept(one.map, one.msg.tick);
+    expect(u1.clearAllUnits).toBe(true);
+    expect(one.msg.payload).not.toContain("8876543");
+    expect(one.map.units.every((unit) => unit.troops === undefined)).toBe(true);
+
+    host.tick();
+    const two = view(sockets[0].socket);
+    const u2 = reader.accept(two.map, two.msg.tick);
+    expect(u2.unitSweepComplete).toBe(true);
+    expect(u2.clearAllUnits).toBe(false);
+    expect(reader.observedUnitCount).toBeGreaterThanOrEqual(2051);
+
+    // The foreign marker is still present in the authoritative Game but
+    // becomes invisible when it moves outside the current sight boundary.
+    const removed = foreign[0];
+    removed.move(game.ref(195, 195));
+    host.tick();
+    const revoked = view(sockets[0].socket);
+    expect(revoked.map.unitRemovedIds).toContain(removed.id());
+    expect(revoked.map.units.find((unit) => unit.id === removed.id())).toBeUndefined();
+    const delta = reader.accept(revoked.map, revoked.msg.tick);
+    expect(delta.removedUnitIds).toContain(removed.id());
+    expect(reader.units().some((unit) => unit.id === removed.id())).toBe(false);
+    // Only ID tombstone crosses the wire; no hidden new position or orders.
+    expect(revoked.msg.payload).not.toContain('"targetTile"');
+    expect(revoked.msg.payload).not.toContain('"landingDestination"');
+
+    const hostile = {
+      ...revoked.map,
+      tick: revoked.map.tick + 1,
+      unitRemovedIds: [removed.id(), removed.id()],
+    };
+    expect(() => reader.accept(hostile, hostile.tick)).toThrow();
+    const foreignTroops = {
+      ...revoked.map,
+      tick: revoked.map.tick + 1,
+      units: [{
+        id: removed.id(),
+        ownerId: B.id,
+        kind: "transport",
+        tile: game.ref(195, 195),
+        troops: 9_999_991,
+      }],
+    };
+    expect(() => reader.accept(foreignTroops, foreignTroops.tick)).toThrow();
+    expect(reader.observedUnitCount).toBeGreaterThan(2000);
+  });
+
+  it("revocation of genuine empire-contributed tiles causes a full map reset and discards cached visible ownership", async () => {
+    const init = await setup("big_plains", { nationalMode: true }, P);
+    const { game, host, sockets } = await rig("big_plains", [
+      init.ref(20, 20),
+      init.ref(65, 100),
+      init.ref(190, 190),
+    ]);
+    const empire = "c3_e3_reset_empire";
+    const a = game.player(A.id);
+    const b = game.player(B.id);
+    game.performNationalCommand(a, { kind: "found-empire", empireId: empire });
+    game.performNationalCommand(a, {
+      kind: "offer-empire", empireId: empire, candidateId: B.id,
+    });
+    game.performNationalCommand(b, {
+      kind: "accept-empire", empireId: empire, candidateId: B.id,
+    });
+    const allyRef = b.spawnTile()!;
+    expect(collectLiveNationalObservation(game, A.id).visibleTiles.has(allyRef)).toBe(true);
+    host.tick();
+    const allied = view(sockets[0].socket);
+    const reader = new NationalObserverMapContinuity(A.id);
+    reader.accept(allied.map, allied.msg.tick);
+    // A reciprocal member is removed by the same real authoritative
+    // tile-relinquish elimination used by the existing FOG-06/07 fixture.
+    for (const tile of [...b.tiles()]) b.relinquish(tile);
+    game.executeNextTick();
+    expect(collectLiveNationalObservation(game, A.id).visibleTiles.has(allyRef)).toBe(false);
+    host.tick();
+    const after = view(sockets[0].socket);
+    expect(after.map.reset).toBe(true);
+    expect(after.map.cursor).toBe(0);
+    expect(after.map.unitReset).toBe(true);
+    const d = reader.accept(after.map, after.msg.tick);
+    expect(d.clearAllTiles).toBe(true);
+    expect(d.clearAllUnits).toBe(true);
+    expect(reader.tileStatus(allyRef)).toBe("revoked");
+    expect(after.map.tiles.every(([ref]) =>
+      collectLiveNationalObservation(game, A.id).visibleTiles.has(ref)
+    )).toBe(true);
   });
 });
