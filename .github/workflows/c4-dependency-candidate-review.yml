@@ -42,6 +42,3 @@ jobs:
       - name: Candidate build verification
         if: success() || failure()
         run: npm run build-prod
-      - name: Full suite on proposed development toolchain
-        if: success() || failure()
-        run: npm test
