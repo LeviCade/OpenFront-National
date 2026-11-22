@@ -520,4 +520,137 @@ describe("C5 E3 — real imperial response and member-specific WAR law", () => {
     const { restored } = await roundTrip(m.game, "plains");
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(m.game));
   });
+  it("executes a real national troop invasion after imperial peace and closes the final offensive gate", async () => {
+    const m = await match();
+    act(m, 1, {
+      type: "national_declare_war",
+      scope: "national",
+      nationId: B,
+      targetId: D,
+      targetKind: "nation",
+      requestId: "c5_real_army_original",
+    });
+    const original = military(m, B, "c5_real_army_original");
+    expect(original.accepted).toBe(true);
+    found(m);
+    act(m, 0, {
+      ...policy(0, "imperial", [], [B]),
+      requestId: "c5_real_army_policy",
+    });
+    join(m, 1);
+    const imperial = m.game.nationalWarState()!.wars.layers.find(
+      (layer) => layer.scope === "imperial" && layer.endedTick === null,
+    )!;
+    expect(imperial).toBeDefined();
+
+    // Only the physical battlefield and initial troop fixture are seeded;
+    // entry, WAR, interventions, peace, and attacks use the actual host.
+    const aggressor = m.game.player(B);
+    const defender = m.game.player(D);
+    for (let y = 33; y < 45; y++) {
+      for (let x = 31; x < 50; x++) aggressor.conquer(m.game.ref(x, y));
+      for (let x = 50; x < 69; x++) defender.conquer(m.game.ref(x, y));
+    }
+    m.host.tick();
+    aggressor.setTroops(750_000);
+    defender.setTroops(40_000);
+
+    act(m, 3, {
+      type: "national_propose_peace",
+      warId: imperial.id,
+      requestId: "c5_real_army_imperial_offer",
+    });
+    const peace = military(m, D, "c5_real_army_imperial_offer");
+    expect(peace.accepted).toBe(true);
+    act(m, 0, {
+      type: "national_accept_peace",
+      motionId: peace.motionId!,
+      requestId: "c5_real_army_imperial_accept",
+    });
+    expect(military(m, A, "c5_real_army_imperial_accept").accepted).toBe(true);
+    expect(m.game.nationalWarAuthority()?.atWar(A, D)).toBe(false);
+    expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(true);
+
+    const before = {
+      tick: m.game.ticks(),
+      gold: aggressor.gold().toString(),
+      troops: aggressor.troops(),
+      captured: aggressor.numTilesOwned(),
+      enemyTiles: defender.numTilesOwned(),
+    };
+    // The forged browser clientID is stripped by the host. Only B's
+    // authenticated seat can command B's surviving national army.
+    admit(m, 1, {
+      type: "attack",
+      targetID: D,
+      troops: 220_000,
+      clientID: clients[0],
+    });
+    const accepted = m.host.tick();
+    expect(accepted.committedIntents).toBe(1);
+    let armyObserved = aggressor.outgoingAttacks().length > 0;
+    for (let step = 0; step < 40 &&
+      aggressor.numTilesOwned() === before.captured; step++) {
+      m.host.tick();
+      armyObserved ||= aggressor.outgoingAttacks().length > 0;
+    }
+    const after = {
+      tick: m.game.ticks(),
+      gold: aggressor.gold().toString(),
+      troops: aggressor.troops(),
+      captured: aggressor.numTilesOwned(),
+      enemyTiles: defender.numTilesOwned(),
+    };
+    expect(armyObserved).toBe(true);
+    expect(after.troops).toBeLessThan(before.troops);
+    expect(after.captured).toBeGreaterThan(before.captured);
+    expect(after.enemyTiles).toBeLessThan(before.enemyTiles);
+    expect(war(m, imperial.id).endedTick).not.toBeNull();
+    expect(war(m, original.warId!).endedTick).toBeNull();
+    expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(true);
+    const { restored } = await roundTrip(m.game, "plains");
+    expect(snapshotGameData(restored)).toEqual(snapshotGameData(m.game));
+    console.info("C5_E3_REAL_TROOP_WITNESS_JSON=" + JSON.stringify({
+      kind: "c5-e3-real-national-army-after-imperial-peace",
+      source: "TrustedNationalMatch/GameRunner/Executor/AttackExecution",
+      politicalAuthority: "national-alone-after-imperial-peace",
+      imperialWarId: imperial.id,
+      originalWarId: original.warId,
+      armyObserved,
+      before,
+      after,
+      committedIntents: accepted.committedIntents,
+      replayDigest: accepted.replayDigest,
+    }));
+
+    // No empire layer remains. When the national layer is also settled,
+    // a newly admitted attack may NOT cause another military deployment.
+    act(m, 3, {
+      type: "national_propose_peace",
+      warId: original.warId!,
+      requestId: "c5_real_army_last_offer",
+    });
+    const lastPeace = military(m, D, "c5_real_army_last_offer");
+    expect(lastPeace.accepted).toBe(true);
+    act(m, 1, {
+      type: "national_accept_peace",
+      motionId: lastPeace.motionId!,
+      requestId: "c5_real_army_last_accept",
+    });
+    expect(military(m, B, "c5_real_army_last_accept").accepted).toBe(true);
+    expect(m.game.nationalWarAuthority()?.atWar(B, D)).toBe(false);
+    expect(m.game.nationalWarAuthority()?.authorizeOffensiveAction(B, D)).toBe(false);
+    const territoryAfterPeace = aggressor.numTilesOwned();
+    admit(m, 1, {
+      type: "attack",
+      targetID: D,
+      troops: 10_000,
+    });
+    expect(m.host.tick().committedIntents).toBe(1);
+    m.host.tick();
+    expect(aggressor.outgoingAttacks()).toHaveLength(0);
+    expect(aggressor.numTilesOwned()).toBe(territoryAfterPeace);
+    expect(BigInt(aggressor.gold().toString()) >= BigInt(after.gold)).toBe(true);
+  });
+
 });
