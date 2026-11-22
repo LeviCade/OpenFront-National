@@ -62,6 +62,26 @@ jobs:
             git -c color.ui=false diff
             exit 1
           fi
+  local-browser-auth:
+    name: Three ordinary UI logins and absent music request diagnostic (not gameplay)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      REQUIRED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ env.REQUIRED_SHA }}
+          persist-credentials: false
+      - run: test "$(git rev-parse HEAD)" = "$REQUIRED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - run: |
+          npm install --global --ignore-scripts npm@12.1.0
+          npm run inst
+      - run: node --check scripts/national-qa/private-staging-browser.mjs
+      - run: node scripts/national-qa/private-staging-browser.mjs --auth-only
   release-audit:
     name: Mandatory dependency and asset audit (strict, no auto-fix)
     runs-on: ubuntu-latest
