@@ -764,6 +764,7 @@ async function main() {
       summaryBytes,
       artifactRoot: join(HOST_ROOT, "verified-artifacts"),
       preflight: readRootJson("controller-preflight.json"),
+      modePreflights: allSignedModes,
       postflight: signedPostflight,
       trustedPublicKeyPem: pem,
       enrolledFingerprints: enrolled,
