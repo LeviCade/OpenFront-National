@@ -253,6 +253,11 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
       expect(again).toEqual(bytes);
       expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
       expect(restored.player(B).canTrade(restored.player(C))).toBe(false);
+      for (let i = 0; i < 4; i++) {
+        tick(game);
+        tick(restored);
+        expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
+      }
       witness(game, "seed-" + seed + "-compliance", before);
     });
   }
@@ -422,6 +427,39 @@ describe("C5 First Class E5 autonomous national economic statecraft", () => {
     expect(b.trainGold()).toBe(BigInt(blockedBefore[1].train));
     expect(c.trainGold()).toBe(BigInt(blockedBefore[2].train));
     witness(game, "seed-313-post-sanction-blocked-rail", blockedBefore);
+  });
+
+  it("ECON-04/AI-07: real AI emperor originates imperial demand with current authority", async () => {
+    const { game, a, b, ca, bb } = await live(411);
+    const empireId = "c5-e5-sovereign-issuer";
+    game.performNationalCommand(a, { kind: "found-empire", empireId });
+    expect(game.nationalPoliticalAuthority()?.emperorOf(empireId)).toBe(A);
+    const route = voyage(game, a, ca, bb);
+    expect(route.isActive()).toBe(true);
+    game.convertHumanToNation(a, "c5-e5-imperial-issuer");
+    until(game, () => NationalSanctionExecution.viewFor(game, a).length > 0, 55);
+    const demand = NationalSanctionExecution.viewFor(game, a)[0];
+    expect(demand.issuer).toBe(A);
+    expect(demand.authorityId).toBe(A);
+    expect(demand.empire).toBe(empireId);
+    expect(demand.recipientIds).toEqual([B]);
+    expect(NationalSanctionExecution.viewFor(game, b)[0].empire).toBe(empireId);
+  });
+
+  it("ECON-05: remote weak land challenger cannot author an unsupported threat in a real game", async () => {
+    const { game, a, c, ca, bb } = await live(511);
+    // Remove the real A-C accessible boundary before the AI takes over;
+    // public WAR status and foreign land-share rankings remain unchanged.
+    c.conquer(game.ref(3, 2));
+    a.setTroops(10);
+    expect(collectLiveNationalObservation(game, A).observation.frontiers.some(
+      (f) => f.targetId === C,
+    )).toBe(false);
+    const route = voyage(game, a, ca, bb);
+    expect(route.isActive()).toBe(true);
+    game.convertHumanToNation(a, "c5-e5-weak-issuer");
+    tick(game, 45);
+    expect(NationalSanctionExecution.viewFor(game, a)).toEqual([]);
   });
 
   it("ECON-04: actual imperial subordinate command is rejected", async () => {
