@@ -142,10 +142,12 @@ function demand(
     id: "ultimatum-1",
     empireId: "crown",
     issuerId: C,
-    recipientId: A,
+    targetId: A,
+    role: "recipient",
+    threat: "imperial-war",
     deadlineTick: 110,
     phase,
-    response: "none",
+    response: phase === "consented" ? "accept" : "none",
   };
 }
 const projected = (world: NationalWorld, id = A) =>
@@ -235,9 +237,12 @@ describe("C5 Class Two E6 sovereign coercion — AI-01/04/05/06/07, ECON-06/07",
       independentRoute: false,
     });
     expect(
+      planObservedImperialCoercion(obs,[demand()],initialNationalCoercionMemory(A))?.kind,
+    ).toBe("acknowledge-consent");
+    expect(
       planObservedImperialCoercion(
         obs,
-        [demand()],
+        [demand("consented")],
         initialNationalCoercionMemory(A),
       ),
     ).toMatchObject({
@@ -250,13 +255,13 @@ describe("C5 Class Two E6 sovereign coercion — AI-01/04/05/06/07, ECON-06/07",
         initialAIPoliticalMemory(),
         25,
         [],
-        [demand()],
+        [demand("consented")],
       ).decision?.command,
     ).toEqual({ kind: "accept-empire", empireId: "crown", candidateId: A });
     expect(
       planObservedImperialCoercion(
         { ...obs, imperialOffers: [] },
-        [demand()],
+        [demand("consented")],
         initialNationalCoercionMemory(A),
       )?.kind,
     ).toBe("request-consent");
@@ -376,7 +381,7 @@ describe("C5 Class Two E6 sovereign coercion — AI-01/04/05/06/07, ECON-06/07",
       planObservedImperialCoercion(reachable, [demand()], bluffed)?.kind,
     ).toBe("resist");
     // A recipient must not learn an outcome directed at a different principal.
-    const foreign = { ...demand("enforced"), id: "foreign", recipientId: B };
+    const foreign = { ...demand("enforced"), id: "foreign", targetId: B };
     expect(
       updateNationalCoercionMemory(obs, [foreign], bluffed).processedOutcomeIds,
     ).not.toContain("foreign");
@@ -413,7 +418,7 @@ describe("C5 Class Two E6 sovereign coercion — AI-01/04/05/06/07, ECON-06/07",
 
   it("imperial issuer distinguishes legitimate reachable enforcement from an actual backdown", () => {
     const w = baseWorld();
-    const view = { ...demand("decision-required") };
+    const view = { ...demand("decision-required"), role: "issuer" as const };
     const issuerObs = projected(w, C);
     expect(
       planObservedImperialCoercion(
@@ -520,10 +525,12 @@ describe("E6 live GameRunner sovereign command and replay receipt", () => {
           id: "e6-ultimatum",
           empireId: "e6-crown",
           issuerId: C,
-          recipientId: A,
-          phase: "pending",
+          targetId: A,
+          role: "recipient",
+          threat: "imperial-war",
+          phase: "consented",
           deadlineTick: game.ticks() + 40,
-          response: "none",
+          response: "accept",
         },
       ],
     );
