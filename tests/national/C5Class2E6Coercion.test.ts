@@ -189,8 +189,8 @@ describe("C5 Class Two E6 sovereign coercion — AI-01/04/05/06/07, ECON-06/07",
       nations: original.nations.map((n) => ({
         ...n,
         controllerKind: n.controllerKind === "ai" ? "human" : "ai",
-        treasury: n.id === B ? 0 : 17,
-        troops: n.id === B ? 1 : 42,
+        treasury: n.id === A ? n.treasury : n.id === B ? 0 : 17,
+        troops: n.id === A ? n.troops : n.id === B ? 1 : 42,
       })),
       assets: original.assets.map((a) =>
         a.id === "secret-charlie-transport"

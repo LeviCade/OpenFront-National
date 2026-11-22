@@ -216,16 +216,17 @@ export function assessImperialShelter(
   const near = observation.frontiers
     .filter((f) => f.access === "land")
     .map((f) => f.targetId);
-  const observedEnemy = observation.visibleAssets.some(
-    (a) =>
-      a.ownerId !== self.id && (a.kind === "army" || a.kind === "transport"),
+  const observedMilitaryOwners = new Set(
+    observation.visibleAssets
+      .filter((a) => a.kind === "army" || a.kind === "transport")
+      .map((a) => a.ownerId),
   );
   const localDanger = near.filter((id) => {
     const enemy = observation.nations.find((n) => n.id === id && n.alive);
     return (
       enemy !== undefined &&
       (sides.enemies.has(id) ||
-        (observedEnemy && enemy.landPercent > self.landPercent * 1.5))
+        (observedMilitaryOwners.has(id) && enemy.landPercent > self.landPercent * 1.5))
     );
   });
   const threat = Math.max(
