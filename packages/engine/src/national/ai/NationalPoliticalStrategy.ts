@@ -89,7 +89,7 @@ export function recordAIPoliticalOutcome(
   command: AIPoliticalCommand,
   outcome: NationalPoliticalCommandResult,
 ): AIPoliticalMemory {
-  const targetId = "pactId" in command ? command.pactId : command.empireId;
+  const targetId = "pactId" in command ? command.pactId : "empireId" in command ? command.empireId : command.command.empireId;
   if (
     outcome.actorId !== observation.observerId ||
     outcome.recipientId !== observation.observerId ||

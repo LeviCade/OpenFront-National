@@ -6,7 +6,7 @@ export interface NationalImperialAdministrationView {
   readonly allowedConstruction: readonly UnitType[] | null;
   readonly treasury: string;
   readonly canAmend: boolean;
-  readonly armyMode?: "decentralized" | "hybrid";
+  readonly armyMode?: "decentralized" | "hybrid" | "centralized";
   readonly hybridThresholdBps?: number;
   readonly imperialTroops?: string;
   readonly imperialTroopCapacity?: string;
@@ -95,7 +95,7 @@ export function readNationalImperialAdministration(
   const hasMilitary = military.some((v) => v !== undefined);
   if (
     hasMilitary &&
-    ((value.armyMode !== "decentralized" && value.armyMode !== "hybrid") ||
+    ((value.armyMode !== "decentralized" && value.armyMode !== "hybrid" && value.armyMode !== "centralized") ||
       typeof value.hybridThresholdBps !== "number" ||
       !Number.isInteger(value.hybridThresholdBps) ||
       value.hybridThresholdBps < 0 ||
