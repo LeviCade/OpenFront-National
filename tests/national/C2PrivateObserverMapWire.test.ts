@@ -15,9 +15,12 @@ import {
   PlayerType,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
-import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import { GameUpdateType, type GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import type { GameConfig } from "@openfront/engine-api/Schemas";
-import { OFFSET_TARGET_TILE, OFFSET_TROOPS } from "@openfront/engine-lib/game/PackedUnitUpdates";
+import {
+  OFFSET_TARGET_TILE,
+  OFFSET_TROOPS,
+} from "@openfront/engine-lib/game/PackedUnitUpdates";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
@@ -306,6 +309,21 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     expect(host.resumeRecipient(sockets[1].client)).toBe(true);
     host.tick();
     const resumed = view(replacement);
+    const roster = resumed.data.updates[GameUpdateType.Player];
+    expect(roster.map((player) => player.id)).toEqual(expect.arrayContaining([A.id, B.id, C.id]));
+    const self = roster.find((player) => player.id === B.id);
+    expect(self?.troops).toBe(game.player(B.id).troops());
+    expect(self?.smallID).toBe(game.player(B.id).smallID());
+    const outsider = roster.find((player) => player.id === A.id);
+    expect(outsider?.smallID).toBe(game.player(A.id).smallID());
+    expect(outsider).not.toHaveProperty("troops");
+    expect(outsider).not.toHaveProperty("gold");
+    expect(resumed.data.updates[GameUpdateType.SpawnPhaseEnd]).toEqual([
+      expect.objectContaining({startTick: game.ticks() - Math.round(game.elapsedGameSeconds() * 10)}),
+    ]);
+    const resumedReader = new NationalObserverMapContinuity(B.id, resumed.map.streamId);
+    expect(() => resumedReader.accept(b2.map, b2.msg.tick)).toThrow();
+    expect(resumedReader.acceptProjection(parseTrustedNationalProjection(resumed.msg.payload, resumed.msg.tick)).usable).toBe(true);
     expect(resumed.map.observerId).toBe(B.id);
     expect(resumed.map.reset).toBe(true);
     expect(resumed.map.cursor).toBe(0);
@@ -608,25 +626,44 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     expect(one.map.unitsTruncated).toBe(true);
     expect(one.map.units).toHaveLength(2048);
     expect(one.map.unitNextCursor).toBe(2048);
-    const packet = parseTrustedNationalProjection(one.msg.payload, one.msg.tick);
+    const packet = parseTrustedNationalProjection(
+      one.msg.payload,
+      one.msg.tick,
+    );
     const native = packet.packedUnitUpdates as unknown[];
     expect(native[OFFSET_TARGET_TILE]).toBeNull();
     const fresh = new NationalObserverMapContinuity(A.id, one.map.streamId);
-    expect(() => new NationalObserverMapContinuity(A.id, "old-stream").acceptProjection(packet)).toThrow();
-    for (const [offset, value] of [[OFFSET_TARGET_TILE, 123], [OFFSET_TROOPS, 9876543]] as const) {
+    expect(() =>
+      new NationalObserverMapContinuity(A.id, "old-stream").acceptProjection(
+        packet,
+      ),
+    ).toThrow();
+    for (const [offset, value] of [
+      [OFFSET_TARGET_TILE, 123],
+      [OFFSET_TROOPS, 9876543],
+    ] as const) {
       const forged = [...native];
       forged[offset] = value;
-      expect(() => fresh.acceptProjection({
-        ...packet, packedUnitUpdates: forged,
-      })).toThrow();
+      expect(() =>
+        fresh.acceptProjection({
+          ...packet,
+          packedUnitUpdates: forged,
+        }),
+      ).toThrow();
       expect(fresh.lastAcceptedTick).toBe(-1);
     }
-    expect(() => fresh.acceptProjection({
-      ...packet, nationalCommandResults: [{ actorId: B.id, recipientId: B.id }],
-    })).toThrow();
-    expect(() => fresh.acceptProjection({
-      ...packet, packedTileUpdates: [9999, 42],
-    })).toThrow();
+    expect(() =>
+      fresh.acceptProjection({
+        ...packet,
+        nationalCommandResults: [{ actorId: B.id, recipientId: B.id }],
+      }),
+    ).toThrow();
+    expect(() =>
+      fresh.acceptProjection({
+        ...packet,
+        packedTileUpdates: [9999, 42],
+      }),
+    ).toThrow();
     const u1 = reader.acceptProjection(packet);
     expect(Number.isNaN(u1.nativeUnits![OFFSET_TARGET_TILE])).toBe(true);
     expect(u1.clearAllUnits).toBe(true);
@@ -771,6 +808,10 @@ describe("C4 E3 continuous authoritative churn", () => {
     for (let i = 0; i < 2055; i++)
       units.push(a.buildUnit(UnitType.City, game.ref(20, 20), {}));
     a.conquer(remote);
+    // An early disconnected outpost is disclosed on page one, unlike
+    // the late remote outpost whose frozen slots are skipped during loss.
+    const early = game.ref(195, 5);
+    a.conquer(early);
     const readers = P.map((p) => new NationalObserverMapContinuity(p.id));
     const seen = new Set<number>();
     const known = new Set<number>();
@@ -786,11 +827,19 @@ describe("C4 E3 continuous authoritative churn", () => {
     const profilers = P.map(
       (p) => new NationalObserverMapPager(game, p.id, "profile-" + p.id),
     );
+    const readyMs = P.map(() => -1);
+    const readyFrames = P.map(() => -1);
+    const runStarted = performance.now();
     const startHeap = process.memoryUsage().heapUsed;
     let peakHeap = startHeap;
     for (let frame = 0; frame < 8; frame++) {
-      if (frame % 2 === 1) b.conquer(remote);
-      else if (frame > 0) a.conquer(remote);
+      if (frame % 2 === 1) {
+        b.conquer(remote);
+        b.conquer(early);
+      } else if (frame > 0) {
+        a.conquer(remote);
+        a.conquer(early);
+      }
       units[0].move(game.ref(frame % 2 === 0 ? 20 : 21, 20));
       const started = performance.now();
       host.tick();
@@ -802,6 +851,10 @@ describe("C4 E3 continuous authoritative churn", () => {
           parseTrustedNationalProjection(v.msg.payload, v.msg.tick),
         );
         reconcileMs += performance.now() - readStarted;
+        if (delta.usable && readyFrames[i] === -1) {
+          readyFrames[i] = frame;
+          readyMs[i] = performance.now() - runStarted;
+        }
         const frames = sockets[i].socket.frames;
         peakBytes = Math.max(peakBytes, frames[frames.length - 1].byteLength);
         const sight = collectLiveNationalObservation(game, P[i].id);
@@ -844,6 +897,8 @@ describe("C4 E3 continuous authoritative churn", () => {
     expect(firstTileComplete).toBe(1);
     expect(firstUnitComplete).toBe(1);
     expect(resets).toBe(1);
+    expect(revokedDisclosures).toBeGreaterThan(0);
+    expect(readyFrames).toEqual([0, 0, 0]);
     expect(units.every((unit) => seen.has(unit.id()))).toBe(true);
     console.info(
       "C4_E3_CHURN_METRICS",
@@ -853,6 +908,8 @@ describe("C4 E3 continuous authoritative churn", () => {
         firstTileComplete,
         firstUnitComplete,
         firstUsableFrame: 0,
+        maxReadyFrame: Math.max(...readyFrames),
+        maxReadyElapsedMs: Math.max(...readyMs),
         resets,
         holes,
         peakBytes,

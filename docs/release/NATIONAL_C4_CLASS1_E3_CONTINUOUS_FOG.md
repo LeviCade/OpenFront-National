@@ -20,7 +20,7 @@ until completion. Newly authorized IDs enter the next sweep.
 
 E4: construct a receiver only on authenticated start. Pass the expected stream
 nonce if E2 exposes it on authenticated start. On each live frame validate via
-accept() before mutation. Apply clearAllTiles/Units, then removedTileRefs and
+acceptProjection() before mutation. Apply clearAllTiles/Units, then removedTileRefs and
 removedUnitIds, then current tuples and markers. Remove stale ownership, border
 edges, labels and selection; omitted cells are unknown. The packed tile lane is
 empty for trusted active private hosts; the map is the sole ownership feed.
@@ -87,3 +87,7 @@ packet 380187 B, total host time 254.81 ms, independent pager profiling
 observed heap growth 42384712 B (includes fixture and captured packets),
 zero permanently omitted fixture unit IDs. This is neither full-map nor
 native GPU evidence.
+
+## Rejoin and fourth iteration
+
+Third candidate 4de1ea7d43c73cb0b8dd142775111a0d78fd0d6a run 44975342479: TS2559 at native guard weak-type interface, fixed at 2970d0d648f1ffa87baef70d161ecbd036b72eb3. Fourth candidate run 44975478499: typecheck, lint and 25/25 tests PASS; exact formatter reported four files. Additional deterministic seam proved mass clear mid-sweep, skipped undisclosed slots, next-sweep missing-unit priority and 131073-unit rotation. Real GameRunner: 3 seats, 8 ticks, readiness frame 0, sweeps frame 1, one reset, 20 skipped slots, maximum 468271 encoded bytes; host 181.96 ms, producer 22.07 ms, wire 48.09 ms, guard 19.59 ms, observed heap delta 27773112 B, no fixture unit permanently lost. The fixture reported zero previously disclosed territorial revocations in that alternating scenario, so a separate early disclosed outpost is added in the next candidate. Rejoin sends public full roster on first active page, full own PlayerUpdate each active tick without consuming engine diff state, and canonical spawn start tick on first active page. No foreign private full snapshot and no legacy Win/all-player stats exposure.

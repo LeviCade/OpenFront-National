@@ -76,27 +76,46 @@ function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function sequence(value: unknown): readonly unknown[] | Float64Array | Uint32Array {
-  if (Array.isArray(value) || value instanceof Float64Array || value instanceof Uint32Array)
+function sequence(
+  value: unknown,
+): readonly unknown[] | Float64Array | Uint32Array {
+  if (
+    Array.isArray(value) ||
+    value instanceof Float64Array ||
+    value instanceof Uint32Array
+  )
     return value;
   return invalid();
 }
 
 function uint(value: unknown, max = 0xffffffff): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= max;
+  return (
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 0 &&
+    value <= max
+  );
 }
 
 /** JSON null represents NaN only at the public codec's optional offsets. */
-export function decodeNationalObserverNativeUnits(value: unknown): Float64Array | undefined {
+export function decodeNationalObserverNativeUnits(
+  value: unknown,
+): Float64Array | undefined {
   if (value === undefined) return undefined;
   const input = sequence(value);
-  if (input.length > NATIONAL_OBSERVER_MAX_UNITS * UNIT_UPDATE_STRIDE ||
-    input.length % UNIT_UPDATE_STRIDE !== 0) invalid();
-  const output = value instanceof Float64Array ? value : new Float64Array(input.length);
+  if (
+    input.length > NATIONAL_OBSERVER_MAX_UNITS * UNIT_UPDATE_STRIDE ||
+    input.length % UNIT_UPDATE_STRIDE !== 0
+  )
+    invalid();
+  const output =
+    value instanceof Float64Array ? value : new Float64Array(input.length);
   for (let i = 0; i < input.length; i++) {
     const cell = input[i];
-    if ((cell === null || (typeof cell === "number" && Number.isNaN(cell))) &&
-      optional.has(i % UNIT_UPDATE_STRIDE)) {
+    if (
+      (cell === null || (typeof cell === "number" && Number.isNaN(cell))) &&
+      optional.has(i % UNIT_UPDATE_STRIDE)
+    ) {
       output[i] = NaN;
     } else if (typeof cell === "number" && Number.isFinite(cell)) {
       output[i] = cell;
@@ -120,8 +139,15 @@ interface NativeLanes {
 }
 
 const foreignPlayerFields = new Set([
-  "type", "id", "name", "displayName", "nationFlag", "playerType",
-  "smallID", "isAlive", "tilesOwned",
+  "type",
+  "id",
+  "name",
+  "displayName",
+  "nationFlag",
+  "playerType",
+  "smallID",
+  "isAlive",
+  "tilesOwned",
 ]);
 
 /** Checks recipient scope, permitted native coordinates, private field
@@ -133,18 +159,33 @@ export function validateNationalObserverNativeLanes(
   packet: NativeLanes,
   page: NationalObserverMapV1,
 ): Float64Array | undefined {
-  if (!uint(page.observerSmallId, 0xfff) || sequence(packet.packedTileUpdates).length !== 0)
+  if (
+    !uint(page.observerSmallId, 0xfff) ||
+    sequence(packet.packedTileUpdates).length !== 0
+  )
     invalid();
   const native = decodeNationalObserverNativeUnits(packet.packedUnitUpdates);
-  if ((native?.length ?? 0) !== page.units.length * UNIT_UPDATE_STRIDE) invalid();
+  if ((native?.length ?? 0) !== page.units.length * UNIT_UPDATE_STRIDE)
+    invalid();
   const shared = new Set<string>([page.observerId]);
   if (packet.nationalPolitics !== undefined) {
-    if (!record(packet.nationalPolitics) || !Array.isArray(packet.nationalPolitics.empires)) invalid();
+    if (
+      !record(packet.nationalPolitics) ||
+      !Array.isArray(packet.nationalPolitics.empires)
+    )
+      invalid();
     for (const empire of packet.nationalPolitics.empires) {
-      if (!record(empire) || !Array.isArray(empire.memberIds) ||
-        typeof empire.leaderId !== "string" || !empire.memberIds.every((id: unknown) => typeof id === "string"))
+      if (
+        !record(empire) ||
+        !Array.isArray(empire.memberIds) ||
+        typeof empire.leaderId !== "string" ||
+        !empire.memberIds.every((id: unknown) => typeof id === "string")
+      )
         invalid();
-      if (empire.leaderId === page.observerId || empire.memberIds.includes(page.observerId)) {
+      if (
+        empire.leaderId === page.observerId ||
+        empire.memberIds.includes(page.observerId)
+      ) {
         shared.add(empire.leaderId);
         for (const id of empire.memberIds) shared.add(id);
       }
@@ -153,20 +194,28 @@ export function validateNationalObserverNativeLanes(
   const ownUnits = new Set<number>();
   for (let i = 0; i < page.units.length; i++) {
     const marker = page.units[i];
-    const row = native!.subarray(i * UNIT_UPDATE_STRIDE, (i + 1) * UNIT_UPDATE_STRIDE);
+    const row = native!.subarray(
+      i * UNIT_UPDATE_STRIDE,
+      (i + 1) * UNIT_UPDATE_STRIDE,
+    );
     const a = row[OFFSET_PACKED_A];
     const own = marker.ownerId === page.observerId;
-    if (!uint(a, 0x1fffffff) ||
+    if (
+      !uint(a, 0x1fffffff) ||
       !uint(marker.nativeOwnerSmallId, 0xfff) ||
-      row[OFFSET_ID] !== marker.id || row[OFFSET_POS] !== marker.tile ||
+      row[OFFSET_ID] !== marker.id ||
+      row[OFFSET_POS] !== marker.tile ||
       unpackAOwnerID(a) !== marker.nativeOwnerSmallId ||
       unpackAUnitType(a) !== marker.nativeType ||
-      (own && marker.nativeOwnerSmallId !== page.observerSmallId) ||
+      (own !== (marker.nativeOwnerSmallId === page.observerSmallId)) ||
       row[OFFSET_TROOPS] < 0 ||
-      (!Number.isNaN(row[OFFSET_MARKED_FOR_DELETION]) && !uint(row[OFFSET_MARKED_FOR_DELETION])))
+      (!Number.isNaN(row[OFFSET_MARKED_FOR_DELETION]) &&
+        !uint(row[OFFSET_MARKED_FOR_DELETION]))
+    )
       invalid();
     if (own) {
-      if (marker.troops !== undefined && row[OFFSET_TROOPS] !== marker.troops) invalid();
+      if (marker.troops !== undefined && row[OFFSET_TROOPS] !== marker.troops)
+        invalid();
       ownUnits.add(marker.id);
     } else if (
       row[OFFSET_LAST_POS] !== marker.tile ||
@@ -175,7 +224,8 @@ export function validateNationalObserverNativeLanes(
       (row[OFFSET_PACKED_B] !== 0 && row[OFFSET_PACKED_B] !== 256) ||
       privateAbsent.some((offset) => !Number.isNaN(row[offset])) ||
       privateZero.some((offset) => row[offset] !== 0)
-    ) invalid();
+    )
+      invalid();
   }
   if (packet.packedMissileTimers !== undefined) {
     const timers = sequence(packet.packedMissileTimers);
@@ -184,8 +234,13 @@ export function validateNationalObserverNativeLanes(
     for (let i = 0; i < timers.length;) {
       const id = timers[i++];
       const length = timers[i++];
-      if (!uint(id) || !ownUnits.has(id) || seen.has(id) ||
-        !uint(length, timers.length - i)) invalid();
+      if (
+        !uint(id) ||
+        !ownUnits.has(id) ||
+        seen.has(id) ||
+        !uint(length, timers.length - i)
+      )
+        invalid();
       seen.add(id);
       for (let end = i + length; i < end; i++) if (!uint(timers[i])) invalid();
     }
@@ -195,31 +250,54 @@ export function validateNationalObserverNativeLanes(
     if (players.length > 25_000 || players.length % 5 !== 0) invalid();
     for (let i = 0; i < players.length; i++) {
       const value = players[i];
-      if (typeof value !== "number" || !Number.isFinite(value) ||
-        (i % 5 === 0 && value !== page.observerSmallId)) invalid();
+      if (
+        typeof value !== "number" ||
+        !Number.isFinite(value) ||
+        (i % 5 === 0 && value !== page.observerSmallId)
+      )
+        invalid();
     }
   }
-  if (packet.playerNameViewData !== undefined &&
+  if (
+    packet.playerNameViewData !== undefined &&
     (!record(packet.playerNameViewData) ||
-      Object.keys(packet.playerNameViewData).some((id) => id !== page.observerId)))
+      Object.keys(packet.playerNameViewData).some(
+        (id) => id !== page.observerId,
+      ))
+  )
     invalid();
   if (!record(packet.updates)) invalid();
   const players = packet.updates[GameUpdateType.Player];
   if (!Array.isArray(players)) invalid();
   for (const player of players) {
-    if (!record(player) || typeof player.id !== "string" ||
+    if (
+      !record(player) ||
+      typeof player.id !== "string" ||
       (player.id !== page.observerId &&
-        Object.keys(player).some((field) => !foreignPlayerFields.has(field))))
+        Object.keys(player).some((field) => !foreignPlayerFields.has(field)))
+    )
       invalid();
   }
-  for (const dto of [packet.nationalConflicts, packet.nationalAccessionOffers]) {
-    if (dto !== undefined && (!record(dto) || dto.recipientId !== page.observerId)) invalid();
+  for (const dto of [
+    packet.nationalConflicts,
+    packet.nationalAccessionOffers,
+  ]) {
+    if (
+      dto !== undefined &&
+      (!record(dto) || dto.recipientId !== page.observerId)
+    )
+      invalid();
   }
-  if (packet.nationalCommandResults !== undefined &&
+  if (
+    packet.nationalCommandResults !== undefined &&
     (!Array.isArray(packet.nationalCommandResults) ||
-      packet.nationalCommandResults.some((receipt: unknown) =>
-        !record(receipt) || receipt.actorId !== page.observerId ||
-        receipt.recipientId !== page.observerId)))
+      packet.nationalCommandResults.some(
+        (receipt: unknown) =>
+          !record(receipt) ||
+          receipt.actorId !== page.observerId ||
+          receipt.recipientId !== page.observerId,
+      ))
+  )
     invalid();
   return native;
 }

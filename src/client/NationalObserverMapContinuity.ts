@@ -154,7 +154,16 @@ function pageFromWire(
         unit.kind,
       ) ||
       Object.keys(unit).some(
-        (key) => !["id", "ownerId", "nativeOwnerSmallId", "nativeType", "kind", "tile", "troops"].includes(key),
+        (key) =>
+          ![
+            "id",
+            "ownerId",
+            "nativeOwnerSmallId",
+            "nativeType",
+            "kind",
+            "tile",
+            "troops",
+          ].includes(key),
       ) ||
       (unit.ownerId !== expectedPrincipal && unit.troops !== undefined)
     )
@@ -234,14 +243,22 @@ export class NationalObserverMapContinuity {
   }
 
   /** Full native path: validate every sibling lane before touching the cache. */
-  acceptProjection(packet: TrustedNationalProjection): NationalObserverProjectionDelta {
-    const page = pageFromWire(packet.nationalObserverMap, packet.tick, this.expectedPrincipal);
+  acceptProjection(
+    packet: TrustedNationalProjection,
+  ): NationalObserverProjectionDelta {
+    const page = pageFromWire(
+      packet.nationalObserverMap,
+      packet.tick,
+      this.expectedPrincipal,
+    );
     const nativeUnits = validateNationalObserverNativeLanes(packet, page);
     return { ...this.applyPage(page), nativeUnits };
   }
 
   accept(untrusted: unknown, packetTick: number): NationalObserverMapDelta {
-    return this.applyPage(pageFromWire(untrusted, packetTick, this.expectedPrincipal));
+    return this.applyPage(
+      pageFromWire(untrusted, packetTick, this.expectedPrincipal),
+    );
   }
 
   private applyPage(page: ContinuityPage): NationalObserverMapDelta {

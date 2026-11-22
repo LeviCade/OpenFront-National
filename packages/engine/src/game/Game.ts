@@ -527,6 +527,8 @@ export interface Player extends PlayerLike {
   executeRetreat(attackID: string): void;
 
   // Misc
+  /** Read-only snapshot; does not consume or alter diff delivery state. */
+  toFullUpdate(): PlayerUpdate;
   toUpdate(
     statsOut?: number[],
     attackTroopsOut?: number[],

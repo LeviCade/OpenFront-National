@@ -12,7 +12,8 @@ import { describe, expect, it } from "vitest";
 import { NationalObserverMapContinuity } from "../../src/client/NationalObserverMapContinuity";
 
 type Assets = LiveNationalObservation["observation"]["visibleAssets"];
-const count = (n: number, start = 0) => Array.from({ length: n }, (_, i) => i + start);
+const count = (n: number, start = 0) =>
+  Array.from({ length: n }, (_, i) => i + start);
 const assets = (n: number, tile: number): Assets =>
   count(n).map((id) => ({
     id: String(id),
@@ -38,10 +39,14 @@ function rig() {
     y: (ref: number) => Math.floor(ref / 256),
     ref: (x: number, y: number) => y * 256 + x,
     isValidRef: (ref: number) => ref >= 0 && ref < 65536,
-    isValidCoord: (x: number, y: number) => x >= 0 && x < 256 && y >= 0 && y < 256,
+    isValidCoord: (x: number, y: number) =>
+      x >= 0 && x < 256 && y >= 0 && y < 256,
     ownerID: safeRead,
     tileState: safeRead,
-    terrainByte: (ref: number) => { safeRead(ref); return 1; },
+    terrainByte: (ref: number) => {
+      safeRead(ref);
+      return 1;
+    },
     neighbors4: (ref: number, out: number[]) => {
       let n = 0;
       if (ref % 256 > 0) out[n++] = ref - 1;
@@ -54,7 +59,7 @@ function rig() {
   const game = {
     ticks: () => tick,
     map: () => map,
-    player: (id: string) => ({ smallID: () => id === "a" ? 1 : 2 }),
+    player: (id: string) => ({ smallID: () => (id === "a" ? 1 : 2) }),
     unit: () => ({ type: () => UnitType.City }),
   } as unknown as Game;
   const pager = new NationalObserverMapPager(game, "a", "seam-a");
@@ -65,9 +70,15 @@ function rig() {
     const verified: LiveNationalObservation = {
       visibleTiles: visible,
       observation: {
-        observerId: "a", tick, nations: [], coalitions: [], wars: [],
-        ownResources: { troops: 1, treasury: 1 }, visibleAssets: units,
-        frontiers: [], diplomaticEvents: [],
+        observerId: "a",
+        tick,
+        nations: [],
+        coalitions: [],
+        wars: [],
+        ownResources: { troops: 1, treasury: 1 },
+        visibleAssets: units,
+        frontiers: [],
+        diplomaticEvents: [],
       },
     };
     const page = pager.page(verified);
@@ -86,7 +97,9 @@ describe("C4 E3 bounded continuity algorithm", () => {
     const second = emit(full, active);
     expect(second.page.nextCursor).toBe(8192);
     expect(second.page.unitNextCursor).toBe(4096);
-    const reduced = full.filter((ref) => ref >= 6000 && (ref < 9000 || ref >= 10000));
+    const reduced = full.filter(
+      (ref) => ref >= 6000 && (ref < 9000 || ref >= 10000),
+    );
     const survivors = active.slice(3000);
     const third = emit(reduced, survivors);
     expect(third.delta.clearAllTiles).toBe(true);
@@ -125,17 +138,27 @@ describe("C4 E3 bounded continuity algorithm", () => {
   it("rotates the bounded overflow window, exposing high IDs without overflowing cache", () => {
     const { emit, reader } = rig();
     const all = assets(NATIONAL_OBSERVER_MAX_TRACKED_UNITS + 1, 1);
-    const windows = Math.ceil(NATIONAL_OBSERVER_MAX_TRACKED_UNITS / NATIONAL_OBSERVER_MAX_UNITS);
+    const windows = Math.ceil(
+      NATIONAL_OBSERVER_MAX_TRACKED_UNITS / NATIONAL_OBSERVER_MAX_UNITS,
+    );
     for (let i = 0; i < windows; i++) {
       const { page } = emit([1], all);
       expect(page.unitOverflow).toBe(true);
       expect(page.unitPartial).toBe(true);
-      expect(reader.observedUnitCount).toBeLessThanOrEqual(NATIONAL_OBSERVER_MAX_TRACKED_UNITS);
+      expect(reader.observedUnitCount).toBeLessThanOrEqual(
+        NATIONAL_OBSERVER_MAX_TRACKED_UNITS,
+      );
     }
-    expect(reader.units().some((unit) => unit.id === NATIONAL_OBSERVER_MAX_TRACKED_UNITS)).toBe(false);
+    expect(
+      reader
+        .units()
+        .some((unit) => unit.id === NATIONAL_OBSERVER_MAX_TRACKED_UNITS),
+    ).toBe(false);
     const rotated = emit([1], all);
     expect(rotated.delta.units[0].id).toBe(NATIONAL_OBSERVER_MAX_TRACKED_UNITS);
     expect(rotated.delta.clearAllUnits).toBe(true);
-    expect(reader.observedUnitCount).toBeLessThanOrEqual(NATIONAL_OBSERVER_MAX_TRACKED_UNITS);
+    expect(reader.observedUnitCount).toBeLessThanOrEqual(
+      NATIONAL_OBSERVER_MAX_TRACKED_UNITS,
+    );
   }, 60000);
 });
