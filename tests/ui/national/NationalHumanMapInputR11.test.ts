@@ -280,10 +280,14 @@ describe("R11 actual NATIONAL map input and target-aware radial projection", () 
     expect(marker?.hidden).toBe(false);
     const x = Number.parseFloat(marker!.style.left);
     const y = Number.parseFloat(marker!.style.top);
-    expect(isNationalOpponentTile(game, transform, "nation-b", x, y)).toBe(true);
+    expect(isNationalOpponentTile(game, transform, "nation-b", x, y)).toBe(
+      true,
+    );
     state.trustedReady = false; // E3 revoked sight or socket disconnected.
     locator.tick();
-    expect(isNationalOpponentTile(game, transform, "nation-b", x, y)).toBe(false);
+    expect(isNationalOpponentTile(game, transform, "nation-b", x, y)).toBe(
+      false,
+    );
     expect(document.querySelector("[data-national-map-target-id]")).toBeNull();
   });
 
