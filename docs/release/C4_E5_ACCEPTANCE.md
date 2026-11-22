@@ -27,3 +27,7 @@ E3/E4: independently observed recipient-specific sanitized projection digests, a
 Audit archive 14735475520, SHA-256 `ffe932cd49f342f23fa12df4ff4a3395057a0ac8d6eec59b54d52317ab0cb8c5`.
 
 Exact source control job 137062878651: 20 new controls and 53 total tests passed, lint zero errors, formatter failed on three new files; the following commit applies the exact CI-generated formatter patch.
+
+## Revision 3: negative-probe and bilateral-action correlation
+
+The subsequent semantic revision requires explicit two-party offer/acceptance evidence for admission and peace, distinct sovereigns for war and attack, actual map/mode readiness, a replay probe bound to an earlier executed command, a revoked socket tied to the observed reconnect, spectator/cross-principal identity evidence, and executed participation by all three private seats. The probe envelope identifier is unique; its replayed request identifier refers to the original command. These are new source controls, not execution of the corresponding browser journeys.

@@ -54,6 +54,15 @@ function fixture(mode) {
   const transitions = phases.map((phase, i) => {
     let before = {},
       after = {};
+    if (phase === "start") {
+      before.mapReady = false;
+      after = {
+        mapReady: true,
+        mapTiles: 100,
+        nationalAuthority: !mode.startsWith("legacy"),
+        gameType: privateMode ? "private" : "solo",
+      };
+    }
     if (phase === "spawn") {
       before.tiles = 0;
       after.tiles = 1;
@@ -67,11 +76,22 @@ function fixture(mode) {
       after.members = 2;
     }
     if (phase === "war") {
-      before.war = false;
+      before = {
+        war: false,
+        actorSovereign: "empire",
+        targetSovereign: "C",
+      };
       after.war = true;
     }
     if (phase === "attack") {
-      before = { targetTiles: 5, targetTroops: 10, actorTroops: 20 };
+      before = {
+        targetTiles: 5,
+        targetTroops: 10,
+        actorTroops: 20,
+        war: true,
+        actorSovereign: "empire",
+        targetSovereign: "C",
+      };
       after = { targetTiles: 4, targetTroops: 8, actorTroops: 15 };
     }
     if (phase === "peace") {
@@ -106,10 +126,31 @@ function fixture(mode) {
       "replay",
       "spectator",
     ].includes(phase);
+    const actor = phase === "admit" ? "B" : phase === "peace" ? "C" : "A";
+    const target =
+      phase === "admit" || phase === "peace"
+        ? "A"
+        : phase === "war" || phase === "attack"
+          ? "C"
+          : "B";
+    const offer = ["admit", "peace"].includes(phase)
+      ? {
+          actor: target,
+          recipient: actor,
+          requestId: "offer-" + i,
+          receiptSha256: h(900 + i),
+          tick: i * 2,
+        }
+      : null;
     return {
       phase,
-      actor: "A",
-      target: "B",
+      actor,
+      target,
+      offer,
+      replayedRequestId: phase === "replay" ? "r5" : null,
+      claimedActor: phase === "cross-principal" ? "B" : null,
+      spectator: phase === "spectator",
+      socketId: phase === "stale-socket" ? "old" : null,
       requestId: "r" + i,
       receiptSha256: h(i + 1),
       tickBefore: i * 2,
@@ -141,6 +182,11 @@ function fixture(mode) {
       phase: a.phase,
       actor: a.actor,
       target: a.target,
+      offer: a.offer ? { ...a.offer } : null,
+      replayedRequestId: a.replayedRequestId,
+      claimedActor: a.claimedActor,
+      spectator: a.spectator,
+      socketId: a.socketId,
       requestId: a.requestId,
       receiptSha256: a.receiptSha256,
       tickAfter: a.tickAfter,
@@ -243,6 +289,55 @@ const mutations = [
         f.authority.transitions[1].tickBefore;
     },
     "COMMAND_RECEIPT_OR_TICK_spawn",
+  ],
+  [
+    "missing bilateral offer",
+    (f) => {
+      delete f.authority.transitions.find((a) => a.phase === "admit").offer;
+    },
+    "ADMISSION_NOT_OBSERVED",
+  ],
+  [
+    "attack own sovereign",
+    (f) => {
+      const a = f.authority.transitions.find((a) => a.phase === "attack");
+      a.before.targetSovereign = a.before.actorSovereign;
+    },
+    "MILITARY_EFFECT_NOT_OBSERVED",
+  ],
+  [
+    "fake replay without original command",
+    (f) => {
+      const a = f.authority.transitions.find((a) => a.phase === "replay");
+      a.replayedRequestId = "never-executed";
+    },
+    "REPLAY_NOT_CORRELATED_TO_EXECUTED_COMMAND",
+  ],
+  [
+    "cross-principal probe is actually same principal",
+    (f) => {
+      const a = f.authority.transitions.find(
+        (a) => a.phase === "cross-principal",
+      );
+      a.claimedActor = a.actor;
+    },
+    "CROSS_PRINCIPAL_PROBE_MISSING",
+  ],
+  [
+    "stale socket has no reconnect correlation",
+    (f) => {
+      f.authority.transitions.find((a) => a.phase === "stale-socket").socketId =
+        "not-the-old-socket";
+    },
+    "STALE_SOCKET_PROBE_MISSING",
+  ],
+  [
+    "spectator probe is actually an admitted participant",
+    (f) => {
+      f.authority.transitions.find((a) => a.phase === "spectator").spectator =
+        false;
+    },
+    "SPECTATOR_PROBE_MISSING",
   ],
   [
     "cross game",

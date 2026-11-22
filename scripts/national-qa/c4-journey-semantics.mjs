@@ -24,6 +24,7 @@ export function validateJourney(mode, browser, authority, trusted) {
   const hex = (x) => typeof x === "string" && /^[a-f0-9]{64}$/.test(x);
   const id = (x) => typeof x === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(x);
   const count = (x) => Number.isSafeInteger(x) && x >= 0;
+  if (!modes.includes(mode)) return fail("SOURCE_OR_MODE_MISMATCH");
   const privateMode = mode === "private-national";
   const isLegacy = mode.startsWith("legacy-");
   const phases = isLegacy
@@ -77,7 +78,7 @@ export function validateJourney(mode, browser, authority, trusted) {
     authority.transitions.length !== phases.length
   )
     return fail("TRANSITION_MISSING_OR_EXTRA");
-  const requests = new Set();
+  const requests = new Map();
   const screenshots = new Set();
   let lastTick = -1;
   for (let i = 0; i < phases.length; i++) {
@@ -112,7 +113,6 @@ export function validateJourney(mode, browser, authority, trusted) {
     if (screenshots.has(b.screenshotSha256))
       return fail("SCREENSHOT_REUSED_" + phase);
     screenshots.add(b.screenshotSha256);
-    requests.add(a.requestId);
     lastTick = a.tickAfter;
     const negative = [
       "illegal",
@@ -131,6 +131,47 @@ export function validateJourney(mode, browser, authority, trusted) {
       after = a.after;
     if (!before || !after) return fail("STATE_MEASUREMENTS_" + phase);
     if (
+      phase === "replay" &&
+      (!id(a.replayedRequestId) ||
+        a.replayedRequestId !== b.replayedRequestId ||
+        requests.get(a.replayedRequestId)?.outcome !== "executed" ||
+        requests.get(a.replayedRequestId)?.actor !== a.actor)
+    )
+      return fail("REPLAY_NOT_CORRELATED_TO_EXECUTED_COMMAND");
+    if (
+      phase === "cross-principal" &&
+      (!id(a.claimedActor) ||
+        a.claimedActor === a.actor ||
+        a.claimedActor !== b.claimedActor)
+    )
+      return fail("CROSS_PRINCIPAL_PROBE_MISSING");
+    if (
+      phase === "spectator" &&
+      (a.spectator !== true || b.spectator !== true)
+    )
+      return fail("SPECTATOR_PROBE_MISSING");
+    if (
+      phase === "stale-socket" &&
+      (!id(a.socketId) ||
+        a.socketId !== b.socketId ||
+        authority.transitions.find((x) => x?.phase === "reconnect")?.before
+          ?.socket !== a.socketId ||
+        authority.transitions.find((x) => x?.phase === "reconnect")?.actor !==
+          a.actor)
+    )
+      return fail("STALE_SOCKET_PROBE_MISSING");
+    requests.set(a.requestId, a);
+    if (
+      phase === "start" &&
+      !(before.mapReady === false &&
+        after.mapReady === true &&
+        count(after.mapTiles) &&
+        after.mapTiles > 0 &&
+        after.nationalAuthority === !isLegacy &&
+        after.gameType === (privateMode ? "private" : "solo"))
+    )
+      return fail("REAL_MODE_AND_MAP_UNPROVEN");
+    if (
       phase === "spawn" &&
       !(before.tiles === 0 && count(after.tiles) && after.tiles > 0)
     )
@@ -147,7 +188,21 @@ export function validateJourney(mode, browser, authority, trusted) {
         count(after.members) &&
         after.members > before.members &&
         id(a.target) &&
-        a.target !== a.actor
+        a.target !== a.actor &&
+        a.target === b.target &&
+        a.offer?.actor === a.target &&
+        a.offer?.recipient === a.actor &&
+        b.offer?.actor === a.offer.actor &&
+        b.offer?.recipient === a.offer.recipient &&
+        id(a.offer?.requestId) &&
+        a.offer.requestId !== a.requestId &&
+        !requests.has(a.offer.requestId) &&
+        a.offer.requestId === b.offer?.requestId &&
+        hex(a.offer.receiptSha256) &&
+        a.offer.receiptSha256 === b.offer?.receiptSha256 &&
+        count(a.offer.tick) &&
+        a.offer.tick <= a.tickBefore &&
+        a.offer.tick === b.offer?.tick
       )
     )
       return fail("ADMISSION_NOT_OBSERVED");
@@ -157,7 +212,11 @@ export function validateJourney(mode, browser, authority, trusted) {
         before.war === false &&
         after.war === true &&
         id(a.target) &&
-        a.target !== a.actor
+        a.target !== a.actor &&
+        a.target === b.target &&
+        id(before.actorSovereign) &&
+        id(before.targetSovereign) &&
+        before.actorSovereign !== before.targetSovereign
       )
     )
       return fail("WAR_NOT_OBSERVED");
@@ -168,6 +227,10 @@ export function validateJourney(mode, browser, authority, trusted) {
         a.target !== a.actor &&
         id(b.target) &&
         b.target === a.target &&
+        before.war === true &&
+        id(before.actorSovereign) &&
+        id(before.targetSovereign) &&
+        before.actorSovereign !== before.targetSovereign &&
         count(before.targetTiles) &&
         count(after.targetTiles) &&
         count(before.targetTroops) &&
@@ -186,7 +249,21 @@ export function validateJourney(mode, browser, authority, trusted) {
         before.war === true &&
         after.war === false &&
         id(a.target) &&
-        a.target !== a.actor
+        a.target !== a.actor &&
+        a.target === b.target &&
+        a.offer?.actor === a.target &&
+        a.offer?.recipient === a.actor &&
+        b.offer?.actor === a.offer.actor &&
+        b.offer?.recipient === a.offer.recipient &&
+        id(a.offer?.requestId) &&
+        a.offer.requestId !== a.requestId &&
+        !requests.has(a.offer.requestId) &&
+        a.offer.requestId === b.offer?.requestId &&
+        hex(a.offer.receiptSha256) &&
+        a.offer.receiptSha256 === b.offer?.receiptSha256 &&
+        count(a.offer.tick) &&
+        a.offer.tick <= a.tickBefore &&
+        a.offer.tick === b.offer?.tick
       )
     )
       return fail("PEACE_NOT_OBSERVED");
@@ -283,6 +360,15 @@ export function validateJourney(mode, browser, authority, trusted) {
       )
     )
       return fail("PRIVATE_ACTOR_NOT_ADMITTED");
+    if (
+      authority.seats.some(
+        (seat) =>
+          !authority.transitions.some(
+            (a) => a.actor === seat.principal && a.outcome === "executed",
+          ),
+      )
+    )
+      return fail("PRIVATE_SEAT_ACTION_UNPROVEN");
   }
   return {
     accepted: true,
