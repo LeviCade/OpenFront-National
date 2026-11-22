@@ -45,7 +45,7 @@ admission, independent recipient projections, authoritative server tick,
 E4 live gameplay controls, bilateral accession consent, WAR/peace, reconnect,
 spectator denial and E6 independent host proof are observed. Identical
 browser-reported match IDs alone do not prove one trusted server. E4 should
-provide a read-only *non-secret* projection marker for diagnosis; the marker
+provide a read-only _non-secret_ projection marker for diagnosis; the marker
 is **not** itself authentication.
 
 ### Legacy desktop and mobile regression
@@ -95,7 +95,7 @@ E6's reviewed changed-head test records actual success.
 - **Focused source verification:** [run #44955265134](https://github.com/LeviCade/OpenFront-National/actions/runs/44955265134) passed 12/12 independent negative tests, syntax, oxlint zero errors and pinned oxfmt. First live private-browser readiness on that SHA returned **BLOCKED** (three real account/browser CDP endpoints absent).
 - **Real ordinary Chrome 157.0.8103.78:** [four-mode source-fixed smoke #44955374876](https://github.com/LeviCade/OpenFront-National/actions/runs/44955374876), exact `c247f2af57e427ef587b125a1034efa91c1b2486`. The matrix jobs completed as diagnostics, **not** gameplay passes. NATIONAL desktop/mobile both **FAIL at `start`**; legacy desktop/mobile both **FAIL at `legacy-ffa`**. Each report retained four valid local PNGs, one Worker packet, WebGL shader pixel PASS, and a browser console error; the game never reached founding, WAR or damage. This ordinary CI lane explicitly enabled SwiftShader and provided **no host GPU signature**.
 - Four sanitized bounded per-mode JSON artifacts are attached to that run. Private raw logs/recipient packets were **not published**. The four failures in software Chrome cannot establish that the physical GPU fails or succeeds.
-- **Updated E5 source after the smoke** improves the sanitized *actual first-failure stage/error* instead of only printing generic process exit, and recognizes actual headless Chrome variants. This source refinement does not retroactively convert the earlier smoke into a new SHA's physical result. E6 must preserve the strict renderer and independently inspect physical graphics.
+- **Updated E5 source after the smoke** improves the sanitized _actual first-failure stage/error_ instead of only printing generic process exit, and recognizes actual headless Chrome variants. This source refinement does not retroactively convert the earlier smoke into a new SHA's physical result. E6 must preserve the strict renderer and independently inspect physical graphics.
 - **Private NATIONAL**: no genuine separately authenticated A/B/C sessions were supplied during this test; therefore **BLOCKED**, not PASS.
 
 **Owner-routing:** E1 commands, WAR and peace semantics; E2 authenticated
