@@ -242,10 +242,14 @@ describe("C2 First Class E3: new M7 actual observer map + recipient wire", () =>
     );
     expect(a.msg.payload).not.toContain("9876543");
     expect(a.msg.payload).not.toContain("secretTreaty");
-    expect(a.msg.payload).not.toContain("terms");
+    // C4 E4: terms are private to authorized members, not forbidden to the founder.
+    expect(JSON.stringify(a.data.nationalPolitics)).not.toContain("terms");
+    expect(c.data.nationalPactDisclosure?.pacts ?? []).toEqual([]);
     expect(c.msg.payload).not.toContain("unanimous");
     expect(c.msg.payload).not.toContain("forbidden");
-    expect(c.msg.payload).not.toContain("c2_e3_secret_mda");
+    // If the E1 public pact read is integrated, the ID is intentionally public.
+    if (c.data.nationalPolitics?.pacts !== undefined)
+      expect(c.data.nationalPolitics.pacts).toContainEqual(expect.objectContaining({ id: "c2_e3_secret_mda" }));
     expect(a.map.countries.map((n) => n.id)).toEqual(
       expect.arrayContaining([A.id, B.id, C.id]),
     );
