@@ -480,7 +480,7 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     for (let y = 5; y < 86; y++) {
       for (let x = 5; x < 86; x++) {
         const ref = game.ref(x, y);
-        if (game.isLand(ref) && game.owner(ref).id() !== A.id)
+        if (game.isLand(ref) && game.owner(ref) !== a)
           a.conquer(ref);
       }
     }
