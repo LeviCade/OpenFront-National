@@ -145,9 +145,9 @@ export class NationalObserverMapPager {
     }
     const visible = verified.visibleTiles;
     const map = this.game.map();
-    const ordered = [...visible]
-      .filter((tile) => map.isValidRef(tile))
-      .sort((a, b) => a - b);
+    if (visible.size > 32_000_000) {
+      throw new Error("NATIONAL observer-map exceeds bounded world limit");
+    }
     if (this.previousVisible !== null) {
       for (const former of this.previousVisible) {
         if (!visible.has(former)) {
@@ -157,7 +157,10 @@ export class NationalObserverMapPager {
         }
       }
     }
-    this.previousVisible = new Set(ordered);
+    // The verified sight set was freshly derived for this tick by E1.
+    // Tracking its membership is O(visible); do not sort all visible tiles
+    // each tick merely to send a 4096-tile page.
+    this.previousVisible = visible;
     const reset = this.resetPending;
     if (reset) {
       this.cursor = 0;
@@ -166,7 +169,9 @@ export class NationalObserverMapPager {
     if (this.cursor === 0) {
       // The ID list is fixed until completion, but tile contents are live.
       // Newly visible tiles join the next sweep, never an arbitrary offset.
-      this.tileRefs = ordered;
+      this.tileRefs = [...visible]
+        .filter((tile) => map.isValidRef(tile))
+        .sort((a, b) => a - b);
       this.sweepId += 1;
       this.sweepTick = this.game.ticks();
     }
