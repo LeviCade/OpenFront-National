@@ -232,6 +232,74 @@ function layer(m: Match, id: string) {
 }
 
 describe("C4 E1 actual last-sovereign engine", () => {
+  it("D-007: authenticated sovereign exit and unanimous constitutional amendment change real MDA eligibility", async () => {
+    const m = await spawned(TestConfig, [
+      [20, 20],
+      [28, 20],
+      [75, 75],
+      [75, 20],
+    ]);
+    pactCommand(
+      m,
+      A,
+      {
+        kind: "found-pact",
+        pactId: PACT,
+        name: "Constitution",
+        pactKind: "MDA",
+        terms: { admission: "leader", expulsion: "forbidden" },
+      },
+      "c2-constitution",
+    );
+    for (const member of [B, D]) {
+      pactCommand(
+        m,
+        A,
+        { kind: "invite-pact", pactId: PACT, candidateId: member },
+        "c2-invite-" + member,
+      );
+      pactCommand(
+        m,
+        member,
+        { kind: "accept-pact", pactId: PACT },
+        "c2-join-" + member,
+      );
+    }
+    const action = (
+      actor: string,
+      type: string,
+      requestId: string,
+      accepted: boolean,
+      fields: Click = {},
+    ) => {
+      clicks(m, stamped(actor, { type, pactId: PACT, requestId, ...fields }));
+      expect(political(m, actor, requestId).accepted).toBe(accepted);
+    };
+    expect(m.game.nationalMdaAllies(A)).toEqual([B, D].sort());
+    action(A, "national_expel_pact", "c2-forbidden", false, { memberId: B });
+    action(C, "national_betray_pact", "c2-outsider", false);
+    action(D, "national_betray_pact", "c2-exit", true);
+    expect(m.game.nationalMdaAllies(A)).toEqual([B]);
+    expect(m.game.nationalMdaAllies(D)).toEqual([]);
+    action(D, "national_betray_pact", "c2-exit-again", false);
+    action(A, "national_propose_pact_amendment", "c2-propose", true, {
+      terms: { admission: "leader", expulsion: "leader" },
+      administratorId: A,
+    });
+    action(C, "national_approve_pact_amendment", "c2-forged-vote", false);
+    action(A, "national_expel_pact", "c2-before-consent", false, {
+      memberId: B,
+    });
+    expect(m.game.nationalMdaAllies(A)).toEqual([B]);
+    action(B, "national_approve_pact_amendment", "c2-real-vote", true);
+    action(A, "national_expel_pact", "c2-after-consent", true, {
+      memberId: B,
+    });
+    expect(m.game.nationalMdaAllies(A)).toEqual([]);
+    expect(m.game.nationalMdaAllies(B)).toEqual([]);
+    expect(m.errors).toEqual([]);
+  });
+
   it("WAR-01/SOV-01: a tiny defender is not handed to a peaceful neighbor by a single combat tick", async () => {
     const m = await spawned(TestConfig, [
       [20, 20],

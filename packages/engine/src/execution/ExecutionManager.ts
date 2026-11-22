@@ -78,6 +78,39 @@ export class Executor {
           intent.clientID,
         );
       }
+      case "national_propose_pact_amendment":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          {
+            kind: "propose-pact-amendment",
+            pactId: intent.pactId,
+            terms: intent.terms,
+            administratorId: intent.administratorId,
+          },
+          intent.requestId,
+          intent.clientID,
+        );
+      case "national_approve_pact_amendment":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          { kind: "approve-pact-amendment", pactId: intent.pactId },
+          intent.requestId,
+          intent.clientID,
+        );
+      case "national_expel_pact":
+        return new NationalFoundEmpireExecution(
+          player,
+          "",
+          {
+            kind: "expel-pact",
+            pactId: intent.pactId,
+            memberId: intent.memberId,
+          },
+          intent.requestId,
+          intent.clientID,
+        );
       case "national_betray_pact":
         return new NationalFoundEmpireExecution(
           player,

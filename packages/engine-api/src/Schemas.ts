@@ -58,7 +58,10 @@ export type Intent =
   | NationalFoundPactIntent
   | NationalInvitePactIntent
   | NationalAcceptPactIntent
-  | NationalBetrayPactIntent;
+  | NationalBetrayPactIntent
+  | NationalProposePactAmendmentIntent
+  | NationalApprovePactAmendmentIntent
+  | NationalExpelPactIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -135,6 +138,16 @@ export type NationalAcceptPactIntent = z.infer<
 
 export type NationalBetrayPactIntent = z.infer<
   typeof NationalBetrayPactIntentSchema
+>;
+
+export type NationalProposePactAmendmentIntent = z.infer<
+  typeof NationalProposePactAmendmentIntentSchema
+>;
+export type NationalApprovePactAmendmentIntent = z.infer<
+  typeof NationalApprovePactAmendmentIntentSchema
+>;
+export type NationalExpelPactIntent = z.infer<
+  typeof NationalExpelPactIntentSchema
 >;
 
 export type Turn = z.infer<typeof TurnSchema>;
@@ -742,6 +755,25 @@ export const NationalBetrayPactIntentSchema = z.object({
   requestId: NationalPoliticalRequestId,
 });
 
+export const NationalProposePactAmendmentIntentSchema = z.object({
+  type: z.literal("national_propose_pact_amendment"),
+  pactId: NationalPoliticalId,
+  terms: NationalFoundPactIntentSchema.shape.terms,
+  administratorId: MappedID.nullable(),
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalApprovePactAmendmentIntentSchema = z.object({
+  type: z.literal("national_approve_pact_amendment"),
+  pactId: NationalPoliticalId,
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalExpelPactIntentSchema = z.object({
+  type: z.literal("national_expel_pact"),
+  pactId: NationalPoliticalId,
+  memberId: MappedID,
+  requestId: NationalPoliticalRequestId,
+});
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -780,6 +812,9 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalInvitePactIntentSchema,
   NationalAcceptPactIntentSchema,
   NationalBetrayPactIntentSchema,
+  NationalProposePactAmendmentIntentSchema,
+  NationalApprovePactAmendmentIntentSchema,
+  NationalExpelPactIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)
