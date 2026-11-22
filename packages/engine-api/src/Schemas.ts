@@ -61,7 +61,8 @@ export type Intent =
   | NationalBetrayPactIntent
   | NationalProposePactAmendmentIntent
   | NationalApprovePactAmendmentIntent
-  | NationalExpelPactIntent;
+  | NationalExpelPactIntent
+  | NationalImperialAdministrationIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -148,6 +149,10 @@ export type NationalApprovePactAmendmentIntent = z.infer<
 >;
 export type NationalExpelPactIntent = z.infer<
   typeof NationalExpelPactIntentSchema
+>;
+
+export type NationalImperialAdministrationIntent = z.infer<
+  typeof NationalImperialAdministrationIntentSchema
 >;
 
 export type Turn = z.infer<typeof TurnSchema>;
@@ -774,6 +779,39 @@ export const NationalExpelPactIntentSchema = z.object({
   requestId: NationalPoliticalRequestId,
 });
 
+/** Class Two M5: append only; client identity is never an action field. */
+export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("set-policy"),
+    empireId: NationalPoliticalId,
+    policy: z.object({
+      workerIncomeBps: zb.uint({ min: 0, max: 10_000 }),
+      allowedConstruction: z.array(z.enum(UnitType)).max(16).nullable(),
+    }),
+  }),
+  z.object({
+    kind: z.literal("transfer-troops"),
+    empireId: NationalPoliticalId,
+    sourceId: MappedID,
+    destinationId: MappedID,
+    amount: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }),
+  }),
+  z.object({
+    kind: z.literal("build-structure"),
+    empireId: NationalPoliticalId,
+    memberId: MappedID,
+    type: z.enum(UnitType),
+    tile: zb.uint(),
+  }),
+  z.object({ kind: z.literal("dissolve"), empireId: NationalPoliticalId }),
+]);
+
+export const NationalImperialAdministrationIntentSchema = z.object({
+  type: z.literal("national_imperial_administration"),
+  command: NationalImperialAdministrationCommandSchema,
+  requestId: NationalPoliticalRequestId,
+});
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -815,6 +853,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalProposePactAmendmentIntentSchema,
   NationalApprovePactAmendmentIntentSchema,
   NationalExpelPactIntentSchema,
+  NationalImperialAdministrationIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

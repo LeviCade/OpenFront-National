@@ -8,6 +8,8 @@ import {
   NationalFoundEmpireExecution,
   NationalFoundEmpireExecutionSnapshot,
 } from "@openfront/engine/execution/NationalFoundEmpireExecution";
+import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
+import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
 import { ConstructionExecution } from "@openfront/engine/execution/ConstructionExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
@@ -566,6 +568,48 @@ describe("Class Two E1 M5 administration", () => {
       expect(leader.gold() - start).toBe(gross);
       expect(g.nationalPoliticalAuthority()?.empireOf(N)).toBeNull();
       expect(g.nationalImperialAdministrationFor(leader)).toBeNull();
+    }
+    expect(snapshot(restored)).toEqual(snapshot(game));
+  });
+
+  it("D-011 stamps administration through Executor, restores queued intent, deduplicates and rejects stale crown", async () => {
+    const game = await realGame(3);
+    foundAndJoined(game);
+    const n = game.player(N);
+    const command = {
+      kind: "set-policy" as const, empireId: "empire-r3",
+      policy: { workerIncomeBps: 2500, allowedConstruction: [UnitType.City] },
+    };
+    const issue = (g: Game, clientID: string, requestId: string) => {
+      const exec = new Executor(g, "r3-national", undefined);
+      g.addExecution(exec.createExec(StampedIntentSchema.parse({
+        type: "national_imperial_administration", clientID, requestId, command,
+      })));
+    };
+    issue(game, n.clientID()!, "admin-e1-policy");
+    const { restored } = await roundTrip(game, "plains");
+    for (const g of [game, restored]) {
+      g.executeNextTick();
+      g.executeNextTick();
+      const actor = g.player(N);
+      expect(g.nationalImperialAdministrationFor(actor)?.workerIncomeBps).toBe(2500);
+      expect(g.nationalPoliticalCommandResults(actor)).toContainEqual(expect.objectContaining({
+        requestId: "admin-e1-policy", commandKind: "imperial-administration",
+        accepted: true, recipientId: N,
+      }));
+      const priorCount = g.nationalPoliticalCommandResults(actor).length;
+      issue(g, actor.clientID()!, "admin-e1-policy");
+      g.executeNextTick(); g.executeNextTick();
+      expect(g.nationalPoliticalCommandResults(actor).length).toBe(priorCount);
+      g.performNationalCommand(actor, { kind: "transfer-crown", empireId: "empire-r3", successorId: S });
+      issue(g, actor.clientID()!, "admin-e1-stale");
+      g.executeNextTick(); g.executeNextTick();
+      expect(g.nationalPoliticalCommandResults(actor)).toContainEqual(expect.objectContaining({
+        requestId: "admin-e1-stale", accepted: false, reason: "political-rule",
+      }));
+      expect(g.nationalPoliticalCommandResults(g.player(S))).not.toContainEqual(expect.objectContaining({
+        requestId: "admin-e1-stale",
+      }));
     }
     expect(snapshot(restored)).toEqual(snapshot(game));
   });

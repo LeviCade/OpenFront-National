@@ -159,6 +159,7 @@ export type NationalRuntimeSnapshot = z.infer<
 /** These actions are authorized by the live GameImpl actor check. */
 export type NationalCommand =
   | { kind: "found-empire"; empireId: string }
+  | { kind: "imperial-administration"; command: NationalImperialAdministrationCommand }
   | { kind: "offer-empire"; empireId: string; candidateId: PlayerID }
   | { kind: "accept-empire"; empireId: string; candidateId: PlayerID }
   | { kind: "transfer-crown"; empireId: string; successorId: PlayerID }

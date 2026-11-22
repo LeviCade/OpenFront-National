@@ -93,7 +93,8 @@ export interface NationalCommandResultViewData {
     | "national_propose_pact_amendment"
     | "national_approve_pact_amendment"
     | "national_betray_pact"
-    | "national_expel_pact";
+    | "national_expel_pact"
+    | "national_imperial_administration";
   readonly accepted: boolean;
   readonly tick: Tick;
   /**

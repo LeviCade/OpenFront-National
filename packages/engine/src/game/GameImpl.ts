@@ -1172,6 +1172,10 @@ export class GameImpl implements Game {
       throw new Error("NATIONAL: unauthenticated or inactive actor");
     }
     this.synchronizeNationalState();
+    if (command.kind === "imperial-administration") {
+      this.performNationalImperialAdministration(actor, command.command, authenticatedClientID);
+      return;
+    }
     this._national.perform(actor.id(), command);
     this.revokeNationalObserverMemory();
   }
@@ -1252,6 +1256,8 @@ export class GameImpl implements Game {
   ): boolean {
     const authority = this.nationalPoliticalAuthority();
     if (!authority?.alive(actorId)) return false;
+    if (command.kind === "imperial-administration")
+      return authority.emperorOf(command.command.empireId) === actorId;
     if (
       command.kind === "transfer-crown" ||
       command.kind === "set-national-peace-delegation"
@@ -1283,7 +1289,9 @@ export class GameImpl implements Game {
     if (this._national === null || this._nationalGovernance === null)
       throw new Error("NATIONAL command journal: mode not enabled");
     this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
-    const targetId = "pactId" in command ? command.pactId : command.empireId;
+    const targetId = command.kind === "imperial-administration"
+      ? command.command.empireId
+      : "pactId" in command ? command.pactId : command.empireId;
     const recordedTargetId =
       typeof targetId === "string" &&
       targetId.length > 0 &&
