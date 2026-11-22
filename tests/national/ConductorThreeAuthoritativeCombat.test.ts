@@ -21,8 +21,8 @@ import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
-import { encodeSnapshotValue } from "@openfront/engine/snapshot/SnapshotCodec";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
+import { encodeSnapshotValue } from "@openfront/engine/snapshot/SnapshotCodec";
 import { describe, expect, it } from "vitest";
 import { Client } from "../../src/server/Client";
 import { TrustedNationalMatch } from "../../src/server/national/TrustedNationalMatch";
@@ -438,10 +438,20 @@ describe("Third Conductor E1 — authoritative attack and succession combat", ()
     // Direct init isolates the attack's side effects from ordinary per-tick
     // troop normalization (which can call Player.removeTroops itself).
     const directOriginal = new AttackExecution(
-      220_000, m.game.player(A), D, null, true, OLD_A,
+      220_000,
+      m.game.player(A),
+      D,
+      null,
+      true,
+      OLD_A,
     );
     const directRestored = new AttackExecution(
-      220_000, restored.player(A), D, null, true, OLD_A,
+      220_000,
+      restored.player(A),
+      D,
+      null,
+      true,
+      OLD_A,
     );
     const originalBalance = m.game.player(A).troops();
     const restoredBalance = restored.player(A).troops();
@@ -512,7 +522,11 @@ describe("Third Conductor E1 — authoritative attack and succession combat", ()
     delete payload.authenticatedClientID;
     delete payload.legacyUnstampedPending;
     const legacyBytes = encodeSnapshotValue(oldRoot);
-    const restored = await restoreTestGame(legacyBytes, "plains", PrivateHostConfig);
+    const restored = await restoreTestGame(
+      legacyBytes,
+      "plains",
+      PrivateHostConfig,
+    );
     restored.takeoverPlayer(restored.player(A), NEW_A);
     const tilesBefore = restored.player(A).numTilesOwned();
     restored.executeNextTick();
