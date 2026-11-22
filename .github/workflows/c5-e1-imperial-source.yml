@@ -62,11 +62,6 @@ jobs:
             exit 1
           fi
 
-      - name: Previous formatting command disabled
-        if: false()
-        run: |
-          npx --no-install oxfmt --check             packages/engine/src/national/NationalRuntime.ts             packages/engine/src/game/GameImpl.ts             packages/engine-api/src/Schemas.ts             tests/national/C5ImperialCentralCombat.test.ts             .github/workflows/c5-e1-imperial-source.yml
-
   full:
     name: Whole-tree regression, lint, formatting, build
     runs-on: ubuntu-latest
