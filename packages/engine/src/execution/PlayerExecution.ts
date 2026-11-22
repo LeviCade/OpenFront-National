@@ -98,10 +98,11 @@ export class PlayerExecution implements Execution {
       return;
     }
 
+    this.mg.releaseNationalDeferredTroops(this.player);
     const troopInc = this.config.troopIncreaseRate(this.player);
-    this.player.addTroops(troopInc);
+    this.mg.creditNationalTroopGrowth(this.player, troopInc);
     const goldFromWorkers = this.config.goldAdditionRate(this.player);
-    this.player.addGold(goldFromWorkers);
+    this.mg.creditNationalWorkerIncome(this.player, goldFromWorkers);
 
     // Record stats
     this.mg.stats().goldWork(this.player, goldFromWorkers);

@@ -65,6 +65,7 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
+import { transferActiveTroops } from "../national/politics/ImperialAccounting";
 import { AttackImpl } from "./AttackImpl";
 import {
   Alliance,
@@ -1372,6 +1373,55 @@ export class PlayerImpl implements Player {
     return actualRemoved;
   }
 
+  /** Treasury disposition is a transfer, not newly earned worker revenue. */
+  static prepareNationalGoldCredits(
+    credits: readonly { player: PlayerImpl; amount: bigint }[],
+  ): () => void {
+    const seen = new Set<PlayerImpl>();
+    const next: { player: PlayerImpl; gold: bigint }[] = [];
+    for (const { player, amount } of credits) {
+      if (!(player instanceof PlayerImpl) || seen.has(player) || amount <= 0n)
+        throw new Error("NATIONAL: invalid treasury credit");
+      seen.add(player);
+      next.push({ player, gold: player._gold + amount });
+    }
+    return () => {
+      for (const row of next) row.player._gold = row.gold;
+    };
+  }
+
+  static prepareNationalTroopCredits(
+    credits: readonly { player: PlayerImpl; amount: bigint; capacity: number }[],
+  ): () => void {
+    const seen = new Set<PlayerImpl>();
+    const next: { player: PlayerImpl; troops: bigint }[] = [];
+    for (const { player, amount, capacity } of credits) {
+      if (!(player instanceof PlayerImpl) || seen.has(player) || amount <= 0n ||
+          !Number.isSafeInteger(capacity) || capacity < 0 ||
+          player._troops + amount > BigInt(capacity))
+        throw new Error("NATIONAL: invalid pooled troop credit");
+      seen.add(player);
+      next.push({ player, troops: player._troops + amount });
+    }
+    return () => { for (const row of next) row.player._troops = row.troops; };
+  }
+
+  static transferNationalActiveTroops(
+    source: PlayerImpl,
+    destination: PlayerImpl,
+    capacity: number,
+    amount: number,
+  ): void {
+    if (source === destination || !Number.isSafeInteger(capacity) ||
+        !Number.isSafeInteger(amount))
+      throw new Error("NATIONAL: invalid active troop transfer");
+    const [sourceAfter, destinationAfter] = transferActiveTroops(
+      source._troops, destination._troops, BigInt(capacity), BigInt(amount),
+    );
+    source._troops = sourceAfter;
+    destination._troops = destinationAfter;
+  }
+
   troops(): number {
     return Number(this._troops);
   }
@@ -1448,6 +1498,8 @@ export class PlayerImpl implements Player {
     spawnTile: TileRef,
     params: UnitParams<T>,
   ): Unit {
+    if (!this.mg.nationalAllowsConstruction(this, type))
+      throw new Error("NATIONAL: construction prohibited by imperial decree");
     if (this.mg.config().isUnitDisabled(type)) {
       throw new Error(
         `Attempted to build disabled unit ${type} at tile ${spawnTile} by player ${this.name()}`,
@@ -1455,6 +1507,33 @@ export class PlayerImpl implements Player {
     }
 
     const cost = this.mg.unitInfo(type).cost(this.mg, this);
+    return this.placePaidUnit(type, spawnTile, params, () => this.removeGold(cost));
+  }
+
+  /** Engine-only imperial building: same placement and cost, different payer. */
+  buildImperialStructure(
+    type: UnitType,
+    targetTile: TileRef,
+    debit: (cost: Gold) => void,
+  ): Unit {
+    if (!Structures.has(type) || !this.isAlive() ||
+        !this.mg.isValidRef(targetTile) || this.mg.config().isUnitDisabled(type))
+      throw new Error("NATIONAL: invalid imperial structure request");
+    const spawnTile = this.canSpawnUnitType(type, targetTile, null);
+    if (spawnTile === false)
+      throw new Error("NATIONAL: no lawful imperial structure placement");
+    const cost = this.mg.unitInfo(type).cost(this.mg, this);
+    // Validated payer callback must debit or throw before any unit creation.
+    debit(cost);
+    return this.placePaidUnit(type, spawnTile, {}, () => {});
+  }
+
+  private placePaidUnit<T extends UnitType>(
+    type: T,
+    spawnTile: TileRef,
+    params: UnitParams<T>,
+    pay: () => void,
+  ): Unit {
     const b = new UnitImpl(
       type,
       this.mg,
@@ -1466,7 +1545,7 @@ export class PlayerImpl implements Player {
     this._units.push(b);
     this._myUnitsVersion++;
     this.recordUnitConstructed(type);
-    this.removeGold(cost);
+    pay();
     this.removeTroops("troops" in params ? (params.troops ?? 0) : 0);
     this.mg.addUpdate(b.toUpdate());
     this.mg.addUnit(b);
@@ -1504,6 +1583,7 @@ export class PlayerImpl implements Player {
     unitType: UnitType,
     knownCost: Gold | null = null,
   ): boolean {
+    if (!this.mg.nationalAllowsConstruction(this, unitType)) return false;
     if (this.mg.config().isUnitDisabled(unitType)) {
       return false;
     }
@@ -1548,6 +1628,8 @@ export class PlayerImpl implements Player {
   }
 
   upgradeUnit(unit: Unit) {
+    if (!this.mg.nationalAllowsConstruction(this, unit.type()))
+      throw new Error("NATIONAL: upgrade prohibited by imperial decree");
     const cost = this.mg.unitInfo(unit.type()).cost(this.mg, this);
     this.removeGold(cost);
     unit.increaseLevel();

@@ -26,6 +26,7 @@ const politicalCommandKind = z.enum([
   "approve-pact-amendment",
   "betray-pact",
   "expel-pact",
+  "imperial-administration",
 ]);
 export type NationalPoliticalCommandKind = z.infer<typeof politicalCommandKind>;
 const warCommandKind = z.enum([

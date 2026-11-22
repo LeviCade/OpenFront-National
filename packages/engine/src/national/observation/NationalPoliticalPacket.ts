@@ -50,6 +50,7 @@ const POLITICAL_TYPES = {
   "approve-pact-amendment": "national_approve_pact_amendment",
   "betray-pact": "national_betray_pact",
   "expel-pact": "national_expel_pact",
+  "imperial-administration": "national_imperial_administration",
 } as const satisfies Record<
   NationalPoliticalCommandKind | "set-national-peace-delegation",
   `national_${string}`
