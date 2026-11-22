@@ -65,7 +65,10 @@ export type Intent =
   | NationalImperialAdministrationIntent
   | NationalIssueSanctionIntent
   | NationalRespondSanctionIntent
-  | NationalResolveSanctionIntent;
+  | NationalResolveSanctionIntent
+  | NationalIssueUltimatumIntent
+  | NationalRespondUltimatumIntent
+  | NationalResolveUltimatumIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -167,6 +170,9 @@ export type NationalRespondSanctionIntent = z.infer<
 export type NationalResolveSanctionIntent = z.infer<
   typeof NationalResolveSanctionIntentSchema
 >;
+export type NationalIssueUltimatumIntent = z.infer<typeof NationalIssueUltimatumIntentSchema>;
+export type NationalRespondUltimatumIntent = z.infer<typeof NationalRespondUltimatumIntentSchema>;
+export type NationalResolveUltimatumIntent = z.infer<typeof NationalResolveUltimatumIntentSchema>;
 
 export type Turn = z.infer<typeof TurnSchema>;
 export type GameConfig = z.infer<typeof GameConfigSchema>;
@@ -893,6 +899,28 @@ export const NationalResolveSanctionIntentSchema = z.object({
   requestId: NationalPoliticalRequestId,
 });
 
+// ECON-06/07: issuer/crown/actor are derived from the authenticated client.
+export const NationalIssueUltimatumIntentSchema = z.object({
+  type: z.literal("national_issue_ultimatum"),
+  empireId: NationalPoliticalId,
+  targetId: NationalWarId,
+  threat: z.enum(["embargo", "imperial-war"]),
+  durationTicks: zb.uint({ min: 1, max: 6000 }),
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalRespondUltimatumIntentSchema = z.object({
+  type: z.literal("national_respond_ultimatum"),
+  ultimatumId: NationalPoliticalId,
+  decision: z.enum(["accept", "refuse"]),
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalResolveUltimatumIntentSchema = z.object({
+  type: z.literal("national_resolve_ultimatum"),
+  ultimatumId: NationalPoliticalId,
+  decision: z.enum(["enforce", "back-down", "withdraw"]),
+  requestId: NationalPoliticalRequestId,
+});
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -938,6 +966,9 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalIssueSanctionIntentSchema,
   NationalRespondSanctionIntentSchema,
   NationalResolveSanctionIntentSchema,
+  NationalIssueUltimatumIntentSchema,
+  NationalRespondUltimatumIntentSchema,
+  NationalResolveUltimatumIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)
