@@ -13,7 +13,11 @@ import {
 import { createGameRunner } from "./GameRunner";
 
 /** Server-only authoritative engine entry, not the legacy browser path. */
-export { GameRunner, createTrustedNationalGameRunner, createTrustedNationalGameRunnerFromSnapshot } from "./GameRunner";
+export {
+  GameRunner,
+  createTrustedNationalGameRunner,
+  createTrustedNationalGameRunnerFromSnapshot,
+} from "./GameRunner";
 
 export interface ReplayedWinner {
   // undefined when the turns run out before anyone wins, or the match was

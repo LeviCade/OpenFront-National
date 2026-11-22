@@ -74,8 +74,12 @@ export class Roster {
 
   /** Restore only immutable seat metadata, never an authenticated socket. */
   restoreDisconnected(client: Client, kicked: boolean): void {
-    if (client.claims !== null || client.spectator ||
-        this.everyone.has(client.clientID) || this.reconnectable.has(client.persistentID)) {
+    if (
+      client.claims !== null ||
+      client.spectator ||
+      this.everyone.has(client.clientID) ||
+      this.reconnectable.has(client.persistentID)
+    ) {
       throw new Error("NATIONAL invalid disconnected roster restore");
     }
     this.everyone.set(client.clientID, client);

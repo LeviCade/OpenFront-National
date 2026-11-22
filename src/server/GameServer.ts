@@ -85,9 +85,12 @@ import {
 } from "./IntentAuthorization";
 import { ListingState } from "./ListingState";
 import { friendsLookup, NameVisibility } from "./NameVisibility";
-import { isNationalSignedInAccount } from "./national/NationalAccountGate";
-import { DurableNationalCheckpoint, nationalMapDigest } from "./national/DurableNationalCheckpoint";
+import {
+  DurableNationalCheckpoint,
+  nationalMapDigest,
+} from "./national/DurableNationalCheckpoint";
 import type { DurableNationalStore } from "./national/DurableNationalStore";
+import { isNationalSignedInAccount } from "./national/NationalAccountGate";
 import { encodeNationalRecipientProjection } from "./national/NationalRecipientWire";
 import { loadTrustedNationalMapFiles } from "./national/TrustedNationalMapFiles";
 import { TrustedNationalMatch } from "./national/TrustedNationalMatch";
@@ -474,7 +477,8 @@ export class GameServer {
           error: "NATIONAL requires human session",
         });
       }
-      if (this.ended) return finish({ status: 409, error: "NATIONAL match ended" });
+      if (this.ended)
+        return finish({ status: 409, error: "NATIONAL match ended" });
       if (stamped.type === "toggle_pause") {
         try {
           this.nationalMatch.setPaused(stamped.paused);
@@ -482,7 +486,10 @@ export class GameServer {
           return finish({ status: 200 });
         } catch {
           this.failTrustedNational();
-          return finish({ status: 503, error: "NATIONAL durable commit failed" });
+          return finish({
+            status: 503,
+            error: "NATIONAL durable commit failed",
+          });
         }
       }
       if (
@@ -511,7 +518,10 @@ export class GameServer {
           );
         } catch {
           this.failTrustedNational();
-          return finish({ status: 503, error: "NATIONAL durable commit failed" });
+          return finish({
+            status: 503,
+            error: "NATIONAL durable commit failed",
+          });
         }
       }
     }
@@ -547,9 +557,11 @@ export class GameServer {
           gameID: this.id,
         });
         this.kickClient(target, reason);
-        return finish(this.nationalFaulted
-          ? { status: 503, error: "NATIONAL durable commit failed" }
-          : { status: 200 });
+        return finish(
+          this.nationalFaulted
+            ? { status: 503, error: "NATIONAL durable commit failed" }
+            : { status: 200 },
+        );
       }
 
       case "update_game_config": {
@@ -980,7 +992,8 @@ export class GameServer {
         !client.publicId ||
         client.spectator ||
         this.clients.isKicked(persistentID) ||
-        (this.deps.durableNationalStore !== undefined && !nationalPrincipal.claims) ||
+        (this.deps.durableNationalStore !== undefined &&
+          !nationalPrincipal.claims) ||
         (client.claims !== null && !isNationalSignedInAccount(client.claims)) ||
         (client.claims === null && !nationalPrincipal.claims) ||
         (nationalPrincipal.claims !== undefined &&
@@ -1030,7 +1043,10 @@ export class GameServer {
         });
       }
       this.sendStartGameMsg(client.ws, lastTurn);
-      if (this.nationalRecoveryDeadline !== null && this.nationalMatch !== null) {
+      if (
+        this.nationalRecoveryDeadline !== null &&
+        this.nationalMatch !== null
+      ) {
         this.nationalRecoveryDeadline = null;
         this.lastPingUpdate = Date.now();
         this.endTurnIntervalID = setInterval(
@@ -1561,7 +1577,10 @@ export class GameServer {
       const info = parsed.data satisfies WireGameStartInfo;
       const durableStore = this.deps.durableNationalStore;
       const map = durableStore
-        ? await loadTrustedNationalMapFiles(info.config.gameMap, info.config.gameMapSize)
+        ? await loadTrustedNationalMapFiles(
+            info.config.gameMap,
+            info.config.gameMapSize,
+          )
         : undefined;
       const mapDigest = map ? nationalMapDigest(map) : undefined;
       const runner = map
@@ -1587,7 +1606,14 @@ export class GameServer {
       }
 
       const checkpoint = durableStore
-        ? DurableNationalCheckpoint.create(durableStore, ServerEnv.gitCommit(), mapDigest!, info, seated, runner)
+        ? DurableNationalCheckpoint.create(
+            durableStore,
+            ServerEnv.gitCommit(),
+            mapDigest!,
+            info,
+            seated,
+            runner,
+          )
         : undefined;
       const match = new TrustedNationalMatch(
         this.id,
@@ -1664,16 +1690,30 @@ export class GameServer {
   /** Worker startup only; durable ownership is acquired before this object
    * can enter GameManager. There are no live sessions until fresh account
    * verification. Do not call the legacy lobby or init path. */
-  public async recoverTrustedNational(checkpoint: DurableNationalCheckpoint): Promise<void> {
-    if (this.stage !== "lobby" || this.nationalMatch !== null ||
-        this.id !== checkpoint.info.gameID || !this.deps.durableNationalStore) {
+  public async recoverTrustedNational(
+    checkpoint: DurableNationalCheckpoint,
+  ): Promise<void> {
+    if (
+      this.stage !== "lobby" ||
+      this.nationalMatch !== null ||
+      this.id !== checkpoint.info.gameID ||
+      !this.deps.durableNationalStore
+    ) {
       throw new Error("NATIONAL invalid recovery lifecycle");
     }
     const info = checkpoint.info;
-    const map = await loadTrustedNationalMapFiles(info.config.gameMap, info.config.gameMapSize);
-    if (nationalMapDigest(map) !== checkpoint.mapDigest) throw new Error("NATIONAL durable map mismatch");
+    const map = await loadTrustedNationalMapFiles(
+      info.config.gameMap,
+      info.config.gameMapSize,
+    );
+    if (nationalMapDigest(map) !== checkpoint.mapDigest)
+      throw new Error("NATIONAL durable map mismatch");
     const runner = await createTrustedNationalGameRunnerFromSnapshot(
-      info, checkpoint.snapshot, map, checkpoint.source, checkpoint.tick,
+      info,
+      checkpoint.snapshot,
+      map,
+      checkpoint.source,
+      checkpoint.tick,
     );
     checkpoint.validateRunner(runner);
     const seats = checkpoint.seats.map((seat, index) => {
@@ -1681,24 +1721,40 @@ export class GameServer {
       // An inert server-side ws shell has no transport, listeners, JWT or
       // recipient. It is replaced only by a freshly validated account.
       return new Client(
-        seat.clientID, seat.subject, null, null, undefined, "",
-        player.username, player.clanTag ?? null, new WebSocket(null),
-        player.cosmetics, seat.accountId, player.friends ?? [],
+        seat.clientID,
+        seat.subject,
+        null,
+        null,
+        undefined,
+        "",
+        player.username,
+        player.clanTag ?? null,
+        new WebSocket(null),
+        player.cosmetics,
+        seat.accountId,
+        player.friends ?? [],
       );
     });
     const match = new TrustedNationalMatch(
-      this.id, runner, seats,
+      this.id,
+      runner,
+      seats,
       (client, packet) => this.sendNationalRecipientPacket(client, packet),
-      checkpoint, true,
+      checkpoint,
+      true,
     );
     for (const client of seats) {
-      this.clients.restoreDisconnected(client, checkpoint.state.kicked.includes(client.clientID));
+      this.clients.restoreDisconnected(
+        client,
+        checkpoint.state.kicked.includes(client.clientID),
+      );
       // Physical connection status changes only on the next committed tick.
       match.recordServerDisconnect(client.clientID, true);
     }
     this.gameStartInfo = info;
     this.wireGameStartInfo = {
-      ...info, listed: false,
+      ...info,
+      listed: false,
       players: info.config.disableClanTags
         ? info.players.map((p) => ({ ...p, clanTag: null }))
         : info.players,
@@ -1788,7 +1844,11 @@ export class GameServer {
     if (this.paused || this.ended || this.nationalMatch === null) return;
     try {
       const receipt = this.nationalMatch.tick();
-      if (receipt.committedIntents > 0 || receipt.tick % 100 === 0 || this.nationalMatch.durableTick() !== null) {
+      if (
+        receipt.committedIntents > 0 ||
+        receipt.tick % 100 === 0 ||
+        this.nationalMatch.durableTick() !== null
+      ) {
         this.log.info("NATIONAL authoritative tick", {
           gameID: this.id,
           tick: receipt.tick,
@@ -2163,7 +2223,9 @@ export class GameServer {
       } catch {
         // Preserve the checkpoint and fence the writer. Never pretend the
         // intended terminal transition reached disk.
-        this.log.error("NATIONAL durable retirement failed", { gameID: this.id });
+        this.log.error("NATIONAL durable retirement failed", {
+          gameID: this.id,
+        });
         this.nationalFaulted = true;
       }
     }
@@ -2279,7 +2341,9 @@ export class GameServer {
     }
     const now = Date.now();
     if (this.nationalRecoveryDeadline !== null) {
-      return now < this.nationalRecoveryDeadline ? GamePhase.Active : GamePhase.Finished;
+      return now < this.nationalRecoveryDeadline
+        ? GamePhase.Active
+        : GamePhase.Finished;
     }
 
     const lessThanLifetime = this.startsAt ? Date.now() < this.startsAt : true;

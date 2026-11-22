@@ -23,7 +23,12 @@ import {
   UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
 import { MapFiles } from "@openfront/engine-api/game/MapFiles";
-import { ClientID, GameConfigSchema, GameStartInfo, Turn } from "@openfront/engine-api/Schemas";
+import {
+  ClientID,
+  GameConfigSchema,
+  GameStartInfo,
+  Turn,
+} from "@openfront/engine-api/Schemas";
 import { packUnitUpdates } from "@openfront/engine-lib/game/PackedUnitUpdates";
 import { loadTerrainMap } from "@openfront/engine-lib/game/TerrainMapLoader";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
@@ -191,13 +196,19 @@ export async function createTrustedNationalGameRunnerFromSnapshot(
   tick: number,
 ): Promise<GameRunner> {
   const header = readSnapshotHeader(snapshot);
-  if (gameStart.config.nationalMode !== true ||
-      gameStart.config.gameType !== GameType.Private || gameStart.listed === true ||
-      header.format !== SNAPSHOT_FORMAT_VERSION || header.gitCommit !== source ||
-      header.gameID !== gameStart.gameID || header.tick !== tick ||
-      JSON.stringify(header.gameConfig) !== JSON.stringify(GameConfigSchema.parse(gameStart.config)) ||
-      header.humans.length !== gameStart.players.length ||
-      header.humans.some((h, i) => h.clientID !== gameStart.players[i]?.clientID)) {
+  if (
+    gameStart.config.nationalMode !== true ||
+    gameStart.config.gameType !== GameType.Private ||
+    gameStart.listed === true ||
+    header.format !== SNAPSHOT_FORMAT_VERSION ||
+    header.gitCommit !== source ||
+    header.gameID !== gameStart.gameID ||
+    header.tick !== tick ||
+    JSON.stringify(header.gameConfig) !==
+      JSON.stringify(GameConfigSchema.parse(gameStart.config)) ||
+    header.humans.length !== gameStart.players.length ||
+    header.humans.some((h, i) => h.clientID !== gameStart.players[i]?.clientID)
+  ) {
     throw new Error("NATIONAL trusted snapshot header incompatible");
   }
   return restoreRunner(gameStart, snapshot, undefined, map, () => {}, true);
@@ -214,7 +225,14 @@ async function restoreRunner(
   const header = readSnapshotHeader(snapshot);
   const gameMap = await loadGameMap(header.gameConfig, map);
   const game = restoreGame(snapshot, {
-    config: (gc) => new EngineConfig(gc, false, gameStart.listed, false, trustedServerNational),
+    config: (gc) =>
+      new EngineConfig(
+        gc,
+        false,
+        gameStart.listed,
+        false,
+        trustedServerNational,
+      ),
     gameMap: gameMap.gameMap,
     miniGameMap: gameMap.miniGameMap,
     teamGameSpawnAreas: gameMap.teamGameSpawnAreas,

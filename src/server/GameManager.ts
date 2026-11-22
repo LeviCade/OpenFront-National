@@ -50,7 +50,8 @@ export class GameManager {
     const store = this.durableNationalStore;
     if (!store) return;
     const source = ServerEnv.gitCommit();
-    if (!/^[a-f0-9]{40}$/.test(source)) throw new Error("NATIONAL recovery requires exact source SHA");
+    if (!/^[a-f0-9]{40}$/.test(source))
+      throw new Error("NATIONAL recovery requires exact source SHA");
     for (const id of store.list()) {
       if (ServerEnv.workerIndex(id) !== workerID || this.games.has(id)) {
         throw new Error("NATIONAL durable shard mismatch");
@@ -58,12 +59,19 @@ export class GameManager {
       const row = store.read(id);
       if (!row) throw new Error("NATIONAL durable record disappeared");
       const checkpoint = DurableNationalCheckpoint.load(store, row, source);
-      const creatorIndex = checkpoint.info.players.findIndex((p) => p.isLobbyCreator);
-      const game = new GameServer({
-        id, log: this.log, createdAt: checkpoint.info.lobbyCreatedAt,
-        gameConfig: checkpoint.info.config,
-        creatorPersistentID: checkpoint.seats[creatorIndex].subject,
-      }, { gatekeeper: this.gatekeeper, durableNationalStore: store });
+      const creatorIndex = checkpoint.info.players.findIndex(
+        (p) => p.isLobbyCreator,
+      );
+      const game = new GameServer(
+        {
+          id,
+          log: this.log,
+          createdAt: checkpoint.info.lobbyCreatedAt,
+          gameConfig: checkpoint.info.config,
+          creatorPersistentID: checkpoint.seats[creatorIndex].subject,
+        },
+        { gatekeeper: this.gatekeeper, durableNationalStore: store },
+      );
       if (game.pastMaxDuration()) {
         checkpoint.retire();
         continue;
