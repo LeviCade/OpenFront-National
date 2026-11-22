@@ -850,6 +850,16 @@ export class NationExecution implements Execution {
                         this.nationalPlannerMemory.political.rejectedCommands.map(
                           (entry) => ({ ...entry }),
                         ),
+                      ...(this.nationalPlannerMemory.political.coercion === undefined
+                        ? {}
+                        : {
+                            coercion: {
+                              observerId: this.nationalPlannerMemory.political.coercion.observerId,
+                              processedOutcomeIds: [...this.nationalPlannerMemory.political.coercion.processedOutcomeIds],
+                              issuerCredibility: this.nationalPlannerMemory.political.coercion.issuerCredibility.map((entry) => ({...entry})),
+                              publicEmpireLand: this.nationalPlannerMemory.political.coercion.publicEmpireLand.map((entry) => ({...entry})),
+                            },
+                          }),
                     },
                   }),
             },
