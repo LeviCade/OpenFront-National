@@ -56,7 +56,7 @@ async function liveGame() {
     new SpawnExecution("recon-e5", BUYER, game.ref(20, 100)),
     new SpawnExecution("recon-e5", TARGET, game.ref(185, 175)),
     new SpawnExecution("recon-e5", ALLY, game.ref(20, 15)),
-    new SpawnExecution("recon-e5", STRANGER, game.ref(195, 15)),
+    new SpawnExecution("recon-e5", STRANGER, game.ref(190, 95)),
   );
   game.executeNextTick();
   game.executeNextTick();
@@ -107,7 +107,7 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     const far = target.buildUnit(UnitType.City, game.ref(190, 10), {});
     const unrelated = game.player(STRANGER.id).buildUnit(
       UnitType.City,
-      game.ref(185, 175),
+      game.ref(190, 95),
       {},
     );
     expect(visible(game, BUYER.id, ship.id())).toBeUndefined();
@@ -138,14 +138,8 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     expect(visible(game, BUYER.id, far.id())).toBeUndefined();
     // Existing lawful geographic sight may reveal this co-located structure;
     // the purchase must NEVER be the authority for an unrelated owner.
-    console.info("[M7 cross-owner attribution] " + JSON.stringify({
-      targetId: TARGET.id,
-      strangerId: STRANGER.id,
-      unrelatedOwner: unrelated.owner().id(),
-      unrelatedAssetId: unrelated.id(),
-      purchased: game.nationalReconnaissanceFor(BUYER.id),
-      visible: visible(game, BUYER.id, unrelated.id()),
-    }));
+    // Position is inside the 90-tile purchase circle but belongs to a
+    // different actual sovereign: target-only recon MUST reject it.
     expect(unrelated.owner().id()).toBe(STRANGER.id);
     expect(visible(game, BUYER.id, unrelated.id())?.source).not.toBe("recon");
     expect(packetHasUnit(packet(game, BUYER.clientID!), ship.id())).toBe(true);
