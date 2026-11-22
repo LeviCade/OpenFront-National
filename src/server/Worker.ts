@@ -683,6 +683,36 @@ export async function startWorker() {
           return;
         }
 
+        // NATIONAL cannot silently replace an authenticated player by
+        // knowing only its persistentID. BEFORE the early rejoin path (or
+        // the join/readmission fast path) query the account service again and
+        // compare the verified publicId and JWT subject with the original seat.
+        const incumbent = gm.game(clientMsg.gameID);
+        const returningNationalSeat =
+          incumbent?.gameConfig.nationalMode === true &&
+          (clientMsg.type === "rejoin" ||
+            incumbent.getClientIdForPersistentId(persistentId) !== null);
+        let nationalPrincipal:
+          | { subject: string; publicId: string }
+          | undefined;
+        if (returningNationalSeat) {
+          if (!claims || claims.sub !== persistentId) {
+            ws.close(CloseCode.Unauthorized, CloseReason.InvalidToken);
+            return;
+          }
+          const account = await getUserMe(clientMsg.token);
+          if (isSocketClosed(ws)) return;
+          if (account.type === "error") {
+            const close = userMeFailureClose(account);
+            ws.close(close.code, close.reason);
+            return;
+          }
+          nationalPrincipal = {
+            subject: claims.sub,
+            publicId: account.response.player.publicId,
+          };
+        }
+
         if (clientMsg.type === "rejoin") {
           log.info("rejoining game", {
             gameID: clientMsg.gameID,
@@ -696,6 +726,7 @@ export async function startWorker() {
             persistentId,
             clientMsg.gameID,
             clientMsg.lastTurn,
+            nationalPrincipal,
           );
           return;
         }
@@ -827,6 +858,7 @@ export async function startWorker() {
             clientMsg.gameID,
             0,
             verifySkipped ? undefined : { username, clanTag },
+            nationalPrincipal,
           )
         ) {
           return;

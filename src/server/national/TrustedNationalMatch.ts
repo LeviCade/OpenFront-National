@@ -44,6 +44,8 @@ export class TrustedNationalMatch {
   /** The exact admitted physical socket, not reusable clientID identity. */
   private readonly activeSocket = new Map<ClientID, () => boolean>();
   private readonly requestIds = new Map<ClientID, Set<string>>();
+  /** A command token belongs to exactly one original principal for this game. */
+  private readonly requestOwners = new Map<string, ClientID>();
   private readonly committed: Turn[] = [];
   private intents: StampedIntent[] = [];
 
@@ -171,8 +173,10 @@ export class TrustedNationalMatch {
     });
     if ("requestId" in stamped && stamped.requestId !== undefined) {
       const seen = this.requestIds.get(sender.clientID)!;
-      if (seen.has(stamped.requestId)) return false;
+      const owner = this.requestOwners.get(stamped.requestId);
+      if (seen.has(stamped.requestId) || owner !== undefined) return false;
       seen.add(stamped.requestId);
+      this.requestOwners.set(stamped.requestId, sender.clientID);
     }
     this.intents.push(stamped);
     return true;
@@ -223,6 +227,19 @@ export class TrustedNationalMatch {
     return this.runner.game.ticks();
   }
 
+  /**
+   * An uncommitted command is a capability held by its submitting physical
+   * socket. A disconnect, kick or replacement cancels it BEFORE the next
+   * authoritative tick. Never recycle its requestId for another session.
+   * Only server-authored connection-status intents survive this cleanup.
+   */
+  private revokePending(clientID: ClientID): void {
+    this.intents = this.intents.filter(
+      (intent) =>
+        intent.type === "mark_disconnected" || intent.clientID !== clientID,
+    );
+  }
+
   /** New physical socket for the SAME verified account/seat. Historical
    * command receipts must NOT replay, current pending invitations may.
    */
@@ -237,6 +254,7 @@ export class TrustedNationalMatch {
         PlayerType.Human
     )
       return false;
+    this.revokePending(client.clientID);
     this.runner.removeTrustedNationalRecipient(client.clientID);
     this.activeSocket.delete(client.clientID);
     this.registerSeat(client);
@@ -246,6 +264,7 @@ export class TrustedNationalMatch {
   /** Revokes private E3 delivery. Already-committed turns remain canonical. */
   revokeRecipient(client: Client): void {
     if (this.seats.get(client.clientID) !== client) return;
+    this.revokePending(client.clientID);
     this.activeSocket.delete(client.clientID);
     this.runner.removeTrustedNationalRecipient(client.clientID);
   }

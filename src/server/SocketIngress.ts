@@ -7,6 +7,7 @@ import {
 import { decodeClientMessageUnvalidated } from "@openfront/shared/ZbinWire";
 import { ZbContext } from "@openfront/zbin";
 import { Logger } from "winston";
+import WebSocket from "ws";
 import { z } from "zod";
 import { Client } from "./Client";
 import { ClientMsgRateLimiter } from "./ClientMsgRateLimiter";
@@ -56,8 +57,17 @@ export class SocketIngress {
   ) {}
 
   attach(client: Client): void {
-    client.ws.removeAllListeners("message");
-    client.ws.on("message", async (message: Buffer) => {
+    // Capture the physical socket. Client.ws is mutable on reconnect: a late
+    // message/close queued by the old socket must not inherit the new one's
+    // authenticated identity, drop the new seat, or submit an old command.
+    const admittedSocket = client.ws;
+    admittedSocket.removeAllListeners("message");
+    admittedSocket.on("message", async (message: Buffer) => {
+      if (
+        client.ws !== admittedSocket ||
+        admittedSocket.readyState !== WebSocket.OPEN
+      )
+        return;
       try {
         this.receive(client, message);
       } catch (error) {
@@ -69,26 +79,30 @@ export class SocketIngress {
         );
       }
     });
-    client.ws.on("close", () => {
+    admittedSocket.on("close", () => {
+      if (client.ws !== admittedSocket) return;
       this.log.info("client disconnected", {
         clientID: client.clientID,
         persistentID: client.persistentID,
       });
       this.view.onClose(client);
     });
-    client.ws.on("error", (error: Error) => {
+    admittedSocket.on("error", (error: Error) => {
       if ((error as any).code === "WS_ERR_UNEXPECTED_RSV_1") {
-        client.ws.close(CloseCode.ProtocolError, CloseReason.ProtocolError);
+        admittedSocket.close(
+          CloseCode.ProtocolError,
+          CloseReason.ProtocolError,
+        );
       }
     });
 
     // Check if WebSocket already closed before we added the listener (race
     // condition) — the 'close' event has already fired, so the handler above
     // will never run for this client.
-    if (client.ws.readyState >= 2) {
+    if (admittedSocket.readyState >= 2 && client.ws === admittedSocket) {
       this.log.info("client WebSocket already closing/closed, removing", {
         clientID: client.clientID,
-        readyState: client.ws.readyState,
+        readyState: admittedSocket.readyState,
       });
       this.view.onClose(client);
     }

@@ -14,7 +14,12 @@ import {
 import { Logger } from "winston";
 import WebSocket from "ws";
 import { Client } from "./Client";
-import { GamePhase, GameServer, JoinResult } from "./GameServer";
+import {
+  GamePhase,
+  GameServer,
+  JoinResult,
+  type NationalReconnectPrincipal,
+} from "./GameServer";
 import { Gatekeeper, noopGatekeeper } from "./Gatekeeper";
 import { ClientAuth, clientAuth } from "./JoinVerify";
 
@@ -65,10 +70,17 @@ export class GameManager {
     gameID: GameID,
     lastTurn: number = 0,
     identityUpdate?: { username: string; clanTag: string | null },
+    nationalPrincipal?: NationalReconnectPrincipal,
   ): boolean {
     const game = this.games.get(gameID);
     if (!game) return false;
-    return game.rejoinClient(ws, persistentID, lastTurn, identityUpdate);
+    return game.rejoinClient(
+      ws,
+      persistentID,
+      lastTurn,
+      identityUpdate,
+      nationalPrincipal,
+    );
   }
 
   createGame(

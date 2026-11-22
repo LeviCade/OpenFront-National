@@ -172,6 +172,12 @@ export interface GameServerOptions {
 // (the archive upload, the tribe fetch, the environment) without mocking
 // modules. env and turnIntervalMs are thunks so the value is read when it
 // is used, not when the game is created.
+/** Reconnect identity freshly verified from the signed JWT and /users/@me. */
+export interface NationalReconnectPrincipal {
+  readonly subject: string;
+  readonly publicId: string;
+}
+
 export interface GameServerDeps {
   // Hand a finished game's record on for upload. The default stamps the
   // deployment (finalizeGameRecord) first; a test receives the record as the
@@ -666,7 +672,20 @@ export class GameServer {
     // it rather than dropped into a game they cannot play. Anyone later
     // came to watch (a shared link) and joins as a spectator.
     if (this.stage === "started") {
-      if (this.rejoinClient(client.ws, client.persistentID, 0)) {
+      if (
+        this.rejoinClient(
+          client.ws,
+          client.persistentID,
+          0,
+          undefined,
+          this.gameConfig.nationalMode === true && client.claims?.sub
+            ? {
+                subject: client.claims.sub,
+                publicId: client.publicId ?? "",
+              }
+            : undefined,
+        )
+      ) {
         return "joined";
       }
       // No late NATIONAL player or spectator may acquire a seat after the
@@ -808,6 +827,7 @@ export class GameServer {
     persistentID: string,
     lastTurn: number = 0,
     identityUpdate?: { username: string; clanTag: string | null },
+    nationalPrincipal?: NationalReconnectPrincipal,
   ): boolean {
     // As in joinClient: an ended game may still be in GameManager until its
     // next tick, and the roster still holds the reconnect mapping.
@@ -816,6 +836,21 @@ export class GameServer {
     if (!clientID) return false;
     const client = this.clients.get(clientID);
     if (!client) return false;
+    // A matching persistentID alone is NOT sufficient. For the authoritative
+    // NATIONAL seat the Worker must freshly verify the token subject and
+    // /users/@me publicId before replacing any socket or E3 recipient cursor.
+    // Rejected attempts must not close or displace the legitimate owner.
+    if (
+      this.gameConfig.nationalMode === true &&
+      (!nationalPrincipal ||
+        nationalPrincipal.subject !== persistentID ||
+        nationalPrincipal.publicId !== client.publicId ||
+        !client.claims ||
+        !client.publicId ||
+        client.spectator ||
+        this.clients.isKicked(persistentID))
+    )
+      return false;
 
     this.log.info("client rejoining", { clientID, lastTurn });
     // Also closes the old WebSocket, to prevent resource leaks.

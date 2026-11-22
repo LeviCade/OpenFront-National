@@ -1,0 +1,73 @@
+name: C2 Class One E2 - Real NATIONAL WebSocket
+on:
+  pull_request:
+    branches: [stage3/conductor2-class1-engineering-20261121]
+    paths:
+      - src/server/Worker.ts
+      - src/server/GameServer.ts
+      - src/server/GameManager.ts
+      - src/server/Rejoin.ts
+      - src/server/SocketIngress.ts
+      - src/server/national/TrustedNationalMatch.ts
+      - tests/server/TrustedNationalRealWebSocket.test.ts
+      - tests/national/ClassFiveTrustedLobbyTransport.test.ts
+      - .github/workflows/c2-class1-e2-real-ws.yml
+
+permissions:
+  contents: read
+
+jobs:
+  real-national-sessions:
+    name: Three signed accounts / three real WebSockets / one authoritative Game
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: npm run typecheck
+      - name: Real TCP/WS + legacy regression and E1/E3 authority suites
+        run: |
+          npx --no-install vitest run --project node \
+            tests/server/TrustedNationalRealWebSocket.test.ts \
+            tests/national/ClassFiveTrustedLobbyTransport.test.ts \
+            tests/national/ClassFiveStampedExecutionChain.test.ts \
+            tests/national/ClassFivePrincipalWireFanout.test.ts \
+            tests/server/GameServerRejoin.test.ts \
+            tests/server/GameServerWire.test.ts \
+            tests/server/SocketIngress.test.ts
+      - name: Focused lint
+        run: |
+          npx --no-install oxlint \
+            src/server/Worker.ts src/server/GameManager.ts \
+            src/server/GameServer.ts src/server/Rejoin.ts src/server/SocketIngress.ts \
+            src/server/national/TrustedNationalMatch.ts \
+            tests/server/TrustedNationalRealWebSocket.test.ts \
+            tests/national/ClassFiveTrustedLobbyTransport.test.ts
+      - name: Pinned formatter and diagnostic diff
+        run: |
+          npx --no-install oxfmt --write \
+            src/server/Worker.ts src/server/GameManager.ts \
+            src/server/GameServer.ts src/server/Rejoin.ts src/server/SocketIngress.ts \
+            src/server/national/TrustedNationalMatch.ts \
+            tests/server/TrustedNationalRealWebSocket.test.ts \
+            tests/national/ClassFiveTrustedLobbyTransport.test.ts
+          echo "C2_FORMAT_DIFF_BEGIN"
+          git -c color.ui=false diff --unified=0 -- \
+            src/server/Worker.ts src/server/GameManager.ts \
+            src/server/GameServer.ts src/server/Rejoin.ts src/server/SocketIngress.ts \
+            src/server/national/TrustedNationalMatch.ts \
+            tests/server/TrustedNationalRealWebSocket.test.ts \
+            tests/national/ClassFiveTrustedLobbyTransport.test.ts
+          echo "C2_FORMAT_DIFF_END"
+          npx --no-install oxfmt --check \
+            src/server/Worker.ts src/server/GameManager.ts \
+            src/server/GameServer.ts src/server/Rejoin.ts src/server/SocketIngress.ts \
+            src/server/national/TrustedNationalMatch.ts \
+            tests/server/TrustedNationalRealWebSocket.test.ts \
+            tests/national/ClassFiveTrustedLobbyTransport.test.ts
