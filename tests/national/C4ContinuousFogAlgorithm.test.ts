@@ -163,7 +163,7 @@ describe("C4 E3 bounded continuity algorithm", () => {
   });
 
   it("rejects forged early terminal cursors and changed frozen totals atomically", () => {
-    const { emit, reader } = rig();
+    const { emit } = rig();
     const all = assets(6200, 1);
     const first = emit(count(16000), all);
     expect(first.page.tileSweepSlots).toBe(16000);
