@@ -4,7 +4,7 @@ Founding: `ea186fa2580c5e1112e36cf1ddaa9119566a2abe`. Branch: `feature/c3-class1
 
 ## Truth boundary
 
-C2 `TrustedNationalRealWebSocket.test.ts` verifies three separately signed Ed25519 JWTs and crosses localhost TCP/WebSocket into one GameRunner, but its account directory is a fixture. It is **NOT** proof of live account authentication. The current class refuses Dev persistent IDs and guest tokens for NATIONAL; Worker must validate the signed provider plus a *fresh* `/users/@me` response at creation, joining and reconnect. No external account login, deployed live host, real GPU, or crash-safe match persistence has been witnessed in this class.
+C2 `TrustedNationalRealWebSocket.test.ts` verifies three separately signed Ed25519 JWTs and crosses localhost TCP/WebSocket into one GameRunner, but its account directory is a fixture. It is **NOT** proof of live account authentication. The current class refuses Dev persistent IDs and guest tokens for NATIONAL; Worker must validate the signed provider plus a _fresh_ `/users/@me` response at creation, joining and reconnect. No external account login, deployed live host, real GPU, or crash-safe match persistence has been witnessed in this class.
 
 ## Authorized nonproduction host runbook
 

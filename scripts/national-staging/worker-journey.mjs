@@ -11,9 +11,12 @@ import {
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 import { WebSocket } from "ws";
+import { NationalObserverMapContinuity } from "../../src/client/NationalObserverMapContinuity.ts";
 import {
+  assertTrustedPublicProjection,
   parseTrustedNationalProjection,
   readTrustedNationalObserverMap,
+  trustedNationalPrincipal,
 } from "../../src/client/TrustedNationalSession.ts";
 import { loadTrustedNationalMapFiles } from "../../src/server/national/TrustedNationalMapFiles.ts";
 import {
@@ -100,6 +103,8 @@ async function peer() {
         state.context = createGameWireContext(msg.gameStartInfo.players);
         state.seat = msg.myClientID;
         state.match = msg.gameStartInfo.gameID;
+        state.actor = trustedNationalPrincipal(msg);
+        state.continuity = new NationalObserverMapContinuity(state.actor);
       }
       if (msg.type === "national_projection") {
         phase = "projection-envelope";
@@ -129,11 +134,17 @@ async function peer() {
         if (map && (!state.actor || map.observerId !== state.actor))
           throw new Error("wrong recipient");
         if (map) {
+          phase = "native-continuity";
+          assert(state.continuity, "missing authenticated continuity guard");
+          state.continuity.acceptProjection(packet);
           if (state.streamId && state.streamId !== map.streamId)
             throw new Error("stream changed");
           if (!state.streamId && !map.reset)
             throw new Error("initial stream did not reset");
           state.streamId = map.streamId;
+        } else {
+          phase = "public-projection";
+          assertTrustedPublicProjection(packet, state.actor, state.seat);
         }
         if (msg.tick <= state.lastProjectionTick)
           throw new Error("non-advancing projection");
@@ -169,6 +180,7 @@ async function peer() {
           state.receipts.set(result.requestId, {
             accepted: result.accepted,
             actorId: result.actorId,
+            type: result.type,
           });
         }
         return;
@@ -399,6 +411,7 @@ try {
   assert(players.every((p) => p.actor && p.streamId));
   assert.equal(new Set(players.map((p) => p.streamId)).size, 3);
   pass("three-engine-principals-three-bound-private-streams");
+  pass("actual-worker-frames-pass-native-recipient-continuity");
   await until(
     () => players.every((p) => p.spawnEnded),
     "server-authored spawn phase end",
@@ -421,30 +434,46 @@ try {
       if (j !== index) assert(!players[j].receipts?.has(intent.requestId));
   }
   const pactId = "c4-local-mda";
-  await pactReceipt(0, {
-    type: "national_found_pact",
-    pactId,
-    name: "Local defense",
-    pactKind: "MDA",
-    terms: { admission: "leader", expulsion: "forbidden" },
-    requestId: "c4-pact-found",
-  }, true);
-  await pactReceipt(0, {
-    type: "national_invite_pact",
-    pactId,
-    candidateId: players[1].actor,
-    requestId: "c4-pact-invite",
-  }, true);
-  await pactReceipt(2, {
-    type: "national_accept_pact",
-    pactId,
-    requestId: "c4-pact-outsider",
-  }, false);
-  await pactReceipt(1, {
-    type: "national_accept_pact",
-    pactId,
-    requestId: "c4-pact-accept",
-  }, true);
+  await pactReceipt(
+    0,
+    {
+      type: "national_found_pact",
+      pactId,
+      name: "Local defense",
+      pactKind: "MDA",
+      terms: { admission: "leader", expulsion: "forbidden" },
+      requestId: "c4-pact-found",
+    },
+    true,
+  );
+  await pactReceipt(
+    0,
+    {
+      type: "national_invite_pact",
+      pactId,
+      candidateId: players[1].actor,
+      requestId: "c4-pact-invite",
+    },
+    true,
+  );
+  await pactReceipt(
+    2,
+    {
+      type: "national_accept_pact",
+      pactId,
+      requestId: "c4-pact-outsider",
+    },
+    false,
+  );
+  await pactReceipt(
+    1,
+    {
+      type: "national_accept_pact",
+      pactId,
+      requestId: "c4-pact-accept",
+    },
+    true,
+  );
   pass("real-worker-pact-founding-invitation-consent-and-outsider-denial");
 
   const requests = ["e2-local-alpha", "e2-local-bravo", "e2-local-charlie"];

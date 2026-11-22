@@ -55,4 +55,3 @@ jobs:
           npx --no-install oxlint             src/client/controllers/NationalMapTargetController.ts             src/client/ClientGameRunner.ts             src/client/TrustedNationalSession.ts             src/client/view/GameView.ts             tests/ui/national/NationalHumanMapInputR11.test.ts             tests/ui/national/TrustedNationalProjectionMapC2.test.ts
       - name: Production build
         run: npm run build-prod
-

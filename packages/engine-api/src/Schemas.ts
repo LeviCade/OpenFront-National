@@ -54,7 +54,10 @@ export type Intent =
   | NationalSetPeaceDelegationIntent
   | NationalDeclareWarIntent
   | NationalProposePeaceIntent
-  | NationalAcceptPeaceIntent;
+  | NationalAcceptPeaceIntent
+  | NationalFoundPactIntent
+  | NationalInvitePactIntent
+  | NationalAcceptPactIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -117,6 +120,16 @@ export type NationalProposePeaceIntent = z.infer<
 >;
 export type NationalAcceptPeaceIntent = z.infer<
   typeof NationalAcceptPeaceIntentSchema
+>;
+
+export type NationalFoundPactIntent = z.infer<
+  typeof NationalFoundPactIntentSchema
+>;
+export type NationalInvitePactIntent = z.infer<
+  typeof NationalInvitePactIntentSchema
+>;
+export type NationalAcceptPactIntent = z.infer<
+  typeof NationalAcceptPactIntentSchema
 >;
 
 export type Turn = z.infer<typeof TurnSchema>;
@@ -698,7 +711,7 @@ export const NationalAcceptPeaceIntentSchema = z.object({
 export const NationalFoundPactIntentSchema = z.object({
   type: z.literal("national_found_pact"),
   pactId: NationalPoliticalId,
-  name: z.string().trim().min(1).max(64),
+  name: z.string().min(1).max(64).regex(/\S/),
   pactKind: z.enum(["NAP", "MDA"]),
   terms: z.object({
     admission: z.enum(["leader", "unanimous"]),

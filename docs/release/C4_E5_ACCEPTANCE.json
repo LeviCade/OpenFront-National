@@ -10,11 +10,7 @@
     "lint": "PASS",
     "productionBuild": "PASS",
     "format": "FAIL",
-    "owners": [
-      "E1",
-      "E2",
-      "E4"
-    ]
+    "owners": ["E1", "E2", "E4"]
   },
   "lanes": [
     {
@@ -146,16 +142,8 @@
       "critical": 2
     },
     "devOnlyCandidates": {
-      "critical": [
-        "concurrently",
-        "shell-quote"
-      ],
-      "high": [
-        "brace-expansion",
-        "source-map-js",
-        "undici",
-        "vite"
-      ],
+      "critical": ["concurrently", "shell-quote"],
+      "high": ["brace-expansion", "source-map-js", "undici", "vite"],
       "moderate": [
         "@vitest/coverage-v8",
         "@vitest/mocker",
