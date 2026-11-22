@@ -28,8 +28,8 @@ import {
   packUnitUpdates,
   unpackUnitUpdates,
 } from "@openfront/engine-lib/game/PackedUnitUpdates";
-import type { Game } from "../../game/Game";
 import { NationalUltimatumExecution } from "../../execution/NationalUltimatumExecution";
+import type { Game } from "../../game/Game";
 import type { NationalPublicPoliticalView } from "../NationalRuntime";
 import type { LiveNationalObservation } from "./LiveObservation";
 import {
@@ -49,11 +49,21 @@ import type { OutboundNationalResult } from "./NationalPoliticalPacket";
 export function projectNationalUltimatums(
   game: Game,
   observerId: string | null,
-): import("@openfront/engine-api/game/GameUpdates").NationalUltimatumViewData | undefined {
-  if (!game.config().nationalMode() || observerId === null ||
-      !game.hasPlayer(observerId)) return undefined;
+):
+  | import("@openfront/engine-api/game/GameUpdates").NationalUltimatumViewData
+  | undefined {
+  if (
+    !game.config().nationalMode() ||
+    observerId === null ||
+    !game.hasPlayer(observerId)
+  )
+    return undefined;
   const actor = game.player(observerId);
-  if (actor.type() !== PlayerType.Human || !actor.hasSpawned() || !actor.isAlive())
+  if (
+    actor.type() !== PlayerType.Human ||
+    !actor.hasSpawned() ||
+    !actor.isAlive()
+  )
     return undefined;
   return {
     version: 1,
@@ -773,7 +783,9 @@ export class NationalOutboundFilter {
       ...(privateAccessionOffers === undefined
         ? {}
         : { nationalAccessionOffers: privateAccessionOffers }),
-      ...(privateUltimatums === undefined ? {} : { nationalUltimatums: privateUltimatums }),
+      ...(privateUltimatums === undefined
+        ? {}
+        : { nationalUltimatums: privateUltimatums }),
       tick: data.tick,
       updates,
       packedTileUpdates: new Uint32Array(packedTile),
