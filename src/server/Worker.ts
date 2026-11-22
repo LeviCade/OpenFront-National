@@ -67,6 +67,7 @@ import {
   DurableNationalStore,
 } from "./national/DurableNationalStore";
 import { isNationalSignedInAccount } from "./national/NationalAccountGate";
+import { isAllowedNationalSocketOrigin } from "./national/NationalSocketOrigin";
 import { watchNationalAccount } from "./national/NationalAccountLease";
 import { setNoStoreHeaders } from "./NoStoreHeaders";
 import { PrivilegeRefresher } from "./PrivilegeRefresher";
@@ -759,6 +760,20 @@ export async function startWorker() {
           // 4xxx rejection would pop a generic "connection refused" dialog on
           // top of it, and a retryable code makes it reconnect and loop.
           ws.close(CloseCode.Normal, "Version mismatch");
+          return;
+        }
+
+        // A NATIONAL private match is a privileged browser session. TLS is
+        // terminated by the hosting proxy; this checks the browser's exact
+        // Origin before any token lookup, seat replacement or private output.
+        // An Origin header is never an identity credential: the signed JWT,
+        // live /users/@me and immutable GameServer binding still apply.
+        const nationalTarget = gm.game(clientMsg.gameID);
+        if (
+          nationalTarget?.gameConfig.nationalMode === true &&
+          !isAllowedNationalSocketOrigin(req.headers.origin)
+        ) {
+          ws.close(CloseCode.Unauthorized, CloseReason.Forbidden);
           return;
         }
 

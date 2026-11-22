@@ -37,6 +37,7 @@ import {
   startIdentity,
   until,
 } from "./operator-harness.mjs";
+import { startNationalWssBridge } from "./wss-bridge.mjs";
 
 const fixture = makeEnvironment();
 const durable = process.env.NATIONAL_TEST_DURABLE_RECOVERY === "1";
@@ -205,6 +206,7 @@ const hostUrl = "http://localhost:3001";
 const peers = [];
 let identity;
 let server;
+let wssBridge;
 let stage = "initialization";
 const pass = (name) => console.log("WORKER_STAGE_PASS " + name);
 const setStage = (name) => {
@@ -257,8 +259,13 @@ async function startHost() {
   }
 }
 
-async function peer() {
-  const ws = new WebSocket("ws://localhost:3001/");
+async function peer(socketOrigin = "http://localhost:9000") {
+  assert(wssBridge, "certificate-verified TLS terminator must be active");
+  const ws = new WebSocket(wssBridge.url, {
+    ca: wssBridge.ca,
+    rejectUnauthorized: true,
+    ...(socketOrigin === undefined ? {} : { origin: socketOrigin }),
+  });
   const state = {
     ws,
     messages: [],
@@ -493,13 +500,30 @@ try {
 
   setStage("ordinary application Master and Worker listeners");
   server = await startHost();
+  wssBridge = await startNationalWssBridge(fixture.dir);
   pass("master-and-worker-listen");
+  pass("real-TCP-certificate-verified-WSS-to-original-Worker");
   const created = await create(auth[0].jwt);
   const id = created.gameID ?? created.id;
   assert(typeof id === "string" && id.length > 0, "missing minted match id");
   assert.equal(created.gameConfig.nationalMode, true);
   assert.equal(await exists(id), true);
   pass("authenticated-private-national-lobby");
+
+  setStage("adversarial real WSS physical Origins cannot acquire seats");
+  for (const hostileOrigin of [
+    undefined,
+    "https://attacker.invalid",
+    "http://localhost:9000.attacker.invalid",
+    "null",
+  ]) {
+    const hostile = await peer(hostileOrigin);
+    join(hostile, id, auth[3].jwt, 3);
+    await until(() => hostile.closeCode !== null, "rejected cross-origin WSS");
+    assert.notEqual(hostile.closeCode, 1006, "hostile Origin normal network close");
+    assert(!hostile.starts && hostile.lastProjectionTick === -1);
+  }
+  pass("untrusted-and-missing-Origins-denied-before-live-account-admission");
 
   setStage("three physical Worker admissions");
   const players = await Promise.all([peer(), peer(), peer()]);
@@ -1235,6 +1259,7 @@ try {
   process.exitCode = 1;
 } finally {
   for (const p of peers) p.ws.terminate();
+  if (wssBridge) await wssBridge.stop();
   if (server) await server.stop();
   if (identity) await identity.stop();
   fixture.cleanup();
