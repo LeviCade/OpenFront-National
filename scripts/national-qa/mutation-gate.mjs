@@ -8,7 +8,7 @@
  * unrelated failures, missing tests, or timeouts as a successful mutation.
  */
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 const dir = "national-qa-artifacts/mutations";
 mkdirSync(dir, { recursive: true });
@@ -33,11 +33,12 @@ const cases = [
   {
     id: "leak-foreign-player",
     file: "packages/engine/src/national/observation/NationalOutbound.ts",
-    before:
-      "const players = rawPlayer.map((u) =>\n      u.id === ownID ? { ...u } : publicPlayer(u),\n    );",
-    after: "const players = rawPlayer.map((u) => ({ ...u }));",
+    before: "updates[GameUpdateType.Player] = players;",
+    after:
+      "updates[GameUpdateType.Player] = [...players, ...rawPlayer.filter((u) => u.id !== ownID)];",
     suite: "tests/qa/national/PacketCanaries.test.ts",
     name: "does not emit hidden troops, ships, diplomatic text",
+    expectedFailure: "NATIONAL unauthorized packet disclosure: 8765432",
   },
 ];
 const outcomes = [];
@@ -69,44 +70,88 @@ for (const entry of cases) {
     failed = true;
     continue;
   }
-  let result;
-  try {
-    writeFileSync(entry.file, original.replace(entry.before, entry.after));
-    result = command("node_modules/.bin/vitest", [
+  const run = (phase) => {
+    const outputPath = dir + "/" + entry.id + "." + phase + ".json";
+    rmSync(outputPath, { force: true });
+    const result = command("node_modules/.bin/vitest", [
       "run",
       "--project",
       "node",
       entry.suite,
       "-t",
       entry.name,
+      "--reporter=json",
+      "--outputFile=" + outputPath,
     ]);
     const output = (result.stdout ?? "") + (result.stderr ?? "");
-    writeFileSync(dir + "/" + entry.id + ".log", output);
-    // Require the targeted test to report an ASSERTION failure, not a
-    // compilation, test discovery, import, timeout or environment error.
-    const targetFailed =
-      result.status !== 0 &&
+    writeFileSync(dir + "/" + entry.id + "." + phase + ".log", output);
+    let report;
+    try {
+      report = JSON.parse(readFileSync(outputPath, "utf8"));
+    } catch {
+      return { status: result.status, valid: false };
+    }
+    const assertions = report.testResults.flatMap(
+      (suite) => suite.assertionResults ?? [],
+    );
+    const target = assertions.filter(
+      (test) =>
+        test.title?.includes(entry.name) === true ||
+        test.fullName?.includes(entry.name) === true,
+    );
+    const valid =
       !result.error &&
       !result.signal &&
-      output.includes(entry.name) &&
-      /FAIL|Failed Tests|AssertionError|unauthorized packet disclosure/.test(
-        output,
-      ) &&
+      target.length === 1 &&
       !/Error parsing|Failed to resolve|No test files found|Timed out/.test(
         output,
       );
-    outcomes.push({
-      id: entry.id,
-      verdict: targetFailed ? "PASS (gate rejected mutation)" : "FAIL",
-      targetedAssertionFailed: targetFailed,
-      exitCode: result.status,
-      timedOut: Boolean(result.error ?? result.signal),
-      test: entry.name,
-    });
-    if (!targetFailed) failed = true;
+    const messages = (target[0]?.failureMessages ?? []).join("\n");
+    return {
+      status: result.status,
+      valid,
+      passed:
+        valid &&
+        result.status === 0 &&
+        target[0].status === "passed" &&
+        report.numPassedTests === 1 &&
+        report.numFailedTests === 0,
+      detected:
+        valid &&
+        result.status === 1 &&
+        target[0].status === "failed" &&
+        report.numFailedTests === 1 &&
+        (entry.expectedFailure
+          ? messages.includes(entry.expectedFailure)
+          : /AssertionError/.test(messages)),
+    };
+  };
+  const baseline = run("baseline");
+  let mutation;
+  try {
+    if (baseline.passed) {
+      writeFileSync(entry.file, original.replace(entry.before, entry.after));
+      mutation = run("mutated");
+    }
   } finally {
     writeFileSync(entry.file, original);
   }
+  const restored = run("restored");
+  const targetFailed =
+    baseline.passed === true &&
+    mutation?.detected === true &&
+    restored.passed === true &&
+    readFileSync(entry.file, "utf8") === original;
+  outcomes.push({
+    id: entry.id,
+    verdict: targetFailed ? "PASS (gate rejected mutation)" : "FAIL",
+    targetedAssertionFailed: mutation?.detected === true,
+    baseline,
+    mutation,
+    restored,
+    test: entry.name,
+  });
+  if (!targetFailed) failed = true;
 }
 const check = command("git", [
   "diff",
