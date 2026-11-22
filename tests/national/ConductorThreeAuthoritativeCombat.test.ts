@@ -338,6 +338,58 @@ describe("Third Conductor E1 — authoritative attack and succession combat", ()
     expect(layer(m.game, imperialId).endedTick).toBeNull();
   });
 
+  it("snapshots a real active invasion with unresolved peace and replays identical battles after restart", async () => {
+    const m = await createMatch();
+    const { imperialId, nationalId } = await atWar(m);
+    act(m, 3, {
+      type: "national_propose_peace",
+      warId: imperialId,
+      requestId: "c3_restart_peace_pending",
+    });
+    const peace = military(m.game, D, "c3_restart_peace_pending");
+    expect(peace.accepted).toBe(true);
+    front(m.game, A, D);
+    const tilesBeforeAttack = m.game.player(A).numTilesOwned();
+    expect(m.host.submit(m.clients[0], {
+      type: "attack", targetID: D, troops: 220_000,
+    })).toBe(true);
+    expect(m.host.tick().committedIntents).toBe(1);
+    expect(m.game.player(A).outgoingAttacks().length).toBeGreaterThan(0);
+    const { restored, bytes, again } = await roundTrip(m.game, "plains");
+    expect(again).toEqual(bytes);
+    expect(snapshotGameData(restored)).toEqual(snapshotGameData(m.game));
+
+    const militaryState = (game: Game) => ({
+      tick: game.ticks(),
+      aTroops: game.player(A).troops(),
+      dTroops: game.player(D).troops(),
+      aTiles: game.player(A).numTilesOwned(),
+      dTiles: game.player(D).numTilesOwned(),
+      attacks: game.player(A).outgoingAttacks().map(
+        (attack) => ({ id: attack.id(), troops: attack.troops() }),
+      ),
+      wars: game.nationalWarState(),
+    });
+    for (let i = 0; i < 8; i++) {
+      m.host.tick();
+      restored.executeNextTick();
+      expect(militaryState(restored)).toEqual(militaryState(m.game));
+    }
+    expect(m.game.player(A).numTilesOwned()).toBeGreaterThan(tilesBeforeAttack);
+    expect(layer(m.game, imperialId).endedTick).toBeNull();
+    expect(layer(m.game, nationalId).endedTick).toBeNull();
+    expect(m.game.nationalWarState()?.wars.motions.some(
+      (x) => x.id === peace.motionId && x.acceptedTick === null,
+    )).toBe(true);
+    console.info("C3_E1_RESTART_WITNESS_JSON=" + JSON.stringify({
+      kind: "c3-e1-in-flight-restart-v1",
+      snapshotLength: bytes.length,
+      pendingPeace: peace.motionId,
+      militaryState: militaryState(m.game),
+      source: "GameSnapshot/restoreGame/real AttackExecution",
+    }));
+  });
+
   it("blocks a queued OLD-session human Attack before troop debit, identically after canonical snapshot restore", async () => {
     const m = await createMatch();
     await atWar(m);

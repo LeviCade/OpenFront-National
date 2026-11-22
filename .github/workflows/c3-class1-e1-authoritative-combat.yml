@@ -35,7 +35,18 @@ jobs:
           npm run inst
       - name: Pinned formatter on E1-owned changes
         run: |
-          npx --no-install oxfmt --check \
+          set -euo pipefail
+          npx --no-install oxfmt --write \
+            packages/engine/src/execution/AttackExecution.ts \
+            packages/engine/src/execution/ExecutionManager.ts \
+            tests/national/ConductorTwoCrownWarContinuity.test.ts \
+            tests/national/ConductorThreeAuthoritativeCombat.test.ts
+          git -c color.ui=false diff -- \
+            packages/engine/src/execution/AttackExecution.ts \
+            packages/engine/src/execution/ExecutionManager.ts \
+            tests/national/ConductorTwoCrownWarContinuity.test.ts \
+            tests/national/ConductorThreeAuthoritativeCombat.test.ts
+          git diff --exit-code -- \
             packages/engine/src/execution/AttackExecution.ts \
             packages/engine/src/execution/ExecutionManager.ts \
             tests/national/ConductorTwoCrownWarContinuity.test.ts \
