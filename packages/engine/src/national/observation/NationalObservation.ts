@@ -161,6 +161,8 @@ export interface VisibleAsset {
   readonly source: SightSource | "own" | "empire";
   /** Origin of inherited empire sight, for revocation after dissolution. */
   readonly sourceNationId?: NationId;
+  /** Paid sight memory expires no later than its original authorized lease. */
+  readonly reconExpiresAtTick?: number;
   readonly strength?: number;
 }
 
@@ -194,6 +196,7 @@ export interface LastKnownAsset {
   readonly y: number;
   readonly lastSeenTick: number;
   readonly sourceNationId?: NationId;
+  readonly reconExpiresAtTick?: number;
 }
 
 export interface NationalSightMemory {
@@ -322,6 +325,9 @@ export function projectNationalObservation(
       ...(grant.observerId === observerId
         ? {}
         : { sourceNationId: grant.observerId }),
+      ...(grant.source === "recon"
+        ? { reconExpiresAtTick: grant.expiresAtTick }
+        : {}),
     });
   }
 
@@ -428,6 +434,8 @@ export function advanceLastKnown(
   const remembered = new Map<string, LastKnownAsset>();
   for (const entry of previous?.assets ?? []) {
     if (entry.lastSeenTick > observation.tick) continue;
+    if (entry.reconExpiresAtTick !== undefined && observation.tick >= entry.reconExpiresAtTick)
+      continue;
     // Shared intelligence rights end when the relevant empire dissolves.
     if (
       entry.sourceNationId !== undefined &&
@@ -454,6 +462,9 @@ export function advanceLastKnown(
       ...(unit.sourceNationId === undefined
         ? {}
         : { sourceNationId: unit.sourceNationId }),
+      ...(unit.reconExpiresAtTick === undefined
+        ? {}
+        : { reconExpiresAtTick: unit.reconExpiresAtTick }),
     });
   }
   const entries = [...remembered.values()].sort(byId);
