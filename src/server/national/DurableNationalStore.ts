@@ -222,7 +222,9 @@ export class DurableNationalStore {
     this.assertAvailable();
     validID(gameID);
     const row = this.db
-      .prepare("SELECT gameID, generation, tick, digest, CASE WHEN length(CAST(payload AS BLOB)) <= ? THEN payload ELSE NULL END AS payload FROM checkpoints WHERE gameID = ?")
+      .prepare(
+        "SELECT gameID, generation, tick, digest, CASE WHEN length(CAST(payload AS BLOB)) <= ? THEN payload ELSE NULL END AS payload FROM checkpoints WHERE gameID = ?",
+      )
       .get(MAX_NATIONAL_RECORD_BYTES, gameID);
     return row ? checked(row) : null;
   }
