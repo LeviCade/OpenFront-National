@@ -1,0 +1,46 @@
+name: C4 reviewed dependency candidate (no automatic promotion)
+
+on:
+  push:
+    branches:
+      - stage3/c4-class1-dependency-review-20261121
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Review raw advisory ranges and non-forced lockfile candidate
+        run: |
+          set -euo pipefail
+          npm audit --json > /tmp/c4-before.json || true
+          node --input-type=module -e 'import fs from "node:fs"; const r=JSON.parse(fs.readFileSync("/tmp/c4-before.json")); if(r.error || !r.metadata || !r.vulnerabilities) process.exit(1); for(const [name,v] of Object.entries(r.vulnerabilities)) console.log(JSON.stringify({name,range:v.range,severity:v.severity,fix:v.fixAvailable,via:v.via.map(x=>typeof x==="string"?x:{title:x.title,range:x.range,url:x.url})}));'
+          npm audit fix --package-lock-only --ignore-scripts --no-fund || true
+          test -z "$(git diff --name-only -- ':!package-lock.json')"
+          echo C4_LOCK_DIFF_BEGIN
+          git -c color.ui=false diff -- package-lock.json
+          echo C4_LOCK_DIFF_END
+          echo C4_LOCK_HASH
+          git hash-object package-lock.json
+          npm audit --json > /tmp/c4-after.json || true
+          node --input-type=module -e 'import fs from "node:fs"; for(const p of ["before","after"]){const r=JSON.parse(fs.readFileSync("/tmp/c4-"+p+".json")); if(r.error || !r.metadata)process.exit(1); console.log(p,JSON.stringify(r.metadata.vulnerabilities));}'
+      - run: npm run inst
+      - run: npm run typecheck
+      - name: Verify both advisory trees after install
+        run: node scripts/national-qa/security-audit.mjs --strict-release
+      - name: Candidate build verification
+        if: success() || failure()
+        run: npm run build-prod
