@@ -1,0 +1,41 @@
+# Fifth Conductor / First Class / Engineer 6 — coast, border and mobile intelligence
+
+**Authority:** [#150](https://github.com/LeviCade/OpenFront-National/issues/150) · **Draft review:** [#151](https://github.com/LeviCade/OpenFront-National/pull/151) · **Founding SHA:** `a1959dd9c08e66d361b70368f784869eea5ab046`.
+
+## Attribution and audited existing system
+
+The founding engine **already** had actual 100-map-tile structure sight from land-border anchors and 200-map-tile ship sight from owned coastal borders and owned/current-empire warships, with sight buckets in `LiveObservation.ts`. It also had finite authenticated observer-map pagination, immediate marker tombstones, native update filtering and recipient continuity checks. These established behaviors belong to predecessor classes; this commission makes no new-feature credit claim for them.
+
+We inspected `NationalObservation`, `LiveObservation`, `NationalObserverMap`, `NationalOutbound`, `GameRunner`, `NationalObserverMapContinuity` and founding fog/native tests. No changes to political command, economy, graphics/GPU or map schemas.
+
+## Founding RED reproduced in actual authoritative Game
+
+`activeEmpireMembers` correctly filtered a `membersOf(empire)` roster by reciprocal live `empireOf(member)`. **But** `collectLiveNationalObservation` separately constructed `world.coalitions` with the raw unfiltered roster; `projectNationalObservation` then unconditionally revealed every listed member-owned unit (including private strength). During an inconsistent partial membership transition, a member no longer reciprocally recognized by the authority could still expose its far-away ship to the former ally. Legitimate geographic sight tiles already excluded that nation—yet the recipient observation did not.
+
+1. Test-only `1be4931bf77075a955efb215983a68aa0367c5d9` established the fixture and `18c9580e17b3308b7528160e1b55d36367507d66` added the source CI. First run failed at fixture setup because class prototype methods were lost when spreading a read-port object; **do not attribute this first RED to the product**.
+2. `9884958e414bc5db42848a63cb559bfa04c4d8d4` fixed the test harness by binding its three authoritative facade methods. Exact GitHub Actions [source RED #45062143356](https://github.com/LeviCade/OpenFront-National/actions/runs/45062143356): TypeScript PASS; 26 predecessor tests PASS; new `FOG-06/07 denies a departed member's distant unit even with a stale roster` FAIL at the intended assertion: `expected false; received true`, leaked own-empire unit while its territorial tile was revoked.
+3. `6f0d65f2495e84fb90a6fb6a464be6f4e4ccbdda`: add one shared `reciprocalEmpireMembers` function and use it in **both** sensor contributors and projected empire roster. Foreign unit strength getters now are never called by the observer adapter. A departed member no longer conveys unit position, strength, coastal or warship reconnaissance merely by appearing on a stale roster.
+
+This repro is an adversarial **trusted read-port inconsistency**; it does not assert that normal pact-state transactions leave stale membership in production.
+
+## New gameplay witnesses
+
+File: `tests/national/C5CoastalVisibility.test.ts`, built using real authoritative `Game`, spawns, units, territorial mutations, map terrain, and real observer-map pager/recipient continuity; no fabricated sight grants.
+
+- **FOG-03:** Spawn on `big_plains`, foreign `City` unit **1** at tile **20124** hidden beyond border strip. Capture legitimately adjacent unowned tile **20024** through the current Game ownership primitive; current 100-tile border reconnaissance discloses the city. Relinquish **20024** and it vanishes. Deterministic `roundTrip` original/restored snapshot matches byte-for-byte; no resurrected city.
+- **FOG-04/05:** Spawn viewer at an actual British Isles coast on the `world` map, coastline tile **280925**; foreign transport **1** first seen on sea tile **222918** (source `coast`), concealed far away at sea tile **2001**, reacquired at distinct real sea tile **220918** (new current position, not stale earlier state). Actual `Unit.move` and engine ticks drive observation. Foreign troop canary **7,654,321** and landing target stay out of the recipient observation.
+- **FOG-04/06 mobile sensors:** Owned warship **2** provides real `warship` source for foreign transport **1** at distant sea tile **2001**, where a home-coast sensor cannot see it. Moving warship away revokes that exact ship from current observation and unit-cache in the **same delivered frame**.
+- **FOG-06/07:** Three real nations form an empire with authenticated commands, then trusted authoritative read-port reciprocal departure is modeled. An outdated member list grants neither territory, ship, nor troop stats. Current outsider `City` stays hidden. Pre-existing real AI/human parity and empire transitions remain in the focused regression set.
+- **FOG-05/07 hidden reads:** A hidden foreign transport's `troops()` getter is replaced with a throwing spy. `collectLiveNationalObservation` succeeds without calling it. Another malicious recipient page adds foreign private troop data; continuity rejects it **before** cache mutation. Rejoin on a fresh stream while the ship is hidden yields no stale marker.
+- **Native full-runner:** Two real `GameRunner` packets for the moving coastal transport show a zero-private-troops marker on legitimate reacquisition and a deleted marker at the **last visible sea tile**, not at undisclosed destination. Existing renderer and native guarding tests cover the broader browser reconciliation contract; no actual physical GPU/browser claim is made here.
+- **Legacy safety:** Existing `NationalLiveObservation.test.ts` confirms full legacy packet visibility is unchanged; original 100/200 behavior is checked by `NationalGeographicFogR8.test.ts`; finite sweep/memory invariants are checked by `C4ContinuousFogAlgorithm.test.ts`.
+
+## Exact measurements and limitations
+
+At intermediate `ca7f0aa0c8dc99ef8b48fa5448badb78cbe444de`, verified GitHub Actions node scenario had **30/30 focused tests PASS**, typecheck PASS, targeted lint PASS (formatting only subsequently failed and was corrected). Log sample: `structureId=1 capturedTile=20024 structureTile=20124`; `shipId=1 coastTile=280925 nearSeaTile=222918 farSeaTile=2001 reacquiredTile=220918 reconnaissanceWarshipId=2`. Maximum JSON-serialized **observer-map page** was **1,568 bytes** across the tested six pages (not a claim about full compressed native packet size). Elapsed wall-clock for the combined real-world scenario was **86.92 ms** in that run, and observed `process.memoryUsage().heapUsed` growth was **2,695,600 bytes** (includes fixture allocations/GC variability; **not** a proven worst-case bound). Two native GameRunner packets were emitted. Existing marker/page ceilings, 32M-cell ceiling, and independent finite cursor sweeps were preserved, not redefined.
+
+All tests use a first-party authoritative server simulation and the real recipient-map parser. The partial-membership repro has a test spy at the authoritative political read interface, not a genuine empire secession command. No real external OAuth, three independent humans, cryptographic GPU attestation, browser screenshots, or production multiplayer acceptance was attempted. Real-world vision, renderer/browser and performance at national map scale require separate integrated release gates. **No self-merge, no grading or percentage point claim.**
+
+## Maintainer handoff
+
+Merge only by the Conductor after the corresponding **exact final PR head** has green CI and after checking against Fourth C2 #146's native private/pact projection. The production change is deliberately concentrated in `packages/engine/src/national/observation/LiveObservation.ts`. The CI workflow is `.github/workflows/c5-e6-coastal-observation.yml` (exact SHA, Node/npm, typecheck, producer tests, native-client tests, focused lint and format). Additional engineering teams should not substitute a fabricated observer packet for actual world geometry. Recheck connected physical GPU/browser and whole-tree source acceptance separately at the integrated SHA.
