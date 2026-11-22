@@ -634,8 +634,9 @@ export class GameImpl implements Game {
         return this._national.snapshot().politics;
       },
       (memberId, action) =>
-        action === "peace" &&
-        this._national?.hasDelegatedNationalPeace(memberId) === true,
+        action === "peace"
+          ? this._national?.hasDelegatedNationalPeace(memberId) === true
+          : this._national?.hasDelegatedNationalDeclaration(memberId) === true,
     );
     return this._nationalAuthority;
   }
@@ -696,6 +697,23 @@ export class GameImpl implements Game {
       throw new Error("NATIONAL: stale authenticated actor session");
   }
 
+  /**
+   * Admission captures an empire policy epoch. A pending/replayed order must
+   * not acquire new authority after revocation, regrant, crown transfer, or
+   * dissolution. Unversioned direct trusted-engine calls preserve existing
+   * internal bot/legacy behavior; stamped browser executions always carry it.
+   */
+  private assertWarPolicyAdmission(
+    actorId: PlayerID,
+    command: { readonly policyVersion?: number },
+  ): void {
+    if (command.policyVersion === undefined) return;
+    const current = this._national?.warPolicyVersionFor(actorId) ?? null;
+    if (!Number.isSafeInteger(command.policyVersion) ||
+        command.policyVersion < 0 || current !== command.policyVersion)
+      throw new Error("NATIONAL WAR: stale or invalid imperial policy epoch");
+  }
+
   /** Legacy direct Game WAR port: preserves real WarLedger rule exceptions. */
   performNationalWarCommand(
     actor: Player,
@@ -714,6 +732,7 @@ export class GameImpl implements Game {
       throw new Error("NATIONAL war: unauthenticated or inactive actor");
     }
     this.synchronizeNationalState();
+    this.assertWarPolicyAdmission(actor.id(), command);
     this._nationalWar.perform(actor.id(), command, this._ticks);
   }
 
@@ -767,7 +786,11 @@ export class GameImpl implements Game {
           : command.kind === "propose-peace"
             ? { kind: command.kind, warId: command.warId }
             : { kind: command.kind, motionId: command.motionId };
-    const fingerprint = JSON.stringify(intent);
+    const fingerprint = JSON.stringify({
+      ...intent,
+      ...(command.policyVersion === undefined
+        ? {} : { policyVersion: command.policyVersion }),
+    });
     if (typeof fingerprint !== "string" || fingerprint.length > 4096)
       throw new Error("NATIONAL war: invalid command payload");
     const safeId = (id: unknown): string | undefined =>
@@ -816,6 +839,7 @@ export class GameImpl implements Game {
         if (!hasSafeCommandIds) return "invalid-war-command";
         try {
           this.synchronizeNationalState();
+          this.assertWarPolicyAdmission(actor.id(), command);
           this._nationalWar!.perform(actor.id(), command, this._ticks);
           return "accepted";
         } catch {
@@ -1101,6 +1125,9 @@ export class GameImpl implements Game {
       case "set-policy":
         this._national.setImperialPolicy(actor.id(), command.empireId, command.policy);
         break;
+      case "set-war-policy":
+        this._national.setWarPolicy(actor.id(), command);
+        break;
       case "transfer-troops": {
         const source = this._players.get(command.sourceId);
         const destination = this._players.get(command.destinationId);
@@ -1225,7 +1252,16 @@ export class GameImpl implements Game {
       this.performNationalImperialAdministration(actor, command.command, authenticatedClientID);
       return;
     }
+    // Legal war with a current member MUST be negotiated away first.
+    // Otherwise accession would silently create an internal national war.
+    if (command.kind === "accept-empire")
+      this._nationalWar?.assertAccessionCompatible(command.empireId, command.candidateId);
     this._national.perform(actor.id(), command);
+    if (command.kind === "accept-empire" &&
+        this._national.accessionWarResponseFor(command.empireId) === "imperial")
+      this._nationalWar?.escalateAccessionWars(
+        command.empireId, command.candidateId, this._ticks,
+      );
     this.revokeNationalObserverMemory();
   }
 
