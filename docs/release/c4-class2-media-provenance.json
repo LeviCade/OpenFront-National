@@ -1,0 +1,660 @@
+{
+  "schema": 1,
+  "foundingSha": "a1959dd9c08e66d361b70368f784869eea5ab046",
+  "upstreamRepository": "openfrontio/OpenFrontIO",
+  "upstreamSha": "445721718207b6e0f068258cd8ff2eccd13d198e",
+  "scope": "Git metadata, not original artist rights clearance or local SHA256 verification",
+  "noticeSources": [
+    "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/LICENSE",
+    "https://github.com/LeviCade/OpenFront-National/blob/a1959dd9c08e66d361b70368f784869eea5ab046/LICENSING.md",
+    "https://github.com/LeviCade/OpenFront-National/blob/a1959dd9c08e66d361b70368f784869eea5ab046/docs/17-stage2-acceptance.md"
+  ],
+  "withheldMusic": [
+    "gameplay.mp3",
+    "gameplay-2.mp3",
+    "gameplay-3.mp3",
+    "menu-theme.mp3"
+  ],
+  "records": [
+    {
+      "path": "resources/fonts/overpass-bold.woff",
+      "bytes": 29840,
+      "gitBlobSha1": "d35502e52ad75a112a9f19ef2350ad5b376024d7",
+      "upstreamBlobSha1": "d35502e52ad75a112a9f19ef2350ad5b376024d7",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/fonts/overpass-bold.woff",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Overpass family: Delve Withrington, Dave Bailey and Thomas Jockin; exact binary creator/version not established",
+      "originEvidence": [
+        "https://github.com/RedHatOfficial/Overpass",
+        "https://github.com/openfrontio/OpenFrontIO/commit/f1bddc7eefe345ad25fb68f4b331497d7e0c1846"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/fonts/overpass.woff",
+      "bytes": 30204,
+      "gitBlobSha1": "8b4c5cc2f4b69fdfd4376f3a145fa0185da9052c",
+      "upstreamBlobSha1": "8b4c5cc2f4b69fdfd4376f3a145fa0185da9052c",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/fonts/overpass.woff",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Overpass family: Delve Withrington, Dave Bailey and Thomas Jockin; exact binary creator/version not established",
+      "originEvidence": [
+        "https://github.com/RedHatOfficial/Overpass",
+        "https://github.com/openfrontio/OpenFrontIO/commit/f1bddc7eefe345ad25fb68f4b331497d7e0c1846"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/ambience/city.mp3",
+      "bytes": 605435,
+      "gitBlobSha1": "7a1b2195721848814aafe158fa6a6dbeaed118a2",
+      "upstreamBlobSha1": "7a1b2195721848814aafe158fa6a6dbeaed118a2",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/ambience/city.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/ambience/factory.mp3",
+      "bytes": 460194,
+      "gitBlobSha1": "0eed8d94018ad322d12c12652e547eada38cfb1f",
+      "upstreamBlobSha1": "0eed8d94018ad322d12c12652e547eada38cfb1f",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/ambience/factory.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/ambience/missile-silo.mp3",
+      "bytes": 365631,
+      "gitBlobSha1": "f1ec1fa4de59a4b50917e2a9ca9a31462951ead1",
+      "upstreamBlobSha1": "f1ec1fa4de59a4b50917e2a9ca9a31462951ead1",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/ambience/missile-silo.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/ambience/sam-silo.mp3",
+      "bytes": 405637,
+      "gitBlobSha1": "e6b228a91baf54c566ce33525923e7ca99de535d",
+      "upstreamBlobSha1": "e6b228a91baf54c566ce33525923e7ca99de535d",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/ambience/sam-silo.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/alliance-accepted.mp3",
+      "bytes": 42787,
+      "gitBlobSha1": "753802eecd3730d5e6e8c751afde134aa6d49295",
+      "upstreamBlobSha1": "753802eecd3730d5e6e8c751afde134aa6d49295",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/alliance-accepted.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/alliance-broken.mp3",
+      "bytes": 95250,
+      "gitBlobSha1": "4ae874a2ecdb48d2addb18213240c40de50c80c9",
+      "upstreamBlobSha1": "4ae874a2ecdb48d2addb18213240c40de50c80c9",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/alliance-broken.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/alliance-declined.mp3",
+      "bytes": 16890,
+      "gitBlobSha1": "3b55f16e1465684445cb481a48d2bd862dab46f9",
+      "upstreamBlobSha1": "3b55f16e1465684445cb481a48d2bd862dab46f9",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/alliance-declined.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/alliance-suggested.mp3",
+      "bytes": 13161,
+      "gitBlobSha1": "03793beba5ede961fee0c2220b43d3f5975da9ec",
+      "upstreamBlobSha1": "03793beba5ede961fee0c2220b43d3f5975da9ec",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/alliance-suggested.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/atom-hit.mp3",
+      "bytes": 78411,
+      "gitBlobSha1": "c4b3ef4fa8f0d3b4533d5c85b0e3baf0416d2082",
+      "upstreamBlobSha1": "c4b3ef4fa8f0d3b4533d5c85b0e3baf0416d2082",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/atom-hit.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/atom-launch.mp3",
+      "bytes": 117107,
+      "gitBlobSha1": "54ab75fa6a5340e5bf89985ce3c43c9b7bea115e",
+      "upstreamBlobSha1": "54ab75fa6a5340e5bf89985ce3c43c9b7bea115e",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/atom-launch.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/build-city.mp3",
+      "bytes": 50266,
+      "gitBlobSha1": "86615bf0f83db344055a8a0c839794756f436d59",
+      "upstreamBlobSha1": "86615bf0f83db344055a8a0c839794756f436d59",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/build-city.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/build-defense-post.mp3",
+      "bytes": 26536,
+      "gitBlobSha1": "646ffcf17f0a57c20a2b6622b0365c20f71c6dc6",
+      "upstreamBlobSha1": "646ffcf17f0a57c20a2b6622b0365c20f71c6dc6",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/build-defense-post.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/build-factory.mp3",
+      "bytes": 35229,
+      "gitBlobSha1": "43b19ad16c2138dbc35d315e748e5279ed8b4063",
+      "upstreamBlobSha1": "43b19ad16c2138dbc35d315e748e5279ed8b4063",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/build-factory.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/build-port.mp3",
+      "bytes": 48261,
+      "gitBlobSha1": "d703d301c232436ad144ea006936cdb7ddd6afc8",
+      "upstreamBlobSha1": "d703d301c232436ad144ea006936cdb7ddd6afc8",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/build-port.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/build-train-station.mp3",
+      "bytes": 55142,
+      "gitBlobSha1": "04247591fa9ae35593c23f00ab7079d3b4ffd8f2",
+      "upstreamBlobSha1": "04247591fa9ae35593c23f00ab7079d3b4ffd8f2",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/build-train-station.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/build-warship.mp3",
+      "bytes": 45558,
+      "gitBlobSha1": "c36959990587f3ebb97de5f1db2da7deade98f97",
+      "upstreamBlobSha1": "c36959990587f3ebb97de5f1db2da7deade98f97",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/build-warship.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/click-1.mp3",
+      "bytes": 10159,
+      "gitBlobSha1": "7aaf3a9728388b1fd47f92e581b1ca6748e2a6c5",
+      "upstreamBlobSha1": "7aaf3a9728388b1fd47f92e581b1ca6748e2a6c5",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/click-1.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/click-2.mp3",
+      "bytes": 10551,
+      "gitBlobSha1": "826c45dedbab7549b66a0c850845979713b04ac5",
+      "upstreamBlobSha1": "826c45dedbab7549b66a0c850845979713b04ac5",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/click-2.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/click-3.mp3",
+      "bytes": 10813,
+      "gitBlobSha1": "a772f08c96ac00921d5d94cc3816686461b0e03d",
+      "upstreamBlobSha1": "a772f08c96ac00921d5d94cc3816686461b0e03d",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/click-3.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/click.mp3",
+      "bytes": 10184,
+      "gitBlobSha1": "28cac4dc29fd715e358a1420c21d0e70b948c9d7",
+      "upstreamBlobSha1": "28cac4dc29fd715e358a1420c21d0e70b948c9d7",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/click.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/conquered.mp3",
+      "bytes": 66544,
+      "gitBlobSha1": "4ae42fdb5404d7b2d08bf055f9e172f45099631a",
+      "upstreamBlobSha1": "4ae42fdb5404d7b2d08bf055f9e172f45099631a",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/conquered.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/defeat.mp3",
+      "bytes": 76619,
+      "gitBlobSha1": "67c370985c32139bfec66ac2b557427cad0f0bf2",
+      "upstreamBlobSha1": "67c370985c32139bfec66ac2b557427cad0f0bf2",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/defeat.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/game-start.mp3",
+      "bytes": 56213,
+      "gitBlobSha1": "c2713dc984a4220de2bc1ff2fb7f4043745e3d68",
+      "upstreamBlobSha1": "c2713dc984a4220de2bc1ff2fb7f4043745e3d68",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/game-start.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/hydrogen-hit.mp3",
+      "bytes": 100556,
+      "gitBlobSha1": "1e38136fdffffadcd28dc084c01e4217de1afa75",
+      "upstreamBlobSha1": "1e38136fdffffadcd28dc084c01e4217de1afa75",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/hydrogen-hit.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/hydrogen-launch.mp3",
+      "bytes": 99675,
+      "gitBlobSha1": "29eab2fbd3d0c258a92d0a0c69569f716b4f2fd4",
+      "upstreamBlobSha1": "29eab2fbd3d0c258a92d0a0c69569f716b4f2fd4",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/hydrogen-launch.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/ka-ching.mp3",
+      "bytes": 15803,
+      "gitBlobSha1": "aeb743c0cda4231c76b7f5a38fc01c182eea6663",
+      "upstreamBlobSha1": "aeb743c0cda4231c76b7f5a38fc01c182eea6663",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/ka-ching.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/mirv-launch.mp3",
+      "bytes": 358224,
+      "gitBlobSha1": "a6ed56e2b51b2cc5d86c123de57ca8723dc75f10",
+      "upstreamBlobSha1": "a6ed56e2b51b2cc5d86c123de57ca8723dc75f10",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/mirv-launch.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/nuke-warning.mp3",
+      "bytes": 64781,
+      "gitBlobSha1": "2b4cfada1ce3e4c41f2079ad3ef43ca6d5dd50c8",
+      "upstreamBlobSha1": "2b4cfada1ce3e4c41f2079ad3ef43ca6d5dd50c8",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/nuke-warning.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/sam-built.mp3",
+      "bytes": 30834,
+      "gitBlobSha1": "f5d30b031091fde2b4bef1907faef1128f633b26",
+      "upstreamBlobSha1": "f5d30b031091fde2b4bef1907faef1128f633b26",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/sam-built.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/sam-hit.mp3",
+      "bytes": 43303,
+      "gitBlobSha1": "db425493803386cddaa6a12d4c019b681ca28254",
+      "upstreamBlobSha1": "db425493803386cddaa6a12d4c019b681ca28254",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/sam-hit.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/sam-shoot.mp3",
+      "bytes": 64269,
+      "gitBlobSha1": "1be29e1a8bceae5eedad7e7ef464fc9ffee8b963",
+      "upstreamBlobSha1": "1be29e1a8bceae5eedad7e7ef464fc9ffee8b963",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/sam-shoot.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/silo-built.mp3",
+      "bytes": 28945,
+      "gitBlobSha1": "a3dcc450abb4a298f33d07fc5de65bb86a5097af",
+      "upstreamBlobSha1": "a3dcc450abb4a298f33d07fc5de65bb86a5097af",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/silo-built.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/slider.mp3",
+      "bytes": 7368,
+      "gitBlobSha1": "b1f53f924e5fc34a89148828d8193f9d86b197c5",
+      "upstreamBlobSha1": "b1f53f924e5fc34a89148828d8193f9d86b197c5",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/slider.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/spawn.mp3",
+      "bytes": 27485,
+      "gitBlobSha1": "03e97b017ecb414f98f6735ecc576a3332d3b159",
+      "upstreamBlobSha1": "03e97b017ecb414f98f6735ecc576a3332d3b159",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/spawn.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/transport-ship.mp3",
+      "bytes": 75202,
+      "gitBlobSha1": "fed0f3aae08822543a8f19d2fef028068bad310e",
+      "upstreamBlobSha1": "fed0f3aae08822543a8f19d2fef028068bad310e",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/transport-ship.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/victory.mp3",
+      "bytes": 75065,
+      "gitBlobSha1": "407097e4c0520ab80f28f47870f31233dbf12e3b",
+      "upstreamBlobSha1": "407097e4c0520ab80f28f47870f31233dbf12e3b",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/victory.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/warship-lost.mp3",
+      "bytes": 123501,
+      "gitBlobSha1": "d810c7f82192685ad0d8e457faf8993f8984a1fd",
+      "upstreamBlobSha1": "d810c7f82192685ad0d8e457faf8993f8984a1fd",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/warship-lost.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    },
+    {
+      "path": "resources/sounds/effects/warship-shot.mp3",
+      "bytes": 28293,
+      "gitBlobSha1": "ee23a671ced50385ac901792c202162c7254915d",
+      "upstreamBlobSha1": "ee23a671ced50385ac901792c202162c7254915d",
+      "source": "https://github.com/openfrontio/OpenFrontIO/blob/445721718207b6e0f068258cd8ff2eccd13d198e/resources/sounds/effects/warship-shot.mp3",
+      "identity": "MATCHED_PINNED_UPSTREAM",
+      "directoryLicense": "CC-BY-SA-4.0 per upstream resources/LICENSE; not independent original-source clearance",
+      "requiredAttribution": "Preserve upstream notices; original creator attribution still unresolved per resource",
+      "originalAuthor": "Unverified; upstream delivery/commit authorship is not original sound authorship",
+      "originEvidence": [
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348",
+        "https://github.com/openfrontio/OpenFrontIO/pull/5348#issuecomment-5632435721"
+      ],
+      "rightsStatus": "UNVERIFIED"
+    }
+  ]
+}
