@@ -146,7 +146,7 @@ describe("NATIONAL signed-account browser boundary", () => {
     ).toBe(403);
   });
   it("rejects NATIONAL upgrade on an untrusted replacement physical socket", () => {
-    const id = cid("oldSocket");
+    const id = cid("oldSock");
     const game = makeGame({
       creatorPersistentID: "verified-old",
       config: { gameType: GameType.Private, gameMode: GameMode.FFA },
@@ -165,7 +165,7 @@ describe("NATIONAL signed-account browser boundary", () => {
       isAdmin: false,
       isAdminBot: false,
     };
-    const untrusted = makeClient({ clientID: cid("replacementSocket") }).ws;
+    const untrusted = makeClient({ clientID: cid("repSock") }).ws;
     expect(game.rejoinClient(untrusted, "verified-old")).toBe(true);
     expect(
       game.handleIntent(
