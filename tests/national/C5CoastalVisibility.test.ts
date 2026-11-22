@@ -1,13 +1,13 @@
-import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
-import { unpackUnitUpdates } from "@openfront/engine-lib/game/PackedUnitUpdates";
-import { Executor } from "@openfront/engine/execution/ExecutionManager";
-import { GameRunner } from "@openfront/engine/GameRunner";
 import {
   PlayerInfo,
   PlayerType,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
+import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import { unpackUnitUpdates } from "@openfront/engine-lib/game/PackedUnitUpdates";
+import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
+import { GameRunner } from "@openfront/engine/GameRunner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import { NationalObserverMapPager } from "@openfront/engine/national/observation/NationalObserverMap";
 import { NationalObserverMapContinuity } from "../../src/client/NationalObserverMapContinuity";
@@ -166,9 +166,10 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     const { restored, bytes, again } = await roundTrip(game, "big_plains");
     expect(again).toEqual(bytes);
     expect(
-      collectLiveNationalObservation(restored, VIEWER.id).observation.visibleAssets.some(
-        (asset) => asset.id === cityId,
-      ),
+      collectLiveNationalObservation(
+        restored,
+        VIEWER.id,
+      ).observation.visibleAssets.some((asset) => asset.id === cityId),
     ).toBe(false);
     console.info(
       "[C5 FOG-03] structureId=" +
@@ -294,7 +295,8 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
 
     let returnSea: number | undefined;
     game.forEachNeighbor(nearSea!, (neighbor) => {
-      if (returnSea === undefined && !game.isLand(neighbor)) returnSea = neighbor;
+      if (returnSea === undefined && !game.isLand(neighbor))
+        returnSea = neighbor;
     });
     expect(returnSea).toBeDefined();
     expect(returnSea).not.toBe(nearSea);
@@ -322,7 +324,9 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     );
     // Test a second legitimate sensor: a real owned warship, far beyond
     // the nation's coastline. Moving that sensor must independently revoke.
-    const sensor = game.player(VIEWER.id).buildUnit(UnitType.Warship, farSea!, { patrolTile: farSea! });
+    const sensor = game
+      .player(VIEWER.id)
+      .buildUnit(UnitType.Warship, farSea!, { patrolTile: farSea! });
     ship.move(farSea!);
     game.executeNextTick();
     const shipborne = collectLiveNationalObservation(game, VIEWER.id);
@@ -338,7 +342,9 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     sensor.move(nearSea!);
     game.executeNextTick();
     const sensorLost = collectLiveNationalObservation(game, VIEWER.id);
-    expect(sensorLost.observation.visibleAssets.map((asset) => asset.id)).not.toContain(shipId);
+    expect(
+      sensorLost.observation.visibleAssets.map((asset) => asset.id),
+    ).not.toContain(shipId);
     const sensorLostPage = pager.page(sensorLost);
     expect(sensorLostPage.unitRemovedIds).toContain(ship.id());
     recipient.accept(sensorLostPage, game.ticks());
@@ -378,9 +384,14 @@ describe("C5 E6: authoritative coastal and empire visibility boundaries", () => 
     expect(nativeRevoked?.markedForDeletion).not.toBe(false);
     const observedHeapDeltaBytes = process.memoryUsage().heapUsed - initialHeap;
     const maxPageBytes = Math.max(
-      ...[firstPage, hiddenPage, reconnectPage, returnPage, warshipPage, sensorLostPage].map((page) =>
-        Buffer.byteLength(JSON.stringify(page), "utf8"),
-      ),
+      ...[
+        firstPage,
+        hiddenPage,
+        reconnectPage,
+        returnPage,
+        warshipPage,
+        sensorLostPage,
+      ].map((page) => Buffer.byteLength(JSON.stringify(page), "utf8")),
     );
     console.info(
       "[C5 FOG-04/05/06] shipId=" +
