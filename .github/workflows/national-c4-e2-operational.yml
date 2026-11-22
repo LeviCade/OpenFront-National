@@ -68,7 +68,6 @@ jobs:
         run: |
           set -euo pipefail
           FILES=(src/server/Worker.ts src/server/GameServer.ts src/server/ServerEnv.ts src/server/Server.ts src/server/Master.ts src/server/JoinVerify.ts src/server/national/NationalAccountLease.ts scripts/national-staging/*.mjs)
-          npx --no-install oxlint "${FILES[@]}"
           if ! npx --no-install oxfmt --check "${FILES[@]}"; then
             npx --no-install oxfmt --write "${FILES[@]}"
             echo E2_FORMAT_REPAIR_BEGIN
@@ -76,3 +75,4 @@ jobs:
             echo E2_FORMAT_REPAIR_END
             exit 1
           fi
+          npx --no-install oxlint "${FILES[@]}"

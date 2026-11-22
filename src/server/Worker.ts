@@ -708,14 +708,16 @@ export async function startWorker() {
           return;
         }
         const { persistentId, claims } = result;
+        const leaseGameID = clientMsg.gameID;
+        const leaseToken = clientMsg.token;
         const attachAccountLease = () => {
-          const game = gm.game(clientMsg.gameID);
+          const game = gm.game(leaseGameID);
           if (!game || game.gameConfig.gameType !== GameType.Private ||
               !claims || !isNationalSignedInAccount(claims)) return;
           const publicId = game.nationalAccountSocket(persistentId, ws);
           if (!publicId) return;
           const stop = watchNationalAccount({
-            token: clientMsg.token,
+            token: leaseToken,
             claims,
             publicId,
             current: () => game.nationalAccountSocket(persistentId, ws) === publicId,
@@ -748,6 +750,10 @@ export async function startWorker() {
             incumbent.getClientIdForPersistentId(persistentId) !== null);
         let nationalPrincipal: NationalReconnectPrincipal | undefined;
         if (returningNationalSeat) {
+          if (clientMsg.type === "join" && clientMsg.spectator) {
+            ws.close(CloseCode.Unauthorized, CloseReason.InvalidToken);
+            return;
+          }
           if (!claims || claims.sub !== persistentId) {
             ws.close(CloseCode.Unauthorized, CloseReason.InvalidToken);
             return;
@@ -1188,7 +1194,7 @@ export function getListingEligibilityError(
   game: GameServer,
   maxPlayers?: number,
 ): string | null {
-  if (game.isPublic() || game.hasStarted()) {
+  if (game.gameConfig.nationalMode === true || game.isPublic() || game.hasStarted()) {
     return "Game cannot be listed";
   }
   if (game.hasJoinWhitelist()) {

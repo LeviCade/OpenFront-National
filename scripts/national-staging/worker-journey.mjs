@@ -10,7 +10,7 @@ import { WebSocket } from "ws";
 import { parseTrustedNationalProjection, readTrustedNationalObserverMap } from "../../src/client/TrustedNationalSession.ts";
 import { loadTrustedNationalMapFiles } from "../../src/server/national/TrustedNationalMapFiles.ts";
 import {
-  accountCommand, launch, login, makeEnvironment, profile, refresh, request,
+  accountCommand, launch, login, makeEnvironment, profile, refresh,
   startIdentity, until,
 } from "./operator-harness.mjs";
 
@@ -47,7 +47,11 @@ async function peer() {
   };
   peers.push(state);
   ws.on("error", () => {});
-  ws.on("close", (code) => { state.closeCode = code; });
+  const heartbeat = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) send(state, { type: "ping", sentAt: Math.floor(performance.now()) });
+  }, 5000);
+  heartbeat.unref();
+  ws.on("close", (code) => { state.closeCode = code; clearInterval(heartbeat); });
   ws.on("message", (frame) => {
     try {
       const msg = decodeServerMessage(frame, state.context);
@@ -65,6 +69,7 @@ async function peer() {
         state.lastProjectionTick = msg.tick;
         // Keep summaries, not raw private projection bodies.
         const updates = packet.updates[String(GameUpdateType.Player)] ?? [];
+        if ((packet.updates[String(GameUpdateType.SpawnPhaseEnd)] ?? []).length > 0) state.spawnEnded = true;
         if (updates.some((p) => p.clientID === state.seat && p.hasSpawned === true)) state.spawned = true;
         if (map && map.tiles.some((tile) => (tile[1] & 4095) !== 0) && map.ownResources.troops > 0) state.visibleOwnLand = true;
         for (const result of packet.nationalCommandResults ?? []) {
@@ -152,8 +157,10 @@ try {
   for (let i = 0; i < 3; i++) join(players[i], id, auth[i].jwt, i);
   await until(() => players.every((p) => p.lobby?.lobby.clients?.length === 3), "all three Worker lobby seats");
   assert(allHealthy(players));
+  pass("three-distinct-worker-lobby-connections");
   const seatIds = players.map((p) => p.lobby.myClientID);
   assert.equal(new Set(seatIds).size, 3);
+  setStage("private NATIONAL public listing denial");
   const rejectedListing = await fetch(hostUrl + "/api/game/" + id + "/listing", {
     method: "POST", headers: { authorization: "Bearer " + auth[0].jwt, "content-type": "application/json" },
     body: JSON.stringify({ listed: true }),
@@ -183,9 +190,16 @@ try {
 
   setStage("native spawn and lawful engine political receipts");
   for (let i = 0; i < 3; i++) send(players[i], { type: "intent", intent: { type: "spawn", tile: tiles[i] } });
-  await until(() => players.every((p) => p.spawned || p.visibleOwnLand), "three authoritative spawns", 30_000);
+  await until(() => players.every((p) => p.spawned === true || p.visibleOwnLand === true), "three authoritative spawns", 30_000);
+  await until(() => players.every((p) => p.spawnEnded), "server-authored spawn phase end", 120_000);
   const requests = ["e2-local-alpha", "e2-local-bravo", "e2-local-charlie"];
-  for (let i = 0; i < 3; i++) {
+  send(players[0], { type: "intent", intent: { type: "national_found_empire", empireId: "e2-empire-0", requestId: requests[0] } });
+  await until(() => players[0].receipts?.get(requests[0])?.accepted === true, "first canonical founding", 30_000);
+  send(players[1], { type: "intent", intent: { type: "national_found_empire", empireId: "e2-replay", requestId: requests[0] } });
+  const replayTick = players[1].lastProjectionTick;
+  await until(() => players[1].lastProjectionTick > replayTick + 2, "cross-principal replay observation");
+  assert(!players[1].receipts?.has(requests[0]), "foreign request ID accepted");
+  for (let i = 1; i < 3; i++) {
     send(players[i], { type: "intent", intent: { type: "national_found_empire",
       empireId: "e2-empire-" + i, requestId: requests[i] } });
   }
@@ -202,7 +216,7 @@ try {
   const previousTick = players[0].lastProjectionTick;
   rejoin(replacement, id, renewed.jwt);
   await until(() => replacement.starts === 1 && replacement.lastProjectionTick > previousTick &&
-    players[1].closeCode !== null, "lawful fresh-token reconnect");
+    players[1].closeCode !== null && players[0].lastProjectionTick > previousTick && players[2].lastProjectionTick > previousTick, "lawful fresh-token reconnect");
   assert.equal(replacement.seat, seatIds[1]);
   assert.equal(replacement.match, id);
   assert(players[0].lastProjectionTick > previousTick && players[2].lastProjectionTick > previousTick);
@@ -217,7 +231,7 @@ try {
   const priorTick = players[0].lastProjectionTick;
   await until(() => replacement.closeCode !== null, "bounded live revocation", 22_000);
   assert.equal(replacement.closeCode, 4001);
-  assert(players[0].lastProjectionTick > priorTick);
+  await until(() => players[0].lastProjectionTick > priorTick, "unrevoked peer keeps advancing");
   const banned = await peer();
   rejoin(banned, id, renewed.jwt);
   await until(() => banned.closeCode !== null, "revoked JWT cannot regain seat");
@@ -246,8 +260,11 @@ try {
   assert.notEqual(next.gameID ?? next.id, id);
   pass("host-restart-ends-old-match-new-game-has-new-id");
   console.log("LOCAL_STAGING_WORKER_PASS automated_protocol_accounts=3 humans=0 upstream_oauth=0 gpu=0 restart_recovery=0");
-} catch {
-  console.error("LOCAL_STAGING_WORKER_FAIL first_transition=" + stage);
+} catch (error) {
+  // Only own source line numbers and enumerated peer state; no JWT or payload.
+  const line = String(error?.stack ?? "").match(/worker-journey\.mjs:(\d+):\d+/)?.[1] ?? "unknown";
+  console.error("LOCAL_STAGING_WORKER_FAIL first_transition=" + stage + " line=" + line);
+  console.error("SAFE_PEER_SUMMARY " + JSON.stringify(peers.map(p => ({ close: p.closeCode, decodeFailed: p.decodeFailed, lobbySize: p.lobby?.lobby.clients?.length ?? 0, starts: p.starts ?? 0, tick: p.lastProjectionTick, spawned: p.spawned === true, spawnEnded: p.spawnEnded === true, receipts: p.receipts?.size ?? 0 }))));
   process.exitCode = 1;
 } finally {
   for (const p of peers) p.ws.terminate();
