@@ -1094,6 +1094,40 @@ export class GameImpl implements Game {
     const alreadyProcessed = this._nationalWar
       .snapshot()
       .levy.processed.some((record) => record.attackId === attackId);
+    if (!alreadyProcessed) {
+      // Formal WAR alone is insufficient: a caller cannot synthesize a
+      // battlefield receipt for an army that the real Game never accepted.
+      // Compare against the actual funded outgoing attack and the exact
+      // pre-interception cancellation/consolidation calculation performed by
+      // AttackExecution. An engine-only adapter is not a client credential.
+      const attacker = this._players.get(attackerId)!;
+      const defender = this._players.get(defenderId)!;
+      const battle = attacker
+        .outgoingAttacks()
+        .find((a) => a.id() === attackId);
+      if (
+        !battle ||
+        !battle.isActive() ||
+        battle.attacker() !== attacker ||
+        battle.target() !== defender
+      )
+        throw new Error("NATIONAL defense: no real accepted invading army");
+      let projected = battle.troops();
+      for (const incoming of attacker.incomingAttacks()) {
+        if (incoming.attacker() !== defender) continue;
+        if (incoming.troops() > projected)
+          throw new Error("NATIONAL defense: canceled incoming battle");
+        projected -= incoming.troops();
+      }
+      if (battle.sourceTile() === null) {
+        for (const outgoing of attacker.outgoingAttacks()) {
+          if (outgoing !== battle && outgoing.target() === defender)
+            projected += outgoing.troops();
+        }
+      }
+      if (projected < 1 || Math.floor(projected) !== troops)
+        throw new Error("NATIONAL defense: forged invading troop strength");
+    }
     const mode = alreadyProcessed ? "none" : (response?.response ?? "none");
     const plan =
       response && (mode === "imperial" || mode === "both")
