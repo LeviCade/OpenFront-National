@@ -69,6 +69,7 @@ import {
   SharedWaterCacheSnapshot,
 } from "../execution/nation/SharedWaterCache";
 import { NationalSanctionExecution } from "../execution/NationalSanctionExecution";
+import { NationalUltimatumExecution } from "../execution/NationalUltimatumExecution";
 import { NationExecution } from "../execution/NationExecution";
 import { SpawnTimerExecution } from "../execution/SpawnTimerExecution";
 import { TribeExecution } from "../execution/TribeExecution";
@@ -1988,6 +1989,7 @@ export class GameImpl implements Game {
     if (this._national !== null) {
       hash += this._national.stateHash();
       hash += NationalSanctionExecution.stateHash(this);
+      hash += NationalUltimatumExecution.stateHash(this);
     }
     if (this._nationalWar !== null)
       hash += simpleHash(JSON.stringify(this._nationalWar.snapshot()));
