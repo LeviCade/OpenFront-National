@@ -97,6 +97,70 @@ export class GameView implements GameLike {
   private _nationalPoliticsTick: number | null = null;
   private _nationalAccessionOffers: NationalAccessionView | null = null;
   private _nationalPoliticalResults: readonly NationalPoliticalResult[] = [];
+  private _trustedProjectionReady = false;
+
+  /** Strictly a view of the E3 recipient packet, NEVER a browser GameRunner. */
+  public isTrustedNationalProjection(): boolean {
+    return this._trustedNationalProjection;
+  }
+
+  /** True only after a matching E2 seat receives a validated E3 frame. */
+  public trustedProjectionReady(): boolean {
+    return this._trustedNationalProjection && this._trustedProjectionReady;
+  }
+
+  public markTrustedProjectionReady(): void {
+    if (this._trustedNationalProjection) this._trustedProjectionReady = true;
+  }
+
+  /**
+   * E3 observer-map reset (new socket or lost empire sight). Erase every
+   * previously visible owner and unit before processing the new authorized
+   * page. Do NOT retain old enemy locations as "last known" facts.
+   */
+  public resetTrustedProjectionSight(): void {
+    if (!this._trustedNationalProjection) return;
+    this._trustedProjectionReady = false;
+    this._map.tileStateBuffer().fill(0);
+    this._units.clear();
+    this._unitStates.clear();
+    this._unitsByOwner.clear();
+    this._unitsByOwnerStale = true;
+    this.toDelete.clear();
+    this.unitGrid = new UnitGrid<UnitView>(this._map);
+    this.invalidateNationalPoliticalView();
+  }
+
+  /**
+   * Radial Attack can be offered for a currently sighted opposing tile.
+   * This is UI eligibility ONLY; the authoritative host may reject the intent.
+   * Never infer targets from unsighted tiles, hidden game state or other clients.
+   */
+  public trustedVisibleAttack(
+    playerID: string,
+    tile: TileRef | undefined,
+  ): boolean {
+    if (
+      !this._trustedNationalProjection ||
+      !this._trustedProjectionReady ||
+      tile === undefined ||
+      this.inSpawnPhase() ||
+      !this.isValidRef(tile) ||
+      !this.hasOwner(tile)
+    )
+      return false;
+    const actor = this.myPlayer();
+    const target = this.owner(tile);
+    return (
+      actor !== null &&
+      actor.id() === playerID &&
+      actor.isAlive() &&
+      actor.hasSpawned() &&
+      actor.troops() > 0 &&
+      target.isPlayer() &&
+      target.id() !== playerID
+    );
+  }
 
   public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
     return this._nationalPolitics;
@@ -244,6 +308,7 @@ export class GameView implements GameLike {
     private _gameID: GameID,
     humans: WirePlayer[],
     private _resumedFromSave = false,
+    private readonly _trustedNationalProjection = false,
   ) {
     this._map = this._mapData.gameMap;
     this.lastUpdate = null;
@@ -1090,7 +1155,11 @@ export class GameView implements GameLike {
     return this._config;
   }
   isSpectator(): boolean {
-    return !this.myPlayer()?.isAlive() || this._config.isReplay();
+    return (
+      (this._trustedNationalProjection && !this._trustedProjectionReady) ||
+      !this.myPlayer()?.isAlive() ||
+      this._config.isReplay()
+    );
   }
   units(...types: UnitType[]): UnitView[] {
     if (types.length === 0) {
