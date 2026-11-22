@@ -131,7 +131,7 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
   });
 
   it("a threatened bot accepts a human-offered empire through real validator and serves its victory", async () => {
-    const game = await seeded(0.18, 0.7, true);
+    const game = await seeded(0.18, 0.55, true);
     // Establish the legitimate human offer BEFORE the first AI planning
     // tick, so its acceptance cannot race the AI's own shelter proposal.
     game.performNationalCommand(game.player(H), {
