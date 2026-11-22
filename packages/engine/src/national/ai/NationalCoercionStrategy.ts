@@ -417,3 +417,74 @@ export function planObservedImperialCoercion(
   }
   return null;
 }
+
+/** E3's exact canonical wire fields, without importing E3's parallel branch.
+ * This maps a *proposal* into an intent; it never executes or grants authority.
+ * NationExecution/Executor MUST submit through E3's authenticated Game ledger.
+ */
+export type ProposedImperialUltimatumIntent =
+  | {
+      readonly type: "national_issue_ultimatum";
+      readonly empireId: string;
+      readonly targetId: string;
+      readonly threat: "embargo" | "imperial-war";
+      readonly durationTicks: number;
+      readonly requestId: string;
+    }
+  | {
+      readonly type: "national_respond_ultimatum";
+      readonly ultimatumId: string;
+      readonly decision: "accept" | "refuse";
+      readonly requestId: string;
+    }
+  | {
+      readonly type: "national_resolve_ultimatum";
+      readonly ultimatumId: string;
+      readonly decision: "enforce" | "back-down";
+      readonly requestId: string;
+    };
+
+/** Narrow E3 adapter; rejects stale, cross-principal and unsupported choices.
+ * Every returned action still requires execution-time authoritative validation.
+ */
+export function proposeCanonicalImperialUltimatumIntent(
+  observation: NationalObservation,
+  views: readonly ObservedImperialUltimatum[],
+  choice: CoercionDecision,
+  requestId: string,
+): ProposedImperialUltimatumIntent | null {
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(requestId)) return null;
+  const self=observation.observerId;
+  const nation=observation.nations.find((n)=>n.id===self && n.alive);
+  if (!nation) return null;
+  if (choice.kind==="request-consent" || choice.kind==="accept-consent") return null;
+  const empires=observation.coalitions.filter((e)=>e.kind==="empire");
+  if (choice.kind==="issue") {
+    if (nation.status!=="imperial") return null;
+    const crown=empires.find((e)=>e.id===choice.empireId && e.leaderId===self && e.members.includes(self));
+    const candidate=observation.nations.find((n)=>n.id===choice.candidateId && n.alive && n.status==="independent");
+    if (!crown || !candidate || !observation.frontiers.some((f)=>f.targetId===candidate.id && f.access==="land"))
+      return null;
+    if (views.some((v)=>v.role==="issuer" && v.issuerId===self && v.empireId===crown.id && v.targetId===candidate.id && ["pending","consented","decision-required"].includes(v.phase)))
+      return null;
+    return {type:"national_issue_ultimatum",empireId:crown.id,targetId:candidate.id,threat:"imperial-war",durationTicks:30,requestId};
+  }
+  const record=views.find((v)=>v.id===choice.ultimatumId);
+  if (!record || !empires.some((e)=>e.id===record.empireId && e.leaderId===record.issuerId))
+    return null;
+  if (choice.kind==="resist" || choice.kind==="acknowledge-consent") {
+    if (nation.status!=="independent" || record.role!=="recipient" || record.targetId!==self ||
+      record.phase!=="pending" || record.response!=="none" ||
+      record.deadlineTick<=observation.tick)
+      return null;
+    return {type:"national_respond_ultimatum",ultimatumId:record.id,decision:choice.kind==="resist"?"refuse":"accept",requestId};
+  }
+  if (nation.status!=="imperial" || record.role!=="issuer" || record.issuerId!==self ||
+    record.phase!=="decision-required") return null;
+  if (choice.kind==="enforce" && record.threat==="imperial-war") {
+    const reachable=observation.frontiers.some((f)=>f.targetId===record.targetId &&
+      (f.access==="land" || (f.access==="naval" && observation.visibleAssets.some((a)=>a.ownerId===self && a.kind==="transport"))));
+    if (!reachable) return null;
+  }
+  return {type:"national_resolve_ultimatum",ultimatumId:record.id,decision:choice.kind,requestId};
+}
