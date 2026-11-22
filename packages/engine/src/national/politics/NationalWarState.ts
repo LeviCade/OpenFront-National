@@ -147,6 +147,10 @@ export class NationalWarStateService {
     return this.wars.mayReplayAsCurrentSovereign(actorId, command);
   }
 
+  retireEmpireWars(empireIds: readonly string[], tick: number): void {
+    this.wars.retireEmpireWars(empireIds, tick);
+  }
+
   /** Validate BOTH ledgers before touching the live state. */
   restore(raw: unknown): void {
     const state = NationalWarStateSnapshotSchema.parse(raw);
