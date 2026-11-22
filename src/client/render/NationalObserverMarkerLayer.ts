@@ -21,7 +21,10 @@ export class NationalObserverMarkerLayer {
     this.canvas.id = "national-observer-unit-markers";
     this.canvas.style.cssText =
       "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1";
-    this.canvas.setAttribute("aria-label", "Observed units without detailed sightings");
+    this.canvas.setAttribute(
+      "aria-label",
+      "Observed units without detailed sightings",
+    );
     this.canvas.setAttribute("role", "img");
     webgl.after(this.canvas);
     this.context = this.canvas.getContext("2d");
@@ -31,8 +34,13 @@ export class NationalObserverMarkerLayer {
     const ctx = this.context;
     if (!ctx || width <= 0 || height <= 0) return;
     const signature = [
-      this.game.trustedObserverMarkerRevision(), this.transform.offsetX,
-      this.transform.offsetY, this.transform.scale, width, height, dpr,
+      this.game.trustedObserverMarkerRevision(),
+      this.transform.offsetX,
+      this.transform.offsetY,
+      this.transform.scale,
+      width,
+      height,
+      dpr,
     ].join(":");
     if (signature === this.lastSignature) return;
     this.lastSignature = signature;
@@ -49,7 +57,10 @@ export class NationalObserverMarkerLayer {
     const ownId = this.game.myPlayer()?.id();
     for (const marker of this.game.trustedObserverFallbackMarkers()) {
       const { x, y } = this.transform.worldToScreenCoordinates(
-        new Cell(this.game.x(marker.tile) + 0.5, this.game.y(marker.tile) + 0.5),
+        new Cell(
+          this.game.x(marker.tile) + 0.5,
+          this.game.y(marker.tile) + 0.5,
+        ),
       );
       if (x < 0 || y < 0 || x >= width || y >= height) continue;
       // At distant zoom levels overlapping markers share one screen cell.
@@ -62,7 +73,11 @@ export class NationalObserverMarkerLayer {
       ctx.beginPath();
       if (marker.kind === "structure") {
         ctx.rect(x - radius, y - radius, radius * 2, radius * 2);
-      } else if (marker.kind === "warship" || marker.kind === "transport" || marker.kind === "trade-ship") {
+      } else if (
+        marker.kind === "warship" ||
+        marker.kind === "transport" ||
+        marker.kind === "trade-ship"
+      ) {
         ctx.moveTo(x, y - radius);
         ctx.lineTo(x + radius, y + radius);
         ctx.lineTo(x - radius, y + radius);

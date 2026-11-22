@@ -111,7 +111,11 @@ export class MainRadialMenu implements Controller {
       if (!this.game.isValidCoord(worldCoords.x, worldCoords.y)) {
         return;
       }
-      if (this.game.isTrustedNationalProjection?.() && !this.game.trustedProjectionReady()) return;
+      if (
+        this.game.isTrustedNationalProjection?.() &&
+        !this.game.trustedProjectionReady()
+      )
+        return;
       const clickedTile = this.game.ref(worldCoords.x, worldCoords.y);
       this.clickedTile = clickedTile;
 

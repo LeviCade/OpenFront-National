@@ -43,18 +43,19 @@ jobs:
           npm install --global --ignore-scripts npm@12.1.0
           npm ci --ignore-scripts
       - name: Verify exact committed source formatting (emit suggested patch on failure)
-        continue-on-error: true
         run: |
           npx --no-install oxfmt --check             src/client/controllers/NationalMapTargetController.ts             src/client/ClientGameRunner.ts             src/client/TrustedNationalSession.ts             src/client/view/GameView.ts             tests/ui/national/NationalHumanMapInputR11.test.ts             tests/ui/national/TrustedNationalProjectionMapC2.test.ts             src/client/Transport.ts src/client/hud/layers/MainRadialMenu.ts src/client/hud/layers/RadialMenuElements.ts src/client/WebGLFrameBuilder.ts src/client/render/NationalObserverMarkerLayer.ts tests/ui/national/C4NativeObserverRevocation.test.ts tests/util/viewStubs.ts || (npx --no-install oxfmt --write src/client/ClientGameRunner.ts src/client/TrustedNationalSession.ts src/client/view/GameView.ts src/client/Transport.ts src/client/hud/layers/MainRadialMenu.ts src/client/hud/layers/RadialMenuElements.ts src/client/WebGLFrameBuilder.ts src/client/render/NationalObserverMarkerLayer.ts tests/ui/national/TrustedNationalProjectionMapC2.test.ts tests/ui/national/C4NativeObserverRevocation.test.ts tests/util/viewStubs.ts; git diff --; git restore --worktree .; exit 1)
       - name: Targeted E4 real-code regressions
+        if: always()
         run: |
           npx --no-install vitest run tests/ui/national/C4NativeObserverRevocation.test.ts             tests/ui/national/NationalHumanMapInputR11.test.ts             tests/ui/national/TrustedNationalProjectionMapC2.test.ts             tests/ui/national/NationalPrivateCapabilityClass5.test.ts             tests/ui/national/NationalPrivatePanelClass5.test.ts             tests/ui/national/NationalFoundingWire.test.ts             tests/ui/national/NationalWarWire.test.ts
       - name: Full project typecheck
         if: always()
         run: npm run typecheck
       - name: Changed source lint
+        if: always()
         run: |
-          npx --no-install oxlint             src/client/controllers/NationalMapTargetController.ts             src/client/ClientGameRunner.ts             src/client/TrustedNationalSession.ts             src/client/view/GameView.ts             tests/ui/national/NationalHumanMapInputR11.test.ts             tests/ui/national/TrustedNationalProjectionMapC2.test.ts
+          npx --no-install oxlint             src/client/controllers/NationalMapTargetController.ts             src/client/ClientGameRunner.ts             src/client/TrustedNationalSession.ts             src/client/view/GameView.ts             tests/ui/national/NationalHumanMapInputR11.test.ts             tests/ui/national/TrustedNationalProjectionMapC2.test.ts             src/client/Transport.ts src/client/hud/layers/MainRadialMenu.ts src/client/hud/layers/RadialMenuElements.ts src/client/WebGLFrameBuilder.ts src/client/render/NationalObserverMarkerLayer.ts tests/ui/national/C4NativeObserverRevocation.test.ts tests/util/viewStubs.ts
       - name: Production build
         if: always()
         run: npm run build-prod

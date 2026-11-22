@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { PlayerType } from "@openfront/engine-api/game/GameTypes";
-import { makeEmptyGu, makeGameView, makeNameViewData, makePlayerUpdate } from "../../util/viewStubs";
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import { describe, expect, it } from "vitest";
 import {
@@ -11,6 +10,12 @@ import {
 } from "../../../src/client/TrustedNationalSession";
 import { GameView } from "../../../src/client/view/GameView";
 import type { PlayerView } from "../../../src/client/view/PlayerView";
+import {
+  makeEmptyGu,
+  makeGameView,
+  makeNameViewData,
+  makePlayerUpdate,
+} from "../../util/viewStubs";
 
 function packet(tick: number) {
   return {
@@ -172,11 +177,19 @@ describe("Second Conductor Class One E4: E3-authoritative graphical map feed", (
   });
 
   it("erases actual GameView ownership, placement and rendered state on E3 revocation", () => {
-    const view = makeGameView({ trustedProjection: true, myClientID: "client-a" });
+    const view = makeGameView({
+      trustedProjection: true,
+      myClientID: "client-a",
+    });
     view.setTrustedPrincipal("nation-a");
     view.markTrustedProjectionReady();
     const gu = makeEmptyGu(1, {
-      packedTileUpdates: new Uint32Array([22, 1 | (128 << 16), 33, 2 | (128 << 16)]),
+      packedTileUpdates: new Uint32Array([
+        22,
+        1 | (128 << 16),
+        33,
+        2 | (128 << 16),
+      ]),
       playerNameViewData: {
         "nation-a": makeNameViewData({ x: 2, y: 2 }),
         "nation-b": makeNameViewData({ x: 3, y: 3 }),
@@ -184,7 +197,16 @@ describe("Second Conductor Class One E4: E3-authoritative graphical map feed", (
     });
     gu.updates[GameUpdateType.Player] = [
       makePlayerUpdate({ id: "nation-a" }),
-      { type: GameUpdateType.Player, id: "nation-b", name: "B", displayName: "B", smallID: 2, playerType: PlayerType.Human, tilesOwned: 1, isAlive: true },
+      {
+        type: GameUpdateType.Player,
+        id: "nation-b",
+        name: "B",
+        displayName: "B",
+        smallID: 2,
+        playerType: PlayerType.Human,
+        tilesOwned: 1,
+        isAlive: true,
+      },
     ];
     view.update(gu);
     expect(view.trustedNameVisible(view.player("nation-a"))).toBe(true);
@@ -192,7 +214,9 @@ describe("Second Conductor Class One E4: E3-authoritative graphical map feed", (
     expect(view.frameData().names.size).toBe(2);
     expect(view.player("nation-b").hasSpawned()).toBe(true);
     view.resetTrustedProjectionSight();
-    expect([...view.frameData().tileState].every((value) => value === 0)).toBe(true);
+    expect([...view.frameData().tileState].every((value) => value === 0)).toBe(
+      true,
+    );
     expect(view.frameData().names.size).toBe(0);
     expect(view.trustedProjectionReady()).toBe(false);
     expect(view.trustedNameVisible(view.player("nation-a"))).toBe(false);

@@ -482,7 +482,9 @@ export class Transport {
         this.lobbyConfig.gameID,
       );
       this.dropBufferedNationalIntents();
-      this.eventBus.emit(new NationalTransportStatusEvent(false, this.lobbyConfig.gameID));
+      this.eventBus.emit(
+        new NationalTransportStatusEvent(false, this.lobbyConfig.gameID),
+      );
       this.lobbyConfig.spectator = e.spectator;
       this.sendMsg({
         type: "spectate",
@@ -561,7 +563,10 @@ export class Transport {
     if (this.connectionRefused) {
       return;
     }
-    const hadTrustedSeat = hasTrustedNationalPrivateCapability(this.eventBus, this.lobbyConfig.gameID);
+    const hadTrustedSeat = hasTrustedNationalPrivateCapability(
+      this.eventBus,
+      this.lobbyConfig.gameID,
+    );
     this.isSessionReady = false;
     this.trustedNationalStart = null;
     revokeTrustedNationalPrivateCapability(
@@ -569,7 +574,10 @@ export class Transport {
       this.lobbyConfig.gameID,
     );
     this.dropBufferedNationalIntents();
-    if (hadTrustedSeat) this.eventBus.emit(new NationalTransportStatusEvent(false, this.lobbyConfig.gameID));
+    if (hadTrustedSeat)
+      this.eventBus.emit(
+        new NationalTransportStatusEvent(false, this.lobbyConfig.gameID),
+      );
     this.startPing();
     this.killExistingSocket();
     // WS origin comes from ClientEnv, resolved per game: the id's letter
@@ -711,9 +719,14 @@ export class Transport {
         if (nationalStartSeen) {
           nationalStreamRejected = true;
           this.isSessionReady = false;
-          revokeTrustedNationalPrivateCapability(this.eventBus, this.lobbyConfig.gameID);
+          revokeTrustedNationalPrivateCapability(
+            this.eventBus,
+            this.lobbyConfig.gameID,
+          );
           this.dropBufferedNationalIntents();
-          this.eventBus.emit(new TrustedNationalProjectionRejectedEvent(this.lobbyConfig.gameID));
+          this.eventBus.emit(
+            new TrustedNationalProjectionRejectedEvent(this.lobbyConfig.gameID),
+          );
           console.warn("NATIONAL wire rejected; fresh admission required");
           return;
         }

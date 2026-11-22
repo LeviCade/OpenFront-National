@@ -293,9 +293,20 @@ export function materializeTrustedNationalUpdate(
   // only those documented sentinel positions, never required IDs or coordinates.
   const rawUnits = packet.packedUnitUpdates;
   const nanOffsets = new Set([4, 5, 6, 7, 9, 10, 12, 13, 14, 15]);
-  const units = rawUnits === undefined ? undefined : Array.isArray(rawUnits) && rawUnits.length <= 210_000 && rawUnits.every((v, i) => (typeof v === "number" && Number.isFinite(v)) || (v === null && nanOffsets.has(i % 21)))
-    ? rawUnits.map((v) => v === null ? NaN : v as number)
-    : (() => { throw new Error("NATIONAL invalid projected unit lanes"); })();
+  const units =
+    rawUnits === undefined
+      ? undefined
+      : Array.isArray(rawUnits) &&
+          rawUnits.length <= 210_000 &&
+          rawUnits.every(
+            (v, i) =>
+              (typeof v === "number" && Number.isFinite(v)) ||
+              (v === null && nanOffsets.has(i % 21)),
+          )
+        ? rawUnits.map((v) => (v === null ? NaN : (v as number)))
+        : (() => {
+            throw new Error("NATIONAL invalid projected unit lanes");
+          })();
   if (units !== undefined && units.length % 21 !== 0)
     throw new Error("NATIONAL invalid projected unit stride");
   const players = numericArray(packet.packedPlayerUpdates, 25_000);
@@ -335,7 +346,9 @@ export function materializeTrustedNationalUpdate(
 }
 
 /** Same deterministic human ID derivation as createGameRunnerInternal. Never read the observerId from a projection to select a principal. */
-export function trustedNationalPrincipal(start: ServerNationalStartMessage): string {
+export function trustedNationalPrincipal(
+  start: ServerNationalStartMessage,
+): string {
   const random = new PseudoRandom(simpleHash(start.gameStartInfo.gameID));
   let principal: string | null = null;
   for (const player of start.gameStartInfo.players) {

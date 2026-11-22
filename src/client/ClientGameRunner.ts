@@ -57,7 +57,6 @@ import {
 import { rememberLobbyPublicGameType } from "./LobbyPublicGameType";
 import { rememberLobbyRoster } from "./LobbyRosterLevels";
 import { NationalObserverMapContinuity } from "./NationalObserverMapContinuity";
-import { NationalObserverMarkerLayer } from "./render/NationalObserverMarkerLayer";
 import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
 import { pagePin } from "./PagePin";
 import { groupTokenOf, loggableStartMessage } from "./PresenceGroup";
@@ -73,6 +72,7 @@ import {
   showGLGate,
   trackGLInit,
 } from "./render/gl";
+import { NationalObserverMarkerLayer } from "./render/NationalObserverMarkerLayer";
 import { ALL_UNIT_TYPES, UnitState } from "./render/types";
 import { versionedPathForMismatchedGame } from "./ServerList";
 import { audioMixer, initAudioMixer } from "./sound/AudioMixer";
@@ -304,7 +304,8 @@ export function joinLobby(
       resolvePrestart();
     }
     if (message.type === "national_start") {
-      if (!hasTrustedNationalPrivateCapability(eventBus, lobbyConfig.gameID)) return;
+      if (!hasTrustedNationalPrivateCapability(eventBus, lobbyConfig.gameID))
+        return;
       rejectedTrustedProjection = false;
       bufferedTrustedProjections = [];
       trustedAdmission = new TrustedNationalStartedEvent(message);
@@ -340,7 +341,8 @@ export function joinLobby(
           }
           currentGameRunner = runner;
           runner.start();
-          if (trustedAdmission !== null) runner.admitTrustedNational(trustedAdmission);
+          if (trustedAdmission !== null)
+            runner.admitTrustedNational(trustedAdmission);
           if (rejectedTrustedProjection) {
             eventBus.emit(
               new TrustedNationalProjectionRejectedEvent(lobbyConfig.gameID),
@@ -1224,7 +1226,8 @@ export class ClientGameRunner {
         this.trustedContinuity === null ||
         observerMap.width !== this.gameView.width() ||
         observerMap.height !== this.gameView.height()
-      ) throw new Error("NATIONAL missing receiver or incompatible map");
+      )
+        throw new Error("NATIONAL missing receiver or incompatible map");
       // Validate the recipient, epoch and both cursors BEFORE any view write.
       const delta = this.trustedContinuity.accept(
         event.projection.nationalObserverMap,
@@ -1239,7 +1242,8 @@ export class ClientGameRunner {
       const pairs: number[] = [];
       for (let i = 0; i < update.packedTileUpdates.length; i += 2) {
         const ref = update.packedTileUpdates[i];
-        if (!this.gameView.isValidRef(ref)) throw new Error("NATIONAL invalid packed tile");
+        if (!this.gameView.isValidRef(ref))
+          throw new Error("NATIONAL invalid packed tile");
         if (this.trustedContinuity.tileStatus(ref) === "observed") {
           pairs.push(ref, update.packedTileUpdates[i + 1]);
         }
@@ -1248,38 +1252,59 @@ export class ClientGameRunner {
       // Do not derive the authenticated principal from a mutable PlayerView.
       const actorUpdates = update.updates[GameUpdateType.Player];
       for (const actor of actorUpdates) {
-        if ((actor.clientID === this.clientID && actor.id !== this.trustedPrincipal) ||
-            (actor.id === this.trustedPrincipal && actor.clientID !== undefined && actor.clientID !== this.clientID))
+        if (
+          (actor.clientID === this.clientID &&
+            actor.id !== this.trustedPrincipal) ||
+          (actor.id === this.trustedPrincipal &&
+            actor.clientID !== undefined &&
+            actor.clientID !== this.clientID)
+        )
           throw new Error("NATIONAL projected seat identity mismatch");
       }
       if (delta.clearAllTiles) {
         this.revokeTrustedSight();
         this.webglBuilder?.clearCaches();
       }
-      this.gameView.reconcileTrustedUnitVisibility(delta.clearAllUnits, delta.removedUnitIds);
+      this.gameView.reconcileTrustedUnitVisibility(
+        delta.clearAllUnits,
+        delta.removedUnitIds,
+      );
       // Strip stale or not-yet-paged packed markers, including old-position
       // death tombstones: revocation is not an animated unit death.
       this.gameView.applyTrustedUnitPage(update, delta, this.trustedContinuity);
-      const sweepReady = this.gameView.trustedProjectionReady() || delta.sweepComplete;
+      const sweepReady =
+        this.gameView.trustedProjectionReady() || delta.sweepComplete;
       this.gameView.setTrustedProjectionReady(sweepReady);
       this.gameView.update(update);
       this.myPlayer = this.clientID
         ? this.gameView.playerByClientID(this.clientID)
         : null;
-      const pageComplete = sweepReady &&
-        this.myPlayer?.id() === this.trustedPrincipal;
+      const pageComplete =
+        sweepReady && this.myPlayer?.id() === this.trustedPrincipal;
       this.gameView.setTrustedProjectionReady(pageComplete);
       this.trustedLastTick = update.tick;
       if (this.trustedStatus) {
-        this.trustedStatus.dataset.trustedNationalMap = pageComplete ? "visible" : "paging";
+        this.trustedStatus.dataset.trustedNationalMap = pageComplete
+          ? "visible"
+          : "paging";
         this.trustedStatus.dataset.trustedNationalUnits =
-          delta.unitOverflow || !delta.unitSweepComplete ? "partial" : "synchronized";
+          delta.unitOverflow || !delta.unitSweepComplete
+            ? "partial"
+            : "synchronized";
         this.trustedStatus.textContent =
-          "NATIONAL · Tick " + update.tick +
-          (pageComplete ? " · Visible terrain synchronized" : " · Loading visible terrain…") +
-          (delta.unitOverflow || !delta.unitSweepComplete ? " · Partial unit intelligence" : "") +
-          " · " + this.trustedContinuity.observedUnitCount + " observed units" +
-          " · Your troops " + Math.floor(observerMap.ownResources.troops).toLocaleString();
+          "NATIONAL · Tick " +
+          update.tick +
+          (pageComplete
+            ? " · Visible terrain synchronized"
+            : " · Loading visible terrain…") +
+          (delta.unitOverflow || !delta.unitSweepComplete
+            ? " · Partial unit intelligence"
+            : "") +
+          " · " +
+          this.trustedContinuity.observedUnitCount +
+          " observed units" +
+          " · Your troops " +
+          Math.floor(observerMap.ownResources.troops).toLocaleString();
       }
       this.webglBuilder?.update(this.gameView);
       this.renderer.tick();
@@ -1297,15 +1322,20 @@ export class ClientGameRunner {
         this.trustedStatus.textContent =
           "NATIONAL · Invalid server projection — controls disabled";
       }
-      console.warn("NATIONAL projected view rejected; fresh admission required");
+      console.warn(
+        "NATIONAL projected view rejected; fresh admission required",
+      );
     }
   };
   /** A new decoded and admitted national_start is the only recovery boundary. */
   public admitTrustedNational(event: TrustedNationalStartedEvent): void {
-    if (!this.trustedNationalProjection ||
-        event.start.gameStartInfo.gameID !== this.lobby.gameID ||
-        event.start.myClientID !== this.clientID ||
-        !hasTrustedNationalPrivateCapability(this.eventBus, this.lobby.gameID)) return;
+    if (
+      !this.trustedNationalProjection ||
+      event.start.gameStartInfo.gameID !== this.lobby.gameID ||
+      event.start.myClientID !== this.clientID ||
+      !hasTrustedNationalPrivateCapability(this.eventBus, this.lobby.gameID)
+    )
+      return;
     this.trustedProjectionActive = false;
     this.trustedContinuity = null;
     this.trustedPrincipal = null;
@@ -1313,20 +1343,27 @@ export class ClientGameRunner {
     try {
       this.trustedPrincipal = trustedNationalPrincipal(event.start);
       this.gameView.setTrustedPrincipal(this.trustedPrincipal);
-      this.trustedContinuity = new NationalObserverMapContinuity(this.trustedPrincipal);
+      this.trustedContinuity = new NationalObserverMapContinuity(
+        this.trustedPrincipal,
+      );
       this.trustedLastTick = -1;
       this.trustedProjectionActive = true;
     } catch {
-      this.onTrustedProjectionRejected(new TrustedNationalProjectionRejectedEvent(this.lobby.gameID));
+      this.onTrustedProjectionRejected(
+        new TrustedNationalProjectionRejectedEvent(this.lobby.gameID),
+      );
       return;
     }
     if (this.trustedStatus) {
       this.trustedStatus.dataset.trustedNationalMap = "loading";
-      this.trustedStatus.textContent = "NATIONAL · Reauthenticated — awaiting fresh visible terrain";
+      this.trustedStatus.textContent =
+        "NATIONAL · Reauthenticated — awaiting fresh visible terrain";
     }
   }
 
-  private readonly onTrustedStart = (event: TrustedNationalStartedEvent): void => {
+  private readonly onTrustedStart = (
+    event: TrustedNationalStartedEvent,
+  ): void => {
     this.admitTrustedNational(event);
   };
 
@@ -1340,7 +1377,8 @@ export class ClientGameRunner {
     this.revokeTrustedSight();
     if (this.trustedStatus) {
       this.trustedStatus.dataset.trustedNationalMap = "disconnected";
-      this.trustedStatus.textContent = "NATIONAL · Connection lost — map and commands disabled";
+      this.trustedStatus.textContent =
+        "NATIONAL · Connection lost — map and commands disabled";
     }
   };
 
@@ -1757,7 +1795,13 @@ export class ClientGameRunner {
     this.myPlayer
       .actions(tile, [UnitType.TransportShip])
       .then((actions) => {
-        if (this.trustedNationalProjection && (!this.myPlayer || !this.gameView.trustedVisibleAttack(this.myPlayer.id(), tile) || this.gameView.owner(tile).id() !== clickedOwner)) return;
+        if (
+          this.trustedNationalProjection &&
+          (!this.myPlayer ||
+            !this.gameView.trustedVisibleAttack(this.myPlayer.id(), tile) ||
+            this.gameView.owner(tile).id() !== clickedOwner)
+        )
+          return;
         if (actions.canAttack) {
           this.eventBus.emit(
             new SendAttackIntentEvent(
@@ -1935,7 +1979,13 @@ export class ClientGameRunner {
     this.myPlayer
       .actions(tile, null)
       .then((actions) => {
-        if (this.trustedNationalProjection && (!this.myPlayer || !this.gameView.trustedVisibleAttack(this.myPlayer.id(), tile) || this.gameView.owner(tile).id() !== clickedOwner)) return;
+        if (
+          this.trustedNationalProjection &&
+          (!this.myPlayer ||
+            !this.gameView.trustedVisibleAttack(this.myPlayer.id(), tile) ||
+            this.gameView.owner(tile).id() !== clickedOwner)
+        )
+          return;
         if (actions.canAttack) {
           this.eventBus.emit(
             new SendAttackIntentEvent(

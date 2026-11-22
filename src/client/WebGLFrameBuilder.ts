@@ -301,7 +301,11 @@ export class WebGLFrameBuilder {
    * no-op via the cache check.
    */
   private syncPlayerSpawns(gameView: GameView): void {
-    if (gameView.isTrustedNationalProjection?.() && !gameView.trustedProjectionReady()) return;
+    if (
+      gameView.isTrustedNationalProjection?.() &&
+      !gameView.trustedProjectionReady()
+    )
+      return;
     for (const p of gameView.players()) {
       const smallID = p.smallID();
       const spawnTile = p.state.spawnTile;
@@ -383,7 +387,10 @@ export class WebGLFrameBuilder {
    * during spawn phase; the pass animates locally from the snapshot.
    */
   private syncSpawnOverlay(gameView: GameView): void {
-    if (gameView.isTrustedNationalProjection?.() && !gameView.trustedProjectionReady()) {
+    if (
+      gameView.isTrustedNationalProjection?.() &&
+      !gameView.trustedProjectionReady()
+    ) {
       this.view.updateSpawnOverlay(false, []);
       return;
     }
