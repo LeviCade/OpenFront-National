@@ -101,7 +101,26 @@ export class NationalFoundEmpireExecution implements Execution {
       initialized: this.game !== null,
       actor: w.player(this.actor),
       empireId: this.empireId,
-      politicalCommand: this.politicalCommand,
+      // Snapshot wire schemas require a mutable array; the runtime policy
+      // deliberately exposes readonly construction categories. Copy only at
+      // this serialization boundary and never mutate the original policy.
+      politicalCommand:
+        this.politicalCommand?.kind === "imperial-administration" &&
+        this.politicalCommand.command.kind === "set-policy"
+          ? {
+              ...this.politicalCommand,
+              command: {
+                ...this.politicalCommand.command,
+                policy: {
+                  ...this.politicalCommand.command.policy,
+                  allowedConstruction:
+                    this.politicalCommand.command.policy.allowedConstruction === null
+                      ? null
+                      : [...this.politicalCommand.command.policy.allowedConstruction],
+                },
+              },
+            }
+          : this.politicalCommand,
       requestId: this.requestId,
       authenticatedClientID: this.authenticatedClientID,
     });
