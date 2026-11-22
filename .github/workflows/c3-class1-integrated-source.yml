@@ -46,8 +46,15 @@ jobs:
         run: |
           npm install --global --ignore-scripts npm@12.1.0
           npm run inst
-      - name: Strict pinned formatting
-        run: npm run format:check
+      - name: Strict pinned formatting and exact markdown repair diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npm run format:check; then
+            npx --no-install oxfmt --write docs/release/NATIONAL_C2_CLASS1_E3_PRIVATE_OBSERVER_MAP.md scripts/national-qa/C2_PLAYTHROUGH.md
+            git -c color.ui=false diff -- docs/release/NATIONAL_C2_CLASS1_E3_PRIVATE_OBSERVER_MAP.md scripts/national-qa/C2_PLAYTHROUGH.md
+            exit 1
+          fi
       - name: Whole-project typecheck
         run: npm run typecheck
       - name: All project tests
