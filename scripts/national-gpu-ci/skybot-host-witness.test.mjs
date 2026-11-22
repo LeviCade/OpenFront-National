@@ -11,11 +11,12 @@ import {
   signedHostRecord,
   signHostWithExternalKey,
   verifyFourModeHostProofs,
+  verifyModeProofPrefix,
   createHostPreflight,
   createHostPostflight,
 } from "./skybot-host-witness.mjs";
 
-const APPROVED_STAGING = "stage3/conductor4-class1-integration-20261121";
+const APPROVED_STAGING = "stage3/conductor4-class2-integration-20261122";
 const SHA = "a".repeat(40);
 const CHALLENGE = "b".repeat(64);
 const STAGE_SHA = SHA;
@@ -32,6 +33,7 @@ const expected = Object.freeze({
   challenge: CHALLENGE,
   approvedStagingRef: APPROVED_STAGING,
   approvedStagingSha: STAGE_SHA,
+  runGrantSha256: "c".repeat(64),
 });
 const proof = () => ({
   expected: { ...expected },
@@ -66,6 +68,8 @@ const proof = () => ({
     run_attempt: 1,
     head_sha: SHA,
     status: "in_progress",
+    name: "Four real game scenarios on one trusted GPU guest",
+    labels: ["skybot-ci-gpu"],
     runner_id: Number(expected.runnerId),
     runner_name: expected.runnerName,
     started_at: new Date(NOW).toISOString(),
@@ -145,6 +149,8 @@ test("source, repository ID, workflow attempt, runner ID, stage and writer must 
     ],
     ["job", "head_sha", "f".repeat(40), "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
     ["job", "run_attempt", undefined, "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    ["job", "name", "other job", "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
+    ["job", "labels", ["ubuntu-latest"], "GITHUB_JOB_RUN_RUNNER_MISMATCH"],
     [
       "approval",
       "approvedStagingRef",
@@ -407,6 +413,7 @@ test("postflight requires four distinct signed, source-bound and non-replayed mo
       runnerName: expected.runnerName,
       runnerId: expected.runnerId,
       challenge: CHALLENGE,
+      runGrantSha256: expected.runGrantSha256,
       issuedAtMs: NOW + index * 90000,
       expiresAtMs: NOW + index * 90000 + 120000,
     };
@@ -437,6 +444,35 @@ test("postflight requires four distinct signed, source-bound and non-replayed mo
       [signedModes[0], signedModes[0], signedModes[2], signedModes[3]],
       publicPem,
       expected,
+      times,
+    ),
+  );
+  assert.equal(
+    verifyModeProofPrefix(
+      signedModes.slice(0, 2),
+      publicPem,
+      expected,
+      times,
+      2,
+      NOW + 100000,
+    ),
+    true,
+  );
+  rejectWith("FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED", () =>
+    verifyModeProofPrefix(
+      signedModes.slice(0, 2),
+      publicPem,
+      expected,
+      times,
+      2,
+      NOW + 1,
+    ),
+  );
+  rejectWith("FOUR_SIGNED_HOST_PREFLIGHTS_INVALID_OR_REPLAYED", () =>
+    verifyFourModeHostProofs(
+      signedModes,
+      publicPem,
+      { ...expected, runGrantSha256: "d".repeat(64) },
       times,
     ),
   );

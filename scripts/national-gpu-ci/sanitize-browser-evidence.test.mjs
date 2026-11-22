@@ -13,6 +13,9 @@ import { test } from "vitest";
 import {
   MODES,
   publishEvidence,
+  physicalGameplayContract,
+  SOLO_STAGES,
+  LEGACY_STAGES,
   summarizeBrowserEvidence,
 } from "./sanitize-browser-evidence.mjs";
 
@@ -233,6 +236,68 @@ test("publish four separate reports; reject absent proof and nonmatching source"
         readFileSync(join(target, "acceptance.json"), "utf8"),
       );
       raw.hardwareAcceptanceRequired = true;
+      const legacy = mode.startsWith("legacy-");
+      raw.scenarioKind = legacy ? "legacy" : "national-solo";
+      raw.stage = legacy ? "legacy-player-action" : "solo-playability-complete";
+      raw.errors = [];
+      raw.events = [
+        verified,
+        ...(legacy ? LEGACY_STAGES : SOLO_STAGES).map((stage) => ({
+          name: "stage-complete",
+          stage,
+        })),
+        ...(legacy
+          ? [
+              { name: "legacy-ffa-verified" },
+              { name: "legacy-actual-map-interaction-authoritative-update" },
+            ]
+          : [
+              { name: "authoritative-empire-accepted", verified: true },
+              { name: "authoritative-war-declared", uiConfirmed: true },
+              { name: "authoritative-combat-impact" },
+              {
+                name: "solo-real-battle-engine-correlated",
+                opponentDamaged: true,
+                troopLoss: true,
+              },
+              {
+                name: "authoritative-solo-playability-complete",
+                founded: true,
+                spawned: true,
+                warDeclared: true,
+                realRadialAttack: true,
+                opponentDamaged: true,
+                liveTick: 30,
+                workerPacketCount: 5,
+              },
+            ]),
+      ];
+      if (!legacy) {
+        writeFileSync(
+          join(target, "solo-battle-authoritative.png"),
+          readFileSync(join(target, "peace-accepted-ended-war.png")),
+        );
+        rmSync(join(target, "peace-accepted-ended-war.png"));
+      }
+      assert.equal(physicalGameplayContract(raw, mode), true);
+      assert.equal(
+        physicalGameplayContract(
+          { ...raw, scenarioKind: "national-three-player" },
+          mode,
+        ),
+        false,
+      );
+      assert.equal(
+        physicalGameplayContract(
+          { ...raw, events: raw.events.slice(0, -1) },
+          mode,
+        ),
+        false,
+      );
+      assert.equal(
+        physicalGameplayContract({ ...raw, errors: [{}] }, mode),
+        false,
+      );
       writeFileSync(join(target, "acceptance.json"), JSON.stringify(raw));
     }
     // The first diagnostic lane is immutable; no mixed or stale artifacts.
@@ -283,7 +348,7 @@ test("publish four separate reports; reject absent proof and nonmatching source"
       force: true,
     });
     rmSync(
-      join(dir, "browser-national-mobile", "peace-accepted-ended-war.png"),
+      join(dir, "browser-national-mobile", "solo-battle-authoritative.png"),
     );
     assert.equal(publishEvidence(dir, SHA, "release"), false);
     const missing = JSON.parse(

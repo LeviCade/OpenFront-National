@@ -10,6 +10,11 @@ case "$kind" in
 esac
 : "${NATIONAL_GPU_CANDIDATE_SHA:?immutable reviewed SHA required}"
 [[ "$NATIONAL_GPU_CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+assert_exact_source() {
+  test "$(git rev-parse HEAD)" = "$NATIONAL_GPU_CANDIDATE_SHA" &&
+    git diff --quiet HEAD --
+}
+assert_exact_source || { echo SOURCE_CHECKOUT_CHANGED; exit 1; }
 mkdir -p national-qa-artifacts/gpu
 : > national-qa-artifacts/gpu/scenarios.jsonl
 private_log_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/national-r10-gpu.XXXXXXXX")" || exit 2
@@ -22,7 +27,11 @@ for mode in national-desktop national-mobile legacy-desktop legacy-mobile; do
     legacy-desktop) args=(--legacy) ;;
     legacy-mobile) args=(--legacy --mobile) ;;
   esac
+  assert_exact_source || { echo SOURCE_CHECKOUT_CHANGED; exit 1; }
   if [[ "$kind" == release ]]; then
+    # Class Two physical contract is explicit Solo; the inherited unsigned
+    # three-principal diagnostic remains distinct, never a Solo substitute.
+    if [[ "$mode" == national-* ]]; then args+=(--solo); fi
     # Read-only, root-controller-delivered PUBLIC material in guest tmpfs.
     # A new independently signed preflight is REQUIRED for every mode.
     if ! node scripts/national-gpu-ci/wait-host-proof.mjs "$mode"; then
@@ -41,6 +50,7 @@ for mode in national-desktop national-mobile legacy-desktop legacy-mobile; do
     node scripts/national-qa/browser-gameplay.mjs "${args[@]}" \
     > "$private_log_dir/$mode.log" 2>&1
   code=$?
+  assert_exact_source || { echo SOURCE_CHECKOUT_CHANGED; exit 1; }
   result=FAIL
   if (( code == 0 )); then result=PASS; fi
   printf '{"scenario":"%s","result":"%s","exitCode":%d}\n' "$mode" "$result" "$code" \

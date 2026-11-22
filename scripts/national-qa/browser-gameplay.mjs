@@ -22,6 +22,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { verifyPublicModeProof } from "../national-gpu-ci/wait-host-proof.mjs";
 import { connectAuthenticatedPeer } from "./browser-r11-peer.mjs";
 import {
   verifyDistinctLiveSessions,
@@ -1019,28 +1020,32 @@ async function main() {
             "utf8",
           ),
         ).trustedEd25519PublicKeySha256;
-        const keyFingerprint = trustedKey
-          ? createHash("sha256").update(trustedKey, "utf8").digest("hex")
+        const signedProof = proofPath
+          ? JSON.parse(readFileSync(proofPath, "utf8"))
           : null;
-        if (
-          !Array.isArray(approvedKeys) ||
-          !approvedKeys.includes(keyFingerprint)
-        ) {
-          throw Error("GPU_RELEASE_TRUST_ROOT_NOT_ENROLLED_OR_MISMATCH");
-        }
+        const expected = {
+          sourceSha:
+            process.env.NATIONAL_GPU_CANDIDATE_SHA ?? process.env.GITHUB_SHA,
+          runId: process.env.GITHUB_RUN_ID,
+          runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+          runnerName: process.env.RUNNER_NAME,
+          challenge: process.env.NATIONAL_GPU_ATTESTATION_CHALLENGE,
+        };
+        // Use the same canonical Ed25519 SPKI DER enrollment, exact mode and
+        // grant-bound signed proof as the E6 read-only handoff verifier.
+        verifyPublicModeProof(
+          (legacy ? "legacy" : "national") + (mobile ? "-mobile" : "-desktop"),
+          signedProof,
+          trustedKey,
+          expected.challenge,
+          approvedKeys,
+          expected,
+          Date.now(),
+        );
         const attestation = verifyHardwareWebgl(hardwareCapabilities, {
-          signedProof: proofPath
-            ? JSON.parse(readFileSync(proofPath, "utf8"))
-            : null,
+          signedProof,
           trustedPublicKey: trustedKey,
-          expected: {
-            sourceSha:
-              process.env.NATIONAL_GPU_CANDIDATE_SHA ?? process.env.GITHUB_SHA,
-            runId: process.env.GITHUB_RUN_ID,
-            runAttempt: process.env.GITHUB_RUN_ATTEMPT,
-            runnerName: process.env.RUNNER_NAME,
-            challenge: process.env.NATIONAL_GPU_ATTESTATION_CHALLENGE,
-          },
+          expected,
         });
         record("strict-hardware-renderer-attestation", attestation);
         if (!attestation.accepted) {
