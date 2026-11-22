@@ -198,8 +198,14 @@ describe("Second Conductor Class One E4: E3-authoritative graphical map feed", (
       hasOwner: (tile: number) => tile === 22,
       owner: () => owner,
     });
-    const self = { id: () => "nation-a", nameData: { x: 2, y: 2 } } as PlayerView;
-    const enemy = { id: () => "nation-b", nameData: { x: 3, y: 3 } } as PlayerView;
+    const self = {
+      id: () => "nation-a",
+      nameData: { x: 2, y: 2 },
+    } as PlayerView;
+    const enemy = {
+      id: () => "nation-b",
+      nameData: { x: 3, y: 3 },
+    } as PlayerView;
     expect(view.trustedNameVisible(self)).toBe(true);
     expect(view.trustedNameVisible(enemy)).toBe(false);
     view.resetTrustedProjectionSight();
