@@ -324,7 +324,7 @@ export class PlayerView implements PlayerLike {
       // Existing native radial menu draws its real Attack control from this
       // recipient-only sight check. Host still validates every attack.
       return {
-        canAttack: this.game.trustedVisibleAttack(this.id(), tile),
+        canAttack: this.game.trustedAttackTarget(this.id(), tile) !== undefined,
         buildableUnits: [],
         canSendEmojiAllPlayers: false,
       };

@@ -1295,6 +1295,10 @@ export class ClientGameRunner {
           delta.unitOverflow || !delta.unitSweepComplete
             ? "partial"
             : "synchronized";
+        const defeated = pageComplete && !this.gameView.inSpawnPhase() &&
+          this.myPlayer?.isAlive() === false;
+        this.trustedStatus.dataset.trustedNationalLife = defeated ? "inactive" : pageComplete ? "active" : "unverified";
+        const observedAttacks = pageComplete ? (this.myPlayer?.outgoingAttacks().length ?? 0) : 0;
         this.trustedStatus.textContent =
           "NATIONAL · Tick " +
           update.tick +
@@ -1308,7 +1312,9 @@ export class ClientGameRunner {
           this.trustedContinuity.observedUnitCount +
           " observed units" +
           " · Your troops " +
-          Math.floor(observerMap.ownResources.troops).toLocaleString();
+          Math.floor(observerMap.ownResources.troops).toLocaleString() +
+          (pageComplete ? " · Active outgoing attacks: " + observedAttacks : "") +
+          (defeated ? " · Nation inactive — no further commands" : "");
       }
       this.webglBuilder?.update(this.gameView);
       this.renderer.tick();
@@ -1791,21 +1797,25 @@ export class ClientGameRunner {
       if (myPlayer === null) return;
       this.myPlayer = myPlayer;
     }
-    const clickedOwner = this.gameView.owner(tile).id();
+    const clickedOwner = this.trustedNationalProjection
+      ? this.gameView.trustedAttackTarget(this.myPlayer.id(), tile)
+      : undefined;
+    if (this.trustedNationalProjection && clickedOwner === undefined) return;
     this.myPlayer
       .actions(tile, [UnitType.TransportShip])
       .then((actions) => {
         if (
           this.trustedNationalProjection &&
           (!this.myPlayer ||
-            !this.gameView.trustedVisibleAttack(this.myPlayer.id(), tile) ||
-            this.gameView.owner(tile).id() !== clickedOwner)
+            this.gameView.trustedAttackTarget(this.myPlayer.id(), tile) !== clickedOwner)
         )
           return;
         if (actions.canAttack) {
           this.eventBus.emit(
             new SendAttackIntentEvent(
-              this.gameView.owner(tile).id(),
+              this.trustedNationalProjection
+                ? (clickedOwner ?? null)
+                : this.gameView.owner(tile).id(),
               this.myPlayer!.troops() * this.renderer.uiState.attackRatio,
             ),
           );
@@ -1975,21 +1985,25 @@ export class ClientGameRunner {
       this.myPlayer = myPlayer;
     }
 
-    const clickedOwner = this.gameView.owner(tile).id();
+    const clickedOwner = this.trustedNationalProjection
+      ? this.gameView.trustedAttackTarget(this.myPlayer.id(), tile)
+      : undefined;
+    if (this.trustedNationalProjection && clickedOwner === undefined) return;
     this.myPlayer
       .actions(tile, null)
       .then((actions) => {
         if (
           this.trustedNationalProjection &&
           (!this.myPlayer ||
-            !this.gameView.trustedVisibleAttack(this.myPlayer.id(), tile) ||
-            this.gameView.owner(tile).id() !== clickedOwner)
+            this.gameView.trustedAttackTarget(this.myPlayer.id(), tile) !== clickedOwner)
         )
           return;
         if (actions.canAttack) {
           this.eventBus.emit(
             new SendAttackIntentEvent(
-              this.gameView.owner(tile).id(),
+              this.trustedNationalProjection
+                ? (clickedOwner ?? null)
+                : this.gameView.owner(tile).id(),
               this.myPlayer!.troops() * this.renderer.uiState.attackRatio,
             ),
           );

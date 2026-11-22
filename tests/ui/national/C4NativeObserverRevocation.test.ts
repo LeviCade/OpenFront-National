@@ -21,6 +21,7 @@ import {
   makeGameView,
   makePlayerUpdate,
   makeUnitUpdate,
+  stubConfig,
 } from "../../util/viewStubs";
 
 const self = "nation-a";
@@ -63,12 +64,30 @@ function page(tick: number, overrides: Record<string, unknown> = {}) {
 }
 
 function setup() {
+  const config = stubConfig({
+    gameConfig: () => ({ nationalMode: true }) as ReturnType<ReturnType<typeof stubConfig>["gameConfig"]>,
+  });
   const view = makeGameView({
     trustedProjection: true,
     myClientID: "client-a",
+    config,
   });
   view.setTrustedPrincipal(self);
   const update = makeEmptyGu(1);
+  Object.assign(update, {
+    nationalPolitics: { empires: [], warnings: [] },
+    nationalConflicts: {
+      version: 1,
+      recipientId: self,
+      layers: [{
+        id: "war-a-b", scope: "national",
+        first: { kind: "nation", id: self },
+        second: { kind: "nation", id: enemy },
+        declaredBy: self, startedTick: 1, endedTick: null,
+      }],
+      motions: [],
+    },
+  });
   update.updates[GameUpdateType.Player] = [
     makePlayerUpdate({ id: self, tilesOwned: 1 }),
     {
@@ -118,6 +137,7 @@ describe("C4 E4: native recipient view revocation", () => {
     expect(view.frameData().units.has(marker.id)).toBe(true);
     expect([...view.trustedObserverFallbackMarkers()]).toEqual([]);
     expect(view.trustedVisibleAttack(self, enemyTile)).toBe(true);
+    expect(view.trustedAttackTarget(self, enemyTile)).toBe(enemy);
 
     const attack = vi.fn();
     const params = {
@@ -173,10 +193,39 @@ describe("C4 E4: native recipient view revocation", () => {
     expect(view.frameData().units.size).toBe(0);
     expect(view.hasOwner(enemyTile)).toBe(false);
     expect(view.trustedVisibleAttack(self, enemyTile)).toBe(false);
+    expect(view.trustedAttackTarget(self, enemyTile)).toBeUndefined();
     centerButtonElement.action(params);
     expect(attack).toHaveBeenCalledTimes(1);
     expect(() => receiver.accept(page(4, { streamId: "forged" }), 4)).toThrow();
     expect(() => receiver.accept(page(2), 2)).toThrow();
+  });
+
+  it("offers neutral expansion only on observed land and prevents attacking before WAR or after peace", async () => {
+    const { view, update, receiver } = setup();
+    const first = receiver.accept(page(1, {
+      tiles: [[ownTile, 1, land, 0], [enemyTile, 2, land, 0], [34, 0, land, 0]],
+    }), 1);
+    update.packedTileUpdates = new Uint32Array([
+      ownTile, 1 | (land << 16), enemyTile, 2 | (land << 16),
+      34, land << 16, 35, land << 16,
+    ]);
+    // The underlying static terrain may include an unseen land tile (35).
+    view.applyTrustedUnitPage(update, first, receiver);
+    view.markTrustedProjectionReady();
+    view.update(update);
+    expect(view.trustedAttackTarget(self, 34)).toBeNull();
+    expect(view.trustedAttackTarget(self, 35)).toBeUndefined();
+    expect(view.trustedAttackTarget(self, enemyTile)).toBe(enemy);
+    expect((await view.player(self).actions(34, null)).canAttack).toBe(true);
+    const peace = makeEmptyGu(2);
+    Object.assign(peace, {
+      nationalPolitics: { empires: [], warnings: [] },
+      nationalConflicts: { version: 1, recipientId: self, layers: [], motions: [] },
+    });
+    view.update(peace);
+    expect(view.trustedAttackTarget(self, enemyTile)).toBeUndefined();
+    expect((await view.player(self).actions(enemyTile, null)).canAttack).toBe(false);
+    expect(view.trustedAttackTarget(self, 34)).toBeNull();
   });
 
   it("retains only coarse authorized markers until exact native unit data arrives, and removes them on reset", () => {

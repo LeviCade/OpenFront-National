@@ -105,6 +105,7 @@ export class GameView implements GameLike {
   private _nationalPoliticalResults: readonly NationalPoliticalResult[] = [];
   private _trustedProjectionReady = false;
   private trustedPrincipal: string | null = null;
+  private trustedSight: NationalObserverMapContinuity | null = null;
 
   public setTrustedPrincipal(principal: string | null): void {
     this.trustedPrincipal = principal;
@@ -156,6 +157,7 @@ export class GameView implements GameLike {
   public resetTrustedProjectionSight(): void {
     if (!this._trustedNationalProjection) return;
     this._trustedProjectionReady = false;
+    this.trustedSight = null;
     this.updatedTerrainTiles = [];
     for (const [tile, terrain] of this.trustedOriginalTerrain) {
       if (this._map.updateTile(tile, terrain << 16))
@@ -233,6 +235,7 @@ export class GameView implements GameLike {
     delta: NationalObserverMapDelta,
     receiver: NationalObserverMapContinuity,
   ): void {
+    this.trustedSight = receiver;
     for (const marker of delta.units) {
       const previous = this.trustedUnitMarkers.get(marker.id);
       if (
@@ -310,6 +313,51 @@ export class GameView implements GameLike {
       target.isPlayer() &&
       target.id() !== playerID
     );
+  }
+
+  /**
+   * Native intent eligibility, not an authority oracle. Undefined means the
+   * current sight/war projection does not permit offering this action; null
+   * is a positively sighted neutral land tile, never an unknown/fog tile.
+   * Private treaties, geographic frontiers and execution remain host-owned.
+   */
+  public trustedAttackTarget(
+    playerID: string,
+    tile: TileRef | undefined,
+  ): PlayerID | null | undefined {
+    if (
+      !this.trustedProjectionReady() ||
+      tile === undefined ||
+      this.inSpawnPhase() ||
+      !this.isValidRef(tile) ||
+      !this.isLand(tile) ||
+      this.trustedSight?.tileStatus(tile) !== "observed"
+    ) return undefined;
+    const actor = this.myPlayer();
+    if (!actor || actor.id() !== playerID || !actor.isAlive() || !actor.hasSpawned() || actor.troops() <= 0)
+      return undefined;
+    const smallID = this.ownerID(tile);
+    if (smallID === 0) return null;
+    const targetID = this.smallIDToID.get(smallID);
+    if (!targetID || targetID === playerID || !this._players.get(targetID)?.isAlive())
+      return undefined;
+    const politics = this.nationalPolitics();
+    const conflicts = this.nationalConflicts();
+    if (!politics || !conflicts || conflicts.recipientId !== playerID ||
+        this._nationalConflictsTick !== this.ticks() || this._nationalPoliticsTick !== this.ticks())
+      return undefined;
+    const empireOf = (id: PlayerID) => politics.empires.find((empire) => empire.memberIds.includes(id))?.id;
+    const actorEmpire = empireOf(playerID);
+    const targetEmpire = empireOf(targetID);
+    if (actorEmpire !== undefined && actorEmpire === targetEmpire) return undefined;
+    const contains = (side: { kind: "nation" | "empire"; id: string }, id: PlayerID, empire: string | undefined) =>
+      side.kind === "nation" ? side.id === id : side.id === empire;
+    const opposed = conflicts.layers.some((layer) =>
+      layer.endedTick === null &&
+      ((contains(layer.first, playerID, actorEmpire) && contains(layer.second, targetID, targetEmpire)) ||
+        (contains(layer.second, playerID, actorEmpire) && contains(layer.first, targetID, targetEmpire))),
+    );
+    return opposed ? targetID : undefined;
   }
 
   /**

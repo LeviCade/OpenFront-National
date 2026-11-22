@@ -742,13 +742,8 @@ function trustedCenterActionAvailable(params: MenuElementParams): boolean {
     return false;
   if (game.inSpawnPhase())
     return !game.config().isRandomSpawn() && !game.owner(tile).isPlayer();
-  const owner = game.owner(tile);
-  return (
-    selected !== null &&
-    owner.isPlayer() &&
-    owner.id() === selected?.id() &&
-    game.trustedVisibleAttack(myPlayer.id(), tile)
-  );
+  const target = game.trustedAttackTarget(myPlayer.id(), tile);
+  return target !== undefined && target === (selected?.id() ?? null);
 }
 
 export const centerButtonElement: CenterButtonElement = {
