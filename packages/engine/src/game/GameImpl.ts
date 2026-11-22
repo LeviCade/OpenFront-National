@@ -1073,7 +1073,7 @@ export class GameImpl implements Game {
     );
     // Retirement validates the engine tick before changing any layer.
     // Publishing staged credits thereafter cannot invoke external code.
-    this._nationalWar?.retireEmpireWars(empireIds, this._ticks);
+    this._nationalWar?.retireEmpireWars(empireIds, tick);
     staged();
     stagedTroops();
   }
