@@ -15,7 +15,7 @@ for (let count=0;count<=30;count++) for(let gold=0n;gold<=100n;gold++) {
   a.deepEqual([...x.credits],[...y.credits]); a.equal([...x.credits.values()].reduce((s,v)=>s+v,x.unclaimed),gold);
   if(ids.includes(leader) && gold>0n) a.equal(x.credits.get(leader),gold);
   if(!ids.length) a.equal(x.unclaimed,gold);
-  if(ids.length && !ids.includes(leader)) { const values=ids.map(id=>x.credits.get(id)||0n); a(values.every(v=>values.every(w=>v-w<=1n))); }
+  if(ids.length && !ids.includes(leader)) { const values=ids.map(id=>x.credits.get(id)??0n); a(values.every(v=>values.every(w=>v-w<=1n))); }
   checks++;
  }
 }
