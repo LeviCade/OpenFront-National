@@ -570,12 +570,19 @@ describe("C3 E3 real host bounded continuity and adversarial receiver", () => {
     expect(one.msg.payload).not.toContain("8876543");
     expect(one.map.units.every((unit) => unit.troops === undefined)).toBe(true);
 
+    // The highest ID has never crossed A's first 2048-marker page.
+    // Moving it beyond A's sight MUST NOT leak its historical existence
+    // through a new unitRemovedIds tombstone on the next frame.
+    const neverEmitted = foreign[foreign.length - 1];
+    neverEmitted.move(game.ref(195, 195));
     host.tick();
     const two = view(sockets[0].socket);
+    expect(two.map.unitRemovedIds).not.toContain(neverEmitted.id());
+    expect(two.map.units.some((unit) => unit.id === neverEmitted.id())).toBe(false);
     const u2 = reader.accept(two.map, two.msg.tick);
     expect(u2.unitSweepComplete).toBe(true);
     expect(u2.clearAllUnits).toBe(false);
-    expect(reader.observedUnitCount).toBeGreaterThanOrEqual(2051);
+    expect(reader.observedUnitCount).toBeGreaterThanOrEqual(2050);
 
     // The foreign marker is still present in the authoritative Game but
     // becomes invisible when it moves outside the current sight boundary.
