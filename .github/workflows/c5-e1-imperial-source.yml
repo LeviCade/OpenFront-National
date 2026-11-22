@@ -50,6 +50,8 @@ jobs:
           FILES=(
             packages/engine/src/national/NationalRuntime.ts
             packages/engine/src/game/GameImpl.ts
+            packages/engine/src/execution/AttackExecution.ts
+            packages/engine/src/execution/TransportShipExecution.ts
             packages/engine-api/src/Schemas.ts
             tests/national/C5ImperialCentralCombat.test.ts
             .github/workflows/c5-e1-imperial-source.yml
