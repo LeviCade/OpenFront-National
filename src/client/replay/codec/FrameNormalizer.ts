@@ -107,6 +107,8 @@ export const VIEW_DATA_ROUTING: Record<
   // Private actor-scoped accession offers must NEVER enter replay frames:
   // seek/reconnect cannot resurrect or disclose a previous invitation.
   nationalAccessionOffers: "dropped",
+  nationalPactDisclosure: "dropped",
+  nationalImperialAdministration: "dropped",
   tick: "normalizer",
   updates: "normalizer",
   packedTileUpdates: "normalizer",
