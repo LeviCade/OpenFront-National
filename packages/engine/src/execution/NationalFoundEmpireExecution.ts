@@ -101,7 +101,11 @@ export class NationalFoundEmpireExecution implements Execution {
       initialized: this.game !== null,
       actor: w.player(this.actor),
       empireId: this.empireId,
-      politicalCommand: this.politicalCommand,
+      // Snapshot schema produces a detached mutable wire representation;
+      // runtime policies deliberately expose readonly arrays.
+      politicalCommand: NationalFoundEmpireStateSchema.shape.politicalCommand.parse(
+        this.politicalCommand,
+      ),
       requestId: this.requestId,
       authenticatedClientID: this.authenticatedClientID,
     });
