@@ -10,7 +10,10 @@ import {
 import { findClosestBy } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player, Unit } from "../game/Game";
-import { nearestReturnPort, neutralBlockader } from "../national/conflict/NationalMaritime";
+import {
+  nearestReturnPort,
+  neutralBlockader,
+} from "../national/conflict/NationalMaritime";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathStatus } from "../pathfinding/types";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
@@ -110,7 +113,9 @@ export class TradeShipExecution implements Execution {
       !this.returningHome &&
       (!national || !this.wasCaptured) &&
       (dstPortOwner.id() === this.srcPort.owner().id() ||
-        (national && (!this.srcPort.isActive() || this.srcPort.owner() !== this.origOwner)))
+        (national &&
+          (!this.srcPort.isActive() ||
+            this.srcPort.owner() !== this.origOwner)))
     ) {
       this.tradeShip.delete(false);
       this.active = false;
@@ -229,7 +234,10 @@ export class TradeShipExecution implements Execution {
   }
 
   private chooseReturnPort(): boolean {
-    const port = nearestReturnPort(this.mg, this.tradeShip!, this.failedReturnPorts);
+    const port =
+      this.failedReturnPorts.length >= 8
+        ? undefined
+        : nearestReturnPort(this.mg, this.tradeShip!, this.failedReturnPorts);
     if (port === undefined) {
       // OPEN 5: no reachable owned home remains. Retire the voyage without
       // a captor, combat event, refund, or any trade/piracy credit.
@@ -249,6 +257,16 @@ export class TradeShipExecution implements Execution {
     this.active = false;
     this.tradeShip!.delete(false);
     if (this.returningHome) return;
+    if (
+      this.mg.nationalWarAuthority() !== null &&
+      !this.wasCaptured &&
+      (!this.srcPort.isActive() ||
+        this.srcPort.owner() !== this.origOwner ||
+        !this._dstPort.isActive() ||
+        !this.origOwner.canTrade(this._dstPort.owner()))
+    ) {
+      return;
+    }
     const gold = this.mg
       .config()
       .tradeShipGold(this.tilesTraveled, this.tradeShip!.owner());

@@ -1238,8 +1238,16 @@ export class PlayerImpl implements Player {
   canTrade(other: Player): boolean {
     // Formal WAR is a separate, derived restriction. Never write it into the
     // manual embargo ledger: ending one war must preserve independent embargoes.
-    if (this.mg.nationalWarAuthority()?.atWar(this.id(), other.id())) {
-      return false;
+    const war = this.mg.nationalWarAuthority();
+    if (war !== null) {
+      // Legacy combat creates temporary embargoes. In NATIONAL they must
+      // neither duplicate the WAR layer nor linger after formal peace.
+      return (
+        other.id() !== this.id() &&
+        !war.atWar(this.id(), other.id()) &&
+        !other.hasManualEmbargoAgainst(this) &&
+        !this.hasManualEmbargoAgainst(other)
+      );
     }
     const embargo =
       other.hasEmbargoAgainst(this) || this.hasEmbargoAgainst(other);

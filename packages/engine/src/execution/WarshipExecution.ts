@@ -346,7 +346,11 @@ export class WarshipExecution implements Execution {
       if (
         bestUnit === undefined ||
         typePriority < bestTypePriority ||
-        (typePriority === bestTypePriority && distSquared < bestDistSquared)
+        (typePriority === bestTypePriority &&
+          (distSquared < bestDistSquared ||
+            (mg.nationalWarAuthority() !== null &&
+              distSquared === bestDistSquared &&
+              unit.id() < bestUnit.id())))
       ) {
         bestUnit = unit;
         bestTypePriority = typePriority;
@@ -656,7 +660,8 @@ export class WarshipExecution implements Execution {
     const target = this.warship.targetUnit();
     if (
       this.mg.nationalWarAuthority() !== null &&
-      (!target?.isActive() || !mayAttackAtSea(this.mg, this.warship.owner(), target.owner()))
+      (!target?.isActive() ||
+        !mayAttackAtSea(this.mg, this.warship.owner(), target.owner()))
     ) {
       this.warship.setTargetUnit(undefined);
       return;
@@ -691,7 +696,8 @@ export class WarshipExecution implements Execution {
       const target = this.warship.targetUnit()!;
       if (
         this.mg.nationalWarAuthority() !== null &&
-        (!target.isActive() || !mayAttackAtSea(this.mg, this.warship.owner(), target.owner()))
+        (!target.isActive() ||
+          !mayAttackAtSea(this.mg, this.warship.owner(), target.owner()))
       ) {
         this.warship.setTargetUnit(undefined);
         return;

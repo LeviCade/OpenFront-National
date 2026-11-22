@@ -2,7 +2,11 @@ import { UnitType } from "@openfront/engine-api/game/GameTypes";
 import type { Game, Player, Unit } from "../../game/Game";
 
 /** The actual controlling nation's authority, never its empire's inferred hostility. */
-export function mayAttackAtSea(game: Game, attacker: Player, target: Player): boolean {
+export function mayAttackAtSea(
+  game: Game,
+  attacker: Player,
+  target: Player,
+): boolean {
   const war = game.nationalWarAuthority();
   if (war === null) return attacker.canAttackPlayer(target, true);
   return (
@@ -24,17 +28,27 @@ export function blockadeRadius(game: Game): number {
  * cached embargo, global port flag or remote economic damage. Only neutral
  * merchants are turned here: hostile merchants use ordinary piracy execution.
  */
-export function neutralBlockader(game: Game, merchant: Unit, destination: Unit): Unit | undefined {
+export function neutralBlockader(
+  game: Game,
+  merchant: Unit,
+  destination: Unit,
+): Unit | undefined {
+  const war = game.nationalWarAuthority();
   if (
-    game.nationalWarAuthority() === null ||
+    war === null ||
     !merchant.isActive() ||
     !destination.isActive() ||
     destination.isMarkedForDeletion() ||
     destination.isUnderConstruction() ||
     !game.isWater(merchant.tile())
-  ) return undefined;
+  ) {
+    return undefined;
+  }
   const component = game.getWaterComponent(merchant.tile());
-  if (component === null || !game.hasWaterComponent(destination.tile(), component)) {
+  if (
+    component === null ||
+    !game.hasWaterComponent(destination.tile(), component)
+  ) {
     return undefined;
   }
   const radius = blockadeRadius(game);
@@ -53,8 +67,10 @@ export function neutralBlockader(game: Game, merchant: Unit, destination: Unit):
       game.euclideanDistSquared(unit.tile(), merchant.tile()) > radius ** 2 ||
       game.euclideanDistSquared(unit.tile(), destination.tile()) > radius ** 2 ||
       !mayAttackAtSea(game, unit.owner(), destination.owner()) ||
-      game.nationalWarAuthority()!.atWar(unit.owner().id(), merchant.owner().id())
-    ) continue;
+      war.atWar(unit.owner().id(), merchant.owner().id())
+    ) {
+      continue;
+    }
     // Stable even when spatial-grid enumeration order differs after restore.
     if (selected === undefined || unit.id() < selected.id()) selected = unit;
   }
@@ -62,20 +78,31 @@ export function neutralBlockader(game: Game, merchant: Unit, destination: Unit):
 }
 
 /** Nearest eligible home port, deterministic tie break and bounded failed-route exclusion. */
-export function nearestReturnPort(game: Game, merchant: Unit, failed: readonly number[]): Unit | undefined {
+export function nearestReturnPort(
+  game: Game,
+  merchant: Unit,
+  failed: readonly number[],
+): Unit | undefined {
   const tile = merchant.tile();
   const component = game.getWaterComponent(tile);
-  return merchant.owner().units(UnitType.Port)
-    .filter((port) =>
-      port.owner() === merchant.owner() &&
-      port.isActive() &&
-      !port.isMarkedForDeletion() &&
-      !port.isUnderConstruction() &&
-      !failed.includes(port.id()) &&
-      (port.tile() === tile || (component !== null && game.hasWaterComponent(port.tile(), component))),
+  return merchant
+    .owner()
+    .units(UnitType.Port)
+    .filter(
+      (port) =>
+        port.owner() === merchant.owner() &&
+        port.isActive() &&
+        !port.isMarkedForDeletion() &&
+        !port.isUnderConstruction() &&
+        !failed.includes(port.id()) &&
+        (port.tile() === tile ||
+          (component !== null &&
+            game.hasWaterComponent(port.tile(), component))),
     )
-    .sort((a, b) =>
-      game.manhattanDist(tile, a.tile()) - game.manhattanDist(tile, b.tile()) ||
-      a.id() - b.id(),
+    .sort(
+      (a, b) =>
+        game.manhattanDist(tile, a.tile()) -
+          game.manhattanDist(tile, b.tile()) ||
+        a.id() - b.id(),
     )[0];
 }
