@@ -54,7 +54,9 @@ jobs:
             tests/national/ConductorFourSovereignMatch.test.ts \
             tests/national/C4ContinuousFogAlgorithm.test.ts \
             tests/server/NationalAccountLease.test.ts \
-            tests/national/TrustedNationalServerAuthority.test.ts
+            tests/national/TrustedNationalServerAuthority.test.ts \
+            tests/national/ClassFivePrincipalWireFanout.test.ts \
+            tests/server/ServerEnv.test.ts
       - name: Independent witness regressions
         run: |
           npx --no-install vitest run --project node \

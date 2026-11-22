@@ -20,6 +20,7 @@ import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { NationalServerRecipientSession } from "@openfront/engine/national/observation/NationalServerOutbound";
+import { replacer } from "@openfront/shared/SharedUtil";
 import { describe, expect, it } from "vitest";
 import {
   readNationalAccessionOffers,
@@ -365,7 +366,7 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
       "privateTreatyTerms",
     ])
       expect(packetB).not.toHaveProperty(key);
-    const safeJson = JSON.stringify(packetB);
+    const safeJson = JSON.stringify(packetB, replacer);
     for (const secret of [
       "verified-independent-",
       "separate-persistent-",
@@ -415,6 +416,6 @@ describe("Class Five server-verified physical-socket recipient fanout", () => {
       "nationalCommandResults",
     ])
       expect(filtered).not.toHaveProperty(key);
-    expect(JSON.stringify(filtered)).not.toContain("SECRET_");
+    expect(JSON.stringify(filtered, replacer)).not.toContain("SECRET_");
   });
 });
