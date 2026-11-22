@@ -80,11 +80,10 @@ function pageFromWire(
     typeof raw.unitOverflow !== "boolean" ||
     !Array.isArray(raw.unitRemovedIds) ||
     raw.unitRemovedIds.length > MAX_UNIT_PAGE ||
-    raw.unitRemovedIds.some(
-      (id: unknown) => !int(id, 0, 0xffffffff),
-    ) ||
+    raw.unitRemovedIds.some((id: unknown) => !int(id, 0, 0xffffffff)) ||
     (base.reset && (base.cursor !== 0 || raw.unitReset !== true)) ||
-    (raw.unitReset && (raw.unitCursor !== 0 || raw.unitRemovedIds.length > 0)) ||
+    (raw.unitReset &&
+      (raw.unitCursor !== 0 || raw.unitRemovedIds.length > 0)) ||
     (base.nextCursor !== null &&
       base.nextCursor !== base.cursor + base.tiles.length)
   )
@@ -131,17 +130,18 @@ export class NationalObserverMapContinuity {
   >();
 
   constructor(private readonly expectedPrincipal: string) {
-    if (
-      expectedPrincipal.length === 0 ||
-      expectedPrincipal.length > 128
-    )
+    if (expectedPrincipal.length === 0 || expectedPrincipal.length > 128)
       throw new Error("NATIONAL expected authenticated principal required");
   }
 
   tileStatus(ref: number): NationalObserverTileStatus {
     if (!Number.isSafeInteger(ref) || ref < 0 || ref >= this.known.length)
       return "unknown";
-    return this.known[ref] ? "observed" : this.revoked[ref] ? "revoked" : "unknown";
+    return this.known[ref]
+      ? "observed"
+      : this.revoked[ref]
+        ? "revoked"
+        : "unknown";
   }
 
   get lastAcceptedTick(): number {
@@ -157,11 +157,7 @@ export class NationalObserverMapContinuity {
   }
 
   accept(untrusted: unknown, packetTick: number): NationalObserverMapDelta {
-    const page = pageFromWire(
-      untrusted,
-      packetTick,
-      this.expectedPrincipal,
-    );
+    const page = pageFromWire(untrusted, packetTick, this.expectedPrincipal);
     if (page.tick <= this.lastTick)
       throw new Error("NATIONAL replayed/backward observer page");
     if (this.streamId !== null && page.streamId !== this.streamId)
@@ -220,8 +216,7 @@ export class NationalObserverMapContinuity {
 
     // Calculate the projected size BEFORE mutating the cache, so oversized
     // hostile packets never partially apply.
-    let projectedUnitCount =
-      page.unitReset ? 0 : this.unitCache.size;
+    let projectedUnitCount = page.unitReset ? 0 : this.unitCache.size;
     if (!page.unitReset) {
       for (const id of page.unitRemovedIds) {
         if (this.unitCache.has(id)) projectedUnitCount--;
