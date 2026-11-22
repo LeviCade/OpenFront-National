@@ -58,6 +58,7 @@ async function match(spawn = true) {
     humans,
     undefined,
     TrustedTestConfig,
+    spawn,
   );
   if (spawn) {
     for (let i = 0; i < humans.length; i++) {
@@ -231,7 +232,7 @@ describe("Fourth Class / E2 trusted Private NATIONAL host", () => {
     assertOwn(sentB[1], b, humans[1].id);
   });
 
-
+  it("rejects fake extra players, anonymous seats and duplicate accounts", async () => {
     const { runner, a, b } = await match();
     expect(
       () => new TrustedNationalMatch(GAME_ID, runner, [a], () => {}),

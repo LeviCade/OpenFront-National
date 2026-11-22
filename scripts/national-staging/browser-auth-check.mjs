@@ -22,6 +22,7 @@ const children = [];
 const sockets = [];
 const passed = (name) => console.log("BROWSER_AUTH_STAGE_PASS " + name);
 let stage = "startup";
+let diagnostic = () => ({});
 
 function allowedLocal(value) {
   try {
@@ -95,6 +96,19 @@ async function openProfile(executable, index, email) {
   };
   let seq = 0;
   let protocolFailure = false;
+  let profileReadFailures = 0;
+  let accountMismatch = false;
+  const statuses = { mail: [], exchange: [], refresh: [], profile: [] };
+  diagnostic = () => ({
+    status: statuses,
+    mail: observed.mail,
+    exchange: observed.exchange,
+    refresh: observed.refresh,
+    profile: observed.profile,
+    protocolFailure,
+    profileReadFailures,
+    accountMismatch,
+  });
   function send(method, params = {}) {
     return new Promise((resolve, reject) => {
       const id = ++seq;
@@ -133,14 +147,23 @@ async function openProfile(executable, index, email) {
               requestId,
               errorReason: "BlockedByClient",
             });
-        void task.catch(() => {
-          protocolFailure = true;
-        });
+        // Navigation may cancel a CDP interception before the response to
+        // continue/fail arrives. That is not an authorization success.
+        void task.catch(() => {});
         return;
       }
       if (m.method === "Network.responseReceived") {
         const u = new URL(m.params.response.url);
-        if (u.origin !== issuer || m.params.response.status !== 200) return;
+        if (u.origin !== issuer) return;
+        const status = m.params.response.status;
+        const key = {
+          "/auth/magic-link": "mail",
+          "/auth/login/token": "exchange",
+          "/auth/refresh": "refresh",
+          "/users/@me": "profile",
+        }[u.pathname];
+        if (key && statuses[key].length < 20) statuses[key].push(status);
+        if (status !== 200) return;
         if (u.pathname === "/auth/magic-link") observed.mail++;
         if (u.pathname === "/auth/login/token") observed.exchange++;
         if (u.pathname === "/auth/refresh") observed.refresh++;
@@ -158,17 +181,22 @@ async function openProfile(executable, index, email) {
                 ? Buffer.from(result.body, "base64").toString("utf8")
                 : result.body,
             );
-            assert(
-              body.user.email === email &&
-                typeof body.player.publicId === "string",
-            );
-            if (observed.account !== null)
-              assert(observed.account === body.player.publicId);
+            if (
+              body.user.email !== email ||
+              typeof body.player.publicId !== "string" ||
+              (observed.account !== null &&
+                observed.account !== body.player.publicId)
+            ) {
+              accountMismatch = true;
+              return;
+            }
             observed.account = body.player.publicId;
             observed.profile++;
           })
           .catch(() => {
-            protocolFailure = true;
+            // A navigation can discard a completed response body. Never
+            // count such a response as a verified account profile.
+            profileReadFailures++;
           });
       }
     } catch {
@@ -245,10 +273,18 @@ async function openProfile(executable, index, email) {
   stage = "browser link exchange and first-party account profile " + index;
   // This is a real navigation through the application's token-login UI,
   // exactly as an operator following their private emailed link would do.
+  // Opening a real mail link creates a fresh document, not merely a
+  // same-document hash change under the email-confirmation modal.
+  await send("Page.navigate", { url: "about:blank" });
+  await until(
+    async () => (await evaluate("location.href")) === "about:blank",
+    "fresh link document",
+  );
   await send("Page.navigate", { url: url.href });
   await until(
     () =>
       !protocolFailure &&
+      !accountMismatch &&
       observed.exchange > 0 &&
       observed.refresh > 0 &&
       observed.profile > 0,
@@ -276,6 +312,7 @@ async function openProfile(executable, index, email) {
   await until(
     () =>
       !protocolFailure &&
+      !accountMismatch &&
       observed.refresh > refreshes &&
       observed.profile > profiles,
     "real browser reload",
@@ -344,6 +381,7 @@ try {
 } catch {
   // Never expose DevTools errors, URLs, credential bodies or profile IDs.
   console.error("LOCAL_STAGING_BROWSER_AUTH_FAIL stage=" + stage);
+  console.error("SAFE_BROWSER_STATUS " + JSON.stringify(diagnostic()));
   process.exitCode = 1;
 } finally {
   for (const ws of sockets) ws.terminate();
