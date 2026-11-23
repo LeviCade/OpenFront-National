@@ -68,7 +68,8 @@ export type Intent =
   | NationalResolveSanctionIntent
   | NationalIssueUltimatumIntent
   | NationalRespondUltimatumIntent
-  | NationalResolveUltimatumIntent;
+  | NationalResolveUltimatumIntent
+  | NationalReconnaissanceIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -178,6 +179,10 @@ export type NationalRespondUltimatumIntent = z.infer<
 >;
 export type NationalResolveUltimatumIntent = z.infer<
   typeof NationalResolveUltimatumIntentSchema
+>;
+
+export type NationalReconnaissanceIntent = z.infer<
+  typeof NationalReconnaissanceIntentSchema
 >;
 
 export type Turn = z.infer<typeof TurnSchema>;
@@ -934,6 +939,15 @@ export const NationalResolveUltimatumIntentSchema = z.object({
   requestId: NationalPoliticalRequestId,
 });
 
+/** Resource cost and lifetime are defined on the Game, never supplied by a client. */
+export const NationalReconnaissanceIntentSchema = z.object({
+  type: z.literal("national_buy_regional_recon"),
+  targetId: MappedID,
+  centerX: zb.uint({ min: 0, max: 65_535 }),
+  centerY: zb.uint({ min: 0, max: 65_535 }),
+  requestId: NationalPoliticalRequestId,
+});
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -982,6 +996,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalIssueUltimatumIntentSchema,
   NationalRespondUltimatumIntentSchema,
   NationalResolveUltimatumIntentSchema,
+  NationalReconnaissanceIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

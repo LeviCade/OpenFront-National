@@ -338,10 +338,38 @@ export function collectLiveNationalObservation(
       invitations.push({ coalitionId: pact.id, recipientId: observerId });
   }
 
+  // Purchases are read ONLY from this observer's current real empire.
+  // Target-indexed envelopes avoid a scan of all purchases per foreign asset.
+  const purchasedByTarget = new Map<
+    string,
+    { payerId: string; x: number; y: number; radius: number; expiry: number }[]
+  >();
+  for (const contributorId of sightOrder) {
+    for (const grant of game.nationalReconnaissanceFor(contributorId)) {
+      if (
+        grant.effectiveTick > game.ticks() ||
+        game.ticks() >= grant.expiresAtTick ||
+        !game.hasPlayer(grant.targetId)
+      )
+        continue;
+      const list = purchasedByTarget.get(grant.targetId) ?? [];
+      list.push({
+        payerId: contributorId,
+        x: grant.centerX,
+        y: grant.centerY,
+        radius: grant.radius,
+        expiry: grant.expiresAtTick,
+      });
+      purchasedByTarget.set(grant.targetId, list);
+    }
+  }
   const assets: NationalWorld["assets"][number][] = [];
   const sightGrants: NationalWorld["sightGrants"][number][] = [];
   const tick = game.ticks();
   const allUnits = game.units();
+  // Freeze actual terrain/adjacent-border sight BEFORE unit discoveries.
+  // Otherwise a recon-sighted target could reveal any co-located stranger.
+  const geographicVisibleTiles = new Set(visibleTiles);
   // An observing warship is itself legitimate first-party (or current
   // empire-shared) intelligence. Never use an enemy warship as a sensor.
   for (const unit of allUnits) {
@@ -372,7 +400,7 @@ export function collectLiveNationalObservation(
       // hidden transports. FOG-05 forbids granting an unseen invasion
       // force a free 100-tile detection radius just because its tile is
       // near a country's distant frontier.
-      const fromBorder = visibleTiles.has(tile)
+      const fromBorder = geographicVisibleTiles.has(tile)
         ? (sightOrigin.get(tile) ?? observerId)
         : kind(unit.type()) === "structure"
           ? nearestSightContributor(borderSight, x, y, BORDER_SIGHT_RADIUS)
@@ -389,7 +417,18 @@ export function collectLiveNationalObservation(
         fromBorder === null && fromCoast === null && isShip
           ? nearestSightContributor(warshipSight, x, y, NAVAL_SIGHT_RADIUS)
           : null;
-      const contributorId = fromBorder ?? fromCoast ?? fromWarship;
+      // Military and structures are seen ONLY inside the paid circle of
+      // the requested target nation. Moving ships are checked at each tick.
+      const recon =
+        fromBorder === null && fromCoast === null && fromWarship === null
+          ? (purchasedByTarget.get(ownerId) ?? []).find((lease) => {
+              const dx = x - lease.x;
+              const dy = y - lease.y;
+              return dx * dx + dy * dy <= lease.radius * lease.radius;
+            })
+          : undefined;
+      const contributorId =
+        fromBorder ?? fromCoast ?? fromWarship ?? recon?.payerId ?? null;
       if (contributorId !== null) {
         // The same independently verified visible tile feeds BOTH AI's
         // NationalObservation and the human GameRunner's packet whitelist.
@@ -403,9 +442,11 @@ export function collectLiveNationalObservation(
               ? "border"
               : fromCoast !== null
                 ? "coast"
-                : "warship",
+                : fromWarship !== null
+                  ? "warship"
+                  : "recon",
           observedAtTick: tick,
-          expiresAtTick: tick,
+          expiresAtTick: recon?.expiry ?? tick,
         });
       }
     }

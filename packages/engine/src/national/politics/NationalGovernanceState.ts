@@ -149,6 +149,7 @@ const asset = z.object({
   y: tick,
   lastSeenTick: tick,
   sourceNationId: identity.optional(),
+  reconExpiresAtTick: tick.optional(),
 });
 const memory = z.object({
   observerId: identity,

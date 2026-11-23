@@ -21,6 +21,7 @@ import { MirvExecutionSnapshot } from "../execution/MIRVExecution";
 import { MissileSiloExecutionSnapshot } from "../execution/MissileSiloExecution";
 import { MoveWarshipExecutionSnapshot } from "../execution/MoveWarshipExecution";
 import { NationalFoundEmpireExecutionSnapshot } from "../execution/NationalFoundEmpireExecution";
+import { NationalReconExecutionSnapshot } from "../execution/NationalReconExecution";
 import { NationalSanctionExecutionSnapshot } from "../execution/NationalSanctionExecution";
 import { NationalUltimatumExecutionSnapshot } from "../execution/NationalUltimatumExecution";
 import { NationalWarExecutionSnapshot } from "../execution/NationalWarExecution";
@@ -81,6 +82,7 @@ export const EXECUTION_SNAPSHOT_TYPES = [
   NationalFoundEmpireExecutionSnapshot,
   NationalWarExecutionSnapshot,
   NationalSanctionExecutionSnapshot,
+  NationalReconExecutionSnapshot,
   NationalUltimatumExecutionSnapshot,
   NationExecutionSnapshot,
   NoOpExecutionSnapshot,

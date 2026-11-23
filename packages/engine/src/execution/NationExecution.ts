@@ -1098,6 +1098,7 @@ const NationStateSchema = z.object({
           y: z.number(),
           lastSeenTick: z.number(),
           sourceNationId: z.string().optional(),
+          reconExpiresAtTick: z.number().int().nonnegative().optional(),
         }),
       ),
     })

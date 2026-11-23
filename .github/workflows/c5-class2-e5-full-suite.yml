@@ -1,0 +1,26 @@
+name: C5 Class Two E5 — complete source regression
+on:
+  push:
+    branches:
+      - feature/c5-class2-e5-funded-recon-intelligence-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  full-source-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact revision under test
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: All client, client-forks and node tests (not only NATIONAL)
+        run: npm test

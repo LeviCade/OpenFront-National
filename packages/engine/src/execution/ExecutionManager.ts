@@ -23,6 +23,7 @@ import { EmojiExecution } from "./EmojiExecution";
 import { MarkDisconnectedExecution } from "./MarkDisconnectedExecution";
 import { MoveWarshipExecution } from "./MoveWarshipExecution";
 import { NationalFoundEmpireExecution } from "./NationalFoundEmpireExecution";
+import { NationalReconExecution } from "./NationalReconExecution";
 import { NationalSanctionExecution } from "./NationalSanctionExecution";
 import { NationalUltimatumExecution } from "./NationalUltimatumExecution";
 import { NationalWarExecution } from "./NationalWarExecution";
@@ -222,6 +223,15 @@ export class Executor {
             enabled: intent.enabled,
           },
           intent.requestId ?? null,
+          intent.clientID,
+        );
+      case "national_buy_regional_recon":
+        return new NationalReconExecution(
+          player,
+          intent.targetId,
+          intent.centerX,
+          intent.centerY,
+          intent.requestId,
           intent.clientID,
         );
       case "national_issue_sanction":
