@@ -1,0 +1,36 @@
+name: C5 Class Two — read-only pinned formatter differential
+on:
+  push:
+    branches:
+      - stage3/conductor5-class2-integration-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c5c2-format-differential-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  formatter-differential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact recorded source
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Print source-only differential produced by pinned installed formatter
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --no-install oxfmt --write
+          git diff --check
+          echo C5FORMAT-BEGIN
+          git diff --no-ext-diff --binary
+          echo C5FORMAT-END
