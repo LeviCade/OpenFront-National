@@ -178,40 +178,7 @@ function decide(
     decision,
     requestId,
   });
-  // CI forensic signal: authorization and ownership, without revealing balances.
-  const stored = game.executions().find((execution) => {
-    const record = execution as unknown as {
-      demand?: { id: string; recipients: readonly { id: string }[] } | null;
-    };
-    return (
-      execution instanceof NationalSanctionExecution &&
-      record.demand?.id === sanctionId
-    );
-  }) as unknown as
-    | {
-        demand: {
-          recipients: readonly {
-            id: string;
-            enforcement?: { offer: { status: string } | null };
-          }[];
-        };
-        controllingIssuer(): Player | null;
-        settlementOwners(row: { id: string }): readonly Player[] | null;
-      }
-    | undefined;
-  const row = stored?.demand.recipients.find((r) => r.id === recipientId);
-  console.info(
-    "C6_E3_DECISION_DIAGNOSTIC=" +
-      JSON.stringify({
-        sanctionId,
-        actorCurrentIssuer: stored?.controllingIssuer() === issuer,
-        owners: row
-          ? (stored?.settlementOwners(row)?.map((p) => p.id()) ?? null)
-          : null,
-        result: row?.enforcement?.offer?.status ?? null,
-        decision,
-      }),
-  );
+
 }
 function status(game: Game, issuer: Player, sanctionId: string) {
   return NationalSanctionExecution.viewFor(game, issuer).find(
@@ -327,7 +294,13 @@ describe("C6 Class 1 E3: actual enforced bilateral restitution", () => {
     expect(status(game, b, id)).toBe("refused");
     expect(b.canTrade(c)).toBe(false);
     expect([b.gold(), c.gold()]).toEqual(before);
-    expect(NationalSanctionExecution.viewFor(game, a)).toEqual([]);
+    // The lawful emperor sees a constituent's demand but not the issuer's ID.
+    const emperorView = NationalSanctionExecution.viewFor(game, a).find(
+      (demand) => demand.id === id,
+    );
+    expect(emperorView?.role).toBe("recipient-emperor");
+    expect(emperorView?.requestId).toBeNull();
+    expect(emperorView?.settlements[0]?.status).toBe("refused");
     expect(NationalSanctionExecution.viewFor(game, d)).toEqual([]);
     expect(
       NationalSanctionExecution.viewFor(game, c).find((x) => x.id === id)
@@ -429,6 +402,16 @@ describe("C6 Class 1 E3: actual enforced bilateral restitution", () => {
         sanctionId: "sanction-1",
         amountGold: "123",
         requestId: "valid",
+      }).success,
+    ).toBe(true);
+    expect(
+      IntentSchema.safeParse({
+        type: "national_decide_sanction_settlement",
+        sanctionId: "sanction-1",
+        recipientId: DELEGATE,
+        offerId: "valid-offer",
+        decision: "accept",
+        requestId: "valid-decision",
       }).success,
     ).toBe(true);
     const game = await setup(
