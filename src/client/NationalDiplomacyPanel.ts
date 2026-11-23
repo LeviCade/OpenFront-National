@@ -1,4 +1,6 @@
 import { GameType, UnitType } from "@openfront/engine-api/game/GameTypes";
+import type { NationalUltimatumViewData } from "@openfront/engine-api/game/GameUpdates";
+import { nationalReconQuote } from "./NationalSovereignActions";
 import type { NationalImperialAdministrationView } from "@openfront/engine-api/game/NationalImperialView";
 import type { NationalPactTerms } from "@openfront/engine-api/game/NationalPactView";
 import type { EventBus } from "@openfront/shared/EventBus";
@@ -46,6 +48,8 @@ import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability
 import { GoToPlayerEvent } from "./TransformHandler";
 import {
   SendNationalPactIntentEvent,
+  SendNationalReconnaissanceIntentEvent,
+  SendNationalUltimatumIntentEvent,
   SendNationalImperialPolicyIntentEvent,
   SendNationalAcceptPeaceIntentEvent,
   SendNationalAcceptEmpireIntentEvent,
@@ -117,6 +121,40 @@ export class NationalDiplomacyPanel extends LitElement {
     motionId?: string;
   } | null = null;
 
+  @state() private ultimatumTargetId = "";
+  @state() private ultimatumThreat: "embargo" | "imperial-war" = "embargo";
+  @state() private ultimatumDurationTicks = 300;
+  @state() private reconTargetId = "";
+  @state() private reconCenterX = "";
+  @state() private reconCenterY = "";
+  @state() private sovereignStatus = "";
+  @state() private reconStatus = "";
+  private sovereignAttempt: {
+    gameId: string;
+    actorId: string;
+    requestId: string;
+    tick: number;
+    type: "issue" | "respond" | "resolve";
+    ultimatumId: string | null;
+    previousVersion: number;
+    decision?: "accept" | "refuse" | "enforce" | "back-down" | "withdraw";
+  } | null = null;
+  private reconAttempt: {
+    gameId: string;
+    actorId: string;
+    requestId: string;
+    targetId: string;
+    x: number;
+    y: number;
+    tick: number;
+  } | null = null;
+  private reconConfirmed: {
+    gameId: string;
+    actorId: string;
+    requestId: string;
+    expiresAtTick: number;
+  } | null = null;
+
   createRenderRoot() {
     return this;
   }
@@ -128,6 +166,7 @@ export class NationalDiplomacyPanel extends LitElement {
   public refresh(): void {
     this.refreshPact();
     this.refreshImperialPolicy();
+    this.refreshSovereignActions();
     const game = this.game;
     const player = game?.myPlayer();
     const politics = game?.nationalPolitics() ?? null;
@@ -442,6 +481,11 @@ export class NationalDiplomacyPanel extends LitElement {
     this.pactStatus = "Connection interrupted; outcome unconfirmed.";
     this.imperialAttempt = null;
     this.imperialStatus = "Connection interrupted; policy outcome unconfirmed.";
+    this.sovereignAttempt = null;
+    this.sovereignStatus = "Connection interrupted; ultimatum outcome unknown.";
+    this.reconAttempt = null;
+    this.reconConfirmed = null;
+    this.reconStatus = "Connection interrupted; purchase outcome unknown.";
     this.selectWarTarget("");
     if (this.confirmedDiplomacy !== null) {
       this.confirmedDiplomacy = null;
@@ -2066,6 +2110,384 @@ export class NationalDiplomacyPanel extends LitElement {
     </section>`;
   }
 
+  /** Rendering cannot grant imperial authority or resurrect a stale Private seat. */
+  private get sovereignReady(): boolean {
+    return (
+      this.warUnavailableReason === null &&
+      this.eventBus !== null &&
+      this.game?.nationalPoliticsTick?.() === this.game?.ticks()
+    );
+  }
+
+  /** Only independent, living, PUBLIC nations are candidates for a demand. */
+  private get ultimatumCandidates(): readonly { id: string; name: string }[] {
+    return this.accessionCandidates();
+  }
+
+  private get reconCandidates(): readonly { id: string; name: string }[] {
+    const game = this.game;
+    const actor = game?.myPlayer();
+    if (!game || !actor || !game.nationalPolitics()) return [];
+    return game.players()
+      .filter((player) =>
+        player.id() !== actor.id() &&
+        player.isAlive() &&
+        player.numTilesOwned() > 0,
+      )
+      .map((player) => ({ id: player.id(), name: player.name() }));
+  }
+
+  private get ownUltimatums(): NationalUltimatumViewData["items"] {
+    const game = this.game;
+    const actor = game?.myPlayer();
+    const privateView = game?.nationalUltimatums?.();
+    return this.sovereignReady && actor &&
+      privateView?.recipientId === actor.id()
+      ? privateView.items
+      : [];
+  }
+
+  private refreshSovereignActions(): void {
+    const game = this.game;
+    const actor = game?.myPlayer();
+    const tick = game?.ticks() ?? -1;
+    const ready = this.sovereignReady;
+    const a = this.sovereignAttempt;
+    if (a) {
+      if (!ready || !game || !actor || game.gameID() !== a.gameId ||
+        actor.id() !== a.actorId || tick < a.tick) {
+        this.sovereignAttempt = null;
+        this.sovereignStatus = "Authority or session changed; ultimatum outcome unknown.";
+      } else {
+        const row = this.ownUltimatums.find((item) =>
+          a.type === "issue"
+            ? item.role === "issuer" && item.requestId === a.requestId
+            : item.id === a.ultimatumId &&
+              item.version > a.previousVersion &&
+              item.acknowledgedRequestIds.includes(a.requestId),
+        );
+        if (row) {
+          const expected =
+            a.type === "issue" ||
+            (a.type === "respond" &&
+              row.response === a.decision &&
+              (a.decision === "accept"
+                ? row.phase === "consented" || row.phase === "acceded" || row.phase === "decision-required"
+                : row.phase === "decision-required" || row.phase === "enforced" || row.phase === "backed-down")) ||
+            (a.type === "resolve" &&
+              (a.decision === "enforce" ? row.phase === "enforced" || row.phase === "backed-down"
+                : a.decision === "withdraw" ? row.phase === "withdrawn"
+                  : row.phase === "backed-down"));
+          this.sovereignAttempt = null;
+          this.sovereignStatus = expected
+            ? a.type === "issue"
+              ? `Game issued ultimatum ${row.id}; current phase: ${row.phase}. Deadline: tick ${row.deadlineTick}.`
+              : a.type === "respond" && a.decision === "accept"
+                ? "Game recorded your consent. Empire accession still requires a separate two-party political offer and acceptance."
+                : `Game confirmed ${a.decision}; current phase: ${row.phase}.`
+            : "Game acknowledged an action but current state did not match. Outcome is unconfirmed.";
+        } else if (tick - a.tick >= 200) {
+          this.sovereignAttempt = null;
+          this.sovereignStatus = "No matching Game-owned ultimatum acknowledgement arrived within 200 ticks; outcome unknown.";
+        }
+      }
+    }
+    const p = this.reconAttempt;
+    if (p) {
+      if (!ready || !game || !actor || game.gameID() !== p.gameId ||
+        actor.id() !== p.actorId || tick < p.tick) {
+        this.reconAttempt = null;
+        this.reconConfirmed = null;
+        this.reconStatus = "Authority or session changed; reconnaissance purchase unconfirmed.";
+      } else {
+        const grant = game.nationalReconnaissance?.()?.grants.find((g) =>
+          g.requestId === p.requestId && g.targetId === p.targetId &&
+          g.centerX === p.x && g.centerY === p.y &&
+          g.effectiveTick >= p.tick && g.effectiveTick <= tick &&
+          g.cost === nationalReconQuote.cost.toString() &&
+          g.radius === nationalReconQuote.radius,
+        );
+        if (grant) {
+          this.reconAttempt = null;
+          this.reconConfirmed = {
+            gameId: p.gameId,
+            actorId: p.actorId,
+            requestId: p.requestId,
+            expiresAtTick: grant.expiresAtTick,
+          };
+          this.reconStatus = `Game confirmed 500-gold purchase. Regional intelligence active until tick ${grant.expiresAtTick}.`;
+        } else if (tick - p.tick >= 200) {
+          this.reconAttempt = null;
+          this.reconStatus = "No matching paid reconnaissance lease arrived in 200 ticks. Purchase outcome unknown.";
+        }
+      }
+    }
+    const c = this.reconConfirmed;
+    if (c && (!ready || !game || !actor ||
+      c.gameId !== game.gameID() || c.actorId !== actor.id() ||
+      tick >= c.expiresAtTick ||
+      !game.nationalReconnaissance?.()?.grants.some((g) => g.requestId === c.requestId))) {
+      this.reconConfirmed = null;
+      this.reconStatus = tick >= c.expiresAtTick
+        ? "Purchased intelligence lease expired; previously hidden locations are no longer authorized."
+        : "Purchased intelligence is no longer verified in the current session.";
+    }
+  }
+
+  private issueUltimatum(event: SubmitEvent): void {
+    event.preventDefault();
+    const game = this.game;
+    const actor = game?.myPlayer();
+    const empire = this.memberEmpire;
+    if (!(event.currentTarget instanceof HTMLFormElement)) return;
+    const form = new FormData(event.currentTarget);
+    const target = form.get("target");
+    const threat = form.get("threat");
+    const duration = Number(form.get("duration"));
+    if (!this.sovereignReady || !game || !actor || !empire ||
+      empire.leaderId !== actor.id() ||
+      !this.ultimatumCandidates.some((item) => item.id === target) ||
+      (threat !== "embargo" && threat !== "imperial-war") ||
+      ![300, 600, 1200].includes(duration) ||
+      form.get("confirm") !== "on" || this.sovereignAttempt) {
+      this.sovereignStatus = "Ultimatum target, consent or emperor authority changed; no command issued.";
+      return;
+    }
+    let requestId: string;
+    try { requestId = createNationalPoliticalRequestId(); }
+    catch { this.sovereignStatus = "Secure request identity unavailable."; return; }
+    this.sovereignAttempt = {
+      gameId: game.gameID(), actorId: actor.id(), requestId,
+      tick: game.ticks(), type: "issue", ultimatumId: null,
+      previousVersion: 0,
+    };
+    this.sovereignStatus = "Pending Game-owned ultimatum acknowledgement.";
+    try {
+      this.eventBus!.emit(new SendNationalUltimatumIntentEvent({
+        type: "national_issue_ultimatum",
+        empireId: empire.id, targetId: target, threat,
+        durationTicks: duration, requestId,
+      }));
+    } catch {
+      this.sovereignAttempt = null;
+      this.sovereignStatus = "Command transport failed; outcome unconfirmed.";
+    }
+  }
+
+  private actOnUltimatum(
+    row: NationalUltimatumViewData["items"][number],
+    decision: "accept" | "refuse" | "enforce" | "back-down" | "withdraw",
+  ): void {
+    const game = this.game;
+    const actor = game?.myPlayer();
+    const current = this.ownUltimatums.find((r) => r.id === row.id);
+    const recipient = decision === "accept" || decision === "refuse";
+    if (!this.sovereignReady || !game || !actor || this.sovereignAttempt ||
+      !current || current.version !== row.version ||
+      (recipient
+        ? current.role !== "recipient" ||
+          current.targetId !== actor.id() ||
+          (current.phase !== "pending" && current.phase !== "consented") ||
+          game.ticks() >= current.deadlineTick ||
+          this.memberEmpire !== null
+        : current.role !== "issuer" ||
+          this.memberEmpire?.leaderId !== actor.id() ||
+          (decision === "withdraw"
+            ? current.phase !== "pending" && current.phase !== "consented"
+            : current.phase !== "decision-required"))) {
+      this.sovereignStatus = "Ultimatum is stale or no longer authorized; no command issued.";
+      return;
+    }
+    let requestId: string;
+    try { requestId = createNationalPoliticalRequestId(); }
+    catch { this.sovereignStatus = "Secure request identity unavailable."; return; }
+    this.sovereignAttempt = {
+      gameId: game.gameID(), actorId: actor.id(), requestId,
+      tick: game.ticks(), type: recipient ? "respond" : "resolve",
+      ultimatumId: row.id, previousVersion: row.version, decision,
+    };
+    this.sovereignStatus = "Pending Game-owned ultimatum acknowledgement.";
+    try {
+      this.eventBus!.emit(new SendNationalUltimatumIntentEvent({
+        type: recipient ? "national_respond_ultimatum" : "national_resolve_ultimatum",
+        ultimatumId: row.id, decision, requestId,
+      }));
+    } catch {
+      this.sovereignAttempt = null;
+      this.sovereignStatus = "Command transport failed; outcome unconfirmed.";
+    }
+  }
+
+  private submitRecon(event: SubmitEvent): void {
+    event.preventDefault();
+    const game = this.game;
+    const actor = game?.myPlayer();
+    if (!(event.currentTarget instanceof HTMLFormElement)) return;
+    const form = new FormData(event.currentTarget);
+    const target = form.get("target");
+    const rawX = form.get("centerX"), rawY = form.get("centerY");
+    const x = typeof rawX === "string" && /^\\d{1,5}$/.test(rawX) ? Number(rawX) : NaN;
+    const y = typeof rawY === "string" && /^\\d{1,5}$/.test(rawY) ? Number(rawY) : NaN;
+    if (!this.sovereignReady || !game || !actor || this.reconAttempt ||
+      !this.reconCandidates.some((candidate) => candidate.id === target) ||
+      !Number.isSafeInteger(x) || !Number.isSafeInteger(y) ||
+      x > 65535 || y > 65535 ||
+      !game.isValidCoord(x, y) || actor.gold() < nationalReconQuote.cost ||
+      form.get("confirm") !== "on") {
+      this.reconStatus = "Invalid map center, insufficient gold or authorization changed; no purchase sent.";
+      return;
+    }
+    let requestId: string;
+    try { requestId = createNationalPoliticalRequestId(); }
+    catch { this.reconStatus = "Secure request identity unavailable."; return; }
+    this.reconAttempt = {
+      gameId: game.gameID(), actorId: actor.id(), requestId,
+      targetId: target as string, x, y, tick: game.ticks(),
+    };
+    this.reconStatus = "Purchase submitted; awaiting the actual paid intelligence lease. No gold or sight is assumed.";
+    try {
+      this.eventBus!.emit(new SendNationalReconnaissanceIntentEvent({
+        type: "national_buy_regional_recon",
+        targetId: target, centerX: x, centerY: y, requestId,
+      }));
+    } catch {
+      this.reconAttempt = null;
+      this.reconStatus = "Transport failed; payment and sight unconfirmed.";
+    }
+  }
+
+  private useOwnMapPosition(): void {
+    const game = this.game;
+    const actor = game?.myPlayer();
+    const point = actor?.nameLocation?.();
+    if (!this.sovereignReady || !point || !game) return;
+    const x = Math.floor(point.x), y = Math.floor(point.y);
+    if (!game.isValidCoord(x, y)) return;
+    // Own public position only, never a foreign label or hidden enemy camera.
+    this.reconCenterX = String(x);
+    this.reconCenterY = String(y);
+  }
+
+  private renderSovereignActions() {
+    if (!this.sovereignReady) return nothing;
+    const game = this.game!;
+    const actor = game.myPlayer();
+    const isEmperor = this.memberEmpire?.leaderId === actor?.id();
+    const selected = this.ultimatumCandidates;
+    const nations = this.reconCandidates;
+    const pending = this.sovereignAttempt !== null;
+    return html`
+      <section aria-label="Imperial ultimatums" data-national-ultimatums class="space-y-3 border-t border-white/15 pt-3">
+        <h2 class="font-semibold text-amber-200">Imperial ultimatums</h2>
+        <p class="text-xs text-slate-300">Demands never annex automatically. Recipient consent and a separate two-party accession are required.</p>
+        ${isEmperor ? html`<form class="space-y-2" @submit=${this.issueUltimatum}>
+          <label class="block">Independent target
+            <select name="target" required class="w-full min-h-11 rounded bg-slate-900 text-white p-2"
+              .value=${this.ultimatumTargetId}
+              @change=${(e: Event) => (this.ultimatumTargetId = (e.target as HTMLSelectElement).value)}>
+              <option value="">Select independent nation</option>
+              ${selected.map((p) => html`<option value=${p.id}>${p.name}</option>`)}
+            </select>
+          </label>
+          <label class="block">Lawful consequence
+            <select name="threat" class="w-full min-h-11 rounded bg-slate-900 text-white p-2"
+              .value=${this.ultimatumThreat}
+              @change=${(e: Event) => (this.ultimatumThreat = (e.target as HTMLSelectElement).value as "embargo" | "imperial-war")}>
+              <option value="embargo">Empire-wide trade embargo</option>
+              <option value="imperial-war">Formal imperial WAR (existing WAR authority)</option>
+            </select>
+          </label>
+          <label class="block">Binding response deadline
+            <select name="duration" class="w-full min-h-11 rounded bg-slate-900 text-white p-2"
+              .value=${String(this.ultimatumDurationTicks)}
+              @change=${(e: Event) => (this.ultimatumDurationTicks = Number((e.target as HTMLSelectElement).value))}>
+              <option value="300">300 game ticks</option>
+              <option value="600">600 game ticks</option>
+              <option value="1200">1,200 game ticks</option>
+            </select>
+          </label>
+          <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="confirm" required class="mt-1" />
+            I confirm this coercive demand; the recipient may refuse.
+          </label>
+          <button type="submit" data-national-issue-ultimatum
+            class="min-h-11 w-full rounded bg-amber-400 text-slate-950 font-semibold p-2 disabled:opacity-50"
+            ?disabled=${pending || selected.length === 0}>Issue ultimatum</button>
+        </form>` : nothing}
+        ${this.ownUltimatums.map((row) => html`
+          <article data-national-ultimatum-id=${row.id} class="rounded border border-amber-200/30 p-3 space-y-2">
+            <p class="font-semibold">${row.role === "recipient" ? "Demand addressed to your nation" : "Issued imperial demand"}</p>
+            <p>Emperor: ${this.playerName(row.issuerId)} · Empire: ${row.empireId}</p>
+            <p>${row.role === "recipient" ? "You" : this.playerName(row.targetId)}: requested voluntary accession</p>
+            <p>Consequence: ${row.threat === "embargo" ? "Empire trade embargo" : "Formal imperial WAR"}</p>
+            <p>Response deadline: tick ${row.deadlineTick} · Current tick ${game.ticks()}</p>
+            <p>Game phase: ${row.phase} · Response: ${row.response}</p>
+            ${row.role === "recipient" && (row.phase === "pending" || row.phase === "consented") &&
+              game.ticks() < row.deadlineTick && this.memberEmpire === null ? html`
+              <div class="flex flex-wrap gap-2">
+                <button type="button" class="min-h-11 rounded border border-amber-400 p-2 disabled:opacity-50"
+                  ?disabled=${pending} @click=${() => this.actOnUltimatum(row, "accept")}>Accept demand (consent only)</button>
+                <button type="button" class="min-h-11 rounded border border-amber-400 p-2 disabled:opacity-50"
+                  ?disabled=${pending} @click=${() => this.actOnUltimatum(row, "refuse")}>Refuse demand</button>
+              </div>` : nothing}
+            ${row.role === "issuer" && (row.phase === "decision-required" ||
+              row.phase === "pending" || row.phase === "consented") ? html`
+              <div class="flex flex-wrap gap-2">
+                ${row.phase === "decision-required" ? html`
+                  <button type="button" class="min-h-11 rounded border border-amber-400 p-2 disabled:opacity-50"
+                    ?disabled=${pending} @click=${() => this.actOnUltimatum(row, "enforce")}>Enforce original consequence</button>
+                  <button type="button" class="min-h-11 rounded border border-amber-400 p-2 disabled:opacity-50"
+                    ?disabled=${pending} @click=${() => this.actOnUltimatum(row, "back-down")}>Back down</button>`
+                : html`<button type="button" class="min-h-11 rounded border border-amber-400 p-2 disabled:opacity-50"
+                    ?disabled=${pending} @click=${() => this.actOnUltimatum(row, "withdraw")}>Withdraw demand</button>`}
+              </div>` : nothing}
+          </article>`)}
+        <p role="status" aria-live="polite" aria-busy=${String(pending)}
+          data-national-ultimatum-status class="text-xs text-amber-200">${this.sovereignStatus}</p>
+      </section>
+      <section aria-label="Paid regional reconnaissance" data-national-recon class="space-y-3 border-t border-white/15 pt-3">
+        <h2 class="font-semibold text-amber-200">Purchase regional intelligence</h2>
+        <p class="text-xs text-slate-300">Game price: ${nationalReconQuote.cost.toString()} personal gold · radius ${nationalReconQuote.radius} tiles · lease ${nationalReconQuote.durationTicks} ticks. No enemy position is revealed by target selection.</p>
+        <form class="space-y-2" @submit=${this.submitRecon}>
+          <label class="block">Public foreign nation
+            <select name="target" required class="w-full min-h-11 rounded bg-slate-900 text-white p-2"
+              .value=${this.reconTargetId}
+              @change=${(e: Event) => (this.reconTargetId = (e.target as HTMLSelectElement).value)}>
+              <option value="">Select nation</option>
+              ${nations.map((p) => html`<option value=${p.id}>${p.name}</option>`)}
+            </select>
+          </label>
+          <p class="text-xs text-slate-300">Choose real game-map coordinates. Use your visible location as a starting point; coordinates never auto-pan to an unseen opponent.</p>
+          <button type="button" class="min-h-11 rounded border border-white/30 p-2"
+            @click=${this.useOwnMapPosition}>Use my visible map position</button>
+          <div class="grid grid-cols-2 gap-2">
+            <label>Map X
+              <input type="number" inputmode="numeric" name="centerX" min="0" max="65535" step="1" required
+                class="w-full min-h-11 rounded bg-slate-900 p-2" .value=${this.reconCenterX}
+                @input=${(e: Event) => (this.reconCenterX = (e.target as HTMLInputElement).value)} />
+            </label>
+            <label>Map Y
+              <input type="number" inputmode="numeric" name="centerY" min="0" max="65535" step="1" required
+                class="w-full min-h-11 rounded bg-slate-900 p-2" .value=${this.reconCenterY}
+                @input=${(e: Event) => (this.reconCenterY = (e.target as HTMLInputElement).value)} />
+            </label>
+          </div>
+          <label class="flex items-start gap-2"><input type="checkbox" name="confirm" required class="mt-1" />
+            Confirm the Game may charge ${nationalReconQuote.cost.toString()} gold once for a ${nationalReconQuote.durationTicks}-tick lease.
+          </label>
+          <button type="submit" data-national-buy-recon
+            class="min-h-11 w-full rounded bg-amber-400 p-2 text-slate-950 font-semibold disabled:opacity-50"
+            ?disabled=${!actor || actor.gold() < nationalReconQuote.cost || this.reconAttempt !== null || nations.length === 0}>
+            Purchase regional reconnaissance
+          </button>
+        </form>
+        <p role="status" aria-live="polite" aria-busy=${String(this.reconAttempt !== null)}
+          data-national-recon-status class="text-xs text-amber-200">${this.reconStatus}</p>
+        <button type="button" class="min-h-11 rounded border border-white/30 p-2"
+          @click=${this.closeForMap}>Close diplomacy to interact with map</button>
+      </section>`;
+  }
+
   render() {
     const game = this.game;
     const mode = game?.config().gameConfig().gameType;
@@ -2177,6 +2599,7 @@ export class NationalDiplomacyPanel extends LitElement {
                   }
                 </p>
                 ${this.renderPacts()} ${this.renderImperialAdministration()}
+                ${this.renderSovereignActions()}
                 ${
                   politics
                     ? html`<div class="space-y-2">
