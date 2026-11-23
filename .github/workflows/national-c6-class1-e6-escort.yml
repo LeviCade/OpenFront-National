@@ -57,7 +57,8 @@ jobs:
             tests/national/RoundNineWarAuthorityGame.test.ts \
             tests/national/RoundTenNationExecutionBridge.test.ts
       - name: Full regression
-        if: success() || failure()
+        # Avoid expensive 12k-suite runs while the focused witness is red.
+        if: success()
         run: npm test
       - name: Lint
         if: success() || failure()
