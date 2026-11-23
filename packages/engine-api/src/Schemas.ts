@@ -933,9 +933,11 @@ export const NationalRespondSanctionIntentSchema = z.object({
   type: z.literal("national_respond_sanction"),
   sanctionId: NationalPoliticalId,
   decision: z.enum(["comply", "refuse"]),
-  // Imperial member commands require an exact current grant epoch at execution.
-  expectedCharterVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }).optional(),
   requestId: NationalPoliticalRequestId,
+  // Imperial member commands require an exact current grant epoch at execution.
+  expectedCharterVersion: zb
+    .uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 })
+    .optional(),
 });
 export const NationalResolveSanctionIntentSchema = z.object({
   type: z.literal("national_resolve_sanction"),

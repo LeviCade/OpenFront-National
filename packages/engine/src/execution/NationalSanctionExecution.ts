@@ -156,9 +156,13 @@ export class NationalSanctionExecution implements Execution {
     if (empire === undefined) return false;
     if (empire === null) return expectedVersion === undefined; // no stale imperial grant after collapse
     const charter = game.nationalEconomicCharterFor(actor);
-    return charter !== null && charter.empireId === empire &&
+    return (
+      charter !== null &&
+      charter.empireId === empire &&
       charter.ownerId === charter.emperorId &&
-      charter.delegated && expectedVersion === charter.version;
+      charter.delegated &&
+      expectedVersion === charter.version
+    );
   }
 
   private canApplyMemberRestriction(member: Player, target: Player): boolean {
@@ -168,8 +172,11 @@ export class NationalSanctionExecution implements Execution {
     if (empire === null) return true;
     if (empire === undefined) return false;
     const charter = game.nationalEconomicCharterFor(member);
-    return charter !== null && charter.ownerId === charter.emperorId &&
-      (p?.empireOf(target.id()) !== empire || charter.allowInternal);
+    return (
+      charter !== null &&
+      charter.ownerId === charter.emperorId &&
+      (p?.empireOf(target.id()) !== empire || charter.allowInternal)
+    );
   }
 
   private advance(tick: number): void {
@@ -285,12 +292,21 @@ export class NationalSanctionExecution implements Execution {
     expectedVersion?: number,
   ): void {
     const d = this.demand!;
-    if (d.phase !== "pending" || this.recipient(actor.id()) !== actor ||
-        !this.mayRespond(actor, expectedVersion)) return;
+    if (
+      d.phase !== "pending" ||
+      this.recipient(actor.id()) !== actor ||
+      !this.mayRespond(actor, expectedVersion)
+    )
+      return;
     const row = d.recipients.find((r) => r.id === actor.id());
     const target = living(this.game!, d.target);
-    if (!row || !target || row.response !== "none" ||
-        !this.canApplyMemberRestriction(actor, target)) return;
+    if (
+      !row ||
+      !target ||
+      row.response !== "none" ||
+      !this.canApplyMemberRestriction(actor, target)
+    )
+      return;
     if (decision === "comply") actor.addEmbargo(target, false);
     row.response = decision;
   }
@@ -310,19 +326,30 @@ export class NationalSanctionExecution implements Execution {
     const auth = game.nationalPoliticalAuthority();
     const member = living(game, memberId);
     const charter = member && game.nationalEconomicCharterFor(member);
-    if (!auth || auth.emperorOf(empireId) !== emperor.id() ||
-        !member || auth.empireOf(memberId) !== empireId ||
-        !charter || charter.version !== expectedVersion ||
-        (charter.ownerId !== null && charter.ownerId !== emperor.id()))
+    if (
+      !auth ||
+      auth.emperorOf(empireId) !== emperor.id() ||
+      !member ||
+      auth.empireOf(memberId) !== empireId ||
+      !charter ||
+      charter.version !== expectedVersion ||
+      (charter.ownerId !== null && charter.ownerId !== emperor.id())
+    )
       throw new Error("NATIONAL: unauthorized imperial sanction response");
     const record = this.records(game).find((e) => e.demand?.id === sanctionId);
     const d = record?.demand;
     const row = d?.recipients.find((r) => r.id === memberId);
     const target = d && living(game, d.target);
-    if (!record || !d || d.phase !== "pending" || !row ||
-        row.response !== "none" || !target ||
-        !record.controllingIssuer() ||
-        (auth.empireOf(target.id()) === empireId && !charter.allowInternal))
+    if (
+      !record ||
+      !d ||
+      d.phase !== "pending" ||
+      !row ||
+      row.response !== "none" ||
+      !target ||
+      !record.controllingIssuer() ||
+      (auth.empireOf(target.id()) === empireId && !charter.allowInternal)
+    )
       throw new Error("NATIONAL: ineligible imperial sanction demand");
     if (decision === "comply") member.addEmbargo(target, false);
     row.response = decision;
@@ -348,8 +375,13 @@ export class NationalSanctionExecution implements Execution {
     for (const row of d.recipients) {
       if (!row.noncompliant) continue;
       const recipient = this.recipient(row.id);
-      if (!recipient || (d.empire !== null &&
-          game.nationalPoliticalAuthority()?.empireOf(recipient.id()) === d.empire)) continue;
+      if (
+        !recipient ||
+        (d.empire !== null &&
+          game.nationalPoliticalAuthority()?.empireOf(recipient.id()) ===
+            d.empire)
+      )
+        continue;
       for (const owner of owners) {
         if (owner === recipient) continue;
         owner.addEmbargo(recipient, false);
@@ -380,7 +412,11 @@ export class NationalSanctionExecution implements Execution {
     if (!record) return;
     record.advance(tick);
     if (command.type === "national_respond_sanction") {
-      record.respond(this.actor, command.decision, command.expectedCharterVersion);
+      record.respond(
+        this.actor,
+        command.decision,
+        command.expectedCharterVersion,
+      );
     } else {
       record.resolve(this.actor, command.decision);
     }
@@ -410,40 +446,49 @@ export class NationalSanctionExecution implements Execution {
       const visible = d.recipients.filter((row) => {
         if (row.id === observer.id()) return true;
         const empire = auth?.empireOf(row.id);
-        return empire !== null && empire !== undefined &&
-          auth?.emperorOf(empire) === observer.id();
+        return (
+          empire !== null &&
+          empire !== undefined &&
+          auth?.emperorOf(empire) === observer.id()
+        );
       });
       if (!isIssuer && visible.length === 0) return [];
       return (isIssuer ? [null] : visible).map((own) => ({
-
-          id: d.id,
-          issuer: d.issuer,
-          authorityId: e.controllingIssuer()?.id() ?? null,
-          empire: d.empire,
-          role: isIssuer ? ("issuer" as const) :
-            own?.id === observer.id() ? ("recipient" as const) :
-            ("recipient-emperor" as const),
-          recipientId: own?.id ?? null,
-          charterVersion: own ? game.nationalEconomicCharterFor(game.player(own.id))?.version ?? null : null,
-          canRespond: own?.id === observer.id() && e.mayRespond(observer,
-            game.nationalEconomicCharterFor(observer)?.version),
-          recipientIds: isIssuer
-            ? d.recipients.map((row) => row.id)
-            : [own!.id],
-          target: d.target,
-          deadline: d.deadline,
-          phase: d.phase,
-          trigger: d.trigger,
-          threat: d.threat,
-          // Never expose transaction existence or another recipient's response.
-          response: own?.response ?? null,
-          requestId:
-            isIssuer &&
-            e.actor === observer &&
-            (e.clientId === null || e.clientId === observer.clientID())
-              ? e.command.requestId
-              : null,
-        }));
+        id: d.id,
+        issuer: d.issuer,
+        authorityId: e.controllingIssuer()?.id() ?? null,
+        empire: d.empire,
+        role: isIssuer
+          ? ("issuer" as const)
+          : own?.id === observer.id()
+            ? ("recipient" as const)
+            : ("recipient-emperor" as const),
+        recipientId: own?.id ?? null,
+        charterVersion: own
+          ? (game.nationalEconomicCharterFor(game.player(own.id))?.version ??
+            null)
+          : null,
+        canRespond:
+          own?.id === observer.id() &&
+          e.mayRespond(
+            observer,
+            game.nationalEconomicCharterFor(observer)?.version,
+          ),
+        recipientIds: isIssuer ? d.recipients.map((row) => row.id) : [own!.id],
+        target: d.target,
+        deadline: d.deadline,
+        phase: d.phase,
+        trigger: d.trigger,
+        threat: d.threat,
+        // Never expose transaction existence or another recipient's response.
+        response: own?.response ?? null,
+        requestId:
+          isIssuer &&
+          e.actor === observer &&
+          (e.clientId === null || e.clientId === observer.clientID())
+            ? e.command.requestId
+            : null,
+      }));
     });
   }
 

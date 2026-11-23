@@ -627,7 +627,9 @@ export interface Game extends GameLike {
     observer: Player,
   ): NationalImperialAdministrationView | null;
   /** ECON-04: member-specific, current-emperor economic law, not a trade ledger. */
-  nationalEconomicCharterFor(observer: Player): NationalEconomicCharterView | null;
+  nationalEconomicCharterFor(
+    observer: Player,
+  ): NationalEconomicCharterView | null;
   performNationalImperialAdministration(
     actor: Player,
     command: NationalImperialAdministrationCommand,

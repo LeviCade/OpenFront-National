@@ -8,6 +8,8 @@
 - Each new restriction is exactly one member↔target bilateral Player embargo. It affects actual merchant ship and train canTrade checks at departure and settlement and carries no synthetic treasury credit. Engineer Two's existing `creditNationalCommercialIncome` and split logic are authoritative and untouched.
 - Crown transfer cancels former emperor grants, clears internal-embargo authorization and bumps the version. Eliminated constituents are pruned from delegate lists with a fresh epoch. Dissolution deletes the charter. A stale user command or accepted journal receipt never revives an old epoch.
 
+Both the optional reply epoch and the optional `economicCharters` snapshot section are appended after pre-existing fields to preserve historical field order.
+
 ## Authenticated typed command contract
 `NationalImperialAdministrationCommandSchema` **append-only** variants:
 1. `set-economic-charter`: `empireId`, `expectedVersion`, `delegateIds`, `allowInternal`; incumbent emperor only.

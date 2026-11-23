@@ -309,12 +309,12 @@ export const NationalRuntimeSnapshotSchema = z.object({
   lastTick: counter,
   politics: politicsSchema,
   administration: z.array(administrationSchema).optional(),
-  economicCharters: z.array(economicCharterSchema).optional(),
   unclaimedTreasury: exactGold.optional(),
   deferredTroops: z
     .array(z.object({ memberId: z.string(), amount: exactGold }))
     .optional(),
   unclaimedTroops: exactGold.optional(),
+  economicCharters: z.array(economicCharterSchema).optional(),
 });
 export type NationalRuntimeSnapshot = z.infer<
   typeof NationalRuntimeSnapshotSchema
@@ -1598,14 +1598,6 @@ export class NationalRuntime {
             ),
           }
         : {}),
-      ...(this.economicCharters.size > 0
-        ? {
-            economicCharters: [...this.economicCharters.values()].sort(
-              (a, b) =>
-                a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0,
-            ),
-          }
-        : {}),
       ...(this.unclaimedTreasury > 0n
         ? { unclaimedTreasury: this.unclaimedTreasury.toString() }
         : {}),
@@ -1621,6 +1613,14 @@ export class NationalRuntime {
         : {}),
       ...(this.unclaimedTroops > 0n
         ? { unclaimedTroops: this.unclaimedTroops.toString() }
+        : {}),
+      ...(this.economicCharters.size > 0
+        ? {
+            economicCharters: [...this.economicCharters.values()].sort(
+              (a, b) =>
+                a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0,
+            ),
+          }
         : {}),
     });
   }
