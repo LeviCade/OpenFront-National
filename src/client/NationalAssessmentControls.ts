@@ -286,7 +286,7 @@ export class NationalAssessmentControls extends LitElement {
                       ${report.militaryTroopsBand.lower}–&lt;${report.militaryTroopsBand.upperExclusive}
                     </p>
                     <p class="text-xs text-slate-300">
-                      ${report.confidence === "shielded-coarse-estimate" ? "Counterassessment shield active: truthful broader purchase-time bands." : "Coarse purchase-time estimate."}
+                      ${report.confidence === "shielded-coarse-estimate" ? "Shielded at purchase: truthful broader purchase-time bands." : "Coarse purchase-time estimate."}
                       Not live exact values. Effective tick
                       ${report.effectiveTick}; expires at tick
                       ${report.expiresAtTick}

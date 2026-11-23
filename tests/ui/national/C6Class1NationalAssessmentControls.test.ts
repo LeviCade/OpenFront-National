@@ -265,7 +265,7 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
     state.reports = valid;
     element.refresh();
     await element.updateComplete;
-    expect(element.textContent).toContain("Counterassessment shield active");
+    expect(element.textContent).toContain("Shielded at purchase");
     expect(element.textContent).toContain("Shielded troop estimate");
     expect(element.textContent).not.toContain("100000");
   });
