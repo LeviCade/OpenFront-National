@@ -146,6 +146,7 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     game.player(DONOR).setTroops(reserve(game) + 45_000);
     game.player(ENEMY).setTroops(50_000);
     const initialDonor = game.player(DONOR).troops();
+    const initialMemberTerritory = game.player(MEMBER).numTilesOwned();
     // Runner grows nations before queued attacks initialize. A no-attack
     // restored control measures that legitimate production independently.
     const { restored: control } = await roundTrip(game, "plains");
@@ -193,6 +194,33 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     expect(imperial.second).toEqual({ kind: "nation", id: ENEMY });
     expect(game.nationalWarAuthority()?.atWar(CROWN, ENEMY)).toBe(true);
     expect(game.nationalWarAuthority()?.atWar(MEMBER, ENEMY)).toBe(true);
+    console.info(
+      "C5E4_INITIAL_INVASION_RECEIPT " +
+        JSON.stringify({
+          policy: "both",
+          policyVersion:
+            game.nationalImperialAdministrationFor(game.player(CROWN))
+              ?.warPolicyVersion,
+          attack: 50_000,
+          donorInitialTroops: initialDonor,
+          donorControlAfterGrowth: baselineDonor,
+          donorActualFinalTroops: game.player(DONOR).troops(),
+          donorDebit: recorded.intercepted,
+          protectedReserve,
+          attackerInitialTroops: 50_000,
+          attackerFinalTroops: game.player(ENEMY).troops(),
+          attackerRemainingInFlight: recorded.remainingAttackingTroops,
+          memberInitialTerritory: initialMemberTerritory,
+          memberFinalTerritory: game.player(MEMBER).numTilesOwned(),
+          goldFinal: roster.map((p) =>
+            [p.id, game.player(p.id).gold().toString()],
+          ),
+          imperialWarId: imperial.id,
+          imperialWarScope: imperial.scope,
+          imperialWarStartedTick: imperial.startedTick,
+          originalNationalWarId: oldWar.id,
+        }),
+    );
 
     const { restored } = await roundTrip(game, "plains");
     expect(restored.nationalWarState()).toEqual(game.nationalWarState());
@@ -249,6 +277,20 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
       );
       if (record.intercepted === 30_000)
         expect(game.player(MEMBER).numTilesOwned()).toBe(territoryBefore);
+      console.info(
+        "C5E4_MODE_RECEIPT " +
+          JSON.stringify({
+            response,
+            attackingTroops: 30_000,
+            donorControlAfterGrowth: baselineDonor,
+            donorFinalTroops: game.player(DONOR).troops(),
+            intercepted: record.intercepted,
+            remainingAttack: record.remainingAttackingTroops,
+            territoryBefore,
+            territoryAfter: game.player(MEMBER).numTilesOwned(),
+            imperialWarLayers: imperialLayers(game).length,
+          }),
+      );
     }
   });
 
