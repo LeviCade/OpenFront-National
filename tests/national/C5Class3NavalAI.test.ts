@@ -317,6 +317,44 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
       ),
     ).toEqual([]);
   });
+  it("one observed ship cannot trigger duplicate spending when sight drops and returns", async () => {
+    const { game, a, b, cPort, behavior, fixedEnemyMerchant } =
+      await fixture();
+    const first = collectLiveNationalObservation(game, A).observation;
+    const spy = vi.spyOn(game, "addExecution");
+    try {
+      expect(behavior.dispatchNationalNavalPressure(first)).toBe("build");
+      fixedEnemyMerchant.delete(false);
+      const lost = collectLiveNationalObservation(game, A).observation;
+      expect(
+        planObservedNationalNavalTargets(lost, [{ x: 7, y: 10 }]),
+      ).toEqual([]);
+      expect(behavior.dispatchNationalNavalPressure(lost)).toBeNull();
+      const acquired = b.buildUnit(UnitType.TradeShip, game.ref(8, 5), {
+        targetUnit: cPort,
+        lastSetSafeFromPirates: -100,
+      });
+      const regained = collectLiveNationalObservation(game, A).observation;
+      expect(
+        planObservedNationalNavalTargets(regained, [{ x: 7, y: 10 }]).some(
+          (target) => target.vesselId === String(acquired.id()),
+        ),
+      ).toBe(true);
+      expect(behavior.dispatchNationalNavalPressure(regained)).toBeNull();
+      const orders = spy.mock.calls.flatMap(([...calls]) => calls);
+      expect(
+        orders.filter(
+          (execution) =>
+            execution.constructor.name === "ConstructionExecution",
+        ),
+      ).toHaveLength(1);
+    } finally {
+      spy.mockRestore();
+    }
+    advance(game, 3);
+    expect(a.units(UnitType.Warship)).toHaveLength(1);
+  });
+
   it("an ACTUAL disconnected sea denies visible enemy commerce, and a stranded fleet cannot teleport", () => {
     const width = 40;
     const height = 18;
