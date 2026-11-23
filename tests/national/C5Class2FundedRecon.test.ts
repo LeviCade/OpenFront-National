@@ -205,10 +205,11 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     expect(game.nationalReconnaissanceFor(BUYER.id)).toEqual([]);
     // Reconnection from an authoritative snapshot cannot renew an expired
     // lease or erase the durable duplicate-request receipt.
-    const { restored: reconnected, bytes, again } = await roundTrip(
-      game,
-      "big_plains",
-    );
+    const {
+      restored: reconnected,
+      bytes,
+      again,
+    } = await roundTrip(game, "big_plains");
     expect(again).toEqual(bytes);
     expect(reconnected.nationalReconnaissanceFor(BUYER.id)).toEqual([]);
     expect(visible(reconnected, BUYER.id, factory.id())).toBeUndefined();
@@ -361,10 +362,14 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     game.executeNextTick();
     restored.executeNextTick();
     expect(
-      originalDebits.mock.calls.filter(([gold]) => gold === REGIONAL_RECON_COST),
+      originalDebits.mock.calls.filter(
+        ([gold]) => gold === REGIONAL_RECON_COST,
+      ),
     ).toHaveLength(1);
     expect(
-      restoredDebits.mock.calls.filter(([gold]) => gold === REGIONAL_RECON_COST),
+      restoredDebits.mock.calls.filter(
+        ([gold]) => gold === REGIONAL_RECON_COST,
+      ),
     ).toHaveLength(1);
     originalDebits.mockRestore();
     restoredDebits.mockRestore();
