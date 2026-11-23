@@ -209,8 +209,9 @@ describe("C6 first-class E3 private-match restitution ingress", () => {
     expect(issuerTransfer).toBe(25_000n);
     expect(payerTransfer).toBe(25_000n);
     expect(issuerTransfer).toBe(payerTransfer);
-    expect(issuer.gold() + payer.gold() - acceptanceBefore[0] - acceptanceBefore[1])
-      .toBe(passive[0] + passive[1]);
+    expect(
+      issuer.gold() + payer.gold() - acceptanceBefore[0] - acceptanceBefore[1],
+    ).toBe(passive[0] + passive[1]);
     expect(issuer.canTrade(payer)).toBe(true);
     expect(view(issuer)[0].settlements[0]?.status).toBe("accepted");
 
@@ -230,9 +231,7 @@ describe("C6 first-class E3 private-match restitution ingress", () => {
     expect(restoredIssuer.gold() - restoredBefore[0] - passive[0]).toBe(
       25_000n,
     );
-    expect(restoredBefore[1] - restoredPayer.gold() + passive[1]).toBe(
-      25_000n,
-    );
+    expect(restoredBefore[1] - restoredPayer.gold() + passive[1]).toBe(25_000n);
     expect(restoredIssuer.canTrade(restoredPayer)).toBe(true);
     expect(
       NationalSanctionExecution.viewFor(restored, restoredIssuer)[0]
@@ -258,8 +257,7 @@ describe("C6 first-class E3 private-match restitution ingress", () => {
           exactConservation: true,
           resumedTrade: issuer.canTrade(payer),
           restoredPayment:
-            restoredIssuer.gold() - restoredBefore[0] - passive[0] ===
-            25_000n,
+            restoredIssuer.gold() - restoredBefore[0] - passive[0] === 25_000n,
           digest: receipt.replayDigest,
           tick: game.ticks(),
         }),
