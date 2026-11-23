@@ -6,8 +6,8 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
-import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { EmbargoExecution } from "@openfront/engine/execution/EmbargoExecution";
+import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
 import { TrainExecution } from "@openfront/engine/execution/TrainExecution";
@@ -645,8 +645,7 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
           before.personal[index].maritime,
       ).toBeGreaterThan(0n);
       expect(
-        externallyPaid.personal[index].gold -
-          before.personal[index].gold,
+        externallyPaid.personal[index].gold - before.personal[index].gold,
       ).toBeGreaterThan(0n);
     }
     expect(externallyPaid.treasury).toBe(before.treasury);
@@ -667,5 +666,4 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
     expect(balances(game)).toEqual(deniedBefore);
     witness("embargo-no-income-no-imperial-credit", game, deniedBefore);
   });
-
 });

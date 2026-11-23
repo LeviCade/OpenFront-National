@@ -6,7 +6,7 @@ Issue: [#173](https://github.com/LeviCade/OpenFront-National/issues/173). Foundi
 
 NATIONAL alone routes **actual paid** income for four named classes: `workers`, `maritime`, `rail`, `piracy`. Every class may independently be enabled or disabled. Existing worker and non-worker percentage basis-point rates are retained.
 
-The emperor can additionally set an **integer gold contribution per successful payment event**: `fixedGoldPerPayout` (canonical, nonnegative decimal string, at most 128 characters). It is a quota *per recipient payment*, not a periodic tick levy, per-empire subscription, debt, or assumed income.
+The emperor can additionally set an **integer gold contribution per successful payment event**: `fixedGoldPerPayout` (canonical, nonnegative decimal string, at most 128 characters). It is a quota _per recipient payment_, not a periodic tick levy, per-empire subscription, debt, or assumed income.
 
 For a positive real gross credit `G`, enabled class, appropriate legacy basis-point rate `R`, fixed quota `F`:
 
@@ -38,15 +38,15 @@ The existing `tradeGold`, `trainGold`, and `piracyGold` counters record **gross 
 
 ## Scope, integration and regression
 
-| Path | Changed symbols | Conflict/owner |
-| --- | --- | --- |
-| `packages/engine/src/national/NationalRuntime.ts` | administration schema, `ImperialPolicy`, `setImperialPolicy`, view, row-copy during army transitions, income routes | E2 exclusive; E1 consumes projection |
-| `packages/engine-api/src/Schemas.ts` | optional fields in **existing** `set-policy` object only | Conductor reconciles with E3/E4 appended variants |
-| `packages/engine/src/game/Game.ts` / `GameImpl.ts` | typed commercial source argument and exact Game-ledger adapter | E3 owns other sanction/trade-permission hunks |
-| `packages/engine/src/execution/TradeShipExecution.ts` | four classification literals at existing paid sites | Preserve E3's embargo gate and paid-trade behavior |
-| `packages/engine/src/game/TrainStation.ts` | two `rail` arguments at actual train-stop credits | Preserve E3's permission gate |
-| `packages/engine-api/src/game/NationalImperialView.ts` | optional typed member-only wire fields and strict parser | E1 panel should consume, not overwrite |
-| `packages/engine/src/national/observation/NationalPactProjection.ts` | new fields in existing private projection whitelist | No public-politics leakage |
+| Path                                                                 | Changed symbols                                                                                                     | Conflict/owner                                     |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `packages/engine/src/national/NationalRuntime.ts`                    | administration schema, `ImperialPolicy`, `setImperialPolicy`, view, row-copy during army transitions, income routes | E2 exclusive; E1 consumes projection               |
+| `packages/engine-api/src/Schemas.ts`                                 | optional fields in **existing** `set-policy` object only                                                            | Conductor reconciles with E3/E4 appended variants  |
+| `packages/engine/src/game/Game.ts` / `GameImpl.ts`                   | typed commercial source argument and exact Game-ledger adapter                                                      | E3 owns other sanction/trade-permission hunks      |
+| `packages/engine/src/execution/TradeShipExecution.ts`                | four classification literals at existing paid sites                                                                 | Preserve E3's embargo gate and paid-trade behavior |
+| `packages/engine/src/game/TrainStation.ts`                           | two `rail` arguments at actual train-stop credits                                                                   | Preserve E3's permission gate                      |
+| `packages/engine-api/src/game/NationalImperialView.ts`               | optional typed member-only wire fields and strict parser                                                            | E1 panel should consume, not overwrite             |
+| `packages/engine/src/national/observation/NationalPactProjection.ts` | new fields in existing private projection whitelist                                                                 | No public-politics leakage                         |
 
 **Do not merge this branch automatically.** Conductor must reconcile shared source by symbol, preserve E3 trade suppression and E4 secret-intelligence projections, rerun full combined acceptance on exact merged source, and obtain Manager approval for any M5 point.
 
