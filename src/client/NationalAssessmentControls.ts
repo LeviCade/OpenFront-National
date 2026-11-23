@@ -56,7 +56,7 @@ export class NationalAssessmentControls extends LitElement {
       !actor?.isAlive() ||
       actor.hasSpawned?.() !== true ||
       game.nationalPolitics() === null ||
-      game.nationalPoliticsTick() !== game.ticks()
+      game.nationalPoliticsTick?.() !== game.ticks()
     )
       return null;
     if (

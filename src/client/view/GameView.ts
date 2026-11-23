@@ -868,7 +868,7 @@ export class GameView implements GameLike {
       // E4 owns the DTO and authenticated recipient filtering; E1 only consumes.
       this._nationalAssessments =
         gu.tick < previousTick ||
-        this._config.isReplay() ||
+        this._config.isReplay?.() === true ||
         (this._trustedNationalProjection && !this._trustedProjectionReady)
           ? null
           : readNationalAssessmentView(
