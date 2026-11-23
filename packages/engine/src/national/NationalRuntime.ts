@@ -966,7 +966,9 @@ export class NationalRuntime {
       expectedVersion !== 0 ||
       (decision !== "approve" && decision !== "reject")
     )
-      throw new Error("NATIONAL: stale, foreign or unauthorized relief decision");
+      throw new Error(
+        "NATIONAL: stale, foreign or unauthorized relief decision",
+      );
     const empire = this.politics.empires.find((e) => e.id === empireId)!;
     if (
       !empire.memberIds.includes(request.memberId) ||
@@ -974,7 +976,9 @@ export class NationalRuntime {
         (nation) => nation.id === request.memberId && nation.alive,
       )
     )
-      throw new Error("NATIONAL: relief recipient is no longer a living member");
+      throw new Error(
+        "NATIONAL: relief recipient is no longer a living member",
+      );
     const row = this.administration.get(empireId);
     const amount = BigInt(request.amount);
     if (decision === "approve") {
@@ -1090,9 +1094,7 @@ export class NationalRuntime {
           (e) =>
             e.id === request.empireId && e.memberIds.includes(request.memberId),
         ) ||
-          !next.nations.some(
-            (n) => n.id === request.memberId && n.alive,
-          ))
+          !next.nations.some((n) => n.id === request.memberId && n.alive))
       )
         this.reliefRequests.set(id, {
           ...request,

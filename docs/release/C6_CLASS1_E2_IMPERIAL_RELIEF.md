@@ -67,15 +67,15 @@ rail and captured-piracy payout hooks.
 
 ## Shared-file collision and Conductor handoff
 
-| Source | E2 insertion | Combined owner |
-| --- | --- | --- |
-| NationalRuntime.ts | bounded relief ledger, request and decision, cancellation and restore; Fifth income routes | E3 charter/sanction authority |
-| Schemas.ts | **append** two administration command variants | E3 sanction settlement and other appends |
-| GameImpl.ts | two administration cases, member request journal replay | E3 trade sanctions and E4 v6 Game snapshot |
-| NationalImperialView.ts | private optional reliefRequests DTO | E1 native imperial panel |
-| NationalPactProjection.ts | member/emperor-only relief projection | E1 native member display |
-| Game.ts | no new method; existing command union | Conductor shared interface |
-| Game snapshots | optional NationalRuntime V1 field only | E4 GameSnapshot v6 |
+| Source                    | E2 insertion                                                                               | Combined owner                             |
+| ------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| NationalRuntime.ts        | bounded relief ledger, request and decision, cancellation and restore; Fifth income routes | E3 charter/sanction authority              |
+| Schemas.ts                | **append** two administration command variants                                             | E3 sanction settlement and other appends   |
+| GameImpl.ts               | two administration cases, member request journal replay                                    | E3 trade sanctions and E4 v6 Game snapshot |
+| NationalImperialView.ts   | private optional reliefRequests DTO                                                        | E1 native imperial panel                   |
+| NationalPactProjection.ts | member/emperor-only relief projection                                                      | E1 native member display                   |
+| Game.ts                   | no new method; existing command union                                                      | Conductor shared interface                 |
+| Game snapshots            | optional NationalRuntime V1 field only                                                     | E4 GameSnapshot v6                         |
 
 Do not resolve conflicts by replacing complete shared files. Integrate by
 named symbols, re-run tests, and retain E3's delegated sanctions and E4's

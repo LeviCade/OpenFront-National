@@ -1377,7 +1377,8 @@ export class GameImpl implements Game {
               !member ||
               !member.hasSpawned() ||
               !member.isAlive() ||
-              this._national?.authority().empireOf(memberId) !== command.empireId
+              this._national?.authority().empireOf(memberId) !==
+                command.empireId
             )
               throw new Error("NATIONAL: invalid real relief wallet");
             return PlayerImpl.prepareNationalGoldCredits([

@@ -227,7 +227,11 @@ export function readNationalImperialAdministration(
     treasury: value.treasury,
     ...(requests === undefined
       ? {}
-      : { reliefRequests: requests.map((item) => ({ ...item })) as ImperialReliefView[] }),
+      : {
+          reliefRequests: requests.map((item) => ({
+            ...item,
+          })) as ImperialReliefView[],
+        }),
     canAmend: value.canAmend,
     allowedConstruction: allowed === null ? null : ([...allowed] as UnitType[]),
   };

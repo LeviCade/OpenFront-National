@@ -1,10 +1,14 @@
 /** Sixth C1 E2: real Game and hostile replay acceptance. */
-import { PlayerInfo, PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
-import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
+import {
+  PlayerInfo,
+  PlayerType,
+  UnitType,
+} from "@openfront/engine-api/game/GameTypes";
 import { readNationalImperialAdministration } from "@openfront/engine-api/game/NationalImperialView";
+import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
-import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
+import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
 import type { Game, Player } from "@openfront/engine/game/Game";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
 import { GameRunner } from "@openfront/engine/GameRunner";
@@ -19,7 +23,7 @@ const [A, B, C] = ["C6R_A", "C6R_B", "C6R_C"];
 const empireId = "C6Relief";
 const map = "half_land_half_ocean";
 const roster = [A, B, C].map(
-  (id, i) => new PlayerInfo(id, PlayerType.Human, "RELIEFCLIENT" + i, id),
+  (id, i) => new PlayerInfo(id, PlayerType.Human, "E2CLIENT" + i, id),
 );
 async function fixture(nationalMode = true) {
   const game = await setup(map, { nationalMode, instantBuild: true }, roster);
@@ -31,26 +35,41 @@ async function fixture(nationalMode = true) {
     player.addGold(1_000_000_000n);
   });
   game.executeNextTick();
-  const workers = vi.spyOn(game.config(), "goldAdditionRate").mockReturnValue(0n);
+  const workers = vi
+    .spyOn(game.config(), "goldAdditionRate")
+    .mockReturnValue(0n);
   return { game, workers };
 }
 function join(game: Game) {
   game.performNationalCommand(game.player(A), {
-    kind: "found-empire", empireId,
+    kind: "found-empire",
+    empireId,
   });
   game.performNationalCommand(game.player(A), {
-    kind: "offer-empire", empireId, candidateId: B,
+    kind: "offer-empire",
+    empireId,
+    candidateId: B,
   });
   game.performNationalCommand(game.player(B), {
-    kind: "accept-empire", empireId, candidateId: B,
+    kind: "accept-empire",
+    empireId,
+    candidateId: B,
   });
 }
 function policy(game: Game, workerIncomeBps = 10000) {
   game.performNationalImperialAdministration(game.player(A), {
-    kind: "set-policy", empireId,
+    kind: "set-policy",
+    empireId,
     policy: {
-      workerIncomeBps, nonWorkerIncomeBps: 0, fixedGoldPerPayout: "0",
-      revenueClasses: { workers: true, maritime: true, rail: true, piracy: true },
+      workerIncomeBps,
+      nonWorkerIncomeBps: 0,
+      fixedGoldPerPayout: "0",
+      revenueClasses: {
+        workers: true,
+        maritime: true,
+        rail: true,
+        piracy: true,
+      },
       allowedConstruction: null,
     },
   });
@@ -61,7 +80,8 @@ function treasury(game: Game, emperor = A): bigint {
   );
 }
 function workerPayout(
-  game: Game, worker: Player,
+  game: Game,
+  worker: Player,
   workers: { mockReturnValue(value: bigint): unknown },
   gross: bigint,
 ) {
@@ -73,15 +93,25 @@ function workerPayout(
 }
 function request(game: Game, reliefId: string, amount: string, actor = B) {
   game.performNationalImperialAdministration(game.player(actor), {
-    kind: "request-relief", empireId, reliefId, amount,
+    kind: "request-relief",
+    empireId,
+    reliefId,
+    amount,
   });
 }
 function decide(
-  game: Game, reliefId: string, decision: "approve" | "reject",
-  actor = A, expectedVersion = 0,
+  game: Game,
+  reliefId: string,
+  decision: "approve" | "reject",
+  actor = A,
+  expectedVersion = 0,
 ) {
   game.performNationalImperialAdministration(game.player(actor), {
-    kind: "decide-relief", empireId, reliefId, expectedVersion, decision,
+    kind: "decide-relief",
+    empireId,
+    reliefId,
+    expectedVersion,
+    decision,
   });
 }
 function ledger(game: Game) {
@@ -115,7 +145,9 @@ describe("C6 C1 E2 — real imperial relief", () => {
     expect(treasury(game)).toBe(61n);
     expect(member.gold()).toBe(grant);
     expect(member.goldEarned()).toBe(earnedBefore);
-    expect(treasury(game) + member.gold()).toBe(before.treasury + before.wallet);
+    expect(treasury(game) + member.gold()).toBe(
+      before.treasury + before.wallet,
+    );
     const valid = member.canBuild(UnitType.City, buildTile);
     expect(valid).not.toBe(false);
     if (valid === false) throw new Error("no lawful city position");
@@ -123,15 +155,18 @@ describe("C6 C1 E2 — real imperial relief", () => {
     expect(structure.owner()).toBe(member);
     expect(member.gold()).toBe(grant - cost);
     expect(treasury(game)).toBe(61n);
-    console.info("C6_E2_REAL_WITNESS=" + JSON.stringify({
-      workerGross: (grant + 61n).toString(),
-      treasuryBefore: before.treasury.toString(),
-      walletBefore: before.wallet.toString(),
-      approvedAmount: grant.toString(),
-      treasuryAfter: treasury(game).toString(),
-      walletAfterConstruction: member.gold().toString(),
-      realConstructionCost: cost.toString(),
-    }));
+    console.info(
+      "C6_E2_REAL_WITNESS=" +
+        JSON.stringify({
+          workerGross: (grant + 61n).toString(),
+          treasuryBefore: before.treasury.toString(),
+          walletBefore: before.wallet.toString(),
+          approvedAmount: grant.toString(),
+          treasuryAfter: treasury(game).toString(),
+          walletAfterConstruction: member.gold().toString(),
+          realConstructionCost: cost.toString(),
+        }),
+    );
     const { restored, bytes, again } = await roundTrip(game, map);
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
@@ -148,8 +183,16 @@ describe("C6 C1 E2 — real imperial relief", () => {
     policy(game);
     workerPayout(game, game.player(B), workers, 1000n);
     const before = game.player(B).gold();
-    const runner = new GameRunner(game, new Executor(game, "c6c1e2", undefined), () => {});
-    const stamped = (actor: string, requestId: string, command: Record<string, unknown>) =>
+    const runner = new GameRunner(
+      game,
+      new Executor(game, "c6c1e2", undefined),
+      () => {},
+    );
+    const stamped = (
+      actor: string,
+      requestId: string,
+      command: Record<string, unknown>,
+    ) =>
       StampedIntentSchema.parse({
         type: "national_imperial_administration",
         clientID: game.player(actor).clientID(),
@@ -158,19 +201,32 @@ describe("C6 C1 E2 — real imperial relief", () => {
       });
     runner.addTurn({
       turnNumber: 0,
-      intents: [stamped(B, "request-once-stamped", {
-        kind: "request-relief", empireId, reliefId: "runner-grant", amount: "400",
-      })],
+      intents: [
+        stamped(B, "request-once-stamped", {
+          kind: "request-relief",
+          empireId,
+          reliefId: "runner-grant",
+          amount: "400",
+        }),
+      ],
     });
     expect(runner.executeNextTick()).toBe(true);
     game.executeNextTick();
-    expect(game.nationalImperialAdministrationFor(game.player(B))?.reliefRequests[0]?.status).toBe("pending");
+    expect(
+      game.nationalImperialAdministrationFor(game.player(B))?.reliefRequests[0]
+        ?.status,
+    ).toBe("pending");
     runner.addTurn({
       turnNumber: 1,
-      intents: [stamped(A, "approve-once-stamped", {
-        kind: "decide-relief", empireId, reliefId: "runner-grant",
-        expectedVersion: 0, decision: "approve",
-      })],
+      intents: [
+        stamped(A, "approve-once-stamped", {
+          kind: "decide-relief",
+          empireId,
+          reliefId: "runner-grant",
+          expectedVersion: 0,
+          decision: "approve",
+        }),
+      ],
     });
     expect(runner.executeNextTick()).toBe(true);
     game.executeNextTick();
@@ -188,7 +244,9 @@ describe("C6 C1 E2 — real imperial relief", () => {
     policy(game, 0);
     const initial = game.player(B).gold();
     request(game, "unfunded", "600");
-    expect(() => decide(game, "unfunded", "approve")).toThrow("insufficient imperial relief treasury");
+    expect(() => decide(game, "unfunded", "approve")).toThrow(
+      "insufficient imperial relief treasury",
+    );
     expect(treasury(game)).toBe(0n);
     expect(game.player(B).gold()).toBe(initial);
     expect(() => request(game, "unfunded", "1")).toThrow();
@@ -197,16 +255,28 @@ describe("C6 C1 E2 — real imperial relief", () => {
     expect(() => request(game, "zero", "0")).toThrow();
     expect(() => request(game, "leading", "001")).toThrow();
     expect(() => request(game, "overflow", "9999999999999")).toThrow();
-    expect(StampedIntentSchema.safeParse({
-      type: "national_imperial_administration",
-      clientID: game.player(B).clientID(),
-      requestId: "bad-wire",
-      command: { kind: "request-relief", empireId, reliefId: "bad-wire", amount: "-1" },
-    }).success).toBe(false);
-    expect(() => game.performNationalImperialAdministration(game.player(A), {
-      kind: "decide-relief", empireId: "otherEmpire",
-      reliefId: "unfunded", expectedVersion: 0, decision: "approve",
-    })).toThrow();
+    expect(
+      StampedIntentSchema.safeParse({
+        type: "national_imperial_administration",
+        clientID: game.player(B).clientID(),
+        requestId: "bad-wire",
+        command: {
+          kind: "request-relief",
+          empireId,
+          reliefId: "bad-wire",
+          amount: "-1",
+        },
+      }).success,
+    ).toBe(false);
+    expect(() =>
+      game.performNationalImperialAdministration(game.player(A), {
+        kind: "decide-relief",
+        empireId: "otherEmpire",
+        reliefId: "unfunded",
+        expectedVersion: 0,
+        decision: "approve",
+      }),
+    ).toThrow();
     request(game, "rejected", "1");
     decide(game, "rejected", "reject");
     expect(() => decide(game, "rejected", "approve", A, 1)).toThrow();
@@ -222,12 +292,17 @@ describe("C6 C1 E2 — real imperial relief", () => {
     workerPayout(game, game.player(B), workers, 100n);
     request(game, "crown-request", "40");
     game.performNationalCommand(game.player(A), {
-      kind: "transfer-crown", empireId, successorId: B,
+      kind: "transfer-crown",
+      empireId,
+      successorId: B,
     });
     expect(() => decide(game, "crown-request", "approve", A)).toThrow();
     expect(() => decide(game, "crown-request", "approve", B)).toThrow();
     expect(treasury(game, B)).toBe(100n);
-    expect(game.nationalImperialAdministrationFor(game.player(B))?.reliefRequests[0]?.status).toBe("pending");
+    expect(
+      game.nationalImperialAdministrationFor(game.player(B))?.reliefRequests[0]
+        ?.status,
+    ).toBe("pending");
   });
 
   it("migrates absent old V1 ledger; rejects duplicate/tampered snapshot and cancels obligations on dissolution", async () => {
@@ -239,20 +314,53 @@ describe("C6 C1 E2 — real imperial relief", () => {
     decide(game, "paid-record", "approve");
     request(game, "pending-record", "10");
     const saved = ledger(game);
-    expect(saved.reliefRequests?.map((r) => r.status)).toEqual(["approved", "pending"]);
+    expect(saved.reliefRequests?.map((r) => r.status)).toEqual([
+      "approved",
+      "pending",
+    ]);
     const restored = NationalRuntime.restore(saved, [A, B, C], game.ticks());
     expect(restored.snapshot()).toEqual(saved);
-    expect(() => restored.requestImperialRelief(B, empireId, "paid-record", "5")).toThrow();
-    expect(() => NationalRuntime.restore({
-      ...saved, reliefRequests: [...(saved.reliefRequests ?? []), saved.reliefRequests![0]],
-    }, [A, B, C], game.ticks())).toThrow("duplicate");
-    expect(() => NationalRuntime.restore({
-      ...saved, reliefRequests: [{ ...saved.reliefRequests![1], version: 1, status: "pending" }],
-    }, [A, B, C], game.ticks())).toThrow("invalid");
+    expect(() =>
+      restored.requestImperialRelief(B, empireId, "paid-record", "5"),
+    ).toThrow();
+    expect(() =>
+      NationalRuntime.restore(
+        {
+          ...saved,
+          reliefRequests: [
+            ...(saved.reliefRequests ?? []),
+            saved.reliefRequests![0],
+          ],
+        },
+        [A, B, C],
+        game.ticks(),
+      ),
+    ).toThrow("duplicate");
+    expect(() =>
+      NationalRuntime.restore(
+        {
+          ...saved,
+          reliefRequests: [
+            { ...saved.reliefRequests![1], version: 1, status: "pending" },
+          ],
+        },
+        [A, B, C],
+        game.ticks(),
+      ),
+    ).toThrow("invalid");
     const oldV1 = { ...saved, reliefRequests: undefined };
-    expect(NationalRuntime.restore(oldV1, [A, B, C], game.ticks()).snapshot().reliefRequests).toBeUndefined();
-    game.performNationalImperialAdministration(game.player(A), { kind: "dissolve", empireId });
-    expect(ledger(game).reliefRequests?.find((r) => r.reliefId === "pending-record")?.status).toBe("cancelled");
+    expect(
+      NationalRuntime.restore(oldV1, [A, B, C], game.ticks()).snapshot()
+        .reliefRequests,
+    ).toBeUndefined();
+    game.performNationalImperialAdministration(game.player(A), {
+      kind: "dissolve",
+      empireId,
+    });
+    expect(
+      ledger(game).reliefRequests?.find((r) => r.reliefId === "pending-record")
+        ?.status,
+    ).toBe("cancelled");
   });
 
   it("keeps requests recipient-private and forbids relief in FFA", async () => {
@@ -261,15 +369,38 @@ describe("C6 C1 E2 — real imperial relief", () => {
     policy(game, 0);
     request(game, "private-request", "25");
     const politics = ledger(game).politics;
-    const leader = projectNationalImperialAdministration(game, A, politics, game.ticks());
-    const member = projectNationalImperialAdministration(game, B, politics, game.ticks());
-    expect(leader?.reliefRequests?.map((r) => r.reliefId)).toEqual(["private-request"]);
-    expect(member?.reliefRequests?.map((r) => r.reliefId)).toEqual(["private-request"]);
-    expect(projectNationalImperialAdministration(game, C, politics, game.ticks())).toBeUndefined();
-    expect(readNationalImperialAdministration({
-      ...member,
-      reliefRequests: [{ ...member!.reliefRequests![0], memberId: C }],
-    }, politics, B, game.ticks())).toBeNull();
+    const leader = projectNationalImperialAdministration(
+      game,
+      A,
+      politics,
+      game.ticks(),
+    );
+    const member = projectNationalImperialAdministration(
+      game,
+      B,
+      politics,
+      game.ticks(),
+    );
+    expect(leader?.reliefRequests?.map((r) => r.reliefId)).toEqual([
+      "private-request",
+    ]);
+    expect(member?.reliefRequests?.map((r) => r.reliefId)).toEqual([
+      "private-request",
+    ]);
+    expect(
+      projectNationalImperialAdministration(game, C, politics, game.ticks()),
+    ).toBeUndefined();
+    expect(
+      readNationalImperialAdministration(
+        {
+          ...member,
+          reliefRequests: [{ ...member!.reliefRequests![0], memberId: C }],
+        },
+        politics,
+        B,
+        game.ticks(),
+      ),
+    ).toBeNull();
     const { game: ffa } = await fixture(false);
     expect(ffa.nationalImperialAdministrationFor(ffa.player(B))).toBeNull();
     expect(() => request(ffa, "ffa", "1")).toThrow("NATIONAL is not enabled");
