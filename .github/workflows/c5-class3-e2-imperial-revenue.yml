@@ -1,0 +1,80 @@
+name: C5 C3 E2 — Exact Imperial Revenue Acceptance
+on:
+  push:
+    branches:
+      - feature/c5-class3-e2-imperial-revenue-classes-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c5-c3-e2-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    name: E2 immutable source — ${{ matrix.gate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [typecheck, live-economy, lint, pinned-format, production-build, regression]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact triggering commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Execute selected real-source acceptance
+        shell: bash
+        env:
+          GATE: ${{ matrix.gate }}
+        run: |
+          set -euo pipefail
+          case "$GATE" in
+            typecheck) npm run typecheck ;;
+            live-economy)
+              npx --no-install vitest run --project node tests/national/C5Class3ImperialRevenue.test.ts
+              ;;
+            lint) npm run lint ;;
+            pinned-format)
+              npm run format:check || {
+                npx --no-install oxfmt --write \
+                  packages/engine/src/national/NationalRuntime.ts \
+                  packages/engine-api/src/Schemas.ts \
+                  packages/engine-api/src/game/NationalImperialView.ts \
+                  packages/engine/src/national/observation/NationalPactProjection.ts \
+                  packages/engine/src/game/GameImpl.ts \
+                  packages/engine/src/game/Game.ts \
+                  packages/engine/src/game/TrainStation.ts \
+                  packages/engine/src/execution/TradeShipExecution.ts \
+                  tests/national/C5Class3ImperialRevenue.test.ts
+                git diff --stat
+                git diff -- \
+                  packages/engine/src/national/NationalRuntime.ts \
+                  packages/engine-api/src/Schemas.ts \
+                  packages/engine-api/src/game/NationalImperialView.ts \
+                  packages/engine/src/national/observation/NationalPactProjection.ts \
+                  packages/engine/src/game/GameImpl.ts \
+                  packages/engine/src/game/Game.ts \
+                  packages/engine/src/game/TrainStation.ts \
+                  packages/engine/src/execution/TradeShipExecution.ts \
+                  tests/national/C5Class3ImperialRevenue.test.ts
+                exit 1
+              }
+              ;;
+            production-build) npm run build-prod ;;
+            regression)
+              npx --no-install vitest run --project node \
+                tests/national/ImperialSpendingClassFive.test.ts \
+                tests/national/C4Class2EconomicMaritime.test.ts \
+                tests/LiveTradeRevenue.test.ts \
+                tests/TradeTrainScenarios.test.ts
+              ;;
+            *) echo "unknown gate" >&2; exit 1 ;;
+          esac
