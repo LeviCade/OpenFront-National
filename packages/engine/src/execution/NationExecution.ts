@@ -62,6 +62,7 @@ import {
 } from "../national/observation/LiveObservation";
 import {
   advanceLastKnown,
+  type NationalObservation,
   type NationalSightMemory,
 } from "../national/observation/NationalObservation";
 import {
@@ -380,6 +381,14 @@ export class NationExecution implements Execution {
       return;
     const verified = collectLiveNationalObservation(this.mg, player.id());
     const observation = verified.observation;
+    // E6 collision-safe naval dispatch slot, before E5 recon/assessment.
+    // E6 supplies the authoritative method in the Conductor merge; absent
+    // E6, this hook is inert rather than probing hidden enemy Game state.
+    if (!this.behaviorsInitialized) this.initializeBehaviors();
+    const nationalNaval = this.warshipBehavior as NationWarshipBehavior & {
+      dispatchNationalNavalPressure?: (observation: NationalObservation) => void;
+    };
+    nationalNaval.dispatchNationalNavalPressure?.(observation);
     // Both AI and humans have access to identical authenticated observations
     // and own trading permissions. No global foreign route or balance scan.
     const demands = NationalSanctionExecution.viewFor(this.mg, player);
