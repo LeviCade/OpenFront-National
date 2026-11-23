@@ -188,7 +188,7 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
   });
 
   it("builds with actual gold and connected port; moves the original warship into a wartime merchant's area", async () => {
-    const { game, a, behavior, fixedEnemyMerchant } = await fixture();
+    const { game, a, aPort, behavior, fixedEnemyMerchant } = await fixture();
     const targetTile = fixedEnemyMerchant.tile();
     const initial = a.gold();
     const price = game.unitInfo(UnitType.Warship).cost(game, a);
@@ -202,7 +202,15 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
     expect(foreignUnitScan).not.toHaveBeenCalled();
     foreignUnitScan.mockRestore();
 
+    const actualBuild = vi.spyOn(a, "buildUnit");
     advance(game, 3);
+    const paidWarshipSpawn = actualBuild.mock.calls.find(
+      ([type]) => type === UnitType.Warship,
+    )?.[1];
+    actualBuild.mockRestore();
+    // The purchase originates at our OWN port. Enemy-coordinate selection
+    // only provides the patrol destination; no foreign-tile teleport.
+    expect(paidWarshipSpawn).toBe(aPort.tile());
     const ship = a.units(UnitType.Warship)[0];
     expect(ship).toBeDefined();
     expect(ship.warshipState().patrolTile).toBe(targetTile);
