@@ -122,9 +122,7 @@ export function planNationalAssessment(
   if (observation.observerId !== previous.observerId)
     throw new Error("NATIONAL assessment AI: principal mismatch");
 
-  const self = observation.nations.find(
-    (n) => n.id === observation.observerId,
-  );
+  const self = observation.nations.find((n) => n.id === observation.observerId);
   const sides = deriveNationalWarSides(
     observation.wars,
     observation.observerId,
@@ -157,9 +155,7 @@ export function planNationalAssessment(
     observation.ownResources.troops >= MIN_SURVIVAL_TROOPS
   ) {
     for (const targetId of enemies) {
-      const attempts = previous.attempts.filter(
-        (a) => a.targetId === targetId,
-      );
+      const attempts = previous.attempts.filter((a) => a.targetId === targetId);
       const matching = attempts
         .map((a) => eligibleReport(observation, a))
         .find((r) => r !== null);
@@ -232,8 +228,7 @@ export function recordNationalAssessmentAttempt(
     throw new Error("NATIONAL assessment AI: invalid or duplicate attempt");
   if (
     expiresAtTick !== null &&
-    (expiresAtTick <= observation.tick ||
-      !Number.isSafeInteger(expiresAtTick))
+    (expiresAtTick <= observation.tick || !Number.isSafeInteger(expiresAtTick))
   )
     throw new Error("NATIONAL assessment AI: invalid authoritative expiry");
 

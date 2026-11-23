@@ -21,6 +21,12 @@ import { assertNever, simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
 import {
+  initialNationalAssessmentAIMemory,
+  planNationalAssessment,
+  recordNationalAssessmentAttempt,
+  type NationalAssessmentAIMemory,
+} from "../national/ai/NationalAssessmentStrategy";
+import {
   planObservedImperialCoercion,
   proposeCanonicalImperialUltimatumIntent,
   type ObservedImperialUltimatum,
@@ -50,12 +56,6 @@ import {
   recordNationalReconAttempt,
   type NationalReconMemory,
 } from "../national/ai/NationalReconStrategy";
-import {
-  initialNationalAssessmentAIMemory,
-  planNationalAssessment,
-  recordNationalAssessmentAttempt,
-  type NationalAssessmentAIMemory,
-} from "../national/ai/NationalAssessmentStrategy";
 import {
   collectLiveNationalObservation,
   liveNationalWarAuthority,
@@ -386,7 +386,9 @@ export class NationExecution implements Execution {
     // E6, this hook is inert rather than probing hidden enemy Game state.
     if (!this.behaviorsInitialized) this.initializeBehaviors();
     const nationalNaval = this.warshipBehavior as NationWarshipBehavior & {
-      dispatchNationalNavalPressure?: (observation: NationalObservation) => void;
+      dispatchNationalNavalPressure?: (
+        observation: NationalObservation,
+      ) => void;
     };
     nationalNaval.dispatchNationalNavalPressure?.(observation);
     // Both AI and humans have access to identical authenticated observations
@@ -727,10 +729,7 @@ export class NationExecution implements Execution {
       return;
     // A real recipient-scoped coarse assessment can justify conserving
     // troops against this WAR enemy. No treaty bypass or new WAR command.
-    if (
-      targetId !== null &&
-      assessmentDecision.holdOffenseAgainst === targetId
-    )
+    if (targetId !== null && assessmentDecision.holdOffenseAgainst === targetId)
       return;
 
     // The planner knows only verified frontier IDs. Confirm adjacency again
