@@ -39,6 +39,8 @@ const recordSchema = z.object({
   target: z.string(),
   threat: z.enum(["embargo", "imperial-war"]),
   issuedTick: z.number().int().nonnegative(),
+  // Crown WAR-policy epoch changes on succession and authority revocation.
+  authorityVersion: z.number().int().nonnegative(),
   deadline: z.number().int().nonnegative(),
   phase: phaseSchema,
   response: z.enum(["none", "accept", "refuse"]),
@@ -137,8 +139,9 @@ export class NationalUltimatumExecution implements Execution {
   private currentEmperor(): Player | null {
     const game = this.game!;
     const row = this.record!;
-    return game.nationalPoliticalAuthority()?.emperorOf(row.empire) ===
-      row.issuer
+    const politics = game.nationalPoliticalAuthority();
+    return politics?.emperorOf(row.empire) === row.issuer &&
+      politics?.warPolicyVersionFor(row.issuer) === row.authorityVersion
       ? living(game, row.issuer)
       : null;
   }
@@ -209,7 +212,8 @@ export class NationalUltimatumExecution implements Execution {
     if (
       !politics ||
       this.admissionEmpire !== command.empireId ||
-      politics.emperorOf(command.empireId) !== this.actor.id()
+      politics.emperorOf(command.empireId) !== this.actor.id() ||
+      politics.warPolicyVersionFor(this.actor.id()) !== this.admissionPolicyVersion
     )
       return;
     const target = living(game, command.targetId);
@@ -238,6 +242,7 @@ export class NationalUltimatumExecution implements Execution {
       target: target.id(),
       threat: command.threat,
       issuedTick: tick,
+      authorityVersion: this.admissionPolicyVersion!,
       deadline: tick + command.durationTicks,
       phase: "pending",
       response: "none",
