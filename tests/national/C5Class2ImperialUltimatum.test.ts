@@ -513,4 +513,38 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(NationalUltimatumExecution.viewFor(restored, restored.player(IDS[1]))[0].phase)
       .toBe("backed-down");
   });
+
+  it("WAR-policy epoch revocation voids an old emperor demand and denies stale enforcement", async () => {
+    const { game, act, view, host } = await fixture();
+    establish(act);
+    act(0, issue("imperial-war", IDS[1], "c5_c2_policy_issue", 200));
+    const pending = view(1)[0];
+    expect(pending.phase).toBe("pending");
+    const originalVersion = game.nationalPoliticalAuthority()!.warPolicyVersionFor(IDS[0])!;
+    act(0, {
+      type: "national_imperial_administration",
+      command: {
+        kind: "set-war-policy",
+        empireId: EMPIRE,
+        expectedVersion: originalVersion,
+        response: "imperial",
+        declarationDelegates: [],
+        peaceDelegates: [],
+      },
+      requestId: "c5_c2_policy_epoch_change",
+    });
+    expect(game.nationalPoliticalAuthority()?.warPolicyVersionFor(IDS[0]))
+      .toBe(originalVersion + 1);
+    host.tick();
+    expect(view(1)[0]).toMatchObject({
+      id: pending.id, phase: "expired", credibility: "void",
+    });
+    act(0, resolve(pending.id, "enforce", "c5_c2_stale_war_policy"));
+    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
+    expect(game.nationalPoliticalAuthority()?.empireOf(IDS[1])).toBeNull();
+    const { bytes, again, restored } = await roundTrip(game, "plains");
+    expect(again).toEqual(bytes);
+    expect(NationalUltimatumExecution.viewFor(restored, restored.player(IDS[1]))[0].phase)
+      .toBe("expired");
+  });
 });
