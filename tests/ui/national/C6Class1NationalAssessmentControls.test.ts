@@ -162,7 +162,7 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
       readNationalAssessmentView(packet([{ ...validReport, targetId: "nation-a" }]), "nation-a", 21),
     ).toBeNull();
     expect(
-      readNationalAssessmentView(packet([{ ...validReport, troopPosition: [12, 44] }]), "nation-a", 21),
+      readNationalAssessmentView(packet([{ ...validReport, troopPosition: [12, 44] } as typeof validReport]), "nation-a", 21),
     ).toBeNull();
     expect(
       readNationalAssessmentView(packet([{ ...validReport, expiresAtTick: 921 }]), "nation-a", 21),
