@@ -31,6 +31,12 @@ jobs:
       - name: Exact touched-source formatting
         run: |
           npx --no-install oxfmt --check src/client/Transport.ts src/client/NationalReconPurchase.ts tests/ui/national/NationalReconPurchase.test.ts docs/release/NATIONAL_C5_CLASS3_ENGINEERING_CHARTER.md
+      - name: Show exact pinned-formatter corrections after check failure
+        if: failure()
+        shell: bash
+        run: |
+          npx --no-install oxfmt --write src/client/Transport.ts src/client/NationalReconPurchase.ts tests/ui/national/NationalReconPurchase.test.ts docs/release/NATIONAL_C5_CLASS3_ENGINEERING_CHARTER.md
+          git diff -- src/client/Transport.ts src/client/NationalReconPurchase.ts tests/ui/national/NationalReconPurchase.test.ts docs/release/NATIONAL_C5_CLASS3_ENGINEERING_CHARTER.md
       - name: Lint touched files
         run: npx --no-install oxlint src/client/Transport.ts src/client/NationalReconPurchase.ts tests/ui/national/NationalReconPurchase.test.ts
       - name: Production build
