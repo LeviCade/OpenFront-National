@@ -5,12 +5,15 @@ import {
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
+import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
 import { TrainExecution } from "@openfront/engine/execution/TrainExecution";
 import { WarshipExecution } from "@openfront/engine/execution/WarshipExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
+import { GameSnapshot } from "@openfront/engine/game/GameImpl";
+import { NationalRuntime } from "@openfront/engine/national/NationalRuntime";
 import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import { Railroad } from "@openfront/engine/game/Railroad";
 import { TrainStation } from "@openfront/engine/game/TrainStation";
@@ -387,4 +390,154 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
     expect(ffa.player(B).gold() - ffaBefore).toBe(101n);
     expect(ffa.nationalImperialAdministrationFor(ffa.player(B))).toBeNull();
   });
+
+  it("two imperial members get two independent credits from one real merchant arrival", async () => {
+    const { game, ports } = await fixture();
+    join(game);
+    decree(game, {
+      nonWorkerIncomeBps: 1250,
+      fixedGoldPerPayout: "27",
+    });
+    const before = balances(game);
+    const voyage = new TradeShipExecution(game.player(A), ports.leader, ports.member);
+    game.addExecution(voyage);
+    until(game, () => !voyage.isActive());
+    const after = witness("maritime-two-member-one-tick", game, before);
+    const grossA = after.personal[0].maritime - before.personal[0].maritime;
+    const grossB = after.personal[1].maritime - before.personal[1].maritime;
+    expect(grossA).toBeGreaterThan(0n);
+    expect(grossB).toBe(grossA);
+    const each = share(grossA, 1250n, 27n);
+    expect(after.personal[0].gold - before.personal[0].gold).toBe(grossA - each);
+    expect(after.personal[1].gold - before.personal[1].gold).toBe(grossA - each);
+    expect(after.treasury - before.treasury).toBe(2n * each);
+    expect(
+      after.personal[0].gold + after.personal[1].gold + after.treasury -
+        before.personal[0].gold - before.personal[1].gold - before.treasury,
+    ).toBe(2n * grossA);
+  });
+
+  it("pays physically captured-ship piracy as piracy, not exempt maritime", async () => {
+    const { game, ports } = await fixture();
+    join(game);
+    decree(game, {
+      nonWorkerIncomeBps: 2500,
+      fixedGoldPerPayout: "19",
+      revenueClasses: { ...all, maritime: false },
+    });
+    expect(
+      game.performNationalWarCommandWithOutcome(game.player(A), {
+        kind: "declare-national",
+        warId: "c5c3e2-piracy-war",
+        aggressorId: A,
+        targetId: C,
+      }).accepted,
+    ).toBe(true);
+    const tile = game.ref(8, 13);
+    const patrol = game.player(A).buildUnit(UnitType.Warship, tile, {
+      patrolTile: tile,
+    });
+    game.addExecution(new WarshipExecution(patrol));
+    const before = balances(game);
+    const voyage = new TradeShipExecution(
+      game.player(C),
+      ports.outsider1,
+      ports.outsider3,
+    );
+    game.addExecution(voyage);
+    ticks(game, 2);
+    const ship = game.player(C).units(UnitType.TradeShip)[0];
+    expect(ship).toBeDefined();
+    until(game, () => ship.owner() === game.player(A));
+    until(game, () => !voyage.isActive());
+    const after = witness("piracy-physical-capture", game, before);
+    const gross = after.personal[0].piracy - before.personal[0].piracy;
+    const contribution = share(gross, 2500n, 19n);
+    expect(gross).toBeGreaterThan(0n);
+    expect(after.personal[0].gold - before.personal[0].gold).toBe(
+      gross - contribution,
+    );
+    expect(after.treasury - before.treasury).toBe(contribution);
+    expect(after.personal[2].maritime).toBe(before.personal[2].maritime);
+    expect(after.personal[4].maritime).toBe(before.personal[4].maritime);
+    expect(after.personal[2].gold).toBe(before.personal[2].gold);
+    expect(after.personal[4].gold).toBe(before.personal[4].gold);
+  });
+
+  it("old V1 snapshots preserve historical percentage rates and default new fields to zero/all", async () => {
+    const { game } = await fixture();
+    join(game);
+    decree(game, {
+      workerIncomeBps: 1200,
+      nonWorkerIncomeBps: 3300,
+      fixedGoldPerPayout: "99",
+      revenueClasses: { ...all, rail: false },
+    });
+    const original = readVersioned(GameSnapshot, snapshotGameData(game).game).national!;
+    const legacy = {
+      ...original,
+      administration: (original.administration ?? []).map((row) => ({
+        empireId: row.empireId,
+        workerIncomeBps: row.workerIncomeBps,
+        nonWorkerIncomeBps: row.nonWorkerIncomeBps,
+        allowedConstruction: row.allowedConstruction,
+        treasury: row.treasury,
+        military: row.military,
+      })),
+    };
+    const restored = NationalRuntime.restore(
+      legacy,
+      roster.map((p) => p.id),
+      game.ticks(),
+    );
+    expect(restored.imperialAdministrationFor(A)).toMatchObject({
+      workerIncomeBps: 1200,
+      nonWorkerIncomeBps: 3300,
+      fixedGoldPerPayout: "0",
+      revenueClasses: all,
+    });
+    const initial = BigInt(restored.imperialAdministrationFor(A)!.treasury);
+    const retained = restored.routeNonWorkerIncome(B, 111n, "maritime");
+    expect(retained).toBe(75n);
+    expect(BigInt(restored.imperialAdministrationFor(A)!.treasury) - initial).toBe(36n);
+    // An old client's percentage-only decree cannot silently reset an established new quota.
+    game.performNationalImperialAdministration(game.player(A), {
+      kind: "set-policy",
+      empireId,
+      policy: { workerIncomeBps: 4400, allowedConstruction: null },
+    });
+    expect(game.nationalImperialAdministrationFor(game.player(A))).toMatchObject({
+      workerIncomeBps: 4400,
+      nonWorkerIncomeBps: 3300,
+      fixedGoldPerPayout: "99",
+      revenueClasses: { ...all, rail: false },
+    });
+  });
+
+  it("malformed fixed amounts and malformed category selections reject atomically", async () => {
+    const { game } = await fixture();
+    join(game);
+    decree(game, { fixedGoldPerPayout: "10" });
+    const before = balances(game);
+    const view = game.nationalImperialAdministrationFor(game.player(A));
+    const invalid = ["-1", "1.5", "01", "NaN", "9".repeat(129)];
+    for (const fixed of invalid) {
+      expect(() => decree(game, { fixedGoldPerPayout: fixed })).toThrow();
+      expect(balances(game)).toEqual(before);
+    }
+    expect(() =>
+      game.performNationalImperialAdministration(game.player(A), {
+        kind: "set-policy",
+        empireId,
+        policy: {
+          workerIncomeBps: 0,
+          allowedConstruction: null,
+          revenueClasses: { ...all, rail: "false" } as never,
+        },
+      }),
+    ).toThrow();
+    expect(game.nationalImperialAdministrationFor(game.player(A))).toEqual(view);
+    expect(balances(game)).toEqual(before);
+  });
+
 });
