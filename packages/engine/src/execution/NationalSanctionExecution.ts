@@ -39,17 +39,23 @@ const phaseSchema = z.enum([
 const sanctionEnforcementSchema = z.object({
   authorityId: z.string(),
   authorityVersion: z.number().int().nonnegative().nullable(),
-  owners: z.array(z.object({
-    id: z.string(),
-    createdAt: z.number().int().nonnegative().nullable(),
-  })).max(64),
-  offer: z.object({
-    requestId: z.string(),
-    gold: z.string().regex(/^[1-9][0-9]{0,17}$/),
-    offeredAt: z.number().int().nonnegative(),
-    expiresAt: z.number().int().nonnegative(),
-    status: z.enum(["pending", "accepted", "refused", "expired"]),
-  }).nullable(),
+  owners: z
+    .array(
+      z.object({
+        id: z.string(),
+        createdAt: z.number().int().nonnegative().nullable(),
+      }),
+    )
+    .max(64),
+  offer: z
+    .object({
+      requestId: z.string(),
+      gold: z.string().regex(/^[1-9][0-9]{0,17}$/),
+      offeredAt: z.number().int().nonnegative(),
+      expiresAt: z.number().int().nonnegative(),
+      status: z.enum(["pending", "accepted", "refused", "expired"]),
+    })
+    .nullable(),
 });
 const recipientSchema = z.object({
   id: z.string(),
@@ -416,7 +422,9 @@ export class NationalSanctionExecution implements Execution {
         authorityVersion:
           d.empire === null
             ? null
-            : (game.nationalPoliticalAuthority()?.warPolicyVersionFor(actor.id()) ?? null),
+            : (game
+                .nationalPoliticalAuthority()
+                ?.warPolicyVersionFor(actor.id()) ?? null),
         owners: [],
         offer: null,
       };
@@ -424,9 +432,9 @@ export class NationalSanctionExecution implements Execution {
         if (owner === recipient) continue;
         const existing = owner.hasManualEmbargoAgainst(recipient);
         owner.addEmbargo(recipient, false);
-        const entry = owner.getEmbargoes().find(
-          (item) => item.target === recipient && !item.isTemporary,
-        );
+        const entry = owner
+          .getEmbargoes()
+          .find((item) => item.target === recipient && !item.isTemporary);
         enforcement.owners.push({
           id: owner.id(),
           createdAt: existing ? null : (entry?.createdAt ?? null),
@@ -437,7 +445,6 @@ export class NationalSanctionExecution implements Execution {
     }
     d.phase = imposed ? "enforced" : "expired";
   }
-
 
   /** Fail closed when another sovereign or sanction also owns this pair. */
   private settlementOwners(row: Demand["recipients"][number]): Player[] | null {
@@ -455,17 +462,19 @@ export class NationalSanctionExecution implements Execution {
       proof.owners.length === 0 ||
       (d.empire !== null &&
         (proof.authorityVersion === null ||
-          game.nationalPoliticalAuthority()?.warPolicyVersionFor(issuer.id()) !==
-            proof.authorityVersion ||
-          game.nationalPoliticalAuthority()?.empireOf(target.id()) === d.empire))
+          game
+            .nationalPoliticalAuthority()
+            ?.warPolicyVersionFor(issuer.id()) !== proof.authorityVersion ||
+          game.nationalPoliticalAuthority()?.empireOf(target.id()) ===
+            d.empire))
     )
       return null;
     const owners: Player[] = [];
     for (const claim of proof.owners) {
       const owner = living(game, claim.id);
-      const entry = owner?.getEmbargoes().find(
-        (embargo) => embargo.target === target && !embargo.isTemporary,
-      );
+      const entry = owner
+        ?.getEmbargoes()
+        .find((embargo) => embargo.target === target && !embargo.isTemporary);
       if (
         !owner ||
         claim.createdAt === null ||
