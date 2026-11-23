@@ -448,12 +448,12 @@ describe("C5 C3 E3 imperial member economic charter on real Game", () => {
   it("authenticated political journal issues recipient-only receipts and rejects replay after spent CAS", async () => {
     const { game, a, b, c, d } = await world();
     const cmd = {
-      kind: "imperial-administration",
+      kind: "imperial-administration" as const,
       command: {
-        kind: "set-economic-charter", empireId: EMPIRE,
+        kind: "set-economic-charter" as const, empireId: EMPIRE,
         expectedVersion: 0, delegateIds: [DELEGATE], allowInternal: false,
       },
-    } as const;
+    };
     const original = game.performNationalPoliticalCommandWithOutcome(
       a, cmd, "c5-e3-journal-charter",
     );
