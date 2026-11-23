@@ -455,6 +455,9 @@ export class NationalUltimatumExecution implements Execution {
           version: row.version,
           warId: row.warId,
           imposedMembers: issuer ? [...row.imposedMembers] : [],
+          acknowledgedRequestIds: row.actions
+            .filter((action) => action.actorId === observer.id())
+            .map((action) => action.requestId),
           requestId:
             issuer &&
             (e.clientId === null || e.clientId === observer.clientID())
@@ -506,6 +509,7 @@ export interface NationalUltimatumObservation {
   readonly warId: string | null;
   readonly imposedMembers: readonly string[];
   readonly requestId: string | null;
+  readonly acknowledgedRequestIds: readonly string[];
 }
 
 export const NationalUltimatumExecutionSnapshot = execSnapshotType({
