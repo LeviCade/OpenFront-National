@@ -1,0 +1,107 @@
+name: C5 C2 E2 — exact-head authenticated WSS Worker acceptance
+
+on:
+  pull_request:
+    branches:
+      - stage3/conductor5-class2-integration-20261122
+    paths:
+      - src/server/**
+      - scripts/national-staging/**
+      - tests/server/NationalSocketOrigin.test.ts
+      - tests/server/NationalAccountGate.test.ts
+      - .github/workflows/national-c5-c2-e2-hosted-wss.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  origin-and-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Exact head source, typecheck and origin regressions
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'SOURCE_SHA=%s\n' "$EXPECTED_SHA"
+          FILES=(src/server/Worker.ts src/server/GameServer.ts src/server/national/NationalSocketOrigin.ts tests/server/NationalSocketOrigin.test.ts tests/server/NationalAccountGate.test.ts scripts/national-staging/wss-bridge.mjs scripts/national-staging/worker-journey.mjs)
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            echo C5_E2_FORMAT_REPAIR_BEGIN
+            git -c color.ui=false diff -- "${FILES[@]}"
+            echo C5_E2_FORMAT_REPAIR_END
+            exit 1
+          fi
+          npm run typecheck
+          npx --no-install vitest run --project node tests/server/NationalSocketOrigin.test.ts tests/server/NationalAccountGate.test.ts tests/server/NationalAccountLease.test.ts tests/server/TrustedNationalRealWebSocket.test.ts
+          npx --no-install oxlint src/server/Worker.ts src/server/GameServer.ts src/server/national/NationalSocketOrigin.ts tests/server/NationalSocketOrigin.test.ts tests/server/NationalAccountGate.test.ts scripts/national-staging/wss-bridge.mjs scripts/national-staging/worker-journey.mjs
+  tcp-wss-original-game:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        durable: ["0", "1"]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Real TLS WSS network, account sessions, live Master/Worker, war, restart
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          NATIONAL_TEST_DURABLE_RECOVERY: ${{ matrix.durable }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'SOURCE_SHA=%s DURABLE=%s\n' "$EXPECTED_SHA" "$NATIONAL_TEST_DURABLE_RECOVERY"
+          node --import tsx scripts/national-staging/worker-journey.mjs
+
+  full-source-regression:
+    name: Entire source test suite and production bundle on exact PR head
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Verify exact source, full regression, build, lint and formatting
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'SOURCE_SHA=%s FULL_SOURCE=1\n' "$EXPECTED_SHA"
+          npm test
+          npm run build-prod
+          npm run lint
+          npm run format:check

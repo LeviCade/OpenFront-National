@@ -68,6 +68,10 @@ import {
 } from "./national/DurableNationalStore";
 import { isNationalSignedInAccount } from "./national/NationalAccountGate";
 import { watchNationalAccount } from "./national/NationalAccountLease";
+import {
+  isAllowedNationalSocketOrigin,
+  registerNationalSocketOrigin,
+} from "./national/NationalSocketOrigin";
 import { setNoStoreHeaders } from "./NoStoreHeaders";
 import { PrivilegeRefresher } from "./PrivilegeRefresher";
 import { startRankedCheckinLoops } from "./RankedCheckin";
@@ -668,6 +672,8 @@ export async function startWorker() {
 
   // WebSocket handling
   wss.on("connection", (ws: WebSocket, req) => {
+    // Provenance belongs to this socket, not a reusable lobby Client or ID.
+    registerNationalSocketOrigin(ws, req.headers.origin);
     // First admission awaits API calls. A second join frame cannot overtake
     // that call and claim multiple roster seats from one physical socket.
     let admissionStarted = false;
@@ -759,6 +765,20 @@ export async function startWorker() {
           // 4xxx rejection would pop a generic "connection refused" dialog on
           // top of it, and a retryable code makes it reconnect and loop.
           ws.close(CloseCode.Normal, "Version mismatch");
+          return;
+        }
+
+        // A NATIONAL private match is a privileged browser session. TLS is
+        // terminated by the hosting proxy; this checks the browser's exact
+        // Origin before any token lookup, seat replacement or private output.
+        // An Origin header is never an identity credential: the signed JWT,
+        // live /users/@me and immutable GameServer binding still apply.
+        const nationalTarget = gm.game(clientMsg.gameID);
+        if (
+          nationalTarget?.gameConfig.nationalMode === true &&
+          !isAllowedNationalSocketOrigin(req.headers.origin)
+        ) {
+          ws.close(CloseCode.Unauthorized, CloseReason.Forbidden);
           return;
         }
 
