@@ -386,11 +386,19 @@ export class NationExecution implements Execution {
     // E6, this hook is inert rather than probing hidden enemy Game state.
     if (!this.behaviorsInitialized) this.initializeBehaviors();
     const nationalNaval = this.warshipBehavior as NationWarshipBehavior & {
+      dispatchNationalNavalEscort?: (
+        observation: NationalObservation,
+      ) => unknown | null;
       dispatchNationalNavalPressure?: (
         observation: NationalObservation,
       ) => void;
     };
-    nationalNaval.dispatchNationalNavalPressure?.(observation);
+    // Escort friendly actual commerce first. E6 alone supplies both engines.
+    // A dispatched escort suppresses offensive naval pressure this tick.
+    const escorted = nationalNaval.dispatchNationalNavalEscort?.(observation) ?? null;
+    if (escorted === null) {
+      nationalNaval.dispatchNationalNavalPressure?.(observation);
+    }
     // Both AI and humans have access to identical authenticated observations
     // and own trading permissions. No global foreign route or balance scan.
     const demands = NationalSanctionExecution.viewFor(this.mg, player);
