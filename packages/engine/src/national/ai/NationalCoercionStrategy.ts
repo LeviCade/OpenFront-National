@@ -513,7 +513,7 @@ export function proposeCanonicalImperialUltimatumIntent(
       empireId: crown.id,
       targetId: candidate.id,
       threat: "imperial-war",
-      durationTicks: 30,
+      durationTicks: 600,
       requestId,
     };
   }

@@ -643,7 +643,7 @@ describe("C5 Class Two E6 sovereign coercion — AI-01/04/05/06/07, ECON-06/07",
       empireId: "crown",
       targetId: A,
       threat: "imperial-war",
-      durationTicks: 30,
+      durationTicks: 600,
       requestId: "e6_new",
     });
     expect(
