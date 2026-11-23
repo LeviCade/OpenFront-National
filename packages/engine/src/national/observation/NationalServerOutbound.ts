@@ -21,6 +21,7 @@ import { NationalObserverMapPager } from "./NationalObserverMap";
 import {
   NationalOutboundFilter,
   projectNationalAccessionOffers,
+  projectNationalUltimatums,
 } from "./NationalOutbound";
 import {
   projectNationalPublicPacts,
@@ -55,6 +56,7 @@ export type NationalServerPoliticalPacket = Pick<
   | "tick"
   | "nationalPolitics"
   | "nationalAccessionOffers"
+  | "nationalUltimatums"
   | "nationalPactDisclosure"
   | "nationalCommandResults"
 >;
@@ -213,6 +215,7 @@ export class NationalServerRecipientSession {
     // and must be present to invalidate stale UI action state.
     if (actor === null) return political;
     const offers = projectNationalAccessionOffers(this.game, actor.id());
+    const ultimatums = projectNationalUltimatums(this.game, actor.id());
     const pactDisclosure = projectNationalPactDisclosure(
       this.game,
       actor.id(),
@@ -229,6 +232,7 @@ export class NationalServerRecipientSession {
         ? {}
         : { nationalPactDisclosure: pactDisclosure }),
       ...(offers === undefined ? {} : { nationalAccessionOffers: offers }),
+      ...(ultimatums === undefined ? {} : { nationalUltimatums: ultimatums }),
       ...(results.length === 0 ? {} : { nationalCommandResults: results }),
     };
   }
@@ -258,6 +262,7 @@ export class NationalServerRecipientSession {
       nationalPolitics: packet.nationalPolitics,
       nationalCommandResults: packet.nationalCommandResults,
       nationalAccessionOffers: packet.nationalAccessionOffers,
+      nationalUltimatums: packet.nationalUltimatums,
       nationalPactDisclosure: packet.nationalPactDisclosure,
     };
     // A pre-spawn/eliminated principal is not authorized to receive any
