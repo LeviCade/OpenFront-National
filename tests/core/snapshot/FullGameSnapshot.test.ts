@@ -212,6 +212,12 @@ describe.each(VARIANTS)("full game snapshots: %s", (_, overrides) => {
         // A legacy FFA scenario must never create either command.
         "NationalUltimatum",
         "NationalRecon",
+        // NATIONAL statistical purchases have their own real GameRunner
+        // snapshot/restore acceptance; never inject them into legacy FFA.
+        "NationalAssessment",
+        // Counterassessment is also authenticated NATIONAL-only, and is
+        // independently snapshotted by C6Class1CounterassessmentShield.test.ts.
+        "NationalCounterassessment",
       ]);
       const missing = EXECUTION_SNAPSHOT_TYPES.map((t) => t.name).filter(
         (name) => !reference.execTypes.has(name) && !neverStored.has(name),

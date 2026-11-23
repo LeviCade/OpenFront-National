@@ -109,6 +109,7 @@ export const VIEW_DATA_ROUTING: Record<
   nationalAccessionOffers: "dropped",
   // Recipient-only ultimatum terms cannot be recorded in public replay frames.
   nationalUltimatums: "dropped",
+  nationalAssessments: "dropped",
   nationalPactDisclosure: "dropped",
   nationalImperialAdministration: "dropped",
   tick: "normalizer",
