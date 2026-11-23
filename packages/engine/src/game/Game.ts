@@ -637,7 +637,7 @@ export interface Game extends GameLike {
   creditNationalCommercialIncome(
     player: Player,
     gross: Gold,
-    source: "maritime" | "rail" | "piracy",
+    source?: "maritime" | "rail" | "piracy",
     tile?: TileRef,
   ): void;
   nationalAllowsConstruction(player: Player, type: UnitType): boolean;
