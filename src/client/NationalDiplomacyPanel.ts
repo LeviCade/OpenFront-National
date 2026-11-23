@@ -2326,8 +2326,8 @@ export class NationalDiplomacyPanel extends LitElement {
     const form = new FormData(event.currentTarget);
     const target = form.get("target");
     const rawX = form.get("centerX"), rawY = form.get("centerY");
-    const x = typeof rawX === "string" && /^\\d{1,5}$/.test(rawX) ? Number(rawX) : NaN;
-    const y = typeof rawY === "string" && /^\\d{1,5}$/.test(rawY) ? Number(rawY) : NaN;
+    const x = typeof rawX === "string" && /^\d{1,5}$/.test(rawX) ? Number(rawX) : NaN;
+    const y = typeof rawY === "string" && /^\d{1,5}$/.test(rawY) ? Number(rawY) : NaN;
     if (!this.sovereignReady || !game || !actor || this.reconAttempt ||
       !this.reconCandidates.some((candidate) => candidate.id === target) ||
       !Number.isSafeInteger(x) || !Number.isSafeInteger(y) ||
