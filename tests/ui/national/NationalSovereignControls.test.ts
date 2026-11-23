@@ -223,6 +223,7 @@ describe("C5 Class Three E1 native sovereign journey", () => {
     recon.querySelector<HTMLInputElement>('[name="centerX"]')!.value = "555";
     recon.querySelector<HTMLInputElement>('[name="centerY"]')!.value = "2";
     recon.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await element.updateComplete;
     expect(purchases).toHaveLength(0);
     expect(demands).toHaveLength(0);
     expect(element.textContent).toContain("Invalid map center");

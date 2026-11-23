@@ -42,6 +42,11 @@ export function parseNationalUltimatumIntent(candidate: unknown): Intent | null 
     Object.keys(data).some((key) => !shape.includes(key))
   )
     return null;
+  if (!receiptId.test(String(data.requestId)) ||
+    (data.type === "national_issue_ultimatum"
+      ? !validId(data.empireId) || !validId(data.targetId)
+      : !validId(data.ultimatumId)))
+    return null;
   const parsed =
     data.type === "national_issue_ultimatum"
       ? NationalIssueUltimatumIntentSchema.safeParse(data)
@@ -83,11 +88,11 @@ export function readNationalUltimatumView(
       (row.warId !== null && !validId(row.warId)) ||
       !Array.isArray(row.imposedMembers) ||
       row.imposedMembers.length > 128 ||
-      row.imposedMembers.some((id) => !validId(id)) ||
+      row.imposedMembers.some((id: unknown) => !validId(id)) ||
       (row.requestId !== null && (row.role !== "issuer" || !receiptId.test(row.requestId))) ||
       !Array.isArray(row.acknowledgedRequestIds) ||
       row.acknowledgedRequestIds.length > 64 ||
-      row.acknowledgedRequestIds.some((id) => typeof id !== "string" || !receiptId.test(id)))
+      row.acknowledgedRequestIds.some((id: unknown) => typeof id !== "string" || !receiptId.test(id)))
       return false;
     ids.add(row.id);
     return true;

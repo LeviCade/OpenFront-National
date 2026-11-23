@@ -2320,6 +2320,8 @@ export class NationalDiplomacyPanel extends LitElement {
 
   private submitRecon(event: SubmitEvent): void {
     event.preventDefault();
+    // A rapid second click must not overwrite the pending receipt's status.
+    if (this.reconAttempt) return;
     const game = this.game;
     const actor = game?.myPlayer();
     if (!(event.currentTarget instanceof HTMLFormElement)) return;
@@ -2332,7 +2334,8 @@ export class NationalDiplomacyPanel extends LitElement {
       !this.reconCandidates.some((candidate) => candidate.id === target) ||
       !Number.isSafeInteger(x) || !Number.isSafeInteger(y) ||
       x > 65535 || y > 65535 ||
-      !game.isValidCoord(x, y) || actor.gold() < nationalReconQuote.cost ||
+      !game.isValidCoord(x, y) ||
+      typeof actor.gold !== "function" || actor.gold() < nationalReconQuote.cost ||
       form.get("confirm") !== "on") {
       this.reconStatus = "Invalid map center, insufficient gold or authorization changed; no purchase sent.";
       return;
@@ -2477,7 +2480,7 @@ export class NationalDiplomacyPanel extends LitElement {
           </label>
           <button type="submit" data-national-buy-recon
             class="min-h-11 w-full rounded bg-amber-400 p-2 text-slate-950 font-semibold disabled:opacity-50"
-            ?disabled=${!actor || actor.gold() < nationalReconQuote.cost || this.reconAttempt !== null || nations.length === 0}>
+            ?disabled=${!actor || typeof actor.gold !== "function" || actor.gold() < nationalReconQuote.cost || this.reconAttempt !== null || nations.length === 0}>
             Purchase regional reconnaissance
           </button>
         </form>
