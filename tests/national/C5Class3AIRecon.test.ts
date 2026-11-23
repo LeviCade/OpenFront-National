@@ -332,9 +332,18 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     expect(after.memory.lastDiscovery?.assetId).toBe("hidden_enemy_transport");
     expect(after.memory.lastDiscovery?.expiresAtTick).toBe(625);
     expect(
+      planNationalRecon({ ...revealed, tick: 84 }, after.memory)
+        .holdOffenseAgainst,
+    ).toBe(B);
+    // Sight still lasts through tick 624, but troop conservation is a
+    // 60-tick tactical response, never a 600-tick forced paralysis.
+    const resumed = planNationalRecon({ ...revealed, tick: 85 }, after.memory);
+    expect(resumed.holdOffenseAgainst).toBeNull();
+    expect(resumed.memory.lastDiscovery?.assetId).toBe("hidden_enemy_transport");
+    expect(
       planNationalRecon(
         { ...revealed, tick: 625, visibleAssets: view.visibleAssets },
-        after.memory,
+        resumed.memory,
       ).holdOffenseAgainst,
     ).toBeNull();
     const rejected = recordNationalReconAttempt(

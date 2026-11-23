@@ -10,13 +10,13 @@ An observed enemy **structure** (within prior lawful geographical sight) is a va
 
 The sole authoritative execution is the inherited `Game.performNationalReconnaissance` on the exact game-owned Nation `Player` object. It charges the original `Player.removeGold(500n)` callback, registers the canonical `NationalReconnaissance` grant and enforces existing actor, target, coordinate, duplicate-token and snapshot restrictions. This is the game-owned handler reached by a human `national_buy_regional_recon` intent. Bots never masquerade as human sessions and cannot mutate a sight flag or duplicate a wallet.
 
-On successful purchase the bot defers further offensive planning, then collects a fresh ordinary principal-filtered observation. A newly sighted hostile military asset with `source:"recon"` is remembered within the grant's original expiration and vetoes an otherwise legal **offensive** `AttackExecution` against that enemy. It does not fabricate a WAR, block neutral expansion or access troop balances. Existing defense/war/economic/coercion and naval hooks remain intact. Sight expires in the authoritative producer on the precise 600-tick boundary.
+On successful purchase the bot defers further offensive planning, then collects a fresh ordinary principal-filtered observation. A newly sighted hostile military asset with `source:"recon"` is remembered within the grant's original expiration and prompts a **60-tick tactical reserve posture from purchase**: the bot defers an otherwise legal `AttackExecution` against that enemy. This is not a 600-tick blockade; ordinary attack planning resumes while the legitimate reconnaissance grant may still be visible. It does not fabricate a WAR, block neutral expansion or access troop balances. Existing war/economic/coercion and naval hooks remain intact. Sight expires in the authoritative producer on the precise 600-tick boundary.
 
 ## Deterministic bounded policy and durability
 
 - Minimum available treasury: 500 fee plus 2,000 reserved gold; minimum own troops 1,000
 - Four lifetime attempted purchases maximum per bot; one attempt per target; rejected attempts count to bound repeated failures
-- Accepted purchase cooldown 660 ticks; rejected purchase cooldown 180 ticks; deterministic player/target/tick request IDs
+- Accepted purchase cooldown 660 ticks; rejected purchase cooldown 180 ticks; tactical attack hold 60 ticks from purchase, independent of the 600-tick sight lease; deterministic player/target/tick request IDs
 - Snapshot record `nationalReconMemory` is an optional v2 `NationExecution` field; legacy snapshots omit it, and current saves persist purchases, cooldowns, discovered military identity and expiry
 - Existing Game-owned recon journal still blocks identical requests after replay or grant expiry; leases do not become renewable rights on restore
 - No new wire command, protocol field, resource currency, GameImpl write or external transport privilege

@@ -57,6 +57,9 @@ const SURVIVAL_GOLD_RESERVE = 2_000;
 const MIN_SURVIVAL_TROOPS = 1_000;
 const RECON_COOLDOWN_TICKS = REGIONAL_RECON_DURATION_TICKS + 60;
 const DENIED_COOLDOWN_TICKS = 180;
+// Guard troops briefly while evaluating new military visibility, then permit
+// normal offensive planning again even when the 600-tick sight lease remains.
+const TACTICAL_HOLD_TICKS = 60;
 const militaryKinds = new Set(["army", "warship", "transport"]);
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -124,8 +127,19 @@ export function planNationalRecon(
     ...previous,
     lastDiscovery: first ?? previousActive,
   };
+  // Do not let a temporary reconnaissance lease turn into 600 ticks of
+  // strategic paralysis. The hold is tied to the canonical paid attempt's
+  // original tick, not to repeatedly refreshed sight or fog memory.
+  const withinTacticalHold = previous.attempts.some(
+    (attempt) =>
+      attempt.outcome === "accepted" &&
+      attempt.targetId === memory.lastDiscovery?.targetId &&
+      observation.tick >= attempt.purchasedTick &&
+      observation.tick < attempt.purchasedTick + TACTICAL_HOLD_TICKS,
+  );
   const holdOffenseAgainst =
     memory.lastDiscovery !== null &&
+    withinTacticalHold &&
     observation.tick < memory.lastDiscovery.expiresAtTick &&
     observation.frontiers.some(
       (f) =>
