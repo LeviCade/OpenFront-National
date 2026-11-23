@@ -38,3 +38,22 @@ Conductor final-action: inspect and integrate all twelve provenance lanes; actua
 
 ## Recovery record
 At class opening, **no Fifth-class engineer PR was integrated and no Sixth-original feature was coded**. Those facts remain true until verified SHA-backed changes occur. E2 individual success is reported in its PR; GitHub's PR-triggered run enumeration did not list a run at its final SHA and must be independently confirmed in final audit. All other Fifth final PR heads have returned successful PR workflow metadata, NOT combined acceptance.
+
+
+## Published C6 engineering issue and immutable lane mapping
+| Sixth lane | New commission | Assigned branch | Fifth inherited draft |
+| --- | --- | --- | --- |
+| E1 | [#186](https://github.com/LeviCade/OpenFront-National/issues/186) | `feature/c6-class1-e1-assessment-native-ui-20261123` | #183 |
+| E2 | [#187](https://github.com/LeviCade/OpenFront-National/issues/187) | `feature/c6-class1-e2-imperial-relief-20261123` | #179 |
+| E3 | [#188](https://github.com/LeviCade/OpenFront-National/issues/188) | `feature/c6-class1-e3-embargo-settlement-20261123` | #181 |
+| E4 | [#189](https://github.com/LeviCade/OpenFront-National/issues/189) | `feature/c6-class1-e4-counterassessment-shield-20261123` | #184 |
+| E5 | [#190](https://github.com/LeviCade/OpenFront-National/issues/190) | `feature/c6-class1-e5-ai-national-assessment-20261123` | #182 |
+| E6 | [#191](https://github.com/LeviCade/OpenFront-National/issues/191) | `feature/c6-class1-e6-defensive-naval-escort-20261123` | #180 |
+
+All six branches were created at exact charter commit `1e8da462d357cf839af2cad448fa027e40735d36` before C6 acceptance workflow commit. It is normal for these working branches to lag command-only C6 staging commits; no engineer should claim code is merged merely because a workflow exists.
+
+**Combined CI:** `.github/workflows/c6-class1-combined-acceptance.yml` (commit `fa75c2624a6bd9d287c93ceac703248fdd678d2e`). Exact pushed SHA only; global source typecheck/all-tests/lint/pinned-format/build; mandatory presence and execution of all six inherited scenario tests and all six original scenario tests; independent host/snapshot/nonregression group. Until each feature is integrated the two mandatory scenario suites are **EXPECTED TO FAIL**, correctly refusing false certification. No physical GPU/human OAuth/host rights gates are claimed.
+
+**Integration sequence and conflict leases:** pre-merge E2 revenue and E3 economic charter by distinct symbols in runtime/Schema/Game, then E4 assessment and v6 snapshot with E2/E3 fields, E1 native UI/projection with E4 private DTO, then E5 recon/national-assessment AI and E6 naval strategy within one coherent deterministic NationExecution tick/snapshot. E3 post-enforcement restitution must not dismiss unrelated embargo reasons. After each merge record exact SHA, re-run narrow tests, audit the diff for lost code, and refresh cross-owner conflicts. Only the Conductor conducts final combined merge; no first-writer/last-writer overwrite.
+
+**Immediate next action:** Dispatch complete standalone instructions #186–#191 to six brand-new one-shot engineering sessions. **No engineer has been run by this charter itself.**
