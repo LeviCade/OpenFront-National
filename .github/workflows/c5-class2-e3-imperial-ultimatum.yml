@@ -40,24 +40,6 @@ jobs:
           cache: npm
       - run: npm install --global --ignore-scripts npm@12.1.0
       - run: npm run inst
-      - name: Emit pinned oxfmt output for exact-source verification
-        run: |
-          npx --no-install oxfmt --write \
-            packages/engine-api/src/Schemas.ts \
-            packages/engine-api/src/game/GameUpdates.ts \
-            packages/engine/src/execution/NationalUltimatumExecution.ts \
-            packages/engine/src/national/observation/NationalOutbound.ts \
-            tests/national/C5Class2ImperialUltimatum.test.ts
-          node - <<'NODE'
-          const fs = require("node:fs");
-          for (const path of [
-            "packages/engine-api/src/Schemas.ts",
-            "packages/engine-api/src/game/GameUpdates.ts",
-            "packages/engine/src/execution/NationalUltimatumExecution.ts",
-            "packages/engine/src/national/observation/NationalOutbound.ts",
-            "tests/national/C5Class2ImperialUltimatum.test.ts",
-          ]) console.log("E3_FORMAT_JSON=" + JSON.stringify({ path, content: fs.readFileSync(path, "utf8") }));
-          NODE
       - name: Typecheck all workspaces
         run: npm run typecheck
       - name: New real-host imperial ultimatum scenarios
@@ -70,12 +52,30 @@ jobs:
           tests/national/C4Class2EconomicIngress.test.ts
           tests/national/NationalAccessionPacketsR11.test.ts
           tests/national/C5ImperialWarPolicy.test.ts
+      - name: Legacy FFA embargo and shipping regressions
+        if: success() || failure()
+        run: >-
+          npx --no-install vitest run --project node
+          tests/core/executions/EmbargoAllExecution.test.ts
+          tests/core/executions/TradeShipExecution.test.ts
       - name: Lint all source
         if: success() || failure()
         run: npm run lint
-      - name: Formatter check
+      - name: Check exact formatting for every E3 touched file
         if: success() || failure()
-        run: npm run format:check
+        run: >-
+          npx --no-install oxfmt --check
+          .github/workflows/c5-class2-e3-imperial-ultimatum.yml
+          packages/engine-api/src/Schemas.ts
+          packages/engine-api/src/game/GameUpdates.ts
+          packages/engine/src/execution/ExecutionManager.ts
+          packages/engine/src/execution/NationalUltimatumExecution.ts
+          packages/engine/src/game/GameImpl.ts
+          packages/engine/src/national/observation/NationalOutbound.ts
+          packages/engine/src/national/observation/NationalServerOutbound.ts
+          packages/engine/src/snapshot/ExecutionRegistry.ts
+          src/client/replay/codec/FrameNormalizer.ts
+          tests/national/C5Class2ImperialUltimatum.test.ts
       - name: Production build
         if: success() || failure()
         run: npm run build-prod
