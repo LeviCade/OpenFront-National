@@ -174,10 +174,16 @@ function expectNoArtificialResources(game: Game, control: Game): void {
   expect(assets(game)).toEqual(assets(control));
 }
 
-function expectNoIndependentCurrency(before: ReturnType<typeof assets>, game: Game): void {
-  const finance = (rows: ReturnType<typeof assets>) => rows.map((r) => ({
-    id: r.id, trade: r.trade, piracy: r.piracy,
-  }));
+function expectNoIndependentCurrency(
+  before: ReturnType<typeof assets>,
+  game: Game,
+): void {
+  const finance = (rows: ReturnType<typeof assets>) =>
+    rows.map((r) => ({
+      id: r.id,
+      trade: r.trade,
+      piracy: r.piracy,
+    }));
   expect(finance(assets(game))).toEqual(finance(before));
 }
 
@@ -370,7 +376,9 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(view(2)).toEqual([]);
     act(0, issue("embargo", IDS[1], "original_issue", 2));
     const id = view(1)[0].id;
-    expect(host.submit(sockets[0], issue("embargo", IDS[2], "original_issue"))).toBe(false);
+    expect(
+      host.submit(sockets[0], issue("embargo", IDS[2], "original_issue")),
+    ).toBe(false);
     expect(view(2)).toEqual([]);
     host.tick(); // already past the two-tick deadline
     act(1, respond(id, "accept", "late_accept"));
