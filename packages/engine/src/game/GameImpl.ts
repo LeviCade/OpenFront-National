@@ -1165,20 +1165,29 @@ export class GameImpl implements Game {
     const campaignId = `national:${attackerId.length}:${attackerId}:${defenderId.length}:${defenderId}`;
     // One transaction across both MDA and imperial contributors; one campaign
     // allowance per real donor, shared across repeated clicks/fronts.
-    const result = this.applyNationalDefenseLevy([
-      {
-        attackId,
-        confirmedAccepted: true,
-        campaignId,
-        attackerId,
-        defenderId,
-        attackingTroops: troops,
-        eligible,
-      },
-    ])[0];
-    if (result.application === "applied" && plan)
-      this._nationalWar.enactStandingDefenseWar(plan, this._ticks);
-    return result;
+    // A declaration made AFTER troop CAS would turn a late WAR failure into
+    // an uncompensated donor loss. Enact the preflighted WAR under the same
+    // synchronous Game tick lock BEFORE spending, and roll it back if the
+    // actual donor transaction refuses the attack. No speculative WAR is
+    // visible outside this indivisible engine operation.
+    const beforeWar = plan ? this._nationalWar.snapshot() : null;
+    if (plan) this._nationalWar.enactStandingDefenseWar(plan, this._ticks);
+    try {
+      return this.applyNationalDefenseLevy([
+        {
+          attackId,
+          confirmedAccepted: true,
+          campaignId,
+          attackerId,
+          defenderId,
+          attackingTroops: troops,
+          eligible,
+        },
+      ])[0];
+    } catch (error) {
+      if (beforeWar) this._nationalWar.restore(beforeWar);
+      throw error;
+    }
   }
 
   /**
