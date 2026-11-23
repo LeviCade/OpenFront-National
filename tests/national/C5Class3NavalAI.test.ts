@@ -17,7 +17,7 @@ import { planObservedNationalNavalTargets } from "@openfront/engine/national/ai/
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import { describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
-import { roundTrip } from "../util/Snapshot";
+import { diffSnapshots, roundTrip } from "../util/Snapshot";
 import { TestConfig } from "../util/TestConfig";
 
 const [A, B, C, D] = ["c5nav-a", "c5nav-b", "c5nav-c", "c5nav-d"];
@@ -265,6 +265,20 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
       active.length,
     );
     expect(restored.player(A).units(UnitType.Warship)[0].tile()).toBe(position);
+    const originalRunner = runnerFor(game);
+    const restoredRunner = runnerFor(restored);
+    for (let i = 0; i < 12; i++) {
+      for (const [g, runner] of [
+        [game, originalRunner],
+        [restored, restoredRunner],
+      ] as const) {
+        runner.addTurn({ turnNumber: g.ticks(), intents: [] });
+        expect(runner.executeNextTick()).toBe(true);
+      }
+    }
+    const replayA = await roundTrip(game, "half_land_half_ocean");
+    const replayB = await roundTrip(restored, "half_land_half_ocean");
+    expect(diffSnapshots(replayA.bytes, replayB.bytes)).toEqual([]);
 
     // Real neutral merchant route approaching B is legal but may be returned
     // by the engine only while a valid enemy-port blockader is on station.
