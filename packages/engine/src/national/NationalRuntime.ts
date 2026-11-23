@@ -128,10 +128,29 @@ const politicsSchema = z.object({
 });
 
 const exactGold = z.string().regex(/^(0|[1-9][0-9]*)$/);
+export type ImperialRevenueClass = "workers" | "maritime" | "rail" | "piracy";
+export type ImperialCommercialRevenueClass = Exclude<ImperialRevenueClass, "workers">;
+export type ImperialRevenueClasses = Readonly<Record<ImperialRevenueClass, boolean>>;
+const allRevenueClasses: ImperialRevenueClasses = Object.freeze({
+  workers: true,
+  maritime: true,
+  rail: true,
+  piracy: true,
+});
+const revenueClassesSchema = z.object({
+  workers: z.boolean(),
+  maritime: z.boolean(),
+  rail: z.boolean(),
+  piracy: z.boolean(),
+}).strict();
 const administrationSchema = z.object({
   empireId: z.string(),
   workerIncomeBps: z.number().int().min(0).max(10_000),
   nonWorkerIncomeBps: z.number().int().min(0).max(10_000).optional(),
+  /** V1 row extension: absent means zero fixed levy and all classes enabled. */
+  fixedGoldPerPayout: exactGold.max(128).optional(),
+  revenueClasses: revenueClassesSchema.optional(),
+  revenuePolicyVersion: z.literal(1).optional(),
   allowedConstruction: z.array(z.enum(UnitType)).nullable(),
   treasury: exactGold,
   military: z
@@ -151,6 +170,10 @@ type AdministrationRow = z.infer<typeof administrationSchema>;
 export type ImperialPolicy = {
   readonly workerIncomeBps: number;
   readonly nonWorkerIncomeBps?: number;
+  /** Exact integer gold per paid event; percentage is applied first. */
+  readonly fixedGoldPerPayout?: string;
+  /** Omitted by legacy clients; the prior class policy is then retained. */
+  readonly revenueClasses?: ImperialRevenueClasses;
   readonly allowedConstruction: UnitType[] | null;
 };
 
@@ -223,6 +246,8 @@ export interface NationalImperialAdministrationView extends Omit<
 > {
   readonly allowedConstruction: readonly UnitType[] | null;
   readonly empireId: string;
+  readonly fixedGoldPerPayout: string;
+  readonly revenueClasses: ImperialRevenueClasses;
   readonly treasury: string;
   readonly canAmend: boolean;
   readonly armyMode: "decentralized" | "hybrid" | "centralized";
@@ -444,16 +469,22 @@ export class NationalRuntime {
     policy: ImperialPolicy,
   ): void {
     this.assertEmperor(actorId, empireId);
+    const previous = this.administration.get(empireId);
     const row = administrationSchema.parse({
       empireId,
       workerIncomeBps: policy.workerIncomeBps,
       nonWorkerIncomeBps:
         policy.nonWorkerIncomeBps ??
-        this.administration.get(empireId)?.nonWorkerIncomeBps ??
+        previous?.nonWorkerIncomeBps ??
         0,
+      fixedGoldPerPayout:
+        policy.fixedGoldPerPayout ?? previous?.fixedGoldPerPayout ?? "0",
+      revenueClasses:
+        policy.revenueClasses ?? previous?.revenueClasses ?? allRevenueClasses,
+      revenuePolicyVersion: 1,
       allowedConstruction: policy.allowedConstruction,
-      treasury: this.administration.get(empireId)?.treasury ?? "0",
-      military: this.administration.get(empireId)?.military,
+      treasury: previous?.treasury ?? "0",
+      military: previous?.military,
     });
     validateAdministration(row);
     row.allowedConstruction?.sort();
@@ -476,6 +507,10 @@ export class NationalRuntime {
       empireId: empire.id,
       workerIncomeBps: row?.workerIncomeBps ?? 0,
       nonWorkerIncomeBps: row?.nonWorkerIncomeBps ?? 0,
+      fixedGoldPerPayout: row?.fixedGoldPerPayout ?? "0",
+      revenueClasses: Object.freeze({
+        ...(row?.revenueClasses ?? allRevenueClasses),
+      }),
       allowedConstruction:
         row?.allowedConstruction === null ||
         row?.allowedConstruction === undefined
@@ -565,6 +600,9 @@ export class NationalRuntime {
       empireId,
       workerIncomeBps: previous?.workerIncomeBps ?? 0,
       nonWorkerIncomeBps: previous?.nonWorkerIncomeBps ?? 0,
+      fixedGoldPerPayout: previous?.fixedGoldPerPayout,
+      revenueClasses: previous?.revenueClasses,
+      revenuePolicyVersion: previous?.revenuePolicyVersion,
       allowedConstruction: previous?.allowedConstruction ?? null,
       treasury: previous?.treasury ?? "0",
       military: {
@@ -652,6 +690,9 @@ export class NationalRuntime {
       empireId,
       workerIncomeBps: previous?.workerIncomeBps ?? 0,
       nonWorkerIncomeBps: previous?.nonWorkerIncomeBps ?? 0,
+      fixedGoldPerPayout: previous?.fixedGoldPerPayout,
+      revenueClasses: previous?.revenueClasses,
+      revenuePolicyVersion: previous?.revenuePolicyVersion,
       allowedConstruction: previous?.allowedConstruction ?? null,
       treasury: previous?.treasury ?? "0",
       military: {
@@ -775,34 +816,46 @@ export class NationalRuntime {
     return amount;
   }
 
-  /** Only PlayerExecution's actual worker production enters this ledger. */
+  /** Worker production and named commercial origins enter at actual paid events only. */
   routeWorkerIncome(memberId: PlayerID, gross: bigint): bigint {
-    const empire = this.politics.empires.find((e) =>
-      e.memberIds.includes(memberId),
-    );
-    const row = empire && this.administration.get(empire.id);
-    if (!row || row.workerIncomeBps === 0) return gross;
-    const split = splitWorkerIncome(gross, row.workerIncomeBps);
-    row.treasury = (BigInt(row.treasury) + split.imperial).toString();
-    return split.personal;
+    return this.routeIncome(memberId, gross, "workers");
+  }
+
+  routeNonWorkerIncome(
+    memberId: PlayerID,
+    gross: bigint,
+    source: ImperialCommercialRevenueClass,
+  ): bigint {
+    return this.routeIncome(memberId, gross, source);
   }
 
   /**
-   * D-011 commercial revenue, explicitly only trade ships, trains and piracy
-   * at their physical payout boundaries. Donations, conquest, gifts and generic
-   * addGold never enter this path. Historical policy defaults to zero.
+   * D-011: percent first (floor in integer basis points), then fixed gold
+   * from the remainder. One gross payment equals retained + imperial exactly.
+   * Neither generic addGold nor a missed/embargoed commerce event calls here.
    */
-  routeNonWorkerIncome(memberId: PlayerID, gross: bigint): bigint {
-    if (gross < 0n) throw new Error("NATIONAL: negative commercial income");
+  private routeIncome(
+    memberId: PlayerID,
+    gross: bigint,
+    source: ImperialRevenueClass,
+  ): bigint {
+    if (gross < 0n) throw new Error("NATIONAL: negative revenue payout");
     const empire = this.politics.empires.find((e) =>
       e.memberIds.includes(memberId),
     );
     const row = empire && this.administration.get(empire.id);
-    const rate = row?.nonWorkerIncomeBps ?? 0;
-    if (rate === 0) return gross;
-    const split = splitWorkerIncome(gross, rate);
-    row!.treasury = (BigInt(row!.treasury) + split.imperial).toString();
-    return split.personal;
+    if (!row || !(row.revenueClasses ?? allRevenueClasses)[source]) return gross;
+    const rate =
+      source === "workers"
+        ? row.workerIncomeBps
+        : row.nonWorkerIncomeBps ?? 0;
+    const percent = splitWorkerIncome(gross, rate).imperial;
+    const remaining = gross - percent;
+    const fixed = BigInt(row.fixedGoldPerPayout ?? "0");
+    const contribution = percent + (fixed < remaining ? fixed : remaining);
+    if (contribution > 0n)
+      row.treasury = (BigInt(row.treasury) + contribution).toString();
+    return gross - contribution;
   }
 
   /** Treasury debits never transit a nation's personal wallet. */

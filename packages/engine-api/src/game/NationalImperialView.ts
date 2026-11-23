@@ -5,6 +5,9 @@ export interface NationalImperialAdministrationView {
   readonly workerIncomeBps: number;
   /** Optional on earlier V1 hosts; current hosts always publish this member-only commercial rate. */
   readonly nonWorkerIncomeBps?: number;
+  /** Both optional for V1 hosts predating the revenue-class extension. */
+  readonly fixedGoldPerPayout?: string;
+  readonly revenueClasses?: Readonly<Record<"workers" | "maritime" | "rail" | "piracy", boolean>>;
   readonly allowedConstruction: readonly UnitType[] | null;
   readonly treasury: string;
   readonly canAmend: boolean;
@@ -45,6 +48,8 @@ export function readNationalImperialAdministration(
         "empireId",
         "workerIncomeBps",
         "nonWorkerIncomeBps",
+        "fixedGoldPerPayout",
+        "revenueClasses",
         "allowedConstruction",
         "treasury",
         "canAmend",
@@ -72,6 +77,15 @@ export function readNationalImperialAdministration(
         !Number.isInteger(value.nonWorkerIncomeBps) ||
         value.nonWorkerIncomeBps < 0 ||
         value.nonWorkerIncomeBps > 10000)) ||
+    (value.fixedGoldPerPayout !== undefined &&
+      (typeof value.fixedGoldPerPayout !== "string" ||
+        !/^(0|[1-9][0-9]{0,127})$/.test(value.fixedGoldPerPayout))) ||
+    (value.revenueClasses !== undefined &&
+      (!record(value.revenueClasses) ||
+        Object.keys(value.revenueClasses).length !== 4 ||
+        !["workers", "maritime", "rail", "piracy"].every(
+          (key) => typeof (value.revenueClasses as Record<string, unknown>)[key] === "boolean",
+        ))) ||
     typeof value.treasury !== "string" ||
     !/^(0|[1-9][0-9]{0,127})$/.test(value.treasury) ||
     typeof value.canAmend !== "boolean"
@@ -133,6 +147,12 @@ export function readNationalImperialAdministration(
     ...(value.nonWorkerIncomeBps === undefined
       ? {}
       : { nonWorkerIncomeBps: value.nonWorkerIncomeBps as number }),
+    ...(value.fixedGoldPerPayout === undefined
+      ? {}
+      : { fixedGoldPerPayout: value.fixedGoldPerPayout as string }),
+    ...(value.revenueClasses === undefined
+      ? {}
+      : { revenueClasses: { ...(value.revenueClasses as Record<"workers" | "maritime" | "rail" | "piracy", boolean>) } }),
     treasury: value.treasury,
     canAmend: value.canAmend,
     allowedConstruction: allowed === null ? null : ([...allowed] as UnitType[]),
