@@ -218,9 +218,7 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
         nation.id === B ? { ...nation, landPercent: 3 } : nation,
       ),
     };
-    expect(
-      planNationalRecon(harmlessNeighbor, fresh).purchase,
-    ).toBeNull();
+    expect(planNationalRecon(harmlessNeighbor, fresh).purchase).toBeNull();
     expect(plan.holdOffenseAgainst).toBeNull();
     expect(
       planNationalRecon(
@@ -441,12 +439,25 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     const ai = await seededFourNations();
     const human = await seededFourNations(true);
     const botSight = collectLiveNationalObservation(ai.game, A).observation;
-    const humanSight = collectLiveNationalObservation(human.game, A).observation;
+    const humanSight = collectLiveNationalObservation(
+      human.game,
+      A,
+    ).observation;
     expect(botSight.nations).toEqual(humanSight.nations);
-    expect(botSight.nations.find((n) => n.id === B)).not.toHaveProperty("controllerKind");
-    expect(humanSight.nations.find((n) => n.id === B)).not.toHaveProperty("controllerKind");
-    const aiProposal = planNationalRecon(botSight, initialNationalReconMemory(A)).purchase;
-    const humanProposal = planNationalRecon(humanSight, initialNationalReconMemory(A)).purchase;
+    expect(botSight.nations.find((n) => n.id === B)).not.toHaveProperty(
+      "controllerKind",
+    );
+    expect(humanSight.nations.find((n) => n.id === B)).not.toHaveProperty(
+      "controllerKind",
+    );
+    const aiProposal = planNationalRecon(
+      botSight,
+      initialNationalReconMemory(A),
+    ).purchase;
+    const humanProposal = planNationalRecon(
+      humanSight,
+      initialNationalReconMemory(A),
+    ).purchase;
     expect(aiProposal).toEqual(humanProposal);
     const aiDebits = vi.spyOn(ai.game.player(A), "removeGold");
     const humanDebits = vi.spyOn(human.game.player(A), "removeGold");
@@ -459,12 +470,27 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     for (const lease of [...aiGrant, ...humanGrant]) {
       expect(lease).toMatchObject({ payerId: A, targetId: B, cost: "500" });
     }
-    expect(aiDebits.mock.calls.filter(([gold]) => gold === REGIONAL_RECON_COST)).toHaveLength(1);
-    expect(humanDebits.mock.calls.filter(([gold]) => gold === REGIONAL_RECON_COST)).toHaveLength(1);
+    expect(
+      aiDebits.mock.calls.filter(([gold]) => gold === REGIONAL_RECON_COST),
+    ).toHaveLength(1);
+    expect(
+      humanDebits.mock.calls.filter(([gold]) => gold === REGIONAL_RECON_COST),
+    ).toHaveLength(1);
     expect(memoryOf(ai.game)?.attempts[0].outcome).toBe("accepted");
     expect(memoryOf(human.game)?.attempts[0].outcome).toBe("accepted");
-    expect(collectLiveNationalObservation(ai.game, A).observation.visibleAssets.find((a) => a.id === String(ai.hidden.id()))?.source).toBe("recon");
-    expect(collectLiveNationalObservation(human.game, A).observation.visibleAssets.find((a) => a.id === String(human.hidden.id()))?.source).toBe("recon");
+    expect(
+      collectLiveNationalObservation(ai.game, A).observation.visibleAssets.find(
+        (a) => a.id === String(ai.hidden.id()),
+      )?.source,
+    ).toBe("recon");
+    expect(
+      collectLiveNationalObservation(
+        human.game,
+        A,
+      ).observation.visibleAssets.find(
+        (a) => a.id === String(human.hidden.id()),
+      )?.source,
+    ).toBe("recon");
     aiDebits.mockRestore();
     humanDebits.mockRestore();
   }, 120_000);
