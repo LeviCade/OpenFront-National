@@ -67,7 +67,8 @@ jobs:
                 src/server/national/NationalRecipientWire.ts \
                 src/client/TrustedNationalSession.ts \
                 tests/national/C5Class3PaidNationalAssessment.test.ts \
-                tests/national/C5Class3AssessmentWire.test.ts
+                tests/national/C5Class3AssessmentWire.test.ts \
+                tests/core/snapshot/FullGameSnapshot.test.ts
               ;;
             lint) npm run lint ;;
             production-build) npm run build-prod ;;
@@ -95,6 +96,7 @@ jobs:
             src/server/national/NationalRecipientWire.ts \
             src/client/TrustedNationalSession.ts \
             tests/national/C5Class3PaidNationalAssessment.test.ts \
-            tests/national/C5Class3AssessmentWire.test.ts
+            tests/national/C5Class3AssessmentWire.test.ts \
+            tests/core/snapshot/FullGameSnapshot.test.ts
           git diff --stat
-          git --no-pager diff -- packages/engine-api/src/Schemas.ts packages/engine-api/src/game/GameUpdates.ts packages/engine-api/src/game/NationalAssessmentView.ts packages/engine/src/national/observation/NationalAssessment.ts packages/engine/src/execution/NationalAssessmentExecution.ts packages/engine/src/game/Game.ts packages/engine/src/game/GameImpl.ts packages/engine/src/execution/ExecutionManager.ts packages/engine/src/snapshot/ExecutionRegistry.ts packages/engine/src/national/observation/NationalObservation.ts packages/engine/src/national/observation/LiveObservation.ts packages/engine/src/national/observation/NationalOutbound.ts src/client/replay/codec/FrameNormalizer.ts src/server/national/NationalRecipientWire.ts src/client/TrustedNationalSession.ts tests/national/C5Class3PaidNationalAssessment.test.ts tests/national/C5Class3AssessmentWire.test.ts
+          git --no-pager diff -- packages/engine-api/src/Schemas.ts packages/engine-api/src/game/GameUpdates.ts packages/engine-api/src/game/NationalAssessmentView.ts packages/engine/src/national/observation/NationalAssessment.ts packages/engine/src/execution/NationalAssessmentExecution.ts packages/engine/src/game/Game.ts packages/engine/src/game/GameImpl.ts packages/engine/src/execution/ExecutionManager.ts packages/engine/src/snapshot/ExecutionRegistry.ts packages/engine/src/national/observation/NationalObservation.ts packages/engine/src/national/observation/LiveObservation.ts packages/engine/src/national/observation/NationalOutbound.ts src/client/replay/codec/FrameNormalizer.ts src/server/national/NationalRecipientWire.ts src/client/TrustedNationalSession.ts tests/national/C5Class3PaidNationalAssessment.test.ts tests/national/C5Class3AssessmentWire.test.ts tests/core/snapshot/FullGameSnapshot.test.ts

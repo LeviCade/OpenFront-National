@@ -536,27 +536,67 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
     });
     for (let i = 0; i < 2048; i++) {
       ledger.buy(
-        "payer" + i, "target" + i, 10, "grant" + i,
-        () => { debits++; }, () => { debits--; }, bands,
+        "payer" + i,
+        "target" + i,
+        10,
+        "grant" + i,
+        () => {
+          debits++;
+        },
+        () => {
+          debits--;
+        },
+        bands,
       );
     }
     expect(debits).toBe(2048);
-    expect(() => ledger.buy(
-      "payer2049", "target2049", 10, "overCapacity",
-      () => { debits++; }, () => { debits--; }, bands,
-    )).toThrow(/active report capacity/);
+    expect(() =>
+      ledger.buy(
+        "payer2049",
+        "target2049",
+        10,
+        "overCapacity",
+        () => {
+          debits++;
+        },
+        () => {
+          debits--;
+        },
+        bands,
+      ),
+    ).toThrow(/active report capacity/);
     expect(debits).toBe(2048);
     expect(ledger.activeFor("payer0", 910)).toEqual([]);
     const restored = NationalAssessment.restore(ledger.snapshot(), 910);
     expect(restored.activeFor("payer0", 910)).toEqual([]);
-    expect(() => restored.buy(
-      "payer0", "target0", 910, "grant0",
-      () => { debits++; }, () => { debits--; }, bands,
-    )).toThrow(/duplicate/);
+    expect(() =>
+      restored.buy(
+        "payer0",
+        "target0",
+        910,
+        "grant0",
+        () => {
+          debits++;
+        },
+        () => {
+          debits--;
+        },
+        bands,
+      ),
+    ).toThrow(/duplicate/);
     expect(debits).toBe(2048);
     restored.buy(
-      "newpayer", "newtarget", 910, "reopened",
-      () => { debits++; }, () => { debits--; }, bands,
+      "newpayer",
+      "newtarget",
+      910,
+      "reopened",
+      () => {
+        debits++;
+      },
+      () => {
+        debits--;
+      },
+      bands,
     );
     expect(debits).toBe(2049);
     expect(restored.activeFor("newpayer", 910)).toHaveLength(1);

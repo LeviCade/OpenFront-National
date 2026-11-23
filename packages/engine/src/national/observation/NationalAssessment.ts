@@ -163,10 +163,11 @@ export class NationalAssessment {
         BigInt(g.militaryTroopsBand.lower) % 100000n !== 0n
       )
         throw new Error("NATIONAL assessment: invalid restored grant");
-      if (g.effectiveTick <= now && now < g.expiresAtTick)
-        activeCount++;
+      if (g.effectiveTick <= now && now < g.expiresAtTick) activeCount++;
       if (activeCount > MAX_ACTIVE_GRANTS)
-        throw new Error("NATIONAL assessment: invalid restored active capacity");
+        throw new Error(
+          "NATIONAL assessment: invalid restored active capacity",
+        );
       state.grants.push(g);
       state.ids.add(key);
       const own = state.byPayer.get(g.payerId) ?? [];
