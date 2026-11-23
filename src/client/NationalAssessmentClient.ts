@@ -22,7 +22,7 @@ export interface NationalAssessmentBand {
 export interface NationalAssessmentClientReport {
   readonly targetId: string;
   readonly paidBy: string;
-  readonly confidence: "coarse-estimate";
+  readonly confidence: "coarse-estimate" | "shielded-coarse-estimate";
   readonly effectiveTick: number;
   readonly expiresAtTick: number;
   readonly treasuryGoldBand: NationalAssessmentBand;
@@ -35,7 +35,7 @@ export interface NationalAssessmentClientView {
   readonly items: readonly NationalAssessmentClientReport[];
 }
 
-const nationalId = /^[A-Za-z0-9_-]{1,64}$/;
+const nationalId = /^[A-Za-z0-9_-]{1,256}$/;
 const requestId = /^[A-Za-z0-9_-]{1,128}$/;
 const decimal = /^(0|[1-9][0-9]{0,29})$/;
 const positiveDecimal = /^[1-9][0-9]{0,29}$/;
@@ -130,7 +130,8 @@ export function readNationalAssessmentView(
       typeof row.paidBy !== "string" ||
       !nationalId.test(row.paidBy) ||
       row.paidBy === row.targetId ||
-      row.confidence !== "coarse-estimate" ||
+      (row.confidence !== "coarse-estimate" &&
+        row.confidence !== "shielded-coarse-estimate") ||
       !safeTick(row.effectiveTick) ||
       !safeTick(row.expiresAtTick) ||
       row.effectiveTick > tick ||
@@ -139,8 +140,11 @@ export function readNationalAssessmentView(
         row.effectiveTick + NATIONAL_ASSESSMENT_QUOTE.durationTicks
     )
       return null;
-    const treasuryGoldBand = readBand(row.treasuryGoldBand, 2500n);
-    const militaryTroopsBand = readBand(row.militaryTroopsBand, 100000n);
+    // E4 C6 shields truthfully widen FUTURE reports; validate the exact
+    // confidence-matched coarse interval, never accept forged precision.
+    const shielded = row.confidence === "shielded-coarse-estimate";
+    const treasuryGoldBand = readBand(row.treasuryGoldBand, shielded ? 10000n : 2500n);
+    const militaryTroopsBand = readBand(row.militaryTroopsBand, shielded ? 400000n : 100000n);
     if (!treasuryGoldBand || !militaryTroopsBand) return null;
     const key = [row.targetId, row.paidBy, row.effectiveTick].join(":");
     if (seen.has(key)) return null;
