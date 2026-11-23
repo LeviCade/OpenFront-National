@@ -44,3 +44,22 @@ jobs:
         run: npx --no-install oxlint packages/engine/src/national/ai/NationalReconStrategy.ts packages/engine/src/execution/NationExecution.ts tests/national/C5Class3AIRecon.test.ts
       - name: Production build
         run: npm run build-prod
+
+  e5-full-repository-regression:
+    name: E5 exact SHA — complete Vitest regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Assert exact source identity
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Full source Vitest across node and client projects
+        run: npm test

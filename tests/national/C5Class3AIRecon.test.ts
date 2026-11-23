@@ -219,6 +219,30 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
       ),
     };
     expect(planNationalRecon(harmlessNeighbor, fresh).purchase).toBeNull();
+    // A real public WAR makes the same weaker rival worth investigating;
+    // the subsequent public peace ends that rationale, without private data.
+    const threatened: NationalObservation = {
+      ...harmlessNeighbor,
+      wars: [
+        {
+          id: "observed_b_war",
+          scope: "national",
+          first: {
+            kind: "nation",
+            stableId: A,
+            activeMemberIds: [A],
+          },
+          second: {
+            kind: "nation",
+            stableId: B,
+            activeMemberIds: [B],
+          },
+          startedTick: 20,
+        },
+      ],
+    };
+    expect(planNationalRecon(threatened, fresh).purchase?.targetId).toBe(B);
+    expect(planNationalRecon({ ...threatened, wars: [] }, fresh).purchase).toBeNull();
     expect(plan.holdOffenseAgainst).toBeNull();
     expect(
       planNationalRecon(
@@ -323,6 +347,18 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     expect(
       planNationalRecon({ ...view, tick: view.tick + 181 }, rejected).purchase,
     ).toBeNull();
+    const exhausted = {
+      ...fresh,
+      attempts: Array.from({ length: 4 }, (_, i) => ({
+        targetId: "exhausted_" + i,
+        anchorAssetId: "known_" + i,
+        requestId: "spent_" + i,
+        purchasedTick: i,
+        expiresAtTick: i,
+        outcome: "rejected" as const,
+      })),
+    };
+    expect(planNationalRecon(view, exhausted).purchase).toBeNull();
   });
 
   it("buys via real Game-owned actor, deducts exactly 500 gold and changes an executed war decision against denied-purchase control", async () => {
@@ -522,9 +558,17 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     expect(again).toEqual(bytes);
     expect(memoryOf(restored)).toEqual(history);
     for (let i = 0; i < 800; i++) game.executeNextTick();
-    expect(memoryOf(game)?.attempts.length).toBeLessThanOrEqual(4);
-    expect(memoryOf(game)?.attempts.map((a) => a.requestId)).toEqual([
-      ...new Set(memoryOf(game)?.attempts.map((a) => a.requestId)),
+    const attempts = memoryOf(game)?.attempts ?? [];
+    const purchases = attempts.filter((a) => a.outcome === "accepted").length;
+    const memoryBytes = JSON.stringify(memoryOf(game)).length;
+    const ratePer1000Ticks = (purchases * 1000) / game.ticks();
+    console.info(
+      `E5 deterministic match: ticks=${game.ticks()} purchases=${purchases} attempts=${attempts.length} purchasesPer1000Ticks=${ratePer1000Ticks.toFixed(3)} reconMemoryBytes=${memoryBytes}`,
+    );
+    expect(attempts.length).toBeLessThanOrEqual(4);
+    expect(memoryBytes).toBeLessThan(2_048);
+    expect(attempts.map((a) => a.requestId)).toEqual([
+      ...new Set(attempts.map((a) => a.requestId)),
     ]);
   }, 120_000);
 });
