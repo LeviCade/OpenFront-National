@@ -409,10 +409,15 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
       }
     }
     expect(refused).toBe(true);
+    // The Game prunes the one-shot response executor after its real tick.
+    // The original issuing execution persists as the authoritative ledger;
+    // its recipient-only recorded decision is proof of the AI action.
     expect(
-      game.executions().filter((x) => x instanceof NationalUltimatumExecution)
-        .length,
-    ).toBeGreaterThanOrEqual(2);
+      game.executions().filter((x) => x instanceof NationalUltimatumExecution),
+    ).toHaveLength(1);
+    expect(
+      NationalUltimatumExecution.viewFor(game, game.player(A))[0],
+    ).toMatchObject({ phase: "decision-required", response: "refuse" });
     expect(game.nationalPoliticalAuthority()?.empireOf(A)).toBeNull();
     expect(game.nationalWarAuthority()?.atWar(H, A)).toBe(false);
     const { bytes, again, restored } = await roundTrip(game, "plains");
