@@ -27,7 +27,7 @@ const [ISSUER, PAYER, STRANGER, TARGET] = [
   "C6SETTLEC",
   "C6SETTLED",
 ];
-const clients = ["C6SETCLIENTA", "C6SETCLIENTB", "C6SETCLIENTC", "C6SETCLIENTD"];
+const clients = ["C6CLIENTA", "C6CLIENTB", "C6CLIENTC", "C6CLIENTD"];
 const roster = [ISSUER, PAYER, STRANGER, TARGET].map(
   (id, index) => new PlayerInfo(id, PlayerType.Human, clients[index], id),
 );
@@ -229,7 +229,8 @@ describe("C6 first-class E3 private-match restitution ingress", () => {
           paid: "25000",
           exactConservation: true,
           resumedTrade: issuer.canTrade(payer),
-          restoredPayment: restoredIssuer.gold() - restoredBefore[0] === 25_000n,
+          restoredPayment:
+            restoredIssuer.gold() - restoredBefore[0] === 25_000n,
           digest: receipt.replayDigest,
           tick: game.ticks(),
         }),
