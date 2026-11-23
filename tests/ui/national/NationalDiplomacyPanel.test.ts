@@ -1207,6 +1207,7 @@ describe("C4 E4 native constitutional controls", () => {
       ),
     ).toBeNull();
   });
+
   it("keeps mobile spawn taps unobstructed, then supports sheet reopen, Escape and focus restoration", async () => {
     const viewport = Object.getOwnPropertyDescriptor(window, "innerWidth");
     Object.defineProperty(window, "innerWidth", {
@@ -1231,7 +1232,9 @@ describe("C4 E4 native constitutional controls", () => {
       toggle.click();
       await element.updateComplete;
       expect(toggle.getAttribute("aria-expanded")).toBe("true");
-      expect(element.querySelector("#national-diplomacy-content")).not.toBeNull();
+      expect(
+        element.querySelector("#national-diplomacy-content"),
+      ).not.toBeNull();
 
       element.querySelector<HTMLElement>("section")!.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
@@ -1252,5 +1255,4 @@ describe("C4 E4 native constitutional controls", () => {
       }
     }
   });
-
 });
