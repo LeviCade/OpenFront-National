@@ -184,7 +184,12 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
     // ConstructionExecution chooses an actual owned port, not the raider.
     expect(aPort.owner()).toBe(a);
     expect(game.isWater(ship.tile())).toBe(true);
-    expect(game.hasWaterComponent(aPort.tile(), game.getWaterComponent(ship.tile())!)).toBe(true);
+    expect(
+      game.hasWaterComponent(
+        aPort.tile(),
+        game.getWaterComponent(ship.tile())!,
+      ),
+    ).toBe(true);
     const tiles = new Set([ship.tile()]);
     let combat = ship.warshipState().isInCombat === true;
     for (let i = 0; i < 30 && ship.isActive(); i++) {
@@ -214,7 +219,10 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
       "c6-escort-client",
     );
     for (let i = 0; i < 12; i++) {
-      for (const [g, runner] of [[game, first], [restored, second]] as const) {
+      for (const [g, runner] of [
+        [game, first],
+        [restored, second],
+      ] as const) {
         runner.addTurn({ turnNumber: g.ticks(), intents: [] });
         expect(runner.executeNextTick()).toBe(true);
       }
@@ -291,8 +299,7 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
   });
 
   it("rejects poverty, peace, lost merchant and impossible foreign water without synthetic orders", async () => {
-    const { game, a, b, observed, merchant, behavior } =
-      await activeThreat();
+    const { game, a, b, observed, merchant, behavior } = await activeThreat();
     a.removeGold(a.gold());
     expect(behavior.dispatchNationalNavalEscort(observed)).toBeNull();
     expect(a.units(UnitType.Warship)).toHaveLength(0);
@@ -347,9 +354,13 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
     const ownTrader = defender.buildUnit(UnitType.TradeShip, split.ref(15, 8), {
       targetUnit: customer.units(UnitType.Port)[0],
     });
-    const foreignRaider = hostile.buildUnit(UnitType.Warship, split.ref(25, 8), {
-      patrolTile: split.ref(25, 8),
-    });
+    const foreignRaider = hostile.buildUnit(
+      UnitType.Warship,
+      split.ref(25, 8),
+      {
+        patrolTile: split.ref(25, 8),
+      },
+    );
     expect(
       split.performNationalWarCommandWithOutcome(defender, {
         kind: "declare-national",
@@ -366,9 +377,9 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
       new NationEmojiBehavior(rnd, split, defender),
     );
     const sight = collectLiveNationalObservation(split, A).observation;
-    expect(sight.visibleAssets.some((u) => u.id === String(ownTrader.id()))).toBe(
-      true,
-    );
+    expect(
+      sight.visibleAssets.some((u) => u.id === String(ownTrader.id())),
+    ).toBe(true);
     // The disconnected raider cannot receive a same-component order; even a
     // forged visible coordinate must not cause travel or treasury deduction.
     const forged = {
@@ -446,7 +457,9 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
     expect(disabledEscortCalls).toBeGreaterThan(0);
     const ourShips = game.player(A).units(UnitType.Warship);
     const controlShips = control.player(A).units(UnitType.Warship);
-    const liveRaider = b.units(UnitType.Warship).find((u) => u.id() === raider.id());
+    const liveRaider = b
+      .units(UnitType.Warship)
+      .find((u) => u.id() === raider.id());
     const controlRaider = control
       .player(B)
       .units(UnitType.Warship)

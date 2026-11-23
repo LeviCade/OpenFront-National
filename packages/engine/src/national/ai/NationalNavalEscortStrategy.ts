@@ -1,4 +1,7 @@
-import type { NationalObservation, VisibleAsset } from "../observation/NationalObservation";
+import type {
+  NationalObservation,
+  VisibleAsset,
+} from "../observation/NationalObservation";
 import { deriveNationalWarSides } from "./NationalPlanner";
 
 /**
@@ -84,8 +87,7 @@ export function planObservedNationalNavalEscorts(
   for (const merchant of merchants) {
     for (const raider of raiders) {
       const threatDistance =
-        Math.abs(merchant.x - raider.x) +
-        Math.abs(merchant.y - raider.y);
+        Math.abs(merchant.x - raider.x) + Math.abs(merchant.y - raider.y);
       if (threatDistance > 20) continue;
       threats.push({
         merchantId: merchant.id,

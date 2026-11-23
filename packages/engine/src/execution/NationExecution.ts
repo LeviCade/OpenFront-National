@@ -370,7 +370,8 @@ export class NationExecution implements Execution {
     if (!this.behaviorsInitialized) this.initializeBehaviors();
     // E6 defensive duty takes precedence over inherited offensive pressure.
     // E5 owns all subsequent reconnaissance and assessment decisions.
-    const escorted = this.warshipBehavior.dispatchNationalNavalEscort(observation);
+    const escorted =
+      this.warshipBehavior.dispatchNationalNavalEscort(observation);
     if (escorted === null) {
       this.warshipBehavior.dispatchNationalNavalPressure(observation);
     }

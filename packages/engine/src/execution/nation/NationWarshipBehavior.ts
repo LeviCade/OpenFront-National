@@ -16,8 +16,8 @@ import {
 import { assertNever } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Game, Player, Unit } from "../../game/Game";
-import { planObservedNationalNavalTargets } from "../../national/ai/NationalNavalStrategy";
 import { planObservedNationalNavalEscorts } from "../../national/ai/NationalNavalEscortStrategy";
+import { planObservedNationalNavalTargets } from "../../national/ai/NationalNavalStrategy";
 import type { NationalObservation } from "../../national/observation/NationalObservation";
 import type {
   SnapshotReader,
@@ -77,7 +77,9 @@ export class NationWarshipBehavior {
         : { nationalNavalMission: { ...this.nationalNavalMission } }),
       ...(this.nationalNavalEscortMission === null
         ? {}
-        : { nationalNavalEscortMission: { ...this.nationalNavalEscortMission } }),
+        : {
+            nationalNavalEscortMission: { ...this.nationalNavalEscortMission },
+          }),
     });
   }
 
@@ -296,24 +298,25 @@ export class NationWarshipBehavior {
       // only first-party units examined by this dispatcher.
       if (
         merchant === this.player &&
-        !this.player.units(UnitType.TradeShip).some(
-          (ship) =>
-            ship.isActive() &&
-            !ship.isMarkedForDeletion() &&
-            String(ship.id()) === target.merchantId &&
-            ship.targetUnit()?.type() === UnitType.Port &&
-            ship.targetUnit()?.isActive() === true &&
-            ship.targetUnit()?.isMarkedForDeletion() === false &&
-            ship.targetUnit()?.owner() !== this.player &&
-            this.player.canTrade(ship.targetUnit()!.owner()) &&
-            this.game.x(ship.tile()) === target.merchantX &&
-            this.game.y(ship.tile()) === target.merchantY,
-        )
+        !this.player
+          .units(UnitType.TradeShip)
+          .some(
+            (ship) =>
+              ship.isActive() &&
+              !ship.isMarkedForDeletion() &&
+              String(ship.id()) === target.merchantId &&
+              ship.targetUnit()?.type() === UnitType.Port &&
+              ship.targetUnit()?.isActive() === true &&
+              ship.targetUnit()?.isMarkedForDeletion() === false &&
+              ship.targetUnit()?.owner() !== this.player &&
+              this.player.canTrade(ship.targetUnit()!.owner()) &&
+              this.game.x(ship.tile()) === target.merchantX &&
+              this.game.y(ship.tile()) === target.merchantY,
+          )
       )
         continue;
 
-      if (!this.game.isValidCoord(target.merchantX, target.merchantY))
-        continue;
+      if (!this.game.isValidCoord(target.merchantX, target.merchantY)) continue;
       const tile = this.game.ref(target.x, target.y);
       const merchantTile = this.game.ref(target.merchantX, target.merchantY);
       if (!this.game.isWater(tile) || !this.game.isWater(merchantTile))
