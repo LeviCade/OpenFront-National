@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { GameType } from "@openfront/engine-api/game/GameTypes";
+import type { NationalUltimatumViewData } from "@openfront/engine-api/game/GameUpdates";
 import { EventBus } from "@openfront/shared/EventBus";
 import { afterEach, describe, expect, it } from "vitest";
 import "../../../src/client/NationalDiplomacyPanel";
@@ -12,7 +13,7 @@ import type { GameView } from "../../../src/client/view";
 
 const mounted: HTMLElement[] = [];
 const empire = { id: "empire-a", leaderId: "nation-a", memberIds: ["nation-a"] };
-const ultimatum = {
+const ultimatum: NationalUltimatumViewData["items"][number] = {
   id: "ultimatum-20-2-5",
   issuerId: "nation-a",
   empireId: "empire-a",
@@ -40,7 +41,7 @@ async function mount(actorId = "nation-a", opts: {
   const state = {
     tick: 20,
     politics: { empires: [empire], warnings: [] },
-    ultimatums: [] as (typeof ultimatum)[],
+    ultimatums: [] as NationalUltimatumViewData["items"][number][],
     grants: [] as {
       requestId: string; targetId: string; centerX: number; centerY: number;
       radius: 90; cost: "500"; effectiveTick: number; expiresAtTick: number;
@@ -110,8 +111,8 @@ async function submitForm(element: NationalDiplomacyPanel, selector: string, tar
   const select = form.querySelector<HTMLSelectElement>('[name="target"]')!;
   select.value = target;
   select.dispatchEvent(new Event("change", { bubbles: true }));
-  form.querySelector<HTMLInputElement>('[name="confirm"]')!.checked = true;
   await element.updateComplete;
+  form.querySelector<HTMLInputElement>('[name="confirm"]')!.checked = true;
   form.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
   await element.updateComplete;
 }
