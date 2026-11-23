@@ -16,14 +16,14 @@ import {
 import { assertNever } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Game, Player, Unit } from "../../game/Game";
+import { planObservedNationalNavalTargets } from "../../national/ai/NationalNavalStrategy";
+import type { NationalObservation } from "../../national/observation/NationalObservation";
 import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../../snapshot/SnapshotContext";
 import { ConstructionExecution } from "../ConstructionExecution";
 import { MoveWarshipExecution } from "../MoveWarshipExecution";
-import { planObservedNationalNavalTargets } from "../../national/ai/NationalNavalStrategy";
-import type { NationalObservation } from "../../national/observation/NationalObservation";
 import {
   EMOJI_WARSHIP_RETALIATION,
   NationEmojiBehavior,
@@ -108,7 +108,8 @@ export class NationWarshipBehavior {
       observation.tick !== this.game.ticks() ||
       !this.player.isAlive() ||
       !this.player.hasSpawned()
-    ) return null;
+    )
+      return null;
 
     const war = this.game.nationalWarAuthority();
     // The only eligible authority is an ACTUAL currently live WAR ledger.
@@ -138,7 +139,8 @@ export class NationWarshipBehavior {
     if (
       this.nationalNavalMission !== null &&
       observation.tick - this.nationalNavalMission.dispatchedAtTick < 100
-    ) return null;
+    )
+      return null;
 
     for (const target of targets) {
       // Recheck after observation; a public WAR record cannot override the
@@ -148,12 +150,17 @@ export class NationWarshipBehavior {
         !this.game.hasPlayer(target.ownerId) ||
         this.player.isFriendly(this.game.player(target.ownerId)) ||
         !this.game.isValidCoord(target.x, target.y)
-      ) continue;
+      )
+        continue;
       const tile = this.game.ref(target.x, target.y);
       if (!this.game.isWater(tile)) continue;
       const component = this.game.getWaterComponent(tile);
       if (component === null) continue;
-      if (!ports.some((port) => this.game.hasWaterComponent(port.tile(), component)))
+      if (
+        !ports.some((port) =>
+          this.game.hasWaterComponent(port.tile(), component),
+        )
+      )
         continue;
 
       const warships = this.player
@@ -170,8 +177,7 @@ export class NationWarshipBehavior {
         .sort(
           (a, b) =>
             this.game.manhattanDist(a.tile(), tile) -
-              this.game.manhattanDist(b.tile(), tile) ||
-            a.id() - b.id(),
+              this.game.manhattanDist(b.tile(), tile) || a.id() - b.id(),
         );
       const closest = warships[0];
       if (closest !== undefined) {
@@ -181,7 +187,8 @@ export class NationWarshipBehavior {
           patrol !== undefined &&
           this.game.euclideanDistSquared(patrol, tile) <=
             (this.game.config().warshipPatrolRange() / 2) ** 2
-        ) continue;
+        )
+          continue;
         this.game.addExecution(
           new MoveWarshipExecution(this.player, [closest.id()], tile),
         );
@@ -198,7 +205,8 @@ export class NationWarshipBehavior {
         this.player.units(UnitType.Warship).length >= 10 ||
         this.spareGold() < this.cost(UnitType.Warship) ||
         this.player.canBuild(UnitType.Warship, tile) === false
-      ) continue;
+      )
+        continue;
       this.game.addExecution(
         new ConstructionExecution(this.player, UnitType.Warship, tile),
       );
