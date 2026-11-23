@@ -89,6 +89,7 @@ function eligibleReport(
   );
   if (
     report === undefined ||
+    typeof report.confidence !== "string" ||
     (report.confidence !== "coarse-estimate" &&
       !report.confidence.startsWith("shielded-"))
   )
