@@ -67,5 +67,7 @@ jobs:
       - run: npm install --global --ignore-scripts npm@12.1.0
       - run: npm run inst
       - run: npm run lint
-      - run: npm run format:check
       - run: npm test
+      # Global format gate remains authoritative and will flag pre-existing
+      # Conductor-owned command documentation; E5 must not overwrite it.
+      - run: npm run format:check
