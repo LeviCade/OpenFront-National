@@ -10,9 +10,14 @@ import {
 import type { TransformHandler } from "../../../src/client/TransformHandler";
 import type { GameView } from "../../../src/client/view";
 
-const instances: { controller: NationalMapTargetController; surface: HTMLElement }[] = [];
+const instances: {
+  controller: NationalMapTargetController;
+  surface: HTMLElement;
+}[] = [];
 
-function mount(options: { private?: boolean; replay?: boolean; spectator?: boolean } = {}) {
+function mount(
+  options: { private?: boolean; replay?: boolean; spectator?: boolean } = {},
+) {
   const surface = document.createElement("div");
   document.body.appendChild(surface);
   surface.getBoundingClientRect = () =>
@@ -37,17 +42,27 @@ function mount(options: { private?: boolean; replay?: boolean; spectator?: boole
       }),
       isReplay: () => options.replay ?? false,
     }),
-    myPlayer: () => ({ id: () => "nation-a", isAlive: () => true, hasSpawned: () => true }),
+    myPlayer: () => ({
+      id: () => "nation-a",
+      isAlive: () => true,
+      hasSpawned: () => true,
+    }),
     isSpectator: () => options.spectator ?? false,
     inSpawnPhase: () => false,
     isTrustedNationalProjection: () => options.private ?? false,
     trustedProjectionReady: () => options.private ?? false,
-    isValidCoord: (x: number, y: number) => x >= 0 && x < 128 && y >= 0 && y < 128,
+    isValidCoord: (x: number, y: number) =>
+      x >= 0 && x < 128 && y >= 0 && y < 128,
   } as unknown as GameView;
   const transform = {
     screenToWorldCoordinates: () => ({ x: 12, y: 34 }),
   } as unknown as TransformHandler;
-  const controller = new NationalMapTargetController(game, bus, transform, surface);
+  const controller = new NationalMapTargetController(
+    game,
+    bus,
+    transform,
+    surface,
+  );
   controller.init();
   instances.push({ controller, surface });
   const selected: NationalReconMapPointSelectedEvent[] = [];

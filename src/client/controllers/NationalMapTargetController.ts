@@ -7,7 +7,10 @@ import type { GameView } from "../view";
 
 /** Scouting center on an actual map tap; neither a purchase nor a sight grant. */
 export class NationalReconMapPickRequestedEvent implements GameEvent {
-  constructor(public readonly gameId: string, public readonly active: boolean) {}
+  constructor(
+    public readonly gameId: string,
+    public readonly active: boolean,
+  ) {}
 }
 export class NationalReconMapPointSelectedEvent implements GameEvent {
   constructor(
@@ -82,14 +85,23 @@ export class NationalMapTargetController implements Controller {
   private canPickRecon(): boolean {
     const cfg = this.game.config().gameConfig();
     const actor = this.game.myPlayer();
-    if (!this.marker || !cfg.nationalMode || this.game.config().isReplay() ||
-        this.game.isSpectator() || this.game.inSpawnPhase() ||
-        !actor?.isAlive() || !actor.hasSpawned()) return false;
+    if (
+      !this.marker ||
+      !cfg.nationalMode ||
+      this.game.config().isReplay() ||
+      this.game.isSpectator() ||
+      this.game.inSpawnPhase() ||
+      !actor?.isAlive() ||
+      !actor.hasSpawned()
+    )
+      return false;
     if (cfg.gameType === GameType.Singleplayer) return true;
-    return cfg.gameType === GameType.Private &&
+    return (
+      cfg.gameType === GameType.Private &&
       this.game.isTrustedNationalProjection?.() === true &&
       this.game.trustedProjectionReady?.() === true &&
-      hasTrustedNationalPrivateCapability(this.bus, this.game.gameID());
+      hasTrustedNationalPrivateCapability(this.bus, this.game.gameID())
+    );
   }
 
   private disarmRecon(): void {
@@ -100,7 +112,9 @@ export class NationalMapTargetController implements Controller {
     }
   }
 
-  private readonly onReconRequest = (event: NationalReconMapPickRequestedEvent) => {
+  private readonly onReconRequest = (
+    event: NationalReconMapPickRequestedEvent,
+  ) => {
     if (event.gameId !== this.game.gameID()) return;
     if (!event.active || !this.canPickRecon()) {
       this.disarmRecon();
@@ -122,18 +136,32 @@ export class NationalMapTargetController implements Controller {
     }
     if (event.button !== 0 || event.isPrimary === false) return;
     const bounds = this.inputSurface.getBoundingClientRect();
-    if (event.clientX < bounds.left || event.clientY < bounds.top ||
-      event.clientX >= bounds.right || event.clientY >= bounds.bottom) return;
+    if (
+      event.clientX < bounds.left ||
+      event.clientY < bounds.top ||
+      event.clientX >= bounds.right ||
+      event.clientY >= bounds.bottom
+    )
+      return;
     const top = document.elementFromPoint?.(event.clientX, event.clientY);
     if (top && top !== this.inputSurface && !this.inputSurface.contains(top))
       return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    const p = this.transform.screenToWorldCoordinates(event.clientX, event.clientY);
-    if (!Number.isSafeInteger(p.x) || !Number.isSafeInteger(p.y) ||
-      !this.game.isValidCoord(p.x, p.y)) return;
+    const p = this.transform.screenToWorldCoordinates(
+      event.clientX,
+      event.clientY,
+    );
+    if (
+      !Number.isSafeInteger(p.x) ||
+      !Number.isSafeInteger(p.y) ||
+      !this.game.isValidCoord(p.x, p.y)
+    )
+      return;
     this.disarmRecon();
-    this.bus.emit(new NationalReconMapPointSelectedEvent(this.game.gameID(), p.x, p.y));
+    this.bus.emit(
+      new NationalReconMapPointSelectedEvent(this.game.gameID(), p.x, p.y),
+    );
   };
 
   private readonly onLeave = () => this.dispose();
@@ -161,7 +189,11 @@ export class NationalMapTargetController implements Controller {
     document.body.appendChild(this.marker);
     this.bus.on(NationalMapTargetSelectedEvent, this.onSelection);
     this.bus.on(NationalReconMapPickRequestedEvent, this.onReconRequest);
-    this.inputSurface.addEventListener("pointerdown", this.onReconPointerDown, true);
+    this.inputSurface.addEventListener(
+      "pointerdown",
+      this.onReconPointerDown,
+      true,
+    );
     document.addEventListener("leave-lobby", this.onLeave);
   }
 
@@ -267,7 +299,11 @@ export class NationalMapTargetController implements Controller {
     this.disarmRecon();
     this.bus.off(NationalMapTargetSelectedEvent, this.onSelection);
     this.bus.off(NationalReconMapPickRequestedEvent, this.onReconRequest);
-    this.inputSurface.removeEventListener("pointerdown", this.onReconPointerDown, true);
+    this.inputSurface.removeEventListener(
+      "pointerdown",
+      this.onReconPointerDown,
+      true,
+    );
     document.removeEventListener("leave-lobby", this.onLeave);
     this.marker?.remove();
     this.marker = null;
