@@ -1,9 +1,6 @@
 name: C6 E1 native national assessment exact-head gates
 
 on:
-  push:
-    branches:
-      - feature/c6-class1-e1-assessment-native-ui-20261123
   pull_request:
     branches:
       - stage3/conductor6-class1-integration-20261123
@@ -18,39 +15,87 @@ concurrency:
 
 jobs:
   source-and-authority:
+    name: E1 - ${{ matrix.gate }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        gate:
+          - typecheck
+          - native-ui
+          - actual-gamerunner
+          - format
+          - lint
+          - production-build
+          - full-regression
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
       - uses: actions/setup-node@v4
         with:
           node-version: "24.15.0"
           cache: npm
       - name: Install required npm 12.1 toolchain
-        run: npm install --global npm@12.1.0 && npm --version
+        run: npm install --global --ignore-scripts npm@12.1.0 && npm --version
       - name: Pinned dependency installation
         run: npm run inst
-      - name: Full workspace TypeScript
-        run: npm run typecheck
-      - name: Sixth assessment UI and inherited Fifth native UI
-        run: >
-          npx --no-install vitest run --project client
-          tests/ui/national/C6Class1NationalAssessmentControls.test.ts
-          tests/ui/national/NationalSovereignActions.test.ts
-          tests/ui/national/NationalSovereignControls.test.ts
-          tests/ui/national/NationalReconMapPick.test.ts
-          tests/ui/national/NationalDiplomacyPanel.test.ts
-          tests/ui/national/NationalReconPurchase.test.ts
-      - name: Inherited real GameRunner witness
-        run: >
-          npx --no-install vitest run --project node
-          tests/national/C5Class2FundedRecon.test.ts
-          tests/national/C5Class2ImperialUltimatum.test.ts
-      - name: Pinned formatting
-        run: npm run format:check
-      - name: Static lint
-        run: npm run lint
-      - name: Production compilation
-        run: npm run build-prod
-      - name: Full repository regression
-        run: npm test
+      - name: Execute exact-head gate
+        env:
+          GATE: ${{ matrix.gate }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GATE" in
+            typecheck)
+              npm run typecheck
+              ;;
+            native-ui)
+              npx --no-install vitest run --project client \
+                tests/ui/national/C6Class1NationalAssessmentControls.test.ts \
+                tests/ui/national/NationalSovereignActions.test.ts \
+                tests/ui/national/NationalSovereignControls.test.ts \
+                tests/ui/national/NationalReconMapPick.test.ts \
+                tests/ui/national/NationalDiplomacyPanel.test.ts \
+                tests/ui/national/NationalReconPurchase.test.ts
+              ;;
+            actual-gamerunner)
+              npx --no-install vitest run --project node \
+                tests/national/C5Class2FundedRecon.test.ts \
+                tests/national/C5Class2ImperialUltimatum.test.ts
+              ;;
+            format)
+              if ! npm run format:check; then
+                # Diagnostic only. No CI credential or write-back to GitHub.
+                npx --no-install oxfmt --write \
+                  src/client/NationalAssessmentClient.ts \
+                  src/client/NationalAssessmentControls.ts \
+                  src/client/NationalDiplomacyPanel.ts \
+                  src/client/Transport.ts \
+                  src/client/view/GameView.ts \
+                  tests/ui/national/C6Class1NationalAssessmentControls.test.ts
+                git diff -- \
+                  src/client/NationalAssessmentClient.ts \
+                  src/client/NationalAssessmentControls.ts \
+                  src/client/NationalDiplomacyPanel.ts \
+                  src/client/Transport.ts \
+                  src/client/view/GameView.ts \
+                  tests/ui/national/C6Class1NationalAssessmentControls.test.ts
+                exit 1
+              fi
+              ;;
+            lint)
+              npm run lint
+              ;;
+            production-build)
+              npm run build-prod
+              ;;
+            full-regression)
+              npm test
+              ;;
+            *)
+              exit 2
+              ;;
+          esac
