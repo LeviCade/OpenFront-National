@@ -24,7 +24,7 @@ const validReport = {
   treasuryGoldBand: { lower: "2500", upperExclusive: "5000" },
   militaryTroopsBand: { lower: "100000", upperExclusive: "200000" },
 };
-const packet = (items = [validReport]): NationalAssessmentClientView => ({
+const packet = (\n  items: NationalAssessmentClientView["items"] = [validReport],\n): NationalAssessmentClientView => ({
   version: 1,
   recipientId: "nation-a",
   items,
