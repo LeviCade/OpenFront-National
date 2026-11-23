@@ -947,9 +947,7 @@ export class NationalRuntime {
   }
 
   /** Engine-only read: no client-supplied donor roster or claimed empire. */
-  standingDefenseFor(
-    defenderId: PlayerID,
-  ): {
+  standingDefenseFor(defenderId: PlayerID): {
     readonly empireId: string;
     readonly response: "none" | "assist" | "imperial" | "both";
   } | null {

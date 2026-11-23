@@ -398,17 +398,23 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     const before = read();
     expect(() =>
       ingress.interceptNationalIncomingAttack(
-        "forged-not-a-real-attack", ENEMY, MEMBER, 50_000,
+        "forged-not-a-real-attack",
+        ENEMY,
+        MEMBER,
+        50_000,
       ),
     ).toThrow(/real accepted invading army/);
     expect(read()).toEqual(before);
 
-    const shell = game.player(ENEMY).createAttack(
-      game.player(MEMBER), 100, null, new Set(),
-    );
+    const shell = game
+      .player(ENEMY)
+      .createAttack(game.player(MEMBER), 100, null, new Set());
     expect(() =>
       ingress.interceptNationalIncomingAttack(
-        shell.id(), ENEMY, MEMBER, 50_000,
+        shell.id(),
+        ENEMY,
+        MEMBER,
+        50_000,
       ),
     ).toThrow(/forged invading troop strength/);
     shell.delete();
@@ -434,7 +440,11 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
   });
 
   it("keeps ordinary FFA attacks independent of imperial policy and NATIONAL WAR", async () => {
-    const game = await setup("plains", { nationalMode: false }, roster.slice(0, 2));
+    const game = await setup(
+      "plains",
+      { nationalMode: false },
+      roster.slice(0, 2),
+    );
     const attackerInfo = roster[0];
     const defenderInfo = roster[1];
     game.addExecution(
