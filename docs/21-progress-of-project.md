@@ -23,6 +23,54 @@ do not silently reweight future checkpoints.
 | M9 — player interface, independent QA, release readiness    |   **6** |
 | **TOTAL**                                                   | **100** |
 
+## Fifth Conductor Second Class final certification (73%) — November 22, 2026
+
+**OFFICIAL MANAGER CERTIFICATION: 73%.** [GitHub Issue #20](https://github.com/LeviCade/OpenFront-National/issues/20) is the governing ledger; all lower historical "current" statements below are superseded. **Started 67%; Fifth C2 delivered +6 entirely new accepted points; minimum was +5 (72%).** **Grade A — 3.78/4.00, GOLDEN REIGN; Fifth Conductor retained.**
+
+[PR #165](https://github.com/LeviCade/OpenFront-National/pull/165) MERGED to `stage3/integration-20261115` at `86b476d3ea8aa04821f2caac421738fe2fe1db21`, carrying exact accepted staged source `3499dcd42684e6e9a65a7d54e64fc93af75142d3`, reported identical Git tree `f6c62b1a9981439e84bf02ee099946732b1fcb8b`. [Combined exact-source #45092234362](https://github.com/LeviCade/OpenFront-National/actions/runs/45092234362) **6/6 success**: 849/849 full test files, 12,016 pass, one prior skip; 140/140 combined engine/native checks (94+46), TypeScript, lint, pinned format, build. [Independent R6 #45092239294](https://github.com/LeviCade/OpenFront-National/actions/runs/45092239294) **7/7 non-GPU jobs pass**, including source, prod dependencies and mutation gate. [Independent QA #45092239307](https://github.com/LeviCade/OpenFront-National/actions/runs/45092239307) SUCCESS for replay/hostile packets and CPU Chromium homepage only. [Real certificate-verified WSS operational #45092234423](https://github.com/LeviCade/OpenFront-National/actions/runs/45092234423) **4/4 success**; same game restored tick 458 and continued to 464, three **automated**, not human, authenticated seats, zero acknowledged tick loss. The canonical merge retains exact staged tree by documented Git tree identity; additional post-merge CI conclusions are not presumed.
+
+**Six NEW, non-duplicated awards:**
+- **M9 +1 / E1 #168:** native emperor upgrade/demolition UI plus current visibility/authorization/receipt-tested map selection. **Development UI only**, not a real human browser playthrough or public release.
+- **M0 +1 / E2 #166:** genuine localhost certificate-verified HTTPS/WSS network transport, exact WebSocket Origin and physical-socket promotion checks, hostile traffic refusal and reconnect; prior plaintext local admission/durable world not re-scored.
+- **M6 +1 / E3 #171:** enforceable sovereign ultimatum: timed issue, recipient response, current legitimate emperor/epoch, actual trade embargo or scoped WAR refusal consequences, secrecy, no automatic annexation.
+- **M5 +1 / E4 #167:** versioned emperor-selected standing attack-time defense, real donor-funded interception plus optional legal imperial WAR, CAS rollback/retreat; no re-award of MDA interception or prior WAR.
+- **M7 +1 / E5 #170:** authenticated 500-gold purchase of recipient-only 90-tile/600-tick regional target intelligence; real hidden units appear/expire/revoke, current reciprocal empire sharing, snapshot/replay and human/AI parity. Previous border/coastal visibility not re-scored.
+- **M8 +1 / E6 #169 with Conductor bridge:** AI uses legitimate ultimatum observation to refuse geographically unreachable threats through ordinary `NationExecution`/real Game command; distinctive from generic treaty AI and economic sanction policy.
+
+**Final accounting: previous 67% + Fifth C2 original +6 = 73%.** The prior 67% included Fourth C2 historical +8 and Fifth C1 original +6; neither has been re-awarded. **Fifth Third Class baseline 73%, mandatory 78%** (at least 5 new distinct points). Original 100-point M0–M9 weights and historic unallocated opening 16 unchanged.
+
+**NOT certified:** complete four-mode physical GPU game and human desktop/mobile playthrough (strict GPU/browser failed/skipped), 3 independently witnessed human graphical NATIONAL clients, externally authorized production OAuth/HTTPS/WSS host, privileged signed host/teardown, independent licensed asset rights, main deploy or release. **No public release.**
+
+## Fifth Conductor First Class final certification (67%) — November 22, 2026
+
+**MANAGER'S OFFICIAL COMPLETION: 67%.** [Issue #20](https://github.com/LeviCade/OpenFront-National/issues/20) is the authoritative certificate. Any older "current" lines below are historic and superseded. The initial post-merge 64% audit was corrected after an independent exact-source review revealed three additional unscored **Fourth-Conductor** features from PR #147; this correction does **not** grant them to the Fifth.
+
+**Exact accepted source:** [PR #157](https://github.com/LeviCade/OpenFront-National/pull/157) MERGED to canonical `stage3/integration-20261115` at `eef7faf5410d1dcbbc4031e1d693db65778a023c`, tree identical to tested Fifth staging `5bc50af82fefe5b11ebf67702c045c5750e3301f`. [Merged-source #45069138256](https://github.com/LeviCade/OpenFront-National/actions/runs/45069138256) SUCCESS: **844/844 files, 11,954 tests passed, one existing skip**, typecheck, lint, format, production build. [Merged independent QA #45069138248](https://github.com/LeviCade/OpenFront-National/actions/runs/45069138248) SUCCESS: GameRunner/replay, hostile packet checks, and Chromium *homepage* smoke, **not** full graphical multiplayer. [Combined 143/143 #45068632800](https://github.com/LeviCade/OpenFront-National/actions/runs/45068632800), [durable Worker 4/4 #45068632794](https://github.com/LeviCade/OpenFront-National/actions/runs/45068632794) and [native pact #45068632789](https://github.com/LeviCade/OpenFront-National/actions/runs/45068632789) SUCCESS.
+
+### FOURTH CONDUCTOR C2 — +8 newly accepted historical points, NEVER Fifth credit
+
+- **M0 +2 / #149:** process-death authoritative same-host persistence before acknowledgment and authenticated same-game/three-seat military-state recovery with no observed acknowledged tick loss.
+- **M2 +1 / #146:** actual seven native pact controls, authenticated Worker receipts and recipient-private roster/constitutional term authorization; distinct from earlier stamped underlying commands.
+- **M6 +2 / #148:** actual sanctions/paid-trade embargo and separately legal naval piracy, blockade, neutral merchant return.
+- **M1 +1 / #147:** SOV-05 actual ten-second Ungovernable deadline **automatically dissolves** the empire with legitimate disposition and replay. Founding `a1959dd9...` test explicitly blocked asset-unsafe collapse, retaining membership, so prior warning/rescue credit is not repeated; the new outcome is distinct and tested in `tests/national/LiveSovereignty.test.ts`.
+- **M5 +1 / #147:** actual emperor-configured worker-income share into canonical treasury, real member gold conservation and treasury-funded genuine construction/replay, unlike prior M5 peace delegation.
+- **M5 +1 / #147:** real hybrid troop growth/reserves, authorized transfers, lawful capacity/deferred claims and conservation on mode change/snapshot, unlike Fifth E1's separate centralized pooled battle.
+
+**The Fourth's honorary A remains its historic grade.** These eight are *newly accepted heritage*, not eight new Fifth-Class results.
+
+### FIFTH CONDUCTOR C1 — +6 truly new certified points
+
+- **M5 +1 / #153:** centralized real troop pooling, lawful emperor offense and defense through canonical combat; not the inherited hybrid accounting.
+- **M5 +1 / #152:** direct real empire-funded structure upgrades, physical demolition and commercial-income sharing; not inherited basic treasury/construction.
+- **M3 +1 / #155:** revocable, versioned per-member national war permissions and standing accession escalation while preserving national/imperial WAR scopes.
+- **M8 +1 / #156:** autonomous Game-issued constitutional treaties, sovereign choices, lawful betrayal, replay, separate from older military AI.
+- **M8 +1 / #154:** AI-issued economic sanctions, compliance/refusal, enforcement/backdown and observation-based credibility, separate from Fourth's underlying sanction enforcement.
+- **M7 +1 / #151:** reproducible and corrected ex-member intelligence leak and owned offshore vessel sight omission; previous 100/200-tile sensor mechanics and paged map credit not repeated.
+
+**Arithmetic: previously certified 53% + Fourth heritage 8% + Fifth new 6% = 67%.** Fifth Class achieved **six** original certified points against the shareholder's minimum five; grade **A — 3.75/4.00, GOLDEN REIGN; retained**. Fifth Second Class starts **67%, minimum 72%**. Original weighting and historical unallocated opening 16% unchanged.
+
+**M9 +0; NO RELEASE.** All four strict physical browser game lanes failed, physical R6 GPU lanes skipped; no physical signed four-mode witness, no three witnessed humans in same graphical game, no independently enrolled privileged signing/cleanup, no external OAuth/HTTPS/WSS approval, and original asset rights unverified. Main not promoted. Documentation-only PR records the certificate; do not award points for merging a ledger.
+
 ## Historical ledger — immutable opening balance
 
 | Checkpoint                       | Previous |             Earned | Reported | Evidence                                                                                                                                                                         |
