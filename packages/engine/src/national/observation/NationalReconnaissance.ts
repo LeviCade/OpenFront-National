@@ -11,7 +11,11 @@ export const REGIONAL_RECON_COST = 500n;
 export const REGIONAL_RECON_RADIUS = 90;
 export const REGIONAL_RECON_DURATION_TICKS = 600;
 const MAX_RECON_PURCHASES = 4096;
-const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
+const id = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9_-]+$/);
 const tick = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 
 const grantSchema = z.object({
@@ -102,7 +106,10 @@ export class NationalReconnaissance {
   }
 
   /** Only active, own-paid leases. Empire sharing is checked LIVE by FOG. */
-  activeFor(payerId: string, currentTick: number): readonly RegionalReconGrant[] {
+  activeFor(
+    payerId: string,
+    currentTick: number,
+  ): readonly RegionalReconGrant[] {
     return (this.byPayer.get(payerId) ?? [])
       .filter(
         (g) => g.effectiveTick <= currentTick && currentTick < g.expiresAtTick,

@@ -269,7 +269,12 @@ export function projectNationalObservation(
   const validGrant = new Map<string, NationalSightGrant>();
   for (const grant of world.sightGrants) {
     if (!intelligencePrincipals.has(grant.observerId)) continue;
-    if (grant.observedAtTick > world.tick || grant.expiresAtTick < world.tick)
+    if (
+      grant.observedAtTick > world.tick ||
+      (grant.source === "recon"
+        ? grant.expiresAtTick <= world.tick
+        : grant.expiresAtTick < world.tick)
+    )
       continue;
     const previous = validGrant.get(grant.assetId);
     if (
@@ -434,7 +439,10 @@ export function advanceLastKnown(
   const remembered = new Map<string, LastKnownAsset>();
   for (const entry of previous?.assets ?? []) {
     if (entry.lastSeenTick > observation.tick) continue;
-    if (entry.reconExpiresAtTick !== undefined && observation.tick >= entry.reconExpiresAtTick)
+    if (
+      entry.reconExpiresAtTick !== undefined &&
+      observation.tick >= entry.reconExpiresAtTick
+    )
       continue;
     // Shared intelligence rights end when the relevant empire dissolves.
     if (

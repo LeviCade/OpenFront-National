@@ -10,13 +10,13 @@ import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
+import { advanceLastKnown } from "@openfront/engine/national/observation/NationalObservation";
 import {
   NationalReconnaissance,
   REGIONAL_RECON_COST,
   REGIONAL_RECON_DURATION_TICKS,
   REGIONAL_RECON_RADIUS,
 } from "@openfront/engine/national/observation/NationalReconnaissance";
-import { advanceLastKnown } from "@openfront/engine/national/observation/NationalObservation";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
@@ -64,10 +64,15 @@ async function liveGame() {
   return game;
 }
 
-function visible(game: Awaited<ReturnType<typeof liveGame>>, who: string, id: number) {
-  return collectLiveNationalObservation(game, who).observation.visibleAssets.find(
-    (asset) => asset.id === String(id),
-  );
+function visible(
+  game: Awaited<ReturnType<typeof liveGame>>,
+  who: string,
+  id: number,
+) {
+  return collectLiveNationalObservation(
+    game,
+    who,
+  ).observation.visibleAssets.find((asset) => asset.id === String(id));
 }
 
 function packet(game: Awaited<ReturnType<typeof liveGame>>, clientID: string) {
@@ -105,11 +110,9 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     });
     const factory = target.buildUnit(UnitType.Factory, game.ref(186, 175), {});
     const far = target.buildUnit(UnitType.City, game.ref(190, 10), {});
-    const unrelated = game.player(STRANGER.id).buildUnit(
-      UnitType.City,
-      game.ref(190, 95),
-      {},
-    );
+    const unrelated = game
+      .player(STRANGER.id)
+      .buildUnit(UnitType.City, game.ref(190, 95), {});
     expect(visible(game, BUYER.id, ship.id())).toBeUndefined();
     expect(visible(game, BUYER.id, factory.id())).toBeUndefined();
     expect(packetHasUnit(packet(game, BUYER.clientID!), ship.id())).toBe(false);
@@ -133,8 +136,12 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     expect(buyer.gold()).toBe(before - REGIONAL_RECON_COST);
 
     const aiView = collectLiveNationalObservation(game, BUYER.id).observation;
-    expect(aiView.visibleAssets.find((a) => a.id === String(ship.id()))?.source).toBe("recon");
-    expect(aiView.visibleAssets.find((a) => a.id === String(factory.id()))?.source).toBe("recon");
+    expect(
+      aiView.visibleAssets.find((a) => a.id === String(ship.id()))?.source,
+    ).toBe("recon");
+    expect(
+      aiView.visibleAssets.find((a) => a.id === String(factory.id()))?.source,
+    ).toBe("recon");
     expect(visible(game, BUYER.id, far.id())).toBeUndefined();
     // Existing lawful geographic sight may reveal this co-located structure;
     // the purchase must NEVER be the authority for an unrelated owner.
@@ -154,7 +161,12 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     const afterWire = buyer.gold();
     expect(() =>
       game.performNationalReconnaissance(
-        buyer, TARGET.id, 185, 175, "paid_recon_1", BUYER.clientID!,
+        buyer,
+        TARGET.id,
+        185,
+        175,
+        "paid_recon_1",
+        BUYER.clientID!,
       ),
     ).toThrow(/duplicate/);
     // Ordinary turn execution may earn independent worker gold; replays
@@ -168,10 +180,16 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
 
     // Observe on the LAST authorized tick, then cross exactly ONE tick
     // to expiry. Prior memory would otherwise last another 60 ticks.
-    while (game.ticks() < lease.expiresAtTick - 1)
-      game.executeNextTick();
-    const lastLawful = collectLiveNationalObservation(game, BUYER.id).observation;
-    expect(lastLawful.visibleAssets.some((asset) => asset.id === String(factory.id()))).toBe(true);
+    while (game.ticks() < lease.expiresAtTick - 1) game.executeNextTick();
+    const lastLawful = collectLiveNationalObservation(
+      game,
+      BUYER.id,
+    ).observation;
+    expect(
+      lastLawful.visibleAssets.some(
+        (asset) => asset.id === String(factory.id()),
+      ),
+    ).toBe(true);
     const memory = advanceLastKnown(lastLawful, null, 60).memory;
     game.executeNextTick();
     expect(game.ticks()).toBe(lease.expiresAtTick);
@@ -179,7 +197,9 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     expect(visible(game, BUYER.id, ship.id())).toBeUndefined();
     const expired = collectLiveNationalObservation(game, BUYER.id).observation;
     expect(advanceLastKnown(expired, memory, 60).stale).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: String(factory.id()) })]),
+      expect.arrayContaining([
+        expect.objectContaining({ id: String(factory.id()) }),
+      ]),
     );
     expect(packetHasUnit(packet(game, BUYER.clientID!), ship.id())).toBe(false);
     expect(game.nationalReconnaissanceFor(BUYER.id)).toEqual([]);
@@ -189,12 +209,17 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     const game = await liveGame();
     const buyer = game.player(BUYER.id);
     const ally = game.player(ALLY.id);
-    const factory = game.player(TARGET.id).buildUnit(
-      UnitType.Factory, game.ref(185, 175), {},
-    );
+    const factory = game
+      .player(TARGET.id)
+      .buildUnit(UnitType.Factory, game.ref(185, 175), {});
     buyer.addGold(1_000n);
     game.performNationalReconnaissance(
-      buyer, TARGET.id, 185, 175, "shared_recon_1", BUYER.clientID!,
+      buyer,
+      TARGET.id,
+      185,
+      175,
+      "shared_recon_1",
+      BUYER.clientID!,
     );
     expect(visible(game, ALLY.id, factory.id())).toBeUndefined();
     // A nearby outsider can legitimately see this factory by its OWN border
@@ -202,31 +227,36 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     expect(visible(game, STRANGER.id, factory.id())?.source).not.toBe("recon");
 
     game.performNationalCommand(buyer, {
-      kind: "found-empire", empireId: "recon_empire",
+      kind: "found-empire",
+      empireId: "recon_empire",
     });
     game.performNationalCommand(buyer, {
-      kind: "offer-empire", empireId: "recon_empire", candidateId: ALLY.id,
+      kind: "offer-empire",
+      empireId: "recon_empire",
+      candidateId: ALLY.id,
     });
     game.performNationalCommand(ally, {
-      kind: "accept-empire", empireId: "recon_empire", candidateId: ALLY.id,
+      kind: "accept-empire",
+      empireId: "recon_empire",
+      candidateId: ALLY.id,
     });
     const shared = visible(game, ALLY.id, factory.id());
     expect(shared?.source).toBe("empire");
     expect(shared?.sourceNationId).toBe(BUYER.id);
-    expect(visible(game, STRANGER.id, factory.id())).toBeUndefined();
+    expect(visible(game, STRANGER.id, factory.id())?.source).not.toBe("recon");
 
     // Fault-inject a stale membership roster (not a live revocation) and
     // require the reciprocal current empireOf guard to terminate disclosure.
     const authority = game.nationalPoliticalAuthority()!;
-    const spy = vi.spyOn(game, "nationalPoliticalAuthority").mockImplementation(
-      () => ({
+    const spy = vi
+      .spyOn(game, "nationalPoliticalAuthority")
+      .mockImplementation(() => ({
         ...authority,
         membersOf: (id: string) => authority.membersOf(id),
         emperorOf: (id: string) => authority.emperorOf(id),
         empireOf: (id: string) =>
           id === BUYER.id ? null : authority.empireOf(id),
-      }),
-    );
+      }));
     try {
       expect(visible(game, ALLY.id, factory.id())).toBeUndefined();
     } finally {
@@ -235,7 +265,8 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     // Genuine Game-owned dissolution (not a mocked membership). The
     // purchased grant remains buyer-owned but the former ally loses rights.
     game.performNationalImperialAdministration(buyer, {
-      kind: "dissolve", empireId: "recon_empire",
+      kind: "dissolve",
+      empireId: "recon_empire",
     });
     expect(game.nationalPoliticalAuthority()?.empireOf(ALLY.id)).toBeNull();
     expect(visible(game, ALLY.id, factory.id())).toBeUndefined();
@@ -254,25 +285,45 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
       centerY: 175,
       requestId: "queued_recon_1",
     };
-    expect(NationalReconnaissanceIntentSchema.safeParse({
-      ...intent, centerX: -1,
-    }).success).toBe(false);
-    expect(NationalReconnaissanceIntentSchema.safeParse({
-      ...intent, requestId: "bad space",
-    }).success).toBe(false);
+    expect(
+      NationalReconnaissanceIntentSchema.safeParse({
+        ...intent,
+        centerX: -1,
+      }).success,
+    ).toBe(false);
+    expect(
+      NationalReconnaissanceIntentSchema.safeParse({
+        ...intent,
+        requestId: "bad space",
+      }).success,
+    ).toBe(false);
     expect(() =>
       game.performNationalReconnaissance(
-        buyer, TARGET.id, 185, 175, "wrong_client", "other-client",
+        buyer,
+        TARGET.id,
+        185,
+        175,
+        "wrong_client",
+        "other-client",
       ),
     ).toThrow(/stale authenticated/);
     expect(() =>
       game.performNationalReconnaissance(
-        buyer, BUYER.id, 185, 175, "own_target", BUYER.clientID!,
+        buyer,
+        BUYER.id,
+        185,
+        175,
+        "own_target",
+        BUYER.clientID!,
       ),
     ).toThrow(/invalid region/);
     expect(buyer.gold()).toBe(before);
 
-    const execution = new Executor(game, "recon-e5", BUYER.clientID!).createExec({
+    const execution = new Executor(
+      game,
+      "recon-e5",
+      BUYER.clientID!,
+    ).createExec({
       ...intent,
       clientID: BUYER.clientID!,
     });
@@ -297,7 +348,11 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     expect(() =>
       rehydrated.performNationalReconnaissance(
         rehydrated.player(BUYER.id),
-        TARGET.id, 185, 175, intent.requestId, BUYER.clientID!,
+        TARGET.id,
+        185,
+        175,
+        intent.requestId,
+        BUYER.clientID!,
       ),
     ).toThrow(/duplicate/);
     expect(rehydrated.player(BUYER.id).gold()).toBe(paidBalance);
@@ -308,14 +363,26 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     const buyer = game.player(BUYER.id);
     const initial = buyer.gold();
     if (initial >= REGIONAL_RECON_COST) buyer.removeGold(initial);
-    expect(() => game.performNationalReconnaissance(
-      buyer, TARGET.id, 185, 175, "insufficient_1", BUYER.clientID!,
-    )).toThrow(/insufficient gold/);
+    expect(() =>
+      game.performNationalReconnaissance(
+        buyer,
+        TARGET.id,
+        185,
+        175,
+        "insufficient_1",
+        BUYER.clientID!,
+      ),
+    ).toThrow(/insufficient gold/);
     expect(game.nationalReconnaissanceFor(BUYER.id)).toEqual([]);
     buyer.addGold(REGIONAL_RECON_COST);
     const original = buyer.gold();
     game.performNationalReconnaissance(
-      buyer, TARGET.id, 185, 175, "funded_1", BUYER.clientID!,
+      buyer,
+      TARGET.id,
+      185,
+      175,
+      "funded_1",
+      BUYER.clientID!,
     );
     expect(buyer.gold()).toBe(original - REGIONAL_RECON_COST);
   });
@@ -333,7 +400,11 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     const elapsed = performance.now() - start;
     expect(total).toBe(120);
     expect(ledger.activeFor("nation0", 605)).toEqual([]);
-    expect(NationalReconnaissance.restore(ledger.snapshot(), 5).snapshot()).toEqual(ledger.snapshot());
-    console.info("[M7 120-nation ledger] active=120 elapsedMs=" + elapsed.toFixed(3));
+    expect(
+      NationalReconnaissance.restore(ledger.snapshot(), 5).snapshot(),
+    ).toEqual(ledger.snapshot());
+    console.info(
+      "[M7 120-nation ledger] active=120 elapsedMs=" + elapsed.toFixed(3),
+    );
   });
 });
