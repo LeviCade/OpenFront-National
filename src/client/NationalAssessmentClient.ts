@@ -36,6 +36,7 @@ export interface NationalAssessmentClientView {
 }
 
 const nationalId = /^[A-Za-z0-9_-]{1,256}$/;
+const commandTargetId = /^[A-Za-z0-9_-]{1,64}$/;
 const requestId = /^[A-Za-z0-9_-]{1,128}$/;
 const decimal = /^(0|[1-9][0-9]{0,29})$/;
 const positiveDecimal = /^[1-9][0-9]{0,29}$/;
@@ -64,7 +65,7 @@ export function parseNationalAssessmentPurchaseIntent(
   if (
     input.type !== "national_buy_national_assessment" ||
     typeof input.targetId !== "string" ||
-    !nationalId.test(input.targetId) ||
+    !commandTargetId.test(input.targetId) ||
     typeof input.requestId !== "string" ||
     !requestId.test(input.requestId)
   )

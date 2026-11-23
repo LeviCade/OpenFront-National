@@ -149,6 +149,7 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
       { ...good, scope: "public" },
       { ...good, requestId: "" },
       { ...good, targetId: "nation a" },
+      { ...good, targetId: "x".repeat(65) },
       { ...good, type: "national_buy_regional_recon" },
       { type: good.type, targetId: good.targetId },
     ]) {
@@ -169,8 +170,11 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
     ).toBeNull();
     // Multiple authenticated purchases may share a payer/target/tick.
     expect(
-      readNationalAssessmentView(packet([validReport, validReport]), "nation-a", 21)
-        ?.items,
+      readNationalAssessmentView(
+        packet([validReport, validReport]),
+        "nation-a",
+        21,
+      )?.items,
     ).toHaveLength(2);
     expect(
       readNationalAssessmentView(
