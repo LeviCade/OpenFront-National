@@ -3,7 +3,11 @@ import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import type { Execution, Game, Player } from "../game/Game";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
-import type { ExecRecord, SnapshotReader, SnapshotWriter } from "../snapshot/SnapshotContext";
+import type {
+  ExecRecord,
+  SnapshotReader,
+  SnapshotWriter,
+} from "../snapshot/SnapshotContext";
 
 export class NationalCounterassessmentExecution implements Execution {
   private active = true;
@@ -13,19 +17,29 @@ export class NationalCounterassessmentExecution implements Execution {
     private requestId: string,
     private authenticatedClientID: ClientID,
   ) {}
-  init(game: Game): void { this.game = game; }
+  init(game: Game): void {
+    this.game = game;
+  }
   tick(): void {
     this.active = false;
     if (this.game === null)
       throw new Error("NATIONAL counterassessment execution not initialized");
     try {
       this.game.performNationalCounterassessment(
-        this.actor, this.requestId, this.authenticatedClientID,
+        this.actor,
+        this.requestId,
+        this.authenticatedClientID,
       );
-    } catch { console.warn("NATIONAL counterassessment rejected"); }
+    } catch {
+      console.warn("NATIONAL counterassessment rejected");
+    }
   }
-  isActive(): boolean { return this.active; }
-  activeDuringSpawnPhase(): boolean { return false; }
+  isActive(): boolean {
+    return this.active;
+  }
+  activeDuringSpawnPhase(): boolean {
+    return false;
+  }
   snapshot(w: SnapshotWriter): ExecRecord {
     return NationalCounterassessmentExecutionSnapshot.write({
       active: this.active,
@@ -35,7 +49,10 @@ export class NationalCounterassessmentExecution implements Execution {
       authenticatedClientID: this.authenticatedClientID,
     });
   }
-  restoreSnapshot(s: NationalCounterassessmentExecutionState, r: SnapshotReader): void {
+  restoreSnapshot(
+    s: NationalCounterassessmentExecutionState,
+    r: SnapshotReader,
+  ): void {
     this.active = s.active;
     this.game = s.initialized ? r.game : null;
     this.actor = r.player(s.actor);
@@ -47,10 +64,16 @@ const NationalCounterassessmentExecutionStateSchema = z.object({
   active: z.boolean(),
   initialized: z.boolean(),
   actor: zPlayerRef(),
-  requestId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/),
+  requestId: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[A-Za-z0-9_-]+$/),
   authenticatedClientID: z.string().min(1).max(256),
 });
-type NationalCounterassessmentExecutionState = z.infer<typeof NationalCounterassessmentExecutionStateSchema>;
+type NationalCounterassessmentExecutionState = z.infer<
+  typeof NationalCounterassessmentExecutionStateSchema
+>;
 export const NationalCounterassessmentExecutionSnapshot = execSnapshotType({
   name: "NationalCounterassessment",
   version: 1,

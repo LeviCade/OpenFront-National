@@ -24,24 +24,30 @@ const band = z.object({
   lower: z.string().regex(/^(0|[1-9][0-9]*)$/),
   upperExclusive: z.string().regex(/^[1-9][0-9]*$/),
 });
-const grantSchema = z.object({
-  requestId: id,
-  payerId: nation,
-  targetId: nation,
-  cost: z.literal("1200"),
-  effectiveTick: tick,
-  expiresAtTick: tick,
-  treasuryGoldBand: band,
-  militaryTroopsBand: band,
-  confidence: z.enum(["coarse-estimate", "shielded-coarse-estimate"]).optional(),
-}).strict();
-const shieldSchema = z.object({
-  requestId: id,
-  defenderId: nation,
-  cost: z.literal("1800"),
-  effectiveTick: tick,
-  expiresAtTick: tick,
-}).strict();
+const grantSchema = z
+  .object({
+    requestId: id,
+    payerId: nation,
+    targetId: nation,
+    cost: z.literal("1200"),
+    effectiveTick: tick,
+    expiresAtTick: tick,
+    treasuryGoldBand: band,
+    militaryTroopsBand: band,
+    confidence: z
+      .enum(["coarse-estimate", "shielded-coarse-estimate"])
+      .optional(),
+  })
+  .strict();
+const shieldSchema = z
+  .object({
+    requestId: id,
+    defenderId: nation,
+    cost: z.literal("1800"),
+    effectiveTick: tick,
+    expiresAtTick: tick,
+  })
+  .strict();
 export type NationalAssessmentShield = z.infer<typeof shieldSchema>;
 export type NationalAssessmentGrant = z.infer<typeof grantSchema>;
 export type NationalAssessmentReport = Omit<
@@ -74,8 +80,13 @@ export function captureNationalAssessmentBands(
   const g = (gold / goldStep) * goldStep;
   const t = (BigInt(troops) / troopStep) * troopStep;
   return {
-    confidence: shielded ? ("shielded-coarse-estimate" as const) : ("coarse-estimate" as const),
-    treasuryGoldBand: { lower: String(g), upperExclusive: String(g + goldStep) },
+    confidence: shielded
+      ? ("shielded-coarse-estimate" as const)
+      : ("coarse-estimate" as const),
+    treasuryGoldBand: {
+      lower: String(g),
+      upperExclusive: String(g + goldStep),
+    },
     militaryTroopsBand: {
       lower: String(t),
       upperExclusive: String(t + troopStep),
@@ -98,8 +109,11 @@ export class NationalAssessment {
   ): NationalAssessmentShield {
     id.parse(requestId);
     nation.parse(defenderId);
-    if (!Number.isSafeInteger(now) || now < 0 ||
-      !Number.isSafeInteger(now + NATIONAL_COUNTERASSESSMENT_DURATION_TICKS))
+    if (
+      !Number.isSafeInteger(now) ||
+      now < 0 ||
+      !Number.isSafeInteger(now + NATIONAL_COUNTERASSESSMENT_DURATION_TICKS)
+    )
       throw new Error("NATIONAL counterassessment: invalid tick");
     const key = this.key(defenderId, requestId);
     if (this.shieldIds.has(key))
@@ -110,27 +124,37 @@ export class NationalAssessment {
       throw new Error("NATIONAL counterassessment: shield already active");
     let activeCount = 0;
     for (const shield of this.shields)
-      if (shield.effectiveTick <= now && now < shield.expiresAtTick) activeCount++;
+      if (shield.effectiveTick <= now && now < shield.expiresAtTick)
+        activeCount++;
     if (activeCount >= MAX_ACTIVE_SHIELDS)
-      throw new Error("NATIONAL counterassessment: active shield capacity exhausted");
+      throw new Error(
+        "NATIONAL counterassessment: active shield capacity exhausted",
+      );
     charge();
     let shield: NationalAssessmentShield;
     try {
       shield = shieldSchema.parse({
-        defenderId, requestId,
+        defenderId,
+        requestId,
         cost: NATIONAL_COUNTERASSESSMENT_COST.toString(),
         effectiveTick: now,
         expiresAtTick: now + NATIONAL_COUNTERASSESSMENT_DURATION_TICKS,
       });
-    } catch (error) { refund(); throw error; }
+    } catch (error) {
+      refund();
+      throw error;
+    }
     this.shields.push(shield);
     this.shieldIds.add(key);
     return { ...shield };
   }
   isShielded(defenderId: string, now: number): boolean {
-    return this.shields.some((s) =>
-      s.defenderId === defenderId &&
-      s.effectiveTick <= now && now < s.expiresAtTick);
+    return this.shields.some(
+      (s) =>
+        s.defenderId === defenderId &&
+        s.effectiveTick <= now &&
+        now < s.expiresAtTick,
+    );
   }
   private key(payer: string, request: string): string {
     return payer.length + ":" + payer + ":" + request;
@@ -142,8 +166,13 @@ export class NationalAssessment {
     requestId: string,
     charge: () => void,
     refund: () => void,
-    capture: () => Omit<ReturnType<typeof captureNationalAssessmentBands>, "confidence"> & {
-      confidence?: ReturnType<typeof captureNationalAssessmentBands>["confidence"];
+    capture: () => Omit<
+      ReturnType<typeof captureNationalAssessmentBands>,
+      "confidence"
+    > & {
+      confidence?: ReturnType<
+        typeof captureNationalAssessmentBands
+      >["confidence"];
     },
   ): NationalAssessmentGrant {
     id.parse(requestId);
@@ -218,8 +247,14 @@ export class NationalAssessment {
     const state = new NationalAssessment();
     let activeCount = 0;
     for (const g of source.grants) {
-      const goldStep = g.confidence === "shielded-coarse-estimate" ? SHIELDED_GOLD_STEP : 2500n;
-      const troopStep = g.confidence === "shielded-coarse-estimate" ? SHIELDED_TROOP_STEP : 100000n;
+      const goldStep =
+        g.confidence === "shielded-coarse-estimate"
+          ? SHIELDED_GOLD_STEP
+          : 2500n;
+      const troopStep =
+        g.confidence === "shielded-coarse-estimate"
+          ? SHIELDED_TROOP_STEP
+          : 100000n;
       const key = state.key(g.payerId, g.requestId);
       if (
         g.payerId === g.targetId ||
@@ -254,14 +289,22 @@ export class NationalAssessment {
       if (
         state.shieldIds.has(key) ||
         shield.effectiveTick > now ||
-        shield.expiresAtTick !== shield.effectiveTick + NATIONAL_COUNTERASSESSMENT_DURATION_TICKS ||
-        state.shields.some((old) => old.defenderId === shield.defenderId &&
-          old.effectiveTick < shield.expiresAtTick &&
-          shield.effectiveTick < old.expiresAtTick)
-      ) throw new Error("NATIONAL counterassessment: invalid restored shield");
-      if (shield.effectiveTick <= now && now < shield.expiresAtTick) activeShields++;
+        shield.expiresAtTick !==
+          shield.effectiveTick + NATIONAL_COUNTERASSESSMENT_DURATION_TICKS ||
+        state.shields.some(
+          (old) =>
+            old.defenderId === shield.defenderId &&
+            old.effectiveTick < shield.expiresAtTick &&
+            shield.effectiveTick < old.expiresAtTick,
+        )
+      )
+        throw new Error("NATIONAL counterassessment: invalid restored shield");
+      if (shield.effectiveTick <= now && now < shield.expiresAtTick)
+        activeShields++;
       if (activeShields > MAX_ACTIVE_SHIELDS)
-        throw new Error("NATIONAL counterassessment: restored active shield capacity exceeded");
+        throw new Error(
+          "NATIONAL counterassessment: restored active shield capacity exceeded",
+        );
       state.shields.push(shield);
       state.shieldIds.add(key);
     }

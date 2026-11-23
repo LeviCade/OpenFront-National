@@ -1754,13 +1754,16 @@ export class GameImpl implements Game {
         const authority = this.nationalPoliticalAuthority();
         const actorEmpire = authority?.empireOf(actor.id()) ?? null;
         const targetEmpire = authority?.empireOf(targetId) ?? null;
-        const allies = actorEmpire !== null && actorEmpire === targetEmpire &&
+        const allies =
+          actorEmpire !== null &&
+          actorEmpire === targetEmpire &&
           authority?.membersOf(actorEmpire).includes(actor.id()) === true &&
           authority?.membersOf(actorEmpire).includes(targetId) === true;
         return captureNationalAssessmentBands(
           target.gold(),
           target.troops(),
-          !allies && this._nationalAssessment!.isShielded(targetId, this._ticks),
+          !allies &&
+            this._nationalAssessment!.isShielded(targetId, this._ticks),
         );
       },
     );
@@ -1777,7 +1780,9 @@ export class GameImpl implements Game {
     if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
       throw new Error("NATIONAL counterassessment: inactive principal");
     return this._nationalAssessment.buyShield(
-      actor.id(), this._ticks, requestId,
+      actor.id(),
+      this._ticks,
+      requestId,
       () => {
         if (actor.gold() < NATIONAL_COUNTERASSESSMENT_COST)
           throw new Error("NATIONAL counterassessment: insufficient gold");
@@ -3331,7 +3336,9 @@ export class GameImpl implements Game {
           : NationalAssessment.restore(s.nationalAssessment, this._ticks);
       for (const shield of this._nationalAssessment.snapshot().shields ?? []) {
         if (!this._players.has(shield.defenderId))
-          throw new Error("NATIONAL counterassessment: invalid restored defender");
+          throw new Error(
+            "NATIONAL counterassessment: invalid restored defender",
+          );
       }
       for (const grant of this._nationalAssessment.snapshot().grants) {
         if (
