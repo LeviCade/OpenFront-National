@@ -115,15 +115,14 @@ export function planNationalRecon(
     )
     .sort((a, b) => cmp(a.targetId, b.targetId) || cmp(a.assetId, b.assetId));
   const first = discoveries[0];
+  const previousActive =
+    previous.lastDiscovery !== null &&
+    observation.tick < previous.lastDiscovery.expiresAtTick
+      ? previous.lastDiscovery
+      : null;
   const memory: NationalReconMemory = {
     ...previous,
-    lastDiscovery:
-      first === undefined
-        ? previous.lastDiscovery !== null &&
-          observation.tick < previous.lastDiscovery.expiresAtTick
-          ? previous.lastDiscovery
-          : null
-        : first,
+    lastDiscovery: first ?? previousActive,
   };
   const holdOffenseAgainst =
     memory.lastDiscovery !== null &&
