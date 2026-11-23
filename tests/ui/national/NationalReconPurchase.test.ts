@@ -3,7 +3,7 @@ import { parseNationalReconnaissanceIntent } from "../../../src/client/NationalR
 
 const valid = Object.freeze({
   type: "national_buy_regional_recon" as const,
-  targetId: "nation-b",
+  targetId: "Target123",
   centerX: 210,
   centerY: 185,
   requestId: "np_" + "a".repeat(32),
