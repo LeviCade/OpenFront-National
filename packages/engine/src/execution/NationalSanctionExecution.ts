@@ -154,7 +154,7 @@ export class NationalSanctionExecution implements Execution {
     const game = this.game!;
     const empire = game.nationalPoliticalAuthority()?.empireOf(actor.id());
     if (empire === undefined) return false;
-    if (empire === null) return true; // independent sovereignty
+    if (empire === null) return expectedVersion === undefined; // no stale imperial grant after collapse
     const charter = game.nationalEconomicCharterFor(actor);
     return charter !== null && charter.empireId === empire &&
       charter.ownerId === charter.emperorId &&
@@ -322,7 +322,7 @@ export class NationalSanctionExecution implements Execution {
     if (!record || !d || d.phase !== "pending" || !row ||
         row.response !== "none" || !target ||
         !record.controllingIssuer() ||
-        !record.canApplyMemberRestriction(member, target))
+        (auth.empireOf(target.id()) === empireId && !charter.allowInternal))
       throw new Error("NATIONAL: ineligible imperial sanction demand");
     if (decision === "comply") member.addEmbargo(target, false);
     row.response = decision;
