@@ -34,7 +34,7 @@ jobs:
       - name: Real naval AI, maritime and FFA regression
         if: success() || failure()
         run: |
-          npx --no-install vitest run --project node             tests/national/C5Class3NavalAI.test.ts             tests/national/C5Class3NavalPerf.test.ts             tests/national/C4Class2EconomicMaritime.test.ts             tests/national/NationalAIRealWar.test.ts             tests/NationWarshipNukeReserve.test.ts             tests/Warship.test.ts             tests/national/C5CoastalVisibility.test.ts
+          npx --no-install vitest run --project node             tests/national/C5Class3NavalAI.test.ts             tests/national/C5Class3NavalPerf.test.ts             tests/national/C4Class2EconomicMaritime.test.ts             tests/national/NationalAIRealWar.test.ts             tests/NationWarshipNukeReserve.test.ts             tests/Warship.test.ts             tests/national/C5CoastalVisibility.test.ts             tests/national/NationalObservation.test.ts             tests/national/NationalLiveObservation.test.ts             tests/national/NationalWarSides.test.ts             tests/national/NationalPlanner.test.ts             tests/national/NationalWarPublicProjectionR9.test.ts             tests/national/RoundNineWarAuthorityGame.test.ts             tests/national/RoundTenNationExecutionBridge.test.ts             tests/national/C5ImperialWarPolicy.test.ts             tests/national/ConductorTwoCrownWarContinuity.test.ts             tests/national/RoundEightWarInFlight.test.ts
       - name: Lint
         if: success() || failure()
         run: npm run lint
