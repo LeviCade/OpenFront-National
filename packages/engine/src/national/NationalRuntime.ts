@@ -128,10 +128,49 @@ const politicsSchema = z.object({
 });
 
 const exactGold = z.string().regex(/^(0|[1-9][0-9]*)$/);
+export type ImperialRevenueClass = "workers" | "maritime" | "rail" | "piracy";
+export type ImperialCommercialRevenueClass = Exclude<
+  ImperialRevenueClass,
+  "workers"
+>;
+export type ImperialRevenueClasses = Readonly<
+  Record<ImperialRevenueClass, boolean>
+>;
+const allRevenueClasses: ImperialRevenueClasses = Object.freeze({
+  workers: true,
+  maritime: true,
+  rail: true,
+  piracy: true,
+});
+const revenueClassesSchema = z
+  .object({
+    workers: z.boolean(),
+    maritime: z.boolean(),
+    rail: z.boolean(),
+    piracy: z.boolean(),
+  })
+  .strict();
+/** A bounded, durable authorization record; no wallet or alternate treasury. */
+const reliefAmount = z.string().regex(/^[1-9][0-9]{0,11}$/);
+const reliefRequestSchema = z.object({
+  reliefId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+  empireId: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+  memberId: z.string().min(1),
+  amount: reliefAmount,
+  status: z.enum(["pending", "approved", "rejected", "cancelled"]),
+  version: z.number().int().min(0).max(1),
+  decidedBy: z.string().min(1).nullable(),
+});
+export type ImperialReliefRequest = z.infer<typeof reliefRequestSchema>;
+
 const administrationSchema = z.object({
   empireId: z.string(),
   workerIncomeBps: z.number().int().min(0).max(10_000),
   nonWorkerIncomeBps: z.number().int().min(0).max(10_000).optional(),
+  /** V1 row extension: absent means zero fixed levy and all classes enabled. */
+  fixedGoldPerPayout: exactGold.max(128).optional(),
+  revenueClasses: revenueClassesSchema.optional(),
+  revenuePolicyVersion: z.literal(1).optional(),
   allowedConstruction: z.array(z.enum(UnitType)).nullable(),
   treasury: exactGold,
   military: z
@@ -151,6 +190,10 @@ type AdministrationRow = z.infer<typeof administrationSchema>;
 export type ImperialPolicy = {
   readonly workerIncomeBps: number;
   readonly nonWorkerIncomeBps?: number;
+  /** Exact integer gold per paid event; percentage is applied first. */
+  readonly fixedGoldPerPayout?: string;
+  /** Omitted by legacy clients; the prior class policy is then retained. */
+  readonly revenueClasses?: ImperialRevenueClasses;
   readonly allowedConstruction: UnitType[] | null;
 };
 
@@ -215,6 +258,19 @@ export type NationalImperialAdministrationCommand =
       empireId: string;
       expectedVersion: number;
       response: "none" | "assist" | "imperial" | "both";
+    }
+  | {
+      kind: "request-relief";
+      empireId: string;
+      reliefId: string;
+      amount: string;
+    }
+  | {
+      kind: "decide-relief";
+      empireId: string;
+      reliefId: string;
+      expectedVersion: number;
+      decision: "approve" | "reject";
     };
 
 export interface NationalImperialAdministrationView extends Omit<
@@ -223,7 +279,11 @@ export interface NationalImperialAdministrationView extends Omit<
 > {
   readonly allowedConstruction: readonly UnitType[] | null;
   readonly empireId: string;
+  readonly fixedGoldPerPayout: string;
+  readonly revenueClasses: ImperialRevenueClasses;
   readonly treasury: string;
+  /** Emperor sees this empire's requests; a constituent sees only their own. */
+  readonly reliefRequests: readonly ImperialReliefRequest[];
   readonly canAmend: boolean;
   readonly armyMode: "decentralized" | "hybrid" | "centralized";
   readonly hybridThresholdBps: number;
@@ -262,6 +322,8 @@ export const NationalRuntimeSnapshotSchema = z.object({
   lastTick: counter,
   politics: politicsSchema,
   administration: z.array(administrationSchema).optional(),
+  /** Optional in original V1 snapshots; historical absence is an empty ledger. */
+  reliefRequests: z.array(reliefRequestSchema).max(4096).optional(),
   unclaimedTreasury: exactGold.optional(),
   deferredTroops: z
     .array(z.object({ memberId: z.string(), amount: exactGold }))
@@ -421,6 +483,7 @@ export class NationalRuntime {
   private politics: PoliticsProjection;
   private lastTick = 0;
   private administration = new Map<string, AdministrationRow>();
+  private reliefRequests = new Map<string, ImperialReliefRequest>();
   private unclaimedTreasury = 0n;
   private deferredTroops = new Map<PlayerID, bigint>();
   private unclaimedTroops = 0n;
@@ -444,16 +507,20 @@ export class NationalRuntime {
     policy: ImperialPolicy,
   ): void {
     this.assertEmperor(actorId, empireId);
+    const previous = this.administration.get(empireId);
     const row = administrationSchema.parse({
       empireId,
       workerIncomeBps: policy.workerIncomeBps,
       nonWorkerIncomeBps:
-        policy.nonWorkerIncomeBps ??
-        this.administration.get(empireId)?.nonWorkerIncomeBps ??
-        0,
+        policy.nonWorkerIncomeBps ?? previous?.nonWorkerIncomeBps ?? 0,
+      fixedGoldPerPayout:
+        policy.fixedGoldPerPayout ?? previous?.fixedGoldPerPayout ?? "0",
+      revenueClasses:
+        policy.revenueClasses ?? previous?.revenueClasses ?? allRevenueClasses,
+      revenuePolicyVersion: 1,
       allowedConstruction: policy.allowedConstruction,
-      treasury: this.administration.get(empireId)?.treasury ?? "0",
-      military: this.administration.get(empireId)?.military,
+      treasury: previous?.treasury ?? "0",
+      military: previous?.military,
     });
     validateAdministration(row);
     row.allowedConstruction?.sort();
@@ -476,12 +543,25 @@ export class NationalRuntime {
       empireId: empire.id,
       workerIncomeBps: row?.workerIncomeBps ?? 0,
       nonWorkerIncomeBps: row?.nonWorkerIncomeBps ?? 0,
+      fixedGoldPerPayout: row?.fixedGoldPerPayout ?? "0",
+      revenueClasses: Object.freeze({
+        ...(row?.revenueClasses ?? allRevenueClasses),
+      }),
       allowedConstruction:
         row?.allowedConstruction === null ||
         row?.allowedConstruction === undefined
           ? null
           : Object.freeze([...row.allowedConstruction]),
       treasury: row?.treasury ?? "0",
+      reliefRequests: Object.freeze(
+        [...this.reliefRequests.values()]
+          .filter(
+            (request) =>
+              request.empireId === empire.id &&
+              (empire.leaderId === memberId || request.memberId === memberId),
+          )
+          .map((request) => Object.freeze({ ...request })),
+      ),
       canAmend: empire.leaderId === memberId,
       armyMode: row?.military?.mode ?? "decentralized",
       hybridThresholdBps: row?.military?.thresholdBps ?? 6000,
@@ -565,6 +645,9 @@ export class NationalRuntime {
       empireId,
       workerIncomeBps: previous?.workerIncomeBps ?? 0,
       nonWorkerIncomeBps: previous?.nonWorkerIncomeBps ?? 0,
+      fixedGoldPerPayout: previous?.fixedGoldPerPayout,
+      revenueClasses: previous?.revenueClasses,
+      revenuePolicyVersion: previous?.revenuePolicyVersion,
       allowedConstruction: previous?.allowedConstruction ?? null,
       treasury: previous?.treasury ?? "0",
       military: {
@@ -652,6 +735,9 @@ export class NationalRuntime {
       empireId,
       workerIncomeBps: previous?.workerIncomeBps ?? 0,
       nonWorkerIncomeBps: previous?.nonWorkerIncomeBps ?? 0,
+      fixedGoldPerPayout: previous?.fixedGoldPerPayout,
+      revenueClasses: previous?.revenueClasses,
+      revenuePolicyVersion: previous?.revenuePolicyVersion,
       allowedConstruction: previous?.allowedConstruction ?? null,
       treasury: previous?.treasury ?? "0",
       military: {
@@ -775,34 +861,147 @@ export class NationalRuntime {
     return amount;
   }
 
-  /** Only PlayerExecution's actual worker production enters this ledger. */
+  /** Worker production and named commercial origins enter at actual paid events only. */
   routeWorkerIncome(memberId: PlayerID, gross: bigint): bigint {
-    const empire = this.politics.empires.find((e) =>
-      e.memberIds.includes(memberId),
-    );
-    const row = empire && this.administration.get(empire.id);
-    if (!row || row.workerIncomeBps === 0) return gross;
-    const split = splitWorkerIncome(gross, row.workerIncomeBps);
-    row.treasury = (BigInt(row.treasury) + split.imperial).toString();
-    return split.personal;
+    return this.routeIncome(memberId, gross, "workers");
+  }
+
+  routeNonWorkerIncome(
+    memberId: PlayerID,
+    gross: bigint,
+    source: ImperialCommercialRevenueClass,
+  ): bigint {
+    return this.routeIncome(memberId, gross, source);
   }
 
   /**
-   * D-011 commercial revenue, explicitly only trade ships, trains and piracy
-   * at their physical payout boundaries. Donations, conquest, gifts and generic
-   * addGold never enter this path. Historical policy defaults to zero.
+   * D-011: percent first (floor in integer basis points), then fixed gold
+   * from the remainder. One gross payment equals retained + imperial exactly.
+   * Neither generic addGold nor a missed/embargoed commerce event calls here.
    */
-  routeNonWorkerIncome(memberId: PlayerID, gross: bigint): bigint {
-    if (gross < 0n) throw new Error("NATIONAL: negative commercial income");
+  private routeIncome(
+    memberId: PlayerID,
+    gross: bigint,
+    source: ImperialRevenueClass,
+  ): bigint {
+    if (gross < 0n) throw new Error("NATIONAL: negative revenue payout");
     const empire = this.politics.empires.find((e) =>
       e.memberIds.includes(memberId),
     );
     const row = empire && this.administration.get(empire.id);
-    const rate = row?.nonWorkerIncomeBps ?? 0;
-    if (rate === 0) return gross;
-    const split = splitWorkerIncome(gross, rate);
-    row!.treasury = (BigInt(row!.treasury) + split.imperial).toString();
-    return split.personal;
+    if (!row || !(row.revenueClasses ?? allRevenueClasses)[source])
+      return gross;
+    const rate =
+      source === "workers"
+        ? row.workerIncomeBps
+        : (row.nonWorkerIncomeBps ?? 0);
+    const percent = splitWorkerIncome(gross, rate).imperial;
+    const remaining = gross - percent;
+    const fixed = BigInt(row.fixedGoldPerPayout ?? "0");
+    const contribution = percent + (fixed < remaining ? fixed : remaining);
+    if (contribution > 0n)
+      row.treasury = (BigInt(row.treasury) + contribution).toString();
+    return gross - contribution;
+  }
+
+  /**
+   * Only a living *non-emperor* constituent may originate their own request.
+   * Request IDs are global to this match and never reusable after settlement.
+   */
+  requestImperialRelief(
+    actorId: PlayerID,
+    empireId: string,
+    reliefId: string,
+    amount: string,
+  ): void {
+    requireCommandId(empireId);
+    requireCommandId(reliefId);
+    const empire = this.politics.empires.find((e) => e.id === empireId);
+    if (
+      !empire ||
+      empire.leaderId === actorId ||
+      !empire.memberIds.includes(actorId) ||
+      !this.politics.nations.some((n) => n.id === actorId && n.alive)
+    )
+      throw new Error("NATIONAL: relief requires a living non-emperor member");
+    if (!reliefAmount.safeParse(amount).success)
+      throw new Error("NATIONAL: invalid bounded relief amount");
+    if (this.reliefRequests.has(reliefId))
+      throw new Error("NATIONAL: duplicate relief identifier");
+    if (this.reliefRequests.size >= 4096)
+      throw new Error("NATIONAL: relief ledger capacity reached");
+    this.reliefRequests.set(reliefId, {
+      reliefId,
+      empireId,
+      memberId: actorId,
+      amount,
+      status: "pending",
+      version: 0,
+      decidedBy: null,
+    });
+  }
+
+  /**
+   * Version-checked two-party authorization. All checks and wallet preflight
+   * precede the one commit. The Game port stages a direct PlayerImpl balance
+   * update, so a grant is spendable but NOT new economic production.
+   */
+  decideImperialRelief(
+    actorId: PlayerID,
+    empireId: string,
+    reliefId: string,
+    expectedVersion: number,
+    decision: "approve" | "reject",
+    prepareWalletCredit: (memberId: PlayerID, amount: bigint) => () => void,
+  ): void {
+    this.assertEmperor(actorId, empireId);
+    requireCommandId(reliefId);
+    const request = this.reliefRequests.get(reliefId);
+    if (
+      !request ||
+      request.empireId !== empireId ||
+      request.memberId === actorId ||
+      request.status !== "pending" ||
+      request.version !== expectedVersion ||
+      expectedVersion !== 0 ||
+      (decision !== "approve" && decision !== "reject")
+    )
+      throw new Error(
+        "NATIONAL: stale, foreign or unauthorized relief decision",
+      );
+    const empire = this.politics.empires.find((e) => e.id === empireId)!;
+    if (
+      !empire.memberIds.includes(request.memberId) ||
+      !this.politics.nations.some(
+        (nation) => nation.id === request.memberId && nation.alive,
+      )
+    )
+      throw new Error(
+        "NATIONAL: relief recipient is no longer a living member",
+      );
+    const row = this.administration.get(empireId);
+    const amount = BigInt(request.amount);
+    if (decision === "approve") {
+      if (!row || BigInt(row.treasury) < amount)
+        throw new Error("NATIONAL: insufficient imperial relief treasury");
+      const credit = prepareWalletCredit(request.memberId, amount);
+      // The preflight returns an in-memory, nonthrowing Game PlayerImpl commit.
+      // No independent currency balance, source counter, or earned-income levy.
+      const oldTreasury = row.treasury;
+      row.treasury = (BigInt(oldTreasury) - amount).toString();
+      try {
+        credit();
+      } catch (error) {
+        row.treasury = oldTreasury;
+        throw error;
+      }
+    }
+    this.reliefRequests.set(reliefId, {
+      ...request,
+      version: 1,
+      status: decision === "approve" ? "approved" : "rejected",
+      decidedBy: actorId,
+    });
   }
 
   /** Treasury debits never transit a nation's personal wallet. */
@@ -886,6 +1085,23 @@ export class NationalRuntime {
     if (collapsed.length > 0)
       disposition?.(credits, collapsed.map((e) => e.id).sort(), troopCredits);
     for (const empire of collapsed) this.administration.delete(empire.id);
+    // A dead/expelled member or dissolved empire cannot retain a payable
+    // request. Keep the ID and cancelled outcome for replay protection.
+    for (const [id, request] of this.reliefRequests) {
+      if (
+        request.status === "pending" &&
+        (!next.empires.some(
+          (e) =>
+            e.id === request.empireId && e.memberIds.includes(request.memberId),
+        ) ||
+          !next.nations.some((n) => n.id === request.memberId && n.alive))
+      )
+        this.reliefRequests.set(id, {
+          ...request,
+          status: "cancelled",
+          version: 1,
+        });
+    }
     this.unclaimedTreasury = unclaimed;
     this.deferredTroops = deferred;
     this.unclaimedTroops = unclaimedTroops;
@@ -1420,6 +1636,13 @@ export class NationalRuntime {
             ),
           }
         : {}),
+      ...(this.reliefRequests.size > 0
+        ? {
+            reliefRequests: [...this.reliefRequests.values()].sort((a, b) =>
+              a.reliefId < b.reliefId ? -1 : a.reliefId > b.reliefId ? 1 : 0,
+            ),
+          }
+        : {}),
       ...(this.unclaimedTreasury > 0n
         ? { unclaimedTreasury: this.unclaimedTreasury.toString() }
         : {}),
@@ -1476,6 +1699,38 @@ export class NationalRuntime {
         throw new Error("NATIONAL: duplicate or orphan imperial treasury");
       row.allowedConstruction?.sort();
       restored.administration.set(row.empireId, row);
+    }
+    for (const request of saved.reliefRequests ?? []) {
+      const participant = saved.politics.nations.some(
+        (n) => n.id === request.memberId,
+      );
+      const decisionPrincipal =
+        request.decidedBy === null ||
+        saved.politics.nations.some((n) => n.id === request.decidedBy);
+      const validStatus =
+        request.status === "pending"
+          ? request.version === 0 && request.decidedBy === null
+          : request.version === 1 &&
+            (request.status === "cancelled"
+              ? request.decidedBy === null
+              : request.decidedBy !== null);
+      if (
+        restored.reliefRequests.has(request.reliefId) ||
+        !participant ||
+        !decisionPrincipal ||
+        !validStatus ||
+        (request.status === "pending" &&
+          (!saved.politics.empires.some(
+            (e) =>
+              e.id === request.empireId &&
+              e.memberIds.includes(request.memberId),
+          ) ||
+            !saved.politics.nations.some(
+              (n) => n.id === request.memberId && n.alive,
+            )))
+      )
+        throw new Error("NATIONAL: invalid or duplicate restored relief");
+      restored.reliefRequests.set(request.reliefId, request);
     }
     restored.unclaimedTreasury = BigInt(saved.unclaimedTreasury ?? "0");
     for (const claim of saved.deferredTroops ?? []) {

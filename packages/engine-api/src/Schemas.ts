@@ -819,6 +819,19 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       policy: z.object({
         workerIncomeBps: zb.uint({ min: 0, max: 10_000 }),
         nonWorkerIncomeBps: zb.uint({ min: 0, max: 10_000 }).optional(),
+        fixedGoldPerPayout: z
+          .string()
+          .regex(/^(0|[1-9][0-9]{0,127})$/)
+          .optional(),
+        revenueClasses: z
+          .object({
+            workers: z.boolean(),
+            maritime: z.boolean(),
+            rail: z.boolean(),
+            piracy: z.boolean(),
+          })
+          .strict()
+          .optional(),
         allowedConstruction: z.array(z.enum(UnitType)).max(16).nullable(),
       }),
     }),
@@ -884,6 +897,20 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       empireId: NationalPoliticalId,
       expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
       response: z.enum(["none", "assist", "imperial", "both"]),
+    }),
+    // C6 E2: an independent two-party transfer; not paid construction.
+    z.object({
+      kind: z.literal("request-relief"),
+      empireId: NationalPoliticalId,
+      reliefId: NationalPoliticalRequestId,
+      amount: z.string().regex(/^[1-9][0-9]{0,11}$/),
+    }),
+    z.object({
+      kind: z.literal("decide-relief"),
+      empireId: NationalPoliticalId,
+      reliefId: NationalPoliticalRequestId,
+      expectedVersion: zb.uint({ min: 0, max: 1 }),
+      decision: z.enum(["approve", "reject"]),
     }),
   ],
 );

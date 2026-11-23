@@ -1,12 +1,29 @@
 import { Structures, UnitType } from "./GameTypes";
 
+export interface ImperialReliefView {
+  readonly reliefId: string;
+  readonly empireId: string;
+  readonly memberId: string;
+  readonly amount: string;
+  readonly status: "pending" | "approved" | "rejected" | "cancelled";
+  readonly version: number;
+  readonly decidedBy: string | null;
+}
+
 export interface NationalImperialAdministrationView {
   readonly empireId: string;
   readonly workerIncomeBps: number;
   /** Optional on earlier V1 hosts; current hosts always publish this member-only commercial rate. */
   readonly nonWorkerIncomeBps?: number;
+  /** Both optional for V1 hosts predating the revenue-class extension. */
+  readonly fixedGoldPerPayout?: string;
+  readonly revenueClasses?: Readonly<
+    Record<"workers" | "maritime" | "rail" | "piracy", boolean>
+  >;
   readonly allowedConstruction: readonly UnitType[] | null;
   readonly treasury: string;
+  /** Absent on earlier V1 hosts. Private to emperor and requesting member. */
+  readonly reliefRequests?: readonly ImperialReliefView[];
   readonly canAmend: boolean;
   readonly armyMode?: "decentralized" | "hybrid" | "centralized";
   readonly hybridThresholdBps?: number;
@@ -45,8 +62,11 @@ export function readNationalImperialAdministration(
         "empireId",
         "workerIncomeBps",
         "nonWorkerIncomeBps",
+        "fixedGoldPerPayout",
+        "revenueClasses",
         "allowedConstruction",
         "treasury",
+        "reliefRequests",
         "canAmend",
         "armyMode",
         "hybridThresholdBps",
@@ -72,6 +92,17 @@ export function readNationalImperialAdministration(
         !Number.isInteger(value.nonWorkerIncomeBps) ||
         value.nonWorkerIncomeBps < 0 ||
         value.nonWorkerIncomeBps > 10000)) ||
+    (value.fixedGoldPerPayout !== undefined &&
+      (typeof value.fixedGoldPerPayout !== "string" ||
+        !/^(0|[1-9][0-9]{0,127})$/.test(value.fixedGoldPerPayout))) ||
+    (value.revenueClasses !== undefined &&
+      (!record(value.revenueClasses) ||
+        Object.keys(value.revenueClasses).length !== 4 ||
+        !["workers", "maritime", "rail", "piracy"].every(
+          (key) =>
+            typeof (value.revenueClasses as Record<string, unknown>)[key] ===
+            "boolean",
+        ))) ||
     typeof value.treasury !== "string" ||
     !/^(0|[1-9][0-9]{0,127})$/.test(value.treasury) ||
     typeof value.canAmend !== "boolean"
@@ -85,6 +116,53 @@ export function readNationalImperialAdministration(
       e.memberIds.includes(actor),
   );
   if (!empire || (empire.leaderId === actor) !== value.canAmend) return null;
+  const requests = value.reliefRequests;
+  if (requests !== undefined) {
+    if (
+      !Array.isArray(requests) ||
+      requests.length > 4096 ||
+      !requests.every((item: unknown) => {
+        if (!record(item)) return false;
+        if (
+          !Object.keys(item).every((key) =>
+            [
+              "reliefId",
+              "empireId",
+              "memberId",
+              "amount",
+              "status",
+              "version",
+              "decidedBy",
+            ].includes(key),
+          ) ||
+          typeof item.reliefId !== "string" ||
+          !/^[A-Za-z0-9_-]{1,64}$/.test(item.reliefId) ||
+          item.empireId !== value.empireId ||
+          typeof item.memberId !== "string" ||
+          item.memberId.length === 0 ||
+          (!value.canAmend && item.memberId !== actor) ||
+          typeof item.amount !== "string" ||
+          !/^[1-9][0-9]{0,11}$/.test(item.amount) ||
+          !["pending", "approved", "rejected", "cancelled"].includes(
+            String(item.status),
+          ) ||
+          (item.version !== 0 && item.version !== 1) ||
+          (item.status === "pending" &&
+            (item.version !== 0 || item.decidedBy !== null)) ||
+          (item.status !== "pending" &&
+            (item.version !== 1 ||
+              (item.status === "cancelled"
+                ? item.decidedBy !== null
+                : typeof item.decidedBy !== "string" ||
+                  item.decidedBy.length === 0)))
+        )
+          return false;
+        return true;
+      }) ||
+      new Set(requests.map((item) => item.reliefId)).size !== requests.length
+    )
+      return null;
+  }
   const allowed = value.allowedConstruction;
   if (
     allowed !== null &&
@@ -133,7 +211,27 @@ export function readNationalImperialAdministration(
     ...(value.nonWorkerIncomeBps === undefined
       ? {}
       : { nonWorkerIncomeBps: value.nonWorkerIncomeBps as number }),
+    ...(value.fixedGoldPerPayout === undefined
+      ? {}
+      : { fixedGoldPerPayout: value.fixedGoldPerPayout as string }),
+    ...(value.revenueClasses === undefined
+      ? {}
+      : {
+          revenueClasses: {
+            ...(value.revenueClasses as Record<
+              "workers" | "maritime" | "rail" | "piracy",
+              boolean
+            >),
+          },
+        }),
     treasury: value.treasury,
+    ...(requests === undefined
+      ? {}
+      : {
+          reliefRequests: requests.map((item) => ({
+            ...item,
+          })) as ImperialReliefView[],
+        }),
     canAmend: value.canAmend,
     allowedConstruction: allowed === null ? null : ([...allowed] as UnitType[]),
   };
