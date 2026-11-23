@@ -1352,8 +1352,40 @@ export class GameImpl implements Game {
     if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
       throw new Error("NATIONAL: inactive administration actor");
     this.synchronizeNationalState();
-    this._national.assertEmperor(actor.id(), command.empireId);
+    // A member may REQUEST relief; only the current emperor may DECIDE.
+    if (command.kind !== "request-relief")
+      this._national.assertEmperor(actor.id(), command.empireId);
     switch (command.kind) {
+      case "request-relief":
+        this._national.requestImperialRelief(
+          actor.id(),
+          command.empireId,
+          command.reliefId,
+          command.amount,
+        );
+        break;
+      case "decide-relief":
+        this._national.decideImperialRelief(
+          actor.id(),
+          command.empireId,
+          command.reliefId,
+          command.expectedVersion,
+          command.decision,
+          (memberId, amount) => {
+            const member = this._players.get(memberId);
+            if (
+              !member ||
+              !member.hasSpawned() ||
+              !member.isAlive() ||
+              this._national?.authority().empireOf(memberId) !== command.empireId
+            )
+              throw new Error("NATIONAL: invalid real relief wallet");
+            return PlayerImpl.prepareNationalGoldCredits([
+              { player: member, amount },
+            ]);
+          },
+        );
+        break;
       case "set-policy":
         this._national.setImperialPolicy(
           actor.id(),
@@ -1832,7 +1864,9 @@ export class GameImpl implements Game {
     const authority = this.nationalPoliticalAuthority();
     if (!authority?.alive(actorId)) return false;
     if (command.kind === "imperial-administration")
-      return authority.emperorOf(command.command.empireId) === actorId;
+      return command.command.kind === "request-relief"
+        ? authority.empireOf(actorId) === command.command.empireId
+        : authority.emperorOf(command.command.empireId) === actorId;
     if (
       command.kind === "transfer-crown" ||
       command.kind === "set-national-peace-delegation"

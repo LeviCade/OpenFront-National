@@ -898,6 +898,20 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
       response: z.enum(["none", "assist", "imperial", "both"]),
     }),
+    // C6 E2: an independent two-party transfer; not paid construction.
+    z.object({
+      kind: z.literal("request-relief"),
+      empireId: NationalPoliticalId,
+      reliefId: NationalPoliticalRequestId,
+      amount: z.string().regex(/^[1-9][0-9]{0,11}$/),
+    }),
+    z.object({
+      kind: z.literal("decide-relief"),
+      empireId: NationalPoliticalId,
+      reliefId: NationalPoliticalRequestId,
+      expectedVersion: zb.uint({ min: 0, max: 1 }),
+      decision: z.enum(["approve", "reject"]),
+    }),
   ],
 );
 
