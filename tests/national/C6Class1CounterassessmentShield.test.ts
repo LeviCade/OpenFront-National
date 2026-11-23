@@ -482,6 +482,42 @@ describe("C6 C1 E4: bounded and independently restorable shield ledger", () => {
         4096 * 600,
       ),
     ).toThrow();
+    // A hostile snapshot cannot claim wider paid defense without a
+    // corresponding real target-owned shield receipt at purchase time.
+    const counterfeit = new NationalAssessment();
+    const counterfeitGrant = counterfeit.buy(
+      "counterfeit-payer",
+      "counterfeit-target",
+      11,
+      "counterfeit-report",
+      () => {},
+      () => {},
+      () => captureNationalAssessmentBands(12345n, 123456, true),
+    );
+    expect(() =>
+      NationalAssessment.restore(
+        { version: 1, grants: [counterfeitGrant], shields: [] },
+        11,
+      ),
+    ).toThrow(/unfunded shielded report/);
+    expect(() =>
+      NationalAssessment.restore(
+        {
+          version: 1,
+          grants: [
+            {
+              ...counterfeitGrant,
+              treasuryGoldBand: {
+                lower: "1".repeat(1000),
+                upperExclusive: "2".repeat(1000),
+              },
+            },
+          ],
+          shields: [],
+        },
+        11,
+      ),
+    ).toThrow();
     const old = new NationalAssessment();
     old.buy(
       "payer",

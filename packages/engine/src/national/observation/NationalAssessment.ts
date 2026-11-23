@@ -21,8 +21,8 @@ const id = z
 const nation = z.string().min(1).max(256);
 const tick = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const band = z.object({
-  lower: z.string().regex(/^(0|[1-9][0-9]*)$/),
-  upperExclusive: z.string().regex(/^[1-9][0-9]*$/),
+  lower: z.string().regex(/^(0|[1-9][0-9]{0,29})$/),
+  upperExclusive: z.string().regex(/^[1-9][0-9]{0,29}$/),
 });
 const grantSchema = z
   .object({
@@ -307,6 +307,21 @@ export class NationalAssessment {
         );
       state.shields.push(shield);
       state.shieldIds.add(key);
+    }
+    // A snapshot may not fabricate paid defensive protection merely by
+    // widening a valid purchase. The shield's actual receipt must predate
+    // and cover the immutable original report purchase tick.
+    for (const grant of state.grants) {
+      if (
+        grant.confidence === "shielded-coarse-estimate" &&
+        !state.shields.some(
+          (shield) =>
+            shield.defenderId === grant.targetId &&
+            shield.effectiveTick <= grant.effectiveTick &&
+            grant.effectiveTick < shield.expiresAtTick,
+        )
+      )
+        throw new Error("NATIONAL assessment: unfunded shielded report");
     }
     return state;
   }
