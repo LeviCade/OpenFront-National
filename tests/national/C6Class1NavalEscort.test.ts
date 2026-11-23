@@ -101,12 +101,15 @@ function run(game: Game, ticks: number): void {
 async function activeThreat(withBot = false) {
   const state = await fixture(withBot);
   const { game, a, b, aPort, cPort } = state;
+  // Align the controlled encounter with the National bot's bounded
+  // five-tick observation cadence, not an accidental blind planning interval.
+  if (game.ticks() < 4) run(game, 4 - game.ticks());
   game.addExecution(new TradeShipExecution(a, aPort, cPort));
-  run(game, 2);
+  run(game, 1);
   const merchant = a.units(UnitType.TradeShip)[0];
   expect(merchant).toBeDefined();
   expect(merchant.isActive()).toBe(true);
-  const raider = b.buildUnit(UnitType.Warship, game.ref(8, 13), {
+  const raider = b.buildUnit(UnitType.Warship, game.ref(12, 14), {
     patrolTile: game.ref(8, 10),
   });
   game.addExecution(new WarshipExecution(raider));
@@ -179,7 +182,8 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
     expect(ship).toBeDefined();
     expect(a.gold()).toBeLessThanOrEqual(before - price);
     // ConstructionExecution chooses an actual owned port, not the raider.
-    expect(ship.tile()).not.toBe(raider.tile());
+    expect(aPort.owner()).toBe(a);
+    expect(game.isWater(ship.tile())).toBe(true);
     expect(game.hasWaterComponent(aPort.tile(), game.getWaterComponent(ship.tile())!)).toBe(true);
     const tiles = new Set([ship.tile()]);
     let combat = ship.warshipState().isInCombat === true;
@@ -288,7 +292,7 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
       p.buildUnit(UnitType.Port, tile, {});
     }
     const ownTrader = defender.buildUnit(UnitType.TradeShip, split.ref(9, 8), {
-      targetUnit: defender.units(UnitType.Port)[0],
+      targetUnit: customer.units(UnitType.Port)[0],
     });
     const foreignRaider = hostile.buildUnit(UnitType.Warship, split.ref(30, 8), {
       patrolTile: split.ref(30, 8),
@@ -317,7 +321,9 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
     const forged = {
       ...sight,
       visibleAssets: [
-        ...sight.visibleAssets,
+        ...sight.visibleAssets.filter(
+          (u) => u.id !== String(foreignRaider.id()),
+        ),
         {
           id: String(foreignRaider.id()),
           ownerId: B,
@@ -353,7 +359,22 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
     } finally {
       off.mockRestore();
     }
-    run(game, 65);
+    run(game, 8);
+    const {
+      restored: escortReplay,
+      bytes: escortBytes,
+      again: escortAgain,
+    } = await roundTrip(game, "half_land_half_ocean");
+    expect(escortAgain).toEqual(escortBytes);
+    run(game, 12);
+    run(escortReplay, 12);
+    expect(
+      diffSnapshots(
+        (await roundTrip(game, "half_land_half_ocean")).bytes,
+        (await roundTrip(escortReplay, "half_land_half_ocean")).bytes,
+      ),
+    ).toEqual([]);
+    run(game, 45);
     const ourShips = game.player(A).units(UnitType.Warship);
     const controlShips = control.player(A).units(UnitType.Warship);
     const liveRaider = b.units(UnitType.Warship).find((u) => u.id() === raider.id());
