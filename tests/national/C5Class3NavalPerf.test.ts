@@ -84,6 +84,13 @@ describe("C5 E6 bounded naval planning on 100 independent nations", () => {
           x: 990,
           y: 990,
         },
+        {
+          id: "secret-unobserved-freighter",
+          ownerId: "sovereign-1",
+          kind: "trade-ship",
+          x: 988,
+          y: 988,
+        },
       ],
     };
     expect(projectNationalObservation(unseenPortWorld, "sovereign-0")).toEqual(
