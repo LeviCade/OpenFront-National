@@ -264,6 +264,11 @@ export function planAIPoliticalInterest(
     previousCoercion,
   );
   if (coercion?.kind === "resist") return idle("preserve-independence");
+  // A threat cannot smuggle accession past the canonical E3 response phase:
+  // dispatch the pending E3 acknowledgement separately, then re-observe the
+  // Game-owned "consented" record before proposing any political accession.
+  if (coercion?.kind === "acknowledge-consent")
+    return idle("preserve-sovereignty");
   if (
     coercion?.kind === "accept-consent" ||
     coercion?.kind === "request-consent"
