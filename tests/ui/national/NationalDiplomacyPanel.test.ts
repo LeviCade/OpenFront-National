@@ -1,6 +1,6 @@
 import type { NationalImperialAdministrationView } from "@openfront/engine-api/game/NationalImperialView";
 // @vitest-environment jsdom
-import { GameType } from "@openfront/engine-api/game/GameTypes";
+import { GameType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import type { NationalPactDisclosureViewData } from "@openfront/engine-api/game/NationalPactView";
 import { EventBus } from "@openfront/shared/EventBus";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -968,5 +968,293 @@ describe("C4 E4 native constitutional controls", () => {
     expect(
       element.querySelector("[data-national-imperial-administration]"),
     ).toBeNull();
+  });
+  it("offers current member structures for two treasury works, suppresses duplicate submissions and rejects stale receipts", async () => {
+    const { element, optionsState, eventBus } = await mount();
+    const commands: SendNationalImperialPolicyIntentEvent[] = [];
+    eventBus.on(SendNationalImperialPolicyIntentEvent, (event) =>
+      commands.push(event),
+    );
+    optionsState.politics = {
+      empires: [
+        {
+          id: "empire",
+          leaderId: "nation-a",
+          memberIds: ["nation-a", "ABCDEF12"],
+        },
+      ],
+      warnings: [],
+      pacts: [],
+    };
+    optionsState.administration = {
+      empireId: "empire",
+      workerIncomeBps: 1000,
+      nonWorkerIncomeBps: 2000,
+      allowedConstruction: [],
+      treasury: "100000",
+      canAmend: true,
+    };
+    const city = {
+      id: () => 42,
+      type: () => UnitType.City,
+      level: () => 1,
+      isActive: () => true,
+      isUnderConstruction: () => false,
+    };
+    const foreign = {
+      ...city,
+      id: () => 99,
+    };
+    const players = element.game!.players();
+    Object.assign(element.game!, {
+      players: () => [
+        players[0],
+        { ...players[1], id: (): string => "ABCDEF12", units: () => [city] },
+        { ...players[2], units: () => [foreign] },
+      ],
+    });
+    element.refresh();
+    await element.updateComplete;
+
+    const works = element.querySelector<HTMLElement>(
+      "[data-national-imperial-works]",
+    )!;
+    expect(works).not.toBeNull();
+    expect(works.textContent).toContain("B Nation");
+    expect(works.textContent).toContain("City #42");
+    expect(works.textContent).not.toContain("#99");
+    const upgrade = works.querySelector<HTMLButtonElement>(
+      '[data-national-imperial-action="upgrade-structure"]',
+    )!;
+    const upgradeForm = upgrade.closest("form")!;
+    upgradeForm.querySelector<HTMLSelectElement>('[name="structure"]')!.value =
+      "42";
+    upgradeForm.querySelector<HTMLInputElement>('[name="confirm"]')!.checked =
+      true;
+    upgrade.click();
+    upgrade.click();
+    await element.updateComplete;
+    expect(commands).toHaveLength(1);
+    expect(commands[0].intent).toMatchObject({
+      type: "national_imperial_administration",
+      command: {
+        kind: "upgrade-structure",
+        empireId: "empire",
+        memberId: "ABCDEF12",
+        unitId: 42,
+      },
+    });
+    const firstRequestId =
+      "requestId" in commands[0].intent
+        ? String(commands[0].intent.requestId)
+        : "";
+    expect(firstRequestId).toMatch(/^np_[0-9a-f]{32}$/);
+    expect(element.textContent).toContain(
+      "Pending authoritative imperial works receipt",
+    );
+
+    optionsState.tick += 1;
+    optionsState.pactReceipts = [
+      {
+        type: "national_imperial_administration",
+        actorId: "nation-c",
+        recipientId: "nation-c",
+        requestId: firstRequestId,
+        commandTargetId: "empire",
+        tick: optionsState.tick,
+        sequence: 1,
+        accepted: true,
+        reason: "accepted",
+      },
+    ];
+    element.refresh();
+    await element.updateComplete;
+    expect(element.textContent).toContain(
+      "Pending authoritative imperial works receipt",
+    );
+    optionsState.pactReceipts = [
+      {
+        ...optionsState.pactReceipts[0],
+        actorId: "nation-a",
+        recipientId: "nation-a",
+      },
+    ];
+    element.refresh();
+    await element.updateComplete;
+    expect(element.textContent).toContain("Game accepted the imperial works");
+
+    const demolition = element.querySelector<HTMLButtonElement>(
+      '[data-national-imperial-action="demolish-structure"]',
+    )!;
+    const demolishForm = demolition.closest("form")!;
+    demolishForm.querySelector<HTMLSelectElement>('[name="structure"]')!.value =
+      "42";
+    demolishForm.querySelector<HTMLInputElement>('[name="confirm"]')!.checked =
+      true;
+    demolition.click();
+    await element.updateComplete;
+    expect(commands).toHaveLength(2);
+    expect(commands[1].intent).toMatchObject({
+      type: "national_imperial_administration",
+      command: {
+        kind: "demolish-structure",
+        empireId: "empire",
+        memberId: "ABCDEF12",
+        unitId: 42,
+      },
+    });
+    const secondRequestId =
+      "requestId" in commands[1].intent
+        ? String(commands[1].intent.requestId)
+        : "";
+    expect(secondRequestId).toMatch(/^np_[0-9a-f]{32}$/);
+    expect(secondRequestId).not.toBe(firstRequestId);
+    optionsState.pactReceipts = [
+      {
+        type: "national_imperial_administration",
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        requestId: secondRequestId,
+        commandTargetId: "empire",
+        tick: optionsState.tick,
+        sequence: 2,
+        accepted: false,
+        reason: "political-rule",
+      },
+    ];
+    element.refresh();
+    await element.updateComplete;
+    expect(element.textContent).toContain(
+      "Game rejected imperial administration command",
+    );
+  });
+
+  it("fails closed on an out-of-date structure and a revoked crown, without broadcasting unit IDs", async () => {
+    const { element, optionsState, eventBus } = await mount();
+    const commands: SendNationalImperialPolicyIntentEvent[] = [];
+    eventBus.on(SendNationalImperialPolicyIntentEvent, (event) =>
+      commands.push(event),
+    );
+    optionsState.politics = {
+      empires: [
+        {
+          id: "empire",
+          leaderId: "nation-a",
+          memberIds: ["nation-a", "ABCDEF12"],
+        },
+      ],
+      warnings: [],
+    };
+    optionsState.administration = {
+      empireId: "empire",
+      workerIncomeBps: 0,
+      allowedConstruction: null,
+      treasury: "100000",
+      canAmend: true,
+    };
+    let active = true;
+    const city = {
+      id: () => 42,
+      type: () => UnitType.City,
+      level: () => 1,
+      isActive: () => active,
+      isUnderConstruction: () => false,
+    };
+    const players = element.game!.players();
+    Object.assign(element.game!, {
+      players: () => [
+        players[0],
+        { ...players[1], id: (): string => "ABCDEF12", units: () => [city] },
+      ],
+    });
+    element.refresh();
+    await element.updateComplete;
+    const upgrade = element.querySelector<HTMLButtonElement>(
+      '[data-national-imperial-action="upgrade-structure"]',
+    )!;
+    const form = upgrade.closest("form")!;
+    form.querySelector<HTMLSelectElement>('[name="structure"]')!.value = "42";
+    form.querySelector<HTMLInputElement>('[name="confirm"]')!.checked = true;
+    active = false; // The game revoked the unit after it was rendered.
+    upgrade.click();
+    await element.updateComplete;
+    expect(commands).toHaveLength(0);
+    expect(element.textContent).toContain("Policy or authority changed");
+    optionsState.politics = {
+      empires: [
+        {
+          id: "empire",
+          leaderId: "ABCDEF12",
+          memberIds: ["nation-a", "ABCDEF12"],
+        },
+      ],
+      warnings: [],
+    };
+    optionsState.administration = {
+      ...optionsState.administration,
+      canAmend: false,
+    };
+    element.refresh();
+    await element.updateComplete;
+    expect(
+      element.querySelector(
+        '[data-national-imperial-action="upgrade-structure"]',
+      ),
+    ).toBeNull();
+    expect(
+      element.querySelector(
+        '[data-national-imperial-action="demolish-structure"]',
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps mobile spawn taps unobstructed, then supports sheet reopen, Escape and focus restoration", async () => {
+    const viewport = Object.getOwnPropertyDescriptor(window, "innerWidth");
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    try {
+      const { element, optionsState } = await mount({ spawned: false });
+      const toggle = element.querySelector<HTMLButtonElement>(
+        'button[aria-controls="national-diplomacy-content"]',
+      )!;
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      // A tap on the diplomacy header cannot cover the real first spawn tap.
+      toggle.click();
+      await element.updateComplete;
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(element.querySelector("#national-diplomacy-content")).toBeNull();
+
+      optionsState.spawned = true;
+      element.refresh();
+      await element.updateComplete;
+      toggle.click();
+      await element.updateComplete;
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(
+        element.querySelector("#national-diplomacy-content"),
+      ).not.toBeNull();
+
+      element
+        .querySelector<HTMLElement>("section")!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+      await element.updateComplete;
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(element.querySelector("#national-diplomacy-content")).toBeNull();
+      await Promise.resolve();
+      expect(document.activeElement).toBe(toggle);
+      toggle.click();
+      await element.updateComplete;
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    } finally {
+      if (viewport) {
+        Object.defineProperty(window, "innerWidth", viewport);
+      } else {
+        Reflect.deleteProperty(window, "innerWidth");
+      }
+    }
   });
 });

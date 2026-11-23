@@ -34,6 +34,7 @@ function mapFixture() {
     gameType: GameType.Singleplayer as GameType,
     trusted: false,
     trustedReady: false,
+    observedTile: true,
   };
   const actor = {
     id: () => "nation-a",
@@ -66,6 +67,7 @@ function mapFixture() {
     myPlayer: () => actor,
     isTrustedNationalProjection: () => state.trusted,
     trustedProjectionReady: () => state.trustedReady,
+    trustedTileObserved: () => state.trustedReady && state.observedTile,
     players: () => [actor, rival],
     inSpawnPhase: () => !state.spawned,
     isSpectator: () => false,
@@ -283,6 +285,18 @@ describe("R11 actual NATIONAL map input and target-aware radial projection", () 
     expect(isNationalOpponentTile(game, transform, "nation-b", x, y)).toBe(
       true,
     );
+    // Current socket and cached owner remain, but E3 revokes this tile.
+    state.observedTile = false;
+    locator.tick();
+    expect(isNationalOpponentTile(game, transform, "nation-b", x, y)).toBe(
+      false,
+    );
+    expect(document.querySelector("[data-national-map-target-id]")).toBeNull();
+    state.observedTile = true;
+    locator.tick();
+    expect(
+      document.querySelector("[data-national-map-target-id]"),
+    ).not.toBeNull();
     state.trustedReady = false; // E3 revoked sight or socket disconnected.
     locator.tick();
     expect(isNationalOpponentTile(game, transform, "nation-b", x, y)).toBe(
