@@ -6,10 +6,10 @@ import {
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
+import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { NationEmojiBehavior } from "@openfront/engine/execution/nation/NationEmojiBehavior";
 import { NationWarshipBehavior } from "@openfront/engine/execution/nation/NationWarshipBehavior";
 import { NationExecution } from "@openfront/engine/execution/NationExecution";
-import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
 import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
@@ -88,8 +88,17 @@ async function fixture(withBotExecution = false) {
     new NationEmojiBehavior(random, game, a),
   );
   return {
-    game, a, b, c, d, aPort, bPort, cPort, dPort,
-    fixedEnemyMerchant, behavior,
+    game,
+    a,
+    b,
+    c,
+    d,
+    aPort,
+    bPort,
+    cPort,
+    dPort,
+    fixedEnemyMerchant,
+    behavior,
   };
 }
 
@@ -116,9 +125,14 @@ function advanceRunner(game: Game, turns: number) {
 
 describe("C5 Class Three E6 lawful observed naval strategy", () => {
   it("selects only current visible WAR enemy merchants; hides ports, allies and neutral vessels", async () => {
-    const { game, a, b, c, d, cPort, dPort, behavior, fixedEnemyMerchant } = await fixture();
-    const neutral = c.buildUnit(UnitType.TradeShip, game.ref(8, 12), { targetUnit: cPort });
-    const ally = d.buildUnit(UnitType.TradeShip, game.ref(8, 12), { targetUnit: dPort });
+    const { game, a, b, c, d, cPort, dPort, behavior, fixedEnemyMerchant } =
+      await fixture();
+    const neutral = c.buildUnit(UnitType.TradeShip, game.ref(8, 12), {
+      targetUnit: cPort,
+    });
+    const ally = d.buildUnit(UnitType.TradeShip, game.ref(8, 12), {
+      targetUnit: dPort,
+    });
     const sight = collectLiveNationalObservation(game, A);
     const ports = [{ x: 7, y: 10 }];
     const targets = planObservedNationalNavalTargets(sight.observation, ports);
@@ -155,7 +169,9 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
     const sight = collectLiveNationalObservation(game, A);
     // The executor does not enumerate enemy units or discover secret paths.
     const foreignUnitScan = vi.spyOn(game, "units");
-    const dispatched = behavior.dispatchNationalNavalPressure(sight.observation);
+    const dispatched = behavior.dispatchNationalNavalPressure(
+      sight.observation,
+    );
     expect(dispatched).toBe("build");
     expect(foreignUnitScan).not.toHaveBeenCalled();
     foreignUnitScan.mockRestore();
@@ -171,19 +187,32 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
       game.executeNextTick();
       if (ship.isActive()) {
         visited.add(ship.tile());
-        closestApproach = Math.min(closestApproach, game.manhattanDist(ship.tile(), targetTile));
+        closestApproach = Math.min(
+          closestApproach,
+          game.manhattanDist(ship.tile(), targetTile),
+        );
       }
       if (ship.tile() === targetTile) break;
     }
     expect(visited.size).toBeGreaterThan(1);
     expect(closestApproach).toBeLessThanOrEqual(2);
-    expect(behavior.dispatchNationalNavalPressure(sight.observation)).toBeNull();
-    console.info("C5_NAVAL_PHYSICAL=" + JSON.stringify({
-      spentAtLeast: price.toString(), warshipId: ship.id(),
-      target: targetTile, visited: visited.size,
-      finalTile: ship.tile(), active: ship.isActive(),
-      authority: game.nationalWarAuthority()?.authorizeOffensiveAction(A, B),
-    }));
+    expect(
+      behavior.dispatchNationalNavalPressure(sight.observation),
+    ).toBeNull();
+    console.info(
+      "C5_NAVAL_PHYSICAL=" +
+        JSON.stringify({
+          spentAtLeast: price.toString(),
+          warshipId: ship.id(),
+          target: targetTile,
+          visited: visited.size,
+          finalTile: ship.tile(),
+          active: ship.isActive(),
+          authority: game
+            .nationalWarAuthority()
+            ?.authorizeOffensiveAction(A, B),
+        }),
+    );
   });
 
   it("rejects no gold, false principal, stale observation, peace and disconnected destinations", async () => {
@@ -219,8 +248,7 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
   });
 
   it("live GameRunner bot deploys; state survives snapshot, destruction and peace without unauthorized piracy", async () => {
-    const { game, a, b, c, cPort, bPort } =
-      await fixture(true);
+    const { game, a, b, c, cPort, bPort } = await fixture(true);
     const before = a.gold();
     advanceRunner(game, 10);
     const active = a.units(UnitType.Warship);
@@ -233,7 +261,9 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
       "half_land_half_ocean",
     );
     expect(again).toEqual(bytes);
-    expect(restored.player(A).units(UnitType.Warship)).toHaveLength(active.length);
+    expect(restored.player(A).units(UnitType.Warship)).toHaveLength(
+      active.length,
+    );
     expect(restored.player(A).units(UnitType.Warship)[0].tile()).toBe(position);
 
     // Real neutral merchant route approaching B is legal but may be returned
@@ -247,14 +277,20 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
     ship.delete(false);
     const merchantOwner = merchant.owner();
     const motion = game.performNationalWarCommandWithOutcome(a, {
-      kind: "propose-peace", warId: "c5-nav-real-war",
+      kind: "propose-peace",
+      warId: "c5-nav-real-war",
       motionId: "c5-nav-stop",
     });
     expect(motion.accepted).toBe(true);
-    expect(game.performNationalWarCommandWithOutcome(b, {
-      kind: "accept-peace", motionId: "c5-nav-stop",
-    }).accepted).toBe(true);
-    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(A, B)).toBe(false);
+    expect(
+      game.performNationalWarCommandWithOutcome(b, {
+        kind: "accept-peace",
+        motionId: "c5-nav-stop",
+      }).accepted,
+    ).toBe(true);
+    expect(game.nationalWarAuthority()?.authorizeOffensiveAction(A, B)).toBe(
+      false,
+    );
     const piracyBefore = a.piracyGold();
     advanceRunner(game, 20);
     expect(merchant.owner()).toBe(merchantOwner);
@@ -268,19 +304,28 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
   });
   it("identical-seed four-nation GameRunner CONTROL versus live paid neutral trade", async () => {
     const { game, bPort, cPort } = await fixture(true);
-    const { restored: control, bytes, again } = await roundTrip(
-      game,
-      "half_land_half_ocean",
-    );
+    const {
+      restored: control,
+      bytes,
+      again,
+    } = await roundTrip(game, "half_land_half_ocean");
     expect(again).toEqual(bytes);
     const price = game.unitInfo(UnitType.Warship).cost(game, game.player(A));
     // In both worlds the same neutral merchant pays for a real C -> B voyage.
     // Only the new naval AI dispatch is disabled in the CONTROL world.
-    control.addExecution(new TradeShipExecution(
-      control.player(C),
-      control.player(C).units(UnitType.Port).find((u) => u.tile() === cPort.tile())!,
-      control.player(B).units(UnitType.Port).find((u) => u.tile() === bPort.tile())!,
-    ));
+    control.addExecution(
+      new TradeShipExecution(
+        control.player(C),
+        control
+          .player(C)
+          .units(UnitType.Port)
+          .find((u) => u.tile() === cPort.tile())!,
+        control
+          .player(B)
+          .units(UnitType.Port)
+          .find((u) => u.tile() === bPort.tile())!,
+      ),
+    );
     game.addExecution(new TradeShipExecution(game.player(C), cPort, bPort));
     const unmodified = vi
       .spyOn(NationWarshipBehavior.prototype, "dispatchNationalNavalPressure")
@@ -297,29 +342,35 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
     // The cost is from Player.buildUnit / WarshipExecution, not an AI ledger.
     // Correct for any real pirate proceeds already credited to the active A.
     const actualCost =
-      control.player(A).gold() - game.player(A).gold() +
-      game.player(A).piracyGold() - control.player(A).piracyGold();
+      control.player(A).gold() -
+      game.player(A).gold() +
+      game.player(A).piracyGold() -
+      control.player(A).piracyGold();
     expect(actualCost).toBe(price);
 
     const firstPosition = deployed[0].tile();
     advanceRunner(control, 95);
     advanceRunner(game, 95);
     expect(control.player(B).tradeGold()).toBeGreaterThan(0n);
-    expect(game.player(B).tradeGold()).toBeLessThan(control.player(B).tradeGold());
+    expect(game.player(B).tradeGold()).toBeLessThan(
+      control.player(B).tradeGold(),
+    );
     expect(deployed[0].tile()).not.toBe(firstPosition);
     expect(control.player(A).piracyGold()).toBe(0n);
-    console.info("C5_NAVAL_CONTROLLED_WITNESS=" + JSON.stringify({
-      seed: "same-snapshot",
-      war: game.nationalWarAuthority()?.atWar(A, B),
-      price: price.toString(),
-      activeWarship: deployed[0].id(),
-      activeBTradeGold: game.player(B).tradeGold().toString(),
-      controlBTradeGold: control.player(B).tradeGold().toString(),
-      activeAPiracyGold: game.player(A).piracyGold().toString(),
-      controlAPiracyGold: control.player(A).piracyGold().toString(),
-      start: firstPosition,
-      end: deployed[0].tile(),
-    }));
+    console.info(
+      "C5_NAVAL_CONTROLLED_WITNESS=" +
+        JSON.stringify({
+          seed: "same-snapshot",
+          war: game.nationalWarAuthority()?.atWar(A, B),
+          price: price.toString(),
+          activeWarship: deployed[0].id(),
+          activeBTradeGold: game.player(B).tradeGold().toString(),
+          controlBTradeGold: control.player(B).tradeGold().toString(),
+          activeAPiracyGold: game.player(A).piracyGold().toString(),
+          controlAPiracyGold: control.player(A).piracyGold().toString(),
+          start: firstPosition,
+          end: deployed[0].tile(),
+        }),
+    );
   });
-
 });
