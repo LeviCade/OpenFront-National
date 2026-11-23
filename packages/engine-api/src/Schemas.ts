@@ -66,6 +66,8 @@ export type Intent =
   | NationalIssueSanctionIntent
   | NationalRespondSanctionIntent
   | NationalResolveSanctionIntent
+  | NationalOfferSanctionSettlementIntent
+  | NationalDecideSanctionSettlementIntent
   | NationalIssueUltimatumIntent
   | NationalRespondUltimatumIntent
   | NationalResolveUltimatumIntent
@@ -170,6 +172,12 @@ export type NationalRespondSanctionIntent = z.infer<
 >;
 export type NationalResolveSanctionIntent = z.infer<
   typeof NationalResolveSanctionIntentSchema
+>;
+export type NationalOfferSanctionSettlementIntent = z.infer<
+  typeof NationalOfferSanctionSettlementIntentSchema
+>;
+export type NationalDecideSanctionSettlementIntent = z.infer<
+  typeof NationalDecideSanctionSettlementIntentSchema
 >;
 export type NationalIssueUltimatumIntent = z.infer<
   typeof NationalIssueUltimatumIntentSchema
@@ -912,6 +920,31 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       expectedVersion: zb.uint({ min: 0, max: 1 }),
       decision: z.enum(["approve", "reject"]),
     }),
+    // C5 C3 ECON-04/05: the same authenticated imperial administration.
+    // Append only: do not renumber historical binary command discriminants.
+    z.object({
+      kind: z.literal("set-economic-charter"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      delegateIds: z.array(MappedID).max(64),
+      allowInternal: z.boolean(),
+    }),
+    z.object({
+      kind: z.literal("set-member-trade"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      memberId: MappedID,
+      targetId: MappedID,
+      embargo: z.boolean(),
+    }),
+    z.object({
+      kind: z.literal("respond-member-sanction"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      memberId: MappedID,
+      sanctionId: NationalPoliticalId,
+      decision: z.enum(["comply", "refuse"]),
+    }),
   ],
 );
 
@@ -936,11 +969,33 @@ export const NationalRespondSanctionIntentSchema = z.object({
   sanctionId: NationalPoliticalId,
   decision: z.enum(["comply", "refuse"]),
   requestId: NationalPoliticalRequestId,
+  // Imperial member commands require an exact current grant epoch at execution.
+  expectedCharterVersion: zb
+    .uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 })
+    .optional(),
 });
 export const NationalResolveSanctionIntentSchema = z.object({
   type: z.literal("national_resolve_sanction"),
   sanctionId: NationalPoliticalId,
   decision: z.enum(["enforce", "back-down"]),
+  requestId: NationalPoliticalRequestId,
+});
+
+// C6 restitution. BigInt gold is encoded as a bounded positive decimal string;
+// no client-asserted actor, wallet or issuer identity is accepted.
+export const NationalOfferSanctionSettlementIntentSchema = z.object({
+  type: z.literal("national_offer_sanction_settlement"),
+  sanctionId: NationalPoliticalId,
+  amountGold: z.string().regex(/^[1-9][0-9]{0,17}$/),
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalDecideSanctionSettlementIntentSchema = z.object({
+  type: z.literal("national_decide_sanction_settlement"),
+  sanctionId: NationalPoliticalId,
+  // A sanction recipient uses the same canonical nation-ID grammar as issuance.
+  recipientId: NationalWarId,
+  offerId: NationalPoliticalRequestId,
+  decision: z.enum(["accept", "refuse"]),
   requestId: NationalPoliticalRequestId,
 });
 
@@ -1024,6 +1079,8 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalRespondUltimatumIntentSchema,
   NationalResolveUltimatumIntentSchema,
   NationalReconnaissanceIntentSchema,
+  NationalOfferSanctionSettlementIntentSchema,
+  NationalDecideSanctionSettlementIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

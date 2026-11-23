@@ -4,6 +4,8 @@ import {
   NationalIssueSanctionIntentSchema,
   NationalRespondSanctionIntentSchema,
   NationalResolveSanctionIntentSchema,
+  NationalOfferSanctionSettlementIntentSchema,
+  NationalDecideSanctionSettlementIntentSchema,
 } from "@openfront/engine-api/Schemas";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { simpleHash } from "@openfront/engine-lib/Util";
@@ -15,11 +17,14 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
+import { NationalUltimatumExecution } from "./NationalUltimatumExecution";
 
 const commandSchema = z.discriminatedUnion("type", [
   NationalIssueSanctionIntentSchema,
   NationalRespondSanctionIntentSchema,
   NationalResolveSanctionIntentSchema,
+  NationalOfferSanctionSettlementIntentSchema,
+  NationalDecideSanctionSettlementIntentSchema,
 ]);
 type Command = z.infer<typeof commandSchema>;
 const phaseSchema = z.enum([
@@ -30,12 +35,37 @@ const phaseSchema = z.enum([
   "backed-down",
   "expired",
 ]);
+// Sanctions can release only Player entries they independently created.
+// A null creation tick means an independent manual embargo pre-existed.
+const sanctionEnforcementSchema = z.object({
+  authorityId: z.string(),
+  authorityVersion: z.number().int().nonnegative().nullable(),
+  owners: z
+    .array(
+      z.object({
+        id: z.string(),
+        createdAt: z.number().int().nonnegative().nullable(),
+      }),
+    )
+    .max(64),
+  offer: z
+    .object({
+      requestId: z.string(),
+      gold: z.string().regex(/^[1-9][0-9]{0,17}$/),
+      offeredAt: z.number().int().nonnegative(),
+      expiresAt: z.number().int().nonnegative(),
+      status: z.enum(["pending", "accepted", "refused", "expired"]),
+    })
+    .nullable(),
+});
 const recipientSchema = z.object({
   id: z.string(),
   response: z.enum(["none", "comply", "refuse"]),
   noncompliant: z.boolean(),
   // Only actual paid external trade events; no private balance snapshots.
   continuedTrade: z.boolean(),
+  // Optional to migrate earlier version-one sanctioned demands.
+  enforcement: sanctionEnforcementSchema.optional(),
 });
 const demandSchema = z.object({
   id: z.string(),
@@ -64,6 +94,7 @@ type State = z.infer<typeof stateSchema>;
 const MAX_DEMANDS = 128;
 const MAX_PER_ISSUER = 16;
 const RESOLUTION_WINDOW = 300;
+const SETTLEMENT_WINDOW = 120;
 
 function living(game: Game, id: string): Player | null {
   if (!game.hasPlayer(id)) return null;
@@ -146,17 +177,47 @@ export class NationalSanctionExecution implements Execution {
   }
 
   private recipient(id: string): Player | null {
-    // Local responses are independently sovereign only until E1 supplies
-    // delegated/centralized trade policy for external imperial demands.
+    return living(this.game!, id);
+  }
+
+  /** An outsider's demand does not itself delegate imperial economic authority. */
+  private mayRespond(actor: Player, expectedVersion?: number): boolean {
     const game = this.game!;
-    return game.nationalPoliticalAuthority()?.empireOf(id) === null
-      ? living(game, id)
-      : null;
+    const empire = game.nationalPoliticalAuthority()?.empireOf(actor.id());
+    if (empire === undefined) return false;
+    if (empire === null) return expectedVersion === undefined; // no stale imperial grant after collapse
+    const charter = game.nationalEconomicCharterFor(actor);
+    return (
+      charter !== null &&
+      charter.empireId === empire &&
+      charter.ownerId === charter.emperorId &&
+      charter.delegated &&
+      expectedVersion === charter.version
+    );
+  }
+
+  private canApplyMemberRestriction(member: Player, target: Player): boolean {
+    const game = this.game!;
+    const p = game.nationalPoliticalAuthority();
+    const empire = p?.empireOf(member.id());
+    if (empire === null) return true;
+    if (empire === undefined) return false;
+    const charter = game.nationalEconomicCharterFor(member);
+    return (
+      charter !== null &&
+      charter.ownerId === charter.emperorId &&
+      (p?.empireOf(target.id()) !== empire || charter.allowInternal)
+    );
   }
 
   private advance(tick: number): void {
     const d = this.demand!;
     const game = this.game!;
+    for (const row of d.recipients) {
+      const offer = row.enforcement?.offer;
+      if (offer?.status === "pending" && tick >= offer.expiresAt)
+        offer.status = "expired";
+    }
     if (d.phase !== "pending" && d.phase !== "decision-required") return;
     const issuer = this.controllingIssuer();
     const target = living(game, d.target);
@@ -218,7 +279,7 @@ export class NationalSanctionExecution implements Execution {
         (id) =>
           id === actor ||
           id === target.id() ||
-          politics.empireOf(id) !== null ||
+          (empire !== null && politics.empireOf(id) === empire) ||
           living(game, id) === null,
       )
     )
@@ -261,15 +322,74 @@ export class NationalSanctionExecution implements Execution {
     this.active = true;
   }
 
-  private respond(actor: Player, decision: "comply" | "refuse"): void {
+  private respond(
+    actor: Player,
+    decision: "comply" | "refuse",
+    expectedVersion?: number,
+  ): void {
     const d = this.demand!;
-    if (d.phase !== "pending" || this.recipient(actor.id()) !== actor) return;
+    if (
+      d.phase !== "pending" ||
+      this.recipient(actor.id()) !== actor ||
+      !this.mayRespond(actor, expectedVersion)
+    )
+      return;
     const row = d.recipients.find((r) => r.id === actor.id());
     const target = living(this.game!, d.target);
-    if (!row || !target || row.response !== "none") return;
-    // Only this recipient's explicit voluntary command changes its policy.
+    if (
+      !row ||
+      !target ||
+      row.response !== "none" ||
+      !this.canApplyMemberRestriction(actor, target)
+    )
+      return;
     if (decision === "comply") actor.addEmbargo(target, false);
     row.response = decision;
+  }
+
+  /** Emperor-only centralized response; validated against the current crown
+   * and CAS epoch at the actual Game execution boundary. */
+  static emperorRespond(
+    game: Game,
+    emperor: Player,
+    memberId: string,
+    sanctionId: string,
+    decision: "comply" | "refuse",
+    empireId: string,
+    expectedVersion: number,
+    advanceEpoch: () => void,
+  ): void {
+    const auth = game.nationalPoliticalAuthority();
+    const member = living(game, memberId);
+    const charter = member && game.nationalEconomicCharterFor(member);
+    if (
+      !auth ||
+      auth.emperorOf(empireId) !== emperor.id() ||
+      !member ||
+      auth.empireOf(memberId) !== empireId ||
+      !charter ||
+      charter.version !== expectedVersion ||
+      (charter.ownerId !== null && charter.ownerId !== emperor.id())
+    )
+      throw new Error("NATIONAL: unauthorized imperial sanction response");
+    const record = this.records(game).find((e) => e.demand?.id === sanctionId);
+    const d = record?.demand;
+    const row = d?.recipients.find((r) => r.id === memberId);
+    const target = d && living(game, d.target);
+    if (
+      !record ||
+      !d ||
+      d.phase !== "pending" ||
+      !row ||
+      row.response !== "none" ||
+      !target ||
+      !record.controllingIssuer() ||
+      (auth.empireOf(target.id()) === empireId && !charter.allowInternal)
+    )
+      throw new Error("NATIONAL: ineligible imperial sanction demand");
+    if (decision === "comply") member.addEmbargo(target, false);
+    row.response = decision;
+    advanceEpoch();
   }
 
   private resolve(actor: Player, decision: "enforce" | "back-down"): void {
@@ -291,14 +411,171 @@ export class NationalSanctionExecution implements Execution {
     for (const row of d.recipients) {
       if (!row.noncompliant) continue;
       const recipient = this.recipient(row.id);
-      if (!recipient) continue;
+      if (
+        !recipient ||
+        (d.empire !== null &&
+          game.nationalPoliticalAuthority()?.empireOf(recipient.id()) ===
+            d.empire)
+      )
+        continue;
+      const enforcement: z.infer<typeof sanctionEnforcementSchema> = {
+        authorityId: actor.id(),
+        authorityVersion:
+          d.empire === null
+            ? null
+            : (game
+                .nationalPoliticalAuthority()
+                ?.warPolicyVersionFor(actor.id()) ?? null),
+        owners: [],
+        offer: null,
+      };
       for (const owner of owners) {
         if (owner === recipient) continue;
+        const existing = owner.hasManualEmbargoAgainst(recipient);
         owner.addEmbargo(recipient, false);
+        const entry = owner
+          .getEmbargoes()
+          .find((item) => item.target === recipient && !item.isTemporary);
+        enforcement.owners.push({
+          id: owner.id(),
+          createdAt: existing ? null : (entry?.createdAt ?? null),
+        });
         imposed = true;
       }
+      if (enforcement.owners.length > 0) row.enforcement = enforcement;
     }
     d.phase = imposed ? "enforced" : "expired";
+  }
+
+  /** Fail closed when another sovereign or sanction also owns this pair. */
+  private settlementOwners(row: Demand["recipients"][number]): Player[] | null {
+    const game = this.game!;
+    const d = this.demand!;
+    const proof = row.enforcement;
+    const target = this.recipient(row.id);
+    const issuer = this.controllingIssuer();
+    if (
+      d.phase !== "enforced" ||
+      !proof ||
+      !target ||
+      !issuer ||
+      proof.authorityId !== issuer.id() ||
+      proof.owners.length === 0 ||
+      (d.empire !== null &&
+        (proof.authorityVersion === null ||
+          game
+            .nationalPoliticalAuthority()
+            ?.warPolicyVersionFor(issuer.id()) !== proof.authorityVersion ||
+          game.nationalPoliticalAuthority()?.empireOf(target.id()) ===
+            d.empire))
+    )
+      return null;
+    const owners: Player[] = [];
+    for (const claim of proof.owners) {
+      const owner = living(game, claim.id);
+      const entry = owner
+        ?.getEmbargoes()
+        .find((embargo) => embargo.target === target && !embargo.isTemporary);
+      if (
+        !owner ||
+        claim.createdAt === null ||
+        !entry ||
+        entry.createdAt !== claim.createdAt ||
+        target.hasManualEmbargoAgainst(owner) ||
+        game.nationalWarAuthority()?.atWar(owner.id(), target.id()) ||
+        NationalUltimatumExecution.hasEnforcedEmbargoPair(
+          game,
+          owner.id(),
+          target.id(),
+        )
+      )
+        return null;
+      const overlap = NationalSanctionExecution.records(game).some((other) => {
+        if (other === this || other.demand?.phase !== "enforced") return false;
+        const competing = other.demand?.recipients.find(
+          (candidate) => candidate.id === row.id,
+        )?.enforcement;
+        return (
+          competing?.offer?.status !== "accepted" &&
+          competing?.owners.some((record) => record.id === owner.id())
+        );
+      });
+      if (overlap) return null;
+      owners.push(owner);
+    }
+    return owners;
+  }
+
+  /** The embargoed recipient offers actual gold; no escrow or advance debit. */
+  private offerSettlement(
+    actor: Player,
+    command: Extract<Command, { type: "national_offer_sanction_settlement" }>,
+    tick: number,
+  ): void {
+    const row = this.demand!.recipients.find(
+      (candidate) => candidate.id === actor.id(),
+    );
+    if (
+      !row ||
+      row.enforcement?.offer !== null ||
+      this.recipient(actor.id()) !== actor ||
+      !this.settlementOwners(row) ||
+      BigInt(command.amountGold) > actor.gold() ||
+      NationalSanctionExecution.records(this.game!).some((record) =>
+        record.demand?.recipients.some(
+          (candidate) =>
+            candidate.enforcement?.offer?.requestId === command.requestId,
+        ),
+      )
+    )
+      return;
+    row.enforcement!.offer = {
+      requestId: command.requestId,
+      gold: command.amountGold,
+      offeredAt: tick,
+      expiresAt: tick + SETTLEMENT_WINDOW,
+      status: "pending",
+    };
+  }
+
+  /** Only the exact currently controlling and original enforcing issuer decides. */
+  private decideSettlement(
+    actor: Player,
+    command: Extract<Command, { type: "national_decide_sanction_settlement" }>,
+    tick: number,
+  ): void {
+    const row = this.demand!.recipients.find(
+      (candidate) => candidate.id === command.recipientId,
+    );
+    const offer = row?.enforcement?.offer;
+    if (
+      !row ||
+      !offer ||
+      offer.requestId !== command.offerId ||
+      offer.status !== "pending" ||
+      this.controllingIssuer() !== actor
+    )
+      return;
+    if (tick >= offer.expiresAt) {
+      offer.status = "expired";
+      return;
+    }
+    if (command.decision === "refuse") {
+      offer.status = "refused";
+      return;
+    }
+    const payer = this.recipient(row.id);
+    const owners = this.settlementOwners(row);
+    const gold = BigInt(offer.gold);
+    if (!payer || !owners || payer.gold() < gold) return;
+    const paid = payer.removeGold(gold);
+    if (paid !== gold) {
+      payer.addGold(paid);
+      return;
+    }
+    actor.addGold(paid);
+    for (const owner of owners) owner.stopEmbargo(payer);
+    offer.status = "accepted";
   }
 
   tick(tick: number): void {
@@ -322,9 +599,17 @@ export class NationalSanctionExecution implements Execution {
     if (!record) return;
     record.advance(tick);
     if (command.type === "national_respond_sanction") {
-      record.respond(this.actor, command.decision);
-    } else {
+      record.respond(
+        this.actor,
+        command.decision,
+        command.expectedCharterVersion,
+      );
+    } else if (command.type === "national_resolve_sanction") {
       record.resolve(this.actor, command.decision);
+    } else if (command.type === "national_offer_sanction_settlement") {
+      record.offerSettlement(this.actor, command, tick);
+    } else {
+      record.decideSettlement(this.actor, command, tick);
     }
   }
 
@@ -347,36 +632,63 @@ export class NationalSanctionExecution implements Execution {
     if (living(game, observer.id()) !== observer) return [];
     return this.records(game).flatMap((e) => {
       const d = e.demand!;
+      const auth = game.nationalPoliticalAuthority();
       const isIssuer = e.controllingIssuer() === observer;
-      const own = d.recipients.find((row) => row.id === observer.id());
-      if (!isIssuer && (!own || e.recipient(observer.id()) !== observer)) {
-        return [];
-      }
-      return [
-        {
-          id: d.id,
-          issuer: d.issuer,
-          authorityId: e.controllingIssuer()?.id() ?? null,
-          empire: d.empire,
-          role: isIssuer ? ("issuer" as const) : ("recipient" as const),
-          recipientIds: isIssuer
-            ? d.recipients.map((row) => row.id)
-            : [observer.id()],
-          target: d.target,
-          deadline: d.deadline,
-          phase: d.phase,
-          trigger: d.trigger,
-          threat: d.threat,
-          // Never expose transaction existence or another recipient's response.
-          response: own?.response ?? null,
-          requestId:
-            isIssuer &&
-            e.actor === observer &&
-            (e.clientId === null || e.clientId === observer.clientID())
-              ? e.command.requestId
-              : null,
-        },
-      ];
+      const visible = d.recipients.filter((row) => {
+        if (row.id === observer.id()) return true;
+        const empire = auth?.empireOf(row.id);
+        return (
+          empire !== null &&
+          empire !== undefined &&
+          auth?.emperorOf(empire) === observer.id()
+        );
+      });
+      if (!isIssuer && visible.length === 0) return [];
+      return (isIssuer ? [null] : visible).map((own) => ({
+        id: d.id,
+        issuer: d.issuer,
+        authorityId: e.controllingIssuer()?.id() ?? null,
+        empire: d.empire,
+        role: isIssuer
+          ? ("issuer" as const)
+          : own?.id === observer.id()
+            ? ("recipient" as const)
+            : ("recipient-emperor" as const),
+        recipientId: own?.id ?? null,
+        charterVersion: own
+          ? (game.nationalEconomicCharterFor(game.player(own.id))?.version ??
+            null)
+          : null,
+        canRespond:
+          own?.id === observer.id() &&
+          e.mayRespond(
+            observer,
+            game.nationalEconomicCharterFor(observer)?.version,
+          ),
+        recipientIds: isIssuer ? d.recipients.map((row) => row.id) : [own!.id],
+        target: d.target,
+        deadline: d.deadline,
+        phase: d.phase,
+        trigger: d.trigger,
+        threat: d.threat,
+        // Never expose a third party's offer to unrelated recipients.
+        settlements: isIssuer
+          ? d.recipients.flatMap((row) =>
+              row.enforcement?.offer
+                ? [{ recipientId: row.id, ...row.enforcement.offer }]
+                : [],
+            )
+          : own?.enforcement?.offer
+            ? [{ recipientId: own.id, ...own.enforcement.offer }]
+            : [],
+        response: own?.response ?? null,
+        requestId:
+          isIssuer &&
+          e.actor === observer &&
+          (e.clientId === null || e.clientId === observer.clientID())
+            ? e.command.requestId
+            : null,
+      }));
     });
   }
 
@@ -436,13 +748,25 @@ export class NationalSanctionExecution implements Execution {
   }
 }
 
-export type NationalEconomicDemandView = ReturnType<
+// Backward-compatible issuer/recipient DTO. Third-Class member-only fields
+// are optional for existing NATIONAL economic AI fixture producers.
+type ProjectedEconomicDemand = ReturnType<
   typeof NationalSanctionExecution.viewFor
 >[number];
+export type NationalEconomicDemandView = Omit<
+  ProjectedEconomicDemand,
+  "recipientId" | "charterVersion" | "canRespond" | "settlements"
+> & {
+  recipientId?: string | null;
+  charterVersion?: number | null;
+  canRespond?: boolean;
+  settlements?: ProjectedEconomicDemand["settlements"];
+};
 
 export const NationalSanctionExecutionSnapshot = execSnapshotType({
   name: "NationalSanction",
-  version: 1,
+  version: 2,
+  migrations: { 1: (data) => data },
   schema: stateSchema,
   cls: () => NationalSanctionExecution,
 });
