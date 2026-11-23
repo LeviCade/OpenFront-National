@@ -314,7 +314,7 @@ describe("C6 Class One E5: DISTINCT funded national assessment policy", () => {
         view,
         accepted,
         C,
-        "ai_assessment_ok",
+        "ai_assessment_shield",
         null,
       ),
     ).toThrow(/duplicate/);
@@ -460,6 +460,29 @@ function next(game: Game, run: GameRunner) {
 // after Conductor integrates E4, with NO fake 1200-gold implementation.
 const assessmentAuthorityIntegrated =
   "performNationalAssessment" in GameImpl.prototype;
+describe("C6 E5 isolated-source GameRunner fails closed without E4", () => {
+  it.skipIf(assessmentAuthorityIntegrated)(
+    "never fabricates an assessment grant, a 1200-gold charge or memory before E4 is merged",
+    async () => {
+      const game = await fourNations();
+      const debit = vi.spyOn(game.player(A), "removeGold");
+      const regional = vi.spyOn(game, "performNationalReconnaissance")
+        .mockImplementation(() => { throw new Error("regional control disabled"); });
+      const run = runner(game);
+      for (let i = 0; i < 12; i++) next(game, run);
+      expect("performNationalAssessment" in game).toBe(false);
+      expect(debit.mock.calls.some(([amount]) => amount === 1200n)).toBe(false);
+      expect(memoryOf(game)?.attempts ?? []).toHaveLength(0);
+      const { restored, bytes, again } = await roundTrip(game, "big_plains");
+      expect(again).toEqual(bytes);
+      expect(memoryOf(restored)).toEqual(memoryOf(game));
+      regional.mockRestore();
+      debit.mockRestore();
+    },
+    120_000,
+  );
+});
+
 describe("C6 E5 GameRunner + E4 canonical authority integration", () => {
   it.skipIf(!assessmentAuthorityIntegrated)(
     "identical-seed real wallets, purchased recipient-only report and later actual AttackExecution divergence",
