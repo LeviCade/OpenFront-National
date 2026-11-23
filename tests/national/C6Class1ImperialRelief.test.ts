@@ -6,7 +6,10 @@ import {
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { readNationalImperialAdministration } from "@openfront/engine-api/game/NationalImperialView";
-import { StampedIntentSchema, type GameConfig } from "@openfront/engine-api/Schemas";
+import {
+  StampedIntentSchema,
+  type GameConfig,
+} from "@openfront/engine-api/Schemas";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
