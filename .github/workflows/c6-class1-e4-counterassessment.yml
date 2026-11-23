@@ -1,0 +1,75 @@
+name: C6 Class One E4 — Counterassessment Exact SHA
+on:
+  push:
+    branches:
+      - feature/c6-class1-e4-counterassessment-shield-20261123
+  pull_request:
+    branches:
+      - stage3/conductor6-class1-integration-20261123
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c6-c1-e4-shield-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  exact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [typecheck, gameplay, format, lint, production-build, full-suite]
+    name: Authenticated shield ${{ matrix.gate }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Pin source
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Execute independent gate
+        shell: bash
+        env:
+          GATE: ${{ matrix.gate }}
+        run: |
+          set -euo pipefail
+          case "$GATE" in
+            typecheck) npm run typecheck ;;
+            gameplay)
+              npx --no-install vitest run --project node \
+                tests/national/C6Class1CounterassessmentShield.test.ts \
+                tests/national/C6Class1CounterassessmentWire.test.ts \
+                tests/national/C5Class3PaidNationalAssessment.test.ts \
+                tests/national/C5Class3AssessmentWire.test.ts \
+                tests/national/C5Class2FundedRecon.test.ts \
+                tests/national/NationalLiveObservation.test.ts
+              ;;
+            format) npm run format:check ;;
+            lint) npm run lint ;;
+            production-build) npm run build-prod ;;
+            full-suite) npm test ;;
+            *) exit 1 ;;
+          esac
+      - name: Show pinned formatting diff on failure
+        if: failure() && matrix.gate == 'format'
+        run: |
+          npx --no-install oxfmt --write \
+            packages/engine/src/national/observation/NationalAssessment.ts \
+            packages/engine/src/execution/NationalCounterassessmentExecution.ts \
+            packages/engine/src/game/GameImpl.ts \
+            packages/engine/src/game/Game.ts \
+            packages/engine-api/src/Schemas.ts \
+            packages/engine-api/src/game/GameUpdates.ts \
+            packages/engine-api/src/game/NationalAssessmentView.ts \
+            packages/engine/src/execution/ExecutionManager.ts \
+            packages/engine/src/snapshot/ExecutionRegistry.ts \
+            tests/national/C6Class1CounterassessmentShield.test.ts \
+            tests/national/C6Class1CounterassessmentWire.test.ts
+          git diff --stat
+          git --no-pager diff -- packages/engine/src/national/observation/NationalAssessment.ts packages/engine/src/execution/NationalCounterassessmentExecution.ts packages/engine/src/game/GameImpl.ts packages/engine/src/game/Game.ts packages/engine-api/src/Schemas.ts packages/engine-api/src/game/GameUpdates.ts packages/engine-api/src/game/NationalAssessmentView.ts packages/engine/src/execution/ExecutionManager.ts packages/engine/src/snapshot/ExecutionRegistry.ts tests/national/C6Class1CounterassessmentShield.test.ts tests/national/C6Class1CounterassessmentWire.test.ts

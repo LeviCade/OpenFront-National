@@ -142,7 +142,9 @@ export class NationalAssessment {
     requestId: string,
     charge: () => void,
     refund: () => void,
-    capture: () => ReturnType<typeof captureNationalAssessmentBands>,
+    capture: () => Omit<ReturnType<typeof captureNationalAssessmentBands>, "confidence"> & {
+      confidence?: ReturnType<typeof captureNationalAssessmentBands>["confidence"];
+    },
   ): NationalAssessmentGrant {
     id.parse(requestId);
     nation.parse(payerId);
