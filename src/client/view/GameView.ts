@@ -82,6 +82,12 @@ import { TrailManager } from "../render/frame/TrailManager";
 import type { FrameData, NameEntry } from "../render/types";
 import { STRUCTURE_TYPES, TRAIL_TYPES } from "../render/types";
 import type { TrustedNationalObserverMap } from "../TrustedNationalSession";
+import type { NationalUltimatumViewData } from "@openfront/engine-api/game/GameUpdates";
+import type { NationalReconnaissanceViewData } from "@openfront/engine-api/game/NationalReconView";
+import {
+  readNationalReconnaissanceView,
+  readNationalUltimatumView,
+} from "../NationalSovereignActions";
 import { UserSettings } from "../UserSettings";
 import { resolveTeamClanTag } from "../Utils";
 import { WorkerClient } from "../WorkerClient";
@@ -120,6 +126,8 @@ export class GameView implements GameLike {
   private _nationalPoliticsTick: number | null = null;
   private _nationalAccessionOffers: NationalAccessionView | null = null;
   private _nationalPoliticalResults: readonly NationalPoliticalResult[] = [];
+  private _nationalUltimatums: NationalUltimatumViewData | null = null;
+  private _nationalReconnaissance: NationalReconnaissanceViewData | null = null;
   private _trustedProjectionReady = false;
   private trustedPrincipal: string | null = null;
   private trustedSight: NationalObserverMapContinuity | null = null;
@@ -129,6 +137,8 @@ export class GameView implements GameLike {
       this._nationalPactDisclosure = null;
       this._nationalImperialAdministration = null;
       this._nationalPactReceipts = [];
+      this._nationalUltimatums = null;
+      this._nationalReconnaissance = null;
     }
     this.trustedPrincipal = principal;
   }
@@ -238,6 +248,8 @@ export class GameView implements GameLike {
     this._nationalPactDisclosure = null;
     this._nationalImperialAdministration = null;
     this._nationalPactReceipts = [];
+    this._nationalUltimatums = null;
+    this._nationalReconnaissance = null;
     this._trustedProjectionReady = false;
     this._trustedSpawnReady = false;
     this.trustedPendingTiles = [];
@@ -555,6 +567,16 @@ export class GameView implements GameLike {
     return this._nationalAccessionOffers;
   }
 
+  /** Exact recipient-only coercion records from the current Game packet. */
+  public nationalUltimatums(): Readonly<NationalUltimatumViewData> | null {
+    return this._nationalUltimatums;
+  }
+
+  /** The current buyer\'s paid leases, never inferred from a button click. */
+  public nationalReconnaissance(): Readonly<NationalReconnaissanceViewData> | null {
+    return this._nationalReconnaissance;
+  }
+
   public nationalPoliticalResults(): readonly Readonly<NationalPoliticalResult>[] {
     return this._nationalPoliticalResults;
   }
@@ -578,6 +600,8 @@ export class GameView implements GameLike {
     this._nationalConflictsTick = null;
     this._nationalAccessionOffers = null;
     this._nationalPoliticalResults = [];
+    this._nationalUltimatums = null;
+    this._nationalReconnaissance = null;
   }
   private startTick: Tick | null = null;
   private smallIDToID = new Map<number, PlayerID>();
@@ -799,6 +823,14 @@ export class GameView implements GameLike {
 
       const currentActorId =
         this.trustedPrincipal ?? this._myPlayer?.id() ?? null;
+      this._nationalUltimatums =
+        gu.tick < previousTick
+          ? null
+          : readNationalUltimatumView(gu.nationalUltimatums, currentActorId, gu.tick);
+      this._nationalReconnaissance =
+        gu.tick < previousTick
+          ? null
+          : readNationalReconnaissanceView(gu.nationalReconnaissance, currentActorId, gu.tick);
       this._nationalImperialAdministration =
         gu.tick < previousTick
           ? null

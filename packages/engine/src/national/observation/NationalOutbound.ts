@@ -75,6 +75,40 @@ export function projectNationalUltimatums(
   };
 }
 
+/**
+ * Never return a foreign nation's sensor lease. The only source is the
+ * authenticated Game principal's own purchased Game ledger.
+ */
+export function projectNationalReconnaissance(
+  game: Game,
+  observerId: string | null,
+): import("@openfront/engine-api/game/NationalReconView").NationalReconnaissanceViewData | undefined {
+  if (
+    !game.config().nationalMode() ||
+    observerId === null ||
+    !game.hasPlayer(observerId)
+  )
+    return undefined;
+  const actor = game.player(observerId);
+  if (actor.type() !== PlayerType.Human || !actor.hasSpawned() || !actor.isAlive())
+    return undefined;
+  return {
+    version: 1,
+    recipientId: actor.id(),
+    tick: game.ticks(),
+    grants: game.nationalReconnaissanceFor(actor.id()).map((grant) => ({
+      requestId: grant.requestId,
+      targetId: grant.targetId,
+      centerX: grant.centerX,
+      centerY: grant.centerY,
+      radius: grant.radius,
+      cost: "500" as const,
+      effectiveTick: grant.effectiveTick,
+      expiresAtTick: grant.expiresAtTick,
+    })),
+  };
+}
+
 export type { NationalPublicConflictView } from "@openfront/engine-api/game/NationalRecipientView";
 
 /**
@@ -754,6 +788,7 @@ export class NationalOutboundFilter {
       this.observerId,
     );
     const privateUltimatums = projectNationalUltimatums(game, this.observerId);
+    const privateReconnaissance = projectNationalReconnaissance(game, this.observerId);
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
     return {
@@ -786,6 +821,9 @@ export class NationalOutboundFilter {
       ...(privateUltimatums === undefined
         ? {}
         : { nationalUltimatums: privateUltimatums }),
+      ...(privateReconnaissance === undefined
+        ? {}
+        : { nationalReconnaissance: privateReconnaissance }),
       tick: data.tick,
       updates,
       packedTileUpdates: new Uint32Array(packedTile),
