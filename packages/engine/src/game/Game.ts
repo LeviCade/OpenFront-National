@@ -61,6 +61,7 @@ import type {
   NationalRecipientPactView,
   NationalImperialAdministrationCommand,
   NationalImperialAdministrationView,
+  NationalEconomicCharterView,
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
@@ -625,6 +626,8 @@ export interface Game extends GameLike {
   nationalImperialAdministrationFor(
     observer: Player,
   ): NationalImperialAdministrationView | null;
+  /** ECON-04: member-specific, current-emperor economic law, not a trade ledger. */
+  nationalEconomicCharterFor(observer: Player): NationalEconomicCharterView | null;
   performNationalImperialAdministration(
     actor: Player,
     command: NationalImperialAdministrationCommand,

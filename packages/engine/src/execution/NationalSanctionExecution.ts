@@ -146,12 +146,30 @@ export class NationalSanctionExecution implements Execution {
   }
 
   private recipient(id: string): Player | null {
-    // Local responses are independently sovereign only until E1 supplies
-    // delegated/centralized trade policy for external imperial demands.
+    return living(this.game!, id);
+  }
+
+  /** An outsider's demand does not itself delegate imperial economic authority. */
+  private mayRespond(actor: Player, expectedVersion?: number): boolean {
     const game = this.game!;
-    return game.nationalPoliticalAuthority()?.empireOf(id) === null
-      ? living(game, id)
-      : null;
+    const empire = game.nationalPoliticalAuthority()?.empireOf(actor.id());
+    if (empire === undefined) return false;
+    if (empire === null) return true; // independent sovereignty
+    const charter = game.nationalEconomicCharterFor(actor);
+    return charter !== null && charter.empireId === empire &&
+      charter.ownerId === charter.emperorId &&
+      charter.delegated && expectedVersion === charter.version;
+  }
+
+  private canApplyMemberRestriction(member: Player, target: Player): boolean {
+    const game = this.game!;
+    const p = game.nationalPoliticalAuthority();
+    const empire = p?.empireOf(member.id());
+    if (empire === null) return true;
+    if (empire === undefined) return false;
+    const charter = game.nationalEconomicCharterFor(member);
+    return charter !== null && charter.ownerId === charter.emperorId &&
+      (p?.empireOf(target.id()) !== empire || charter.allowInternal);
   }
 
   private advance(tick: number): void {
@@ -218,7 +236,7 @@ export class NationalSanctionExecution implements Execution {
         (id) =>
           id === actor ||
           id === target.id() ||
-          politics.empireOf(id) !== null ||
+          (empire !== null && politics.empireOf(id) === empire) ||
           living(game, id) === null,
       )
     )
@@ -261,15 +279,54 @@ export class NationalSanctionExecution implements Execution {
     this.active = true;
   }
 
-  private respond(actor: Player, decision: "comply" | "refuse"): void {
+  private respond(
+    actor: Player,
+    decision: "comply" | "refuse",
+    expectedVersion?: number,
+  ): void {
     const d = this.demand!;
-    if (d.phase !== "pending" || this.recipient(actor.id()) !== actor) return;
+    if (d.phase !== "pending" || this.recipient(actor.id()) !== actor ||
+        !this.mayRespond(actor, expectedVersion)) return;
     const row = d.recipients.find((r) => r.id === actor.id());
     const target = living(this.game!, d.target);
-    if (!row || !target || row.response !== "none") return;
-    // Only this recipient's explicit voluntary command changes its policy.
+    if (!row || !target || row.response !== "none" ||
+        !this.canApplyMemberRestriction(actor, target)) return;
     if (decision === "comply") actor.addEmbargo(target, false);
     row.response = decision;
+  }
+
+  /** Emperor-only centralized response; validated against the current crown
+   * and CAS epoch at the actual Game execution boundary. */
+  static emperorRespond(
+    game: Game,
+    emperor: Player,
+    memberId: string,
+    sanctionId: string,
+    decision: "comply" | "refuse",
+    empireId: string,
+    expectedVersion: number,
+    advanceEpoch: () => void,
+  ): void {
+    const auth = game.nationalPoliticalAuthority();
+    const member = living(game, memberId);
+    const charter = member && game.nationalEconomicCharterFor(member);
+    if (!auth || auth.emperorOf(empireId) !== emperor.id() ||
+        !member || auth.empireOf(memberId) !== empireId ||
+        !charter || charter.version !== expectedVersion ||
+        (charter.ownerId !== null && charter.ownerId !== emperor.id()))
+      throw new Error("NATIONAL: unauthorized imperial sanction response");
+    const record = this.records(game).find((e) => e.demand?.id === sanctionId);
+    const d = record?.demand;
+    const row = d?.recipients.find((r) => r.id === memberId);
+    const target = d && living(game, d.target);
+    if (!record || !d || d.phase !== "pending" || !row ||
+        row.response !== "none" || !target ||
+        !record.controllingIssuer() ||
+        !record.canApplyMemberRestriction(member, target))
+      throw new Error("NATIONAL: ineligible imperial sanction demand");
+    if (decision === "comply") member.addEmbargo(target, false);
+    row.response = decision;
+    advanceEpoch();
   }
 
   private resolve(actor: Player, decision: "enforce" | "back-down"): void {
@@ -291,7 +348,8 @@ export class NationalSanctionExecution implements Execution {
     for (const row of d.recipients) {
       if (!row.noncompliant) continue;
       const recipient = this.recipient(row.id);
-      if (!recipient) continue;
+      if (!recipient || (d.empire !== null &&
+          game.nationalPoliticalAuthority()?.empireOf(recipient.id()) === d.empire)) continue;
       for (const owner of owners) {
         if (owner === recipient) continue;
         owner.addEmbargo(recipient, false);
@@ -322,7 +380,7 @@ export class NationalSanctionExecution implements Execution {
     if (!record) return;
     record.advance(tick);
     if (command.type === "national_respond_sanction") {
-      record.respond(this.actor, command.decision);
+      record.respond(this.actor, command.decision, command.expectedCharterVersion);
     } else {
       record.resolve(this.actor, command.decision);
     }
@@ -347,21 +405,31 @@ export class NationalSanctionExecution implements Execution {
     if (living(game, observer.id()) !== observer) return [];
     return this.records(game).flatMap((e) => {
       const d = e.demand!;
+      const auth = game.nationalPoliticalAuthority();
       const isIssuer = e.controllingIssuer() === observer;
-      const own = d.recipients.find((row) => row.id === observer.id());
-      if (!isIssuer && (!own || e.recipient(observer.id()) !== observer)) {
-        return [];
-      }
-      return [
-        {
+      const visible = d.recipients.filter((row) => {
+        if (row.id === observer.id()) return true;
+        const empire = auth?.empireOf(row.id);
+        return empire !== null && empire !== undefined &&
+          auth?.emperorOf(empire) === observer.id();
+      });
+      if (!isIssuer && visible.length === 0) return [];
+      return (isIssuer ? [null] : visible).map((own) => ({
+
           id: d.id,
           issuer: d.issuer,
           authorityId: e.controllingIssuer()?.id() ?? null,
           empire: d.empire,
-          role: isIssuer ? ("issuer" as const) : ("recipient" as const),
+          role: isIssuer ? ("issuer" as const) :
+            own?.id === observer.id() ? ("recipient" as const) :
+            ("recipient-emperor" as const),
+          recipientId: own?.id ?? null,
+          charterVersion: own ? game.nationalEconomicCharterFor(game.player(own.id))?.version ?? null : null,
+          canRespond: own?.id === observer.id() && e.mayRespond(observer,
+            game.nationalEconomicCharterFor(observer)?.version),
           recipientIds: isIssuer
             ? d.recipients.map((row) => row.id)
-            : [observer.id()],
+            : [own!.id],
           target: d.target,
           deadline: d.deadline,
           phase: d.phase,
@@ -375,8 +443,7 @@ export class NationalSanctionExecution implements Execution {
             (e.clientId === null || e.clientId === observer.clientID())
               ? e.command.requestId
               : null,
-        },
-      ];
+        }));
     });
   }
 

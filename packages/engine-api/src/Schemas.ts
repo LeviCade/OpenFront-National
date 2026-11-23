@@ -885,6 +885,31 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
       response: z.enum(["none", "assist", "imperial", "both"]),
     }),
+    // C5 C3 ECON-04/05: the same authenticated imperial administration.
+    // Append only: do not renumber historical binary command discriminants.
+    z.object({
+      kind: z.literal("set-economic-charter"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      delegateIds: z.array(MappedID).max(64),
+      allowInternal: z.boolean(),
+    }),
+    z.object({
+      kind: z.literal("set-member-trade"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      memberId: MappedID,
+      targetId: MappedID,
+      embargo: z.boolean(),
+    }),
+    z.object({
+      kind: z.literal("respond-member-sanction"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      memberId: MappedID,
+      sanctionId: NationalPoliticalId,
+      decision: z.enum(["comply", "refuse"]),
+    }),
   ],
 );
 
@@ -908,6 +933,8 @@ export const NationalRespondSanctionIntentSchema = z.object({
   type: z.literal("national_respond_sanction"),
   sanctionId: NationalPoliticalId,
   decision: z.enum(["comply", "refuse"]),
+  // Imperial member commands require an exact current grant epoch at execution.
+  expectedCharterVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }).optional(),
   requestId: NationalPoliticalRequestId,
 });
 export const NationalResolveSanctionIntentSchema = z.object({
