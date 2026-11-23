@@ -44,7 +44,21 @@ jobs:
       - name: Touched formatter
         if: success() || failure()
         run: |
-          npx --no-install oxfmt --check             packages/engine/src/national/ai/NationalNavalStrategy.ts             packages/engine/src/execution/nation/NationWarshipBehavior.ts             packages/engine/src/execution/NationExecution.ts             tests/national/C5Class3NavalAI.test.ts
+          FILES=(
+            packages/engine/src/national/ai/NationalNavalStrategy.ts
+            packages/engine/src/execution/nation/NationWarshipBehavior.ts
+            packages/engine/src/execution/NationExecution.ts
+            tests/national/C5Class3NavalAI.test.ts
+          )
+          if ! npx --no-install oxfmt --check "${FILES[@]}"; then
+            npx --no-install oxfmt --write "${FILES[@]}"
+            for path in "${FILES[@]}"; do
+              echo "C5NAVAL_FORMAT_BEGIN:$path"
+              base64 -w76 "$path" | sed 's/^/C5NAVAL_BASE64:/'
+              echo "C5NAVAL_FORMAT_END:$path"
+            done
+            exit 1
+          fi
       - name: Production build
         if: success() || failure()
         run: npm run build-prod
