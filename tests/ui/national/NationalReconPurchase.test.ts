@@ -24,7 +24,9 @@ describe("C5 Third Class conductor — canonical paid recon client ingress", () 
       { radius: 9999 },
       { empireId: "empire" },
     ])
-      expect(parseNationalReconnaissanceIntent({ ...valid, ...injected })).toBeNull();
+      expect(
+        parseNationalReconnaissanceIntent({ ...valid, ...injected }),
+      ).toBeNull();
   });
 
   it("rejects malformed targets, coordinates and request identity", () => {
@@ -40,7 +42,9 @@ describe("C5 Third Class conductor — canonical paid recon client ingress", () 
       { requestId: null },
       { type: "national_imperial_administration" },
     ])
-      expect(parseNationalReconnaissanceIntent({ ...valid, ...malformed })).toBeNull();
+      expect(
+        parseNationalReconnaissanceIntent({ ...valid, ...malformed }),
+      ).toBeNull();
   });
 
   it("rejects legacy envelopes, null and prototype-free malformed commands", () => {
@@ -60,7 +64,9 @@ describe("C5 Third Class conductor — canonical paid recon client ingress", () 
     const incoming = Object.freeze({ ...valid });
     const accepted = parseNationalReconnaissanceIntent(incoming);
     expect(accepted).toEqual(incoming);
-    expect(Object.keys(accepted ?? {}).sort()).toEqual(Object.keys(incoming).sort());
+    expect(Object.keys(accepted ?? {}).sort()).toEqual(
+      Object.keys(incoming).sort(),
+    );
     expect(Object.isFrozen(incoming)).toBe(true);
   });
 });
