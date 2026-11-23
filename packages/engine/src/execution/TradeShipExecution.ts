@@ -306,12 +306,14 @@ export class TradeShipExecution implements Execution {
       this.mg.creditNationalCommercialIncome(
         this.origOwner,
         gold,
+        "maritime",
         this._dstPort.tile(),
       );
     } else if (this.wasCaptured) {
       this.mg.creditNationalCommercialIncome(
         this.tradeShip!.owner(),
         gold,
+        "piracy",
         this._dstPort.tile(),
       );
       this.tradeShip!.owner().addPiracyGold(gold);
@@ -335,11 +337,13 @@ export class TradeShipExecution implements Execution {
       this.mg.creditNationalCommercialIncome(
         this.srcPort.owner(),
         gold,
+        "maritime",
         this.srcPort.tile(),
       );
       this.mg.creditNationalCommercialIncome(
         this._dstPort.owner(),
         gold,
+        "maritime",
         this._dstPort.tile(),
       );
       this.srcPort.owner().addTradeGold(gold);

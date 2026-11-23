@@ -61,8 +61,13 @@ import type {
   NationalRecipientPactView,
   NationalImperialAdministrationCommand,
   NationalImperialAdministrationView,
+  NationalEconomicCharterView,
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
+import type {
+  NationalAssessmentGrant,
+  NationalAssessmentShield,
+} from "../national/observation/NationalAssessment";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import type { RegionalReconGrant } from "../national/observation/NationalReconnaissance";
 import type {
@@ -625,6 +630,10 @@ export interface Game extends GameLike {
   nationalImperialAdministrationFor(
     observer: Player,
   ): NationalImperialAdministrationView | null;
+  /** ECON-04: member-specific, current-emperor economic law, not a trade ledger. */
+  nationalEconomicCharterFor(
+    observer: Player,
+  ): NationalEconomicCharterView | null;
   performNationalImperialAdministration(
     actor: Player,
     command: NationalImperialAdministrationCommand,
@@ -637,6 +646,7 @@ export interface Game extends GameLike {
   creditNationalCommercialIncome(
     player: Player,
     gross: Gold,
+    source?: "maritime" | "rail" | "piracy",
     tile?: TileRef,
   ): void;
   nationalAllowsConstruction(player: Player, type: UnitType): boolean;
@@ -716,6 +726,19 @@ export interface Game extends GameLike {
   ): RegionalReconGrant;
   /** Own purchases ONLY; LiveObservation performs reciprocal empire sharing. */
   nationalReconnaissanceFor(payerId: PlayerID): readonly RegionalReconGrant[];
+  performNationalAssessment(
+    actor: Player,
+    targetId: PlayerID,
+    requestId: string,
+    authenticatedClientID?: ClientID,
+  ): NationalAssessmentGrant;
+  performNationalCounterassessment(
+    actor: Player,
+    requestId: string,
+    authenticatedClientID?: ClientID,
+  ): NationalAssessmentShield;
+  /** Internal trusted-source records; never public wire without projection. */
+  nationalAssessmentsFor(payerId: PlayerID): readonly NationalAssessmentGrant[];
   performNationalCommand(
     actor: Player,
     command: NationalCommand,

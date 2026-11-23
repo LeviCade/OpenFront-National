@@ -92,7 +92,17 @@ import {
   type NationalRecipientPactView,
   type NationalImperialAdministrationCommand,
   type NationalImperialAdministrationView,
+  type NationalEconomicCharterView,
 } from "../national/NationalRuntime";
+import {
+  NationalAssessment,
+  NationalAssessmentSnapshotSchema,
+  NATIONAL_ASSESSMENT_COST,
+  NATIONAL_COUNTERASSESSMENT_COST,
+  captureNationalAssessmentBands,
+  type NationalAssessmentGrant,
+  type NationalAssessmentShield,
+} from "../national/observation/NationalAssessment";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import {
   NationalReconnaissance,
@@ -227,6 +237,7 @@ export class GameImpl implements Game {
   private _winner: Player | Team | null = null;
   private _national: NationalRuntime | null = null;
   private _nationalRecon: NationalReconnaissance | null = null;
+  private _nationalAssessment: NationalAssessment | null = null;
   /** One persisted principal journal + human sight store per NATIONAL Game. */
   private _nationalGovernance: NationalGovernanceState | null = null;
   /** E2 WAR/LEVY is canonically stored here, never in a WeakMap or fork. */
@@ -280,6 +291,7 @@ export class GameImpl implements Game {
         );
         this._nationalGovernance = new NationalGovernanceState();
         this._nationalRecon = new NationalReconnaissance();
+        this._nationalAssessment = new NationalAssessment();
         this._nationalWar = new NationalWarStateService(
           this.nationalPoliticalAuthority()!,
           this.nationalTroopDebits(),
@@ -1316,6 +1328,20 @@ export class GameImpl implements Game {
     return this._national?.imperialAdministrationFor(observer.id()) ?? null;
   }
 
+  nationalEconomicCharterFor(
+    observer: Player,
+  ): NationalEconomicCharterView | null {
+    if (
+      !this._national ||
+      this._players.get(observer.id()) !== observer ||
+      !observer.hasSpawned() ||
+      !observer.isAlive()
+    )
+      return null;
+    this.synchronizeNationalState();
+    return this._national.economicCharterFor(observer.id());
+  }
+
   /**
    * Resolve the CURRENT live constituent and physical structure at execution
    * time. Pending orders carry identifiers, never borrowed unit objects.
@@ -1352,8 +1378,41 @@ export class GameImpl implements Game {
     if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
       throw new Error("NATIONAL: inactive administration actor");
     this.synchronizeNationalState();
-    this._national.assertEmperor(actor.id(), command.empireId);
+    // A member may REQUEST relief; only the current emperor may DECIDE.
+    if (command.kind !== "request-relief")
+      this._national.assertEmperor(actor.id(), command.empireId);
     switch (command.kind) {
+      case "request-relief":
+        this._national.requestImperialRelief(
+          actor.id(),
+          command.empireId,
+          command.reliefId,
+          command.amount,
+        );
+        break;
+      case "decide-relief":
+        this._national.decideImperialRelief(
+          actor.id(),
+          command.empireId,
+          command.reliefId,
+          command.expectedVersion,
+          command.decision,
+          (memberId, amount) => {
+            const member = this._players.get(memberId);
+            if (
+              !member ||
+              !member.hasSpawned() ||
+              !member.isAlive() ||
+              this._national?.authority().empireOf(memberId) !==
+                command.empireId
+            )
+              throw new Error("NATIONAL: invalid real relief wallet");
+            return PlayerImpl.prepareNationalGoldCredits([
+              { player: member, amount },
+            ]);
+          },
+        );
+        break;
       case "set-policy":
         this._national.setImperialPolicy(
           actor.id(),
@@ -1366,6 +1425,64 @@ export class GameImpl implements Game {
         break;
       case "set-standing-defense-policy":
         this._national.setStandingDefensePolicy(actor.id(), command);
+        break;
+      case "set-economic-charter":
+        this._national.setEconomicCharter(
+          actor.id(),
+          command.empireId,
+          command.expectedVersion,
+          command.delegateIds,
+          command.allowInternal,
+        );
+        break;
+      case "set-member-trade": {
+        const member = this._players.get(command.memberId);
+        const target = this._players.get(command.targetId);
+        const auth = this._national.authority();
+        const charter =
+          member && this._national.economicCharterFor(member.id());
+        if (
+          !member ||
+          !target ||
+          member === target ||
+          !member.hasSpawned() ||
+          !member.isAlive() ||
+          !target.hasSpawned() ||
+          !target.isAlive() ||
+          auth.empireOf(member.id()) !== command.empireId ||
+          !charter ||
+          charter.version !== command.expectedVersion ||
+          (auth.empireOf(target.id()) === command.empireId &&
+            !charter.allowInternal)
+        )
+          throw new Error("NATIONAL: unauthorized constituent trade order");
+        // No global embargo: mutate precisely this member/target Player pair.
+        // No treasury credit/debit occurs unless a later legal trade pays.
+        if (command.embargo) member.addEmbargo(target, false);
+        else member.stopEmbargo(target);
+        this._national.advanceEconomicEpoch(
+          actor.id(),
+          command.empireId,
+          command.expectedVersion,
+        );
+        break;
+      }
+      case "respond-member-sanction":
+        NationalSanctionExecution.emperorRespond(
+          this,
+          actor,
+          command.memberId,
+          command.sanctionId,
+          command.decision,
+          command.empireId,
+          command.expectedVersion,
+          () =>
+            this._national!.advanceEconomicEpoch(
+              actor.id(),
+              command.empireId,
+              command.expectedVersion,
+            ),
+        );
         break;
       case "transfer-troops": {
         const source = this._players.get(command.sourceId);
@@ -1617,12 +1734,21 @@ export class GameImpl implements Game {
   creditNationalCommercialIncome(
     player: Player,
     gross: bigint,
+    source?: "maritime" | "rail" | "piracy",
     tile?: TileRef,
   ): void {
     if (this._national && this._players.get(player.id()) !== player)
       throw new Error("NATIONAL: invalid commercial income owner");
+    if (this._national && source === undefined)
+      throw new Error(
+        "NATIONAL: commercial income requires a named payout source",
+      );
     player.addGold(
-      this._national?.routeNonWorkerIncome(player.id(), gross) ?? gross,
+      this._national?.routeNonWorkerIncome(
+        player.id(),
+        gross,
+        source ?? "maritime",
+      ) ?? gross,
       tile,
     );
   }
@@ -1699,6 +1825,95 @@ export class GameImpl implements Game {
 
   nationalReconnaissanceFor(payerId: PlayerID): readonly RegionalReconGrant[] {
     return this._nationalRecon?.activeFor(payerId, this._ticks) ?? [];
+  }
+
+  /** Game-owned gold debit and post-admission bounded foreign assessment. */
+  performNationalAssessment(
+    actor: Player,
+    targetId: PlayerID,
+    requestId: string,
+    authenticatedClientID?: ClientID,
+  ): NationalAssessmentGrant {
+    if (this._nationalAssessment === null || !this._config.nationalMode())
+      throw new Error("NATIONAL assessment: mode not enabled");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
+    const target = this._players.get(targetId);
+    if (
+      this.inSpawnPhase() ||
+      !actor.hasSpawned() ||
+      !actor.isAlive() ||
+      !target ||
+      !target.hasSpawned() ||
+      !target.isAlive() ||
+      targetId === actor.id()
+    )
+      throw new Error("NATIONAL assessment: inactive or invalid target");
+    return this._nationalAssessment.buy(
+      actor.id(),
+      targetId,
+      this._ticks,
+      requestId,
+      () => {
+        if (actor.gold() < NATIONAL_ASSESSMENT_COST)
+          throw new Error("NATIONAL assessment: insufficient gold");
+        const spent = actor.removeGold(NATIONAL_ASSESSMENT_COST);
+        if (spent !== NATIONAL_ASSESSMENT_COST) {
+          actor.addGold(spent);
+          throw new Error("NATIONAL assessment: non-atomic debit");
+        }
+      },
+      () => {
+        actor.addGold(NATIONAL_ASSESSMENT_COST);
+      },
+      () => {
+        const authority = this.nationalPoliticalAuthority();
+        const actorEmpire = authority?.empireOf(actor.id()) ?? null;
+        const targetEmpire = authority?.empireOf(targetId) ?? null;
+        const allies =
+          actorEmpire !== null &&
+          actorEmpire === targetEmpire &&
+          authority?.membersOf(actorEmpire).includes(actor.id()) === true &&
+          authority?.membersOf(actorEmpire).includes(targetId) === true;
+        return captureNationalAssessmentBands(
+          target.gold(),
+          target.troops(),
+          !allies &&
+            this._nationalAssessment!.isShielded(targetId, this._ticks),
+        );
+      },
+    );
+  }
+  /** No target or duration can be chosen by an untrusted client. */
+  performNationalCounterassessment(
+    actor: Player,
+    requestId: string,
+    authenticatedClientID?: ClientID,
+  ): NationalAssessmentShield {
+    if (this._nationalAssessment === null || !this._config.nationalMode())
+      throw new Error("NATIONAL counterassessment: mode not enabled");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
+    if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
+      throw new Error("NATIONAL counterassessment: inactive principal");
+    return this._nationalAssessment.buyShield(
+      actor.id(),
+      this._ticks,
+      requestId,
+      () => {
+        if (actor.gold() < NATIONAL_COUNTERASSESSMENT_COST)
+          throw new Error("NATIONAL counterassessment: insufficient gold");
+        const spent = actor.removeGold(NATIONAL_COUNTERASSESSMENT_COST);
+        if (spent !== NATIONAL_COUNTERASSESSMENT_COST) {
+          actor.addGold(spent);
+          throw new Error("NATIONAL counterassessment: non-atomic debit");
+        }
+      },
+      () => actor.addGold(NATIONAL_COUNTERASSESSMENT_COST),
+    );
+  }
+  nationalAssessmentsFor(
+    payerId: PlayerID,
+  ): readonly NationalAssessmentGrant[] {
+    return this._nationalAssessment?.activeFor(payerId, this._ticks) ?? [];
   }
 
   /** Trusted player object from authenticated execution, never caller-supplied ID. */
@@ -1822,8 +2037,24 @@ export class GameImpl implements Game {
   ): boolean {
     const authority = this.nationalPoliticalAuthority();
     if (!authority?.alive(actorId)) return false;
-    if (command.kind === "imperial-administration")
-      return authority.emperorOf(command.command.empireId) === actorId;
+    if (command.kind === "imperial-administration") {
+      if (command.command.kind === "request-relief")
+        return authority.empireOf(actorId) === command.command.empireId;
+      if (authority.emperorOf(command.command.empireId) !== actorId)
+        return false;
+      const detail = command.command;
+      if (
+        detail.kind === "set-economic-charter" ||
+        detail.kind === "set-member-trade" ||
+        detail.kind === "respond-member-sanction"
+      ) {
+        return (
+          this._national?.economicCharterFor(actorId)?.version ===
+          detail.expectedVersion
+        );
+      }
+      return true;
+    }
     if (
       command.kind === "transfer-crown" ||
       command.kind === "set-national-peace-delegation"
@@ -2212,6 +2443,8 @@ export class GameImpl implements Game {
     // immutable replay journal must be represented in the match state hash.
     if (this._nationalRecon !== null)
       hash += simpleHash(JSON.stringify(this._nationalRecon.snapshot()));
+    if (this._nationalAssessment !== null)
+      hash += simpleHash(JSON.stringify(this._nationalAssessment.snapshot()));
     return hash;
   }
 
@@ -3162,6 +3395,7 @@ export class GameImpl implements Game {
       nationalWar: this._nationalWar?.snapshot() ?? null,
       nationalGovernance: this._nationalGovernance?.snapshot() ?? null,
       nationalRecon: this._nationalRecon?.snapshot() ?? null,
+      nationalAssessment: this._nationalAssessment?.snapshot() ?? null,
     };
   }
 
@@ -3227,6 +3461,23 @@ export class GameImpl implements Game {
     if (this._config.nationalMode()) {
       if (s.national === null)
         throw new Error("NATIONAL snapshot state missing");
+      this._nationalAssessment =
+        s.nationalAssessment === null
+          ? new NationalAssessment()
+          : NationalAssessment.restore(s.nationalAssessment, this._ticks);
+      for (const shield of this._nationalAssessment.snapshot().shields ?? []) {
+        if (!this._players.has(shield.defenderId))
+          throw new Error(
+            "NATIONAL counterassessment: invalid restored defender",
+          );
+      }
+      for (const grant of this._nationalAssessment.snapshot().grants) {
+        if (
+          !this._players.has(grant.payerId) ||
+          !this._players.has(grant.targetId)
+        )
+          throw new Error("NATIONAL assessment: invalid restored identity");
+      }
       this._nationalRecon =
         s.nationalRecon === null
           ? new NationalReconnaissance()
@@ -3276,6 +3527,9 @@ export class GameImpl implements Game {
       if (s.nationalRecon !== null)
         throw new Error("NATIONAL recon data in legacy snapshot");
       this._nationalRecon = null;
+      if (s.nationalAssessment !== null)
+        throw new Error("NATIONAL assessment data in legacy snapshot");
+      this._nationalAssessment = null;
       if (s.nationalGovernance !== null)
         throw new Error("NATIONAL governance in legacy game snapshot");
       this._nationalGovernance = null;
@@ -3371,7 +3625,7 @@ export class GameImpl implements Game {
 
 export const GameSnapshot = snapshotType({
   name: "Game",
-  version: 5,
+  version: 6,
   migrations: {
     1: (data: unknown) => ({
       ...(data as Record<string, unknown>),
@@ -3388,6 +3642,10 @@ export const GameSnapshot = snapshotType({
     4: (data: unknown) => ({
       ...(data as Record<string, unknown>),
       nationalRecon: null,
+    }),
+    5: (data: unknown) => ({
+      ...(data as Record<string, unknown>),
+      nationalAssessment: null,
     }),
   },
   schema: z.object({
@@ -3427,6 +3685,7 @@ export const GameSnapshot = snapshotType({
     nationalWar: NationalWarStateSnapshotSchema.nullable(),
     nationalGovernance: NationalGovernanceSnapshotSchema.nullable(),
     nationalRecon: NationalReconnaissanceSnapshotSchema.nullable(),
+    nationalAssessment: NationalAssessmentSnapshotSchema.nullable(),
   }),
 });
 export type GameState = z.infer<typeof GameSnapshot.schema>;

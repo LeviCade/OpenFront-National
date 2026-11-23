@@ -123,11 +123,24 @@ export function projectNationalImperialAdministration(
     ...(source.nonWorkerIncomeBps === undefined
       ? {}
       : { nonWorkerIncomeBps: source.nonWorkerIncomeBps }),
+    ...(source.fixedGoldPerPayout === undefined
+      ? {}
+      : { fixedGoldPerPayout: source.fixedGoldPerPayout }),
+    ...(source.revenueClasses === undefined
+      ? {}
+      : { revenueClasses: { ...source.revenueClasses } }),
     allowedConstruction:
       source.allowedConstruction === null
         ? null
         : [...source.allowedConstruction],
     treasury: source.treasury,
+    ...(source.reliefRequests === undefined
+      ? {}
+      : {
+          reliefRequests: source.reliefRequests.map((request) => ({
+            ...request,
+          })),
+        }),
     canAmend: source.canAmend,
     ...(source.armyMode === undefined
       ? {}

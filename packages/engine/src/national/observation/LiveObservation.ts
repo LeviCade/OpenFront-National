@@ -10,6 +10,7 @@ import type { TileRef } from "@openfront/engine-api/game/GameMap";
 import { PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import type { Game, Player } from "../../game/Game";
 import type { NationalRecipientDiplomacy } from "../politics/PoliticalAuthorityAdapter";
+import { projectLiveNationalAssessments } from "./NationalAssessment";
 import {
   projectNationalObservation,
   type AssetKind,
@@ -563,7 +564,10 @@ export function collectLiveNationalObservation(
     unownedFrontier,
   };
   return {
-    observation: projectNationalObservation(world, observerId),
+    observation: {
+      ...projectNationalObservation(world, observerId),
+      assessments: projectLiveNationalAssessments(game, observerId),
+    },
     visibleTiles,
   };
 }

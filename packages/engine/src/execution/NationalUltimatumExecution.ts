@@ -136,6 +136,23 @@ export class NationalUltimatumExecution implements Execution {
       );
   }
 
+  /** Other diplomacy must never buy away this separate enforced embargo. */
+  static hasEnforcedEmbargoPair(
+    game: Game,
+    ownerId: string,
+    targetId: string,
+  ): boolean {
+    return this.records(game).some((execution) => {
+      const row = execution.record!;
+      return (
+        row.phase === "enforced" &&
+        row.threat === "embargo" &&
+        row.target === targetId &&
+        row.imposedMembers.includes(ownerId)
+      );
+    });
+  }
+
   private currentEmperor(): Player | null {
     const game = this.game!;
     const row = this.record!;
@@ -455,6 +472,9 @@ export class NationalUltimatumExecution implements Execution {
           version: row.version,
           warId: row.warId,
           imposedMembers: issuer ? [...row.imposedMembers] : [],
+          acknowledgedRequestIds: row.actions
+            .filter((action) => action.actorId === observer.id())
+            .map((action) => action.requestId),
           requestId:
             issuer &&
             (e.clientId === null || e.clientId === observer.clientID())
@@ -506,6 +526,7 @@ export interface NationalUltimatumObservation {
   readonly warId: string | null;
   readonly imposedMembers: readonly string[];
   readonly requestId: string | null;
+  readonly acknowledgedRequestIds: readonly string[];
 }
 
 export const NationalUltimatumExecutionSnapshot = execSnapshotType({

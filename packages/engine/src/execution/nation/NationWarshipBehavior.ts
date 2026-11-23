@@ -16,11 +16,15 @@ import {
 import { assertNever } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Game, Player, Unit } from "../../game/Game";
+import { planObservedNationalNavalEscorts } from "../../national/ai/NationalNavalEscortStrategy";
+import { planObservedNationalNavalTargets } from "../../national/ai/NationalNavalStrategy";
+import type { NationalObservation } from "../../national/observation/NationalObservation";
 import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../../snapshot/SnapshotContext";
 import { ConstructionExecution } from "../ConstructionExecution";
+import { MoveWarshipExecution } from "../MoveWarshipExecution";
 import {
   EMOJI_WARSHIP_RETALIATION,
   NationEmojiBehavior,
@@ -35,6 +39,23 @@ export class NationWarshipBehavior {
   private trackedIncomingTransportShips: Set<Unit> = new Set();
   // Track incoming transport ships we have dealt with
   private dealtWithTransportShip: Set<Unit> = new Set();
+
+  // NATIONAL-only, principal-local mission memory. No foreign unit references
+  // or historical unseen positions are retained; legacy FFA omits this field.
+  private nationalNavalMission: {
+    readonly vesselId: string;
+    readonly targetOwnerId: string;
+    readonly dispatchedAtTick: number;
+  } | null = null;
+
+  // Separate from inherited offensive missions: defensive orders must not
+  // disappear after an enemy merchant briefly enters or exits sight.
+  private nationalNavalEscortMission: {
+    readonly merchantId: string;
+    readonly raiderId: string;
+    readonly raiderOwnerId: string;
+    readonly dispatchedAtTick: number;
+  } | null = null;
 
   constructor(
     private random: PseudoRandom,
@@ -51,6 +72,14 @@ export class NationWarshipBehavior {
       trackedTradeShips: units(this.trackedTradeShips),
       trackedIncomingTransportShips: units(this.trackedIncomingTransportShips),
       dealtWithTransportShip: units(this.dealtWithTransportShip),
+      ...(this.nationalNavalMission === null
+        ? {}
+        : { nationalNavalMission: { ...this.nationalNavalMission } }),
+      ...(this.nationalNavalEscortMission === null
+        ? {}
+        : {
+            nationalNavalEscortMission: { ...this.nationalNavalEscortMission },
+          }),
     });
   }
 
@@ -72,6 +101,301 @@ export class NationWarshipBehavior {
     this.trackedTradeShips = units(s.trackedTradeShips);
     this.trackedIncomingTransportShips = units(s.trackedIncomingTransportShips);
     this.dealtWithTransportShip = units(s.dealtWithTransportShip);
+    this.nationalNavalMission = s.nationalNavalMission ?? null;
+    this.nationalNavalEscortMission = s.nationalNavalEscortMission ?? null;
+  }
+
+  /**
+   * An ACTUAL NATIONAL naval mission, not generic random FFA construction.
+   * This takes an already principal-filtered, current-tick observation and
+   * issues real original-engine MoveWarship / Construction executions.
+   *
+   * No Game.units foreign scan, no targetUnit lookup, no magical sight:
+   * only currently observed enemy trade-ship coordinates are considered.
+   * The original Game resolves purchase, movement, combat and payouts.
+   */
+  dispatchNationalNavalPressure(
+    observation: NationalObservation,
+  ): "move" | "build" | null {
+    if (
+      !this.game.config().nationalMode() ||
+      this.game.config().isUnitDisabled(UnitType.Warship) ||
+      observation.observerId !== this.player.id() ||
+      observation.tick !== this.game.ticks() ||
+      !this.player.isAlive() ||
+      !this.player.hasSpawned()
+    )
+      return null;
+
+    // An ongoing defensive duty wins over fresh offensive piracy. The
+    // offensive planner gets another chance after the escort cooldown.
+    if (
+      this.nationalNavalEscortMission !== null &&
+      observation.tick - this.nationalNavalEscortMission.dispatchedAtTick < 80
+    )
+      return null;
+    const war = this.game.nationalWarAuthority();
+    // The only eligible authority is an ACTUAL currently live WAR ledger.
+    if (war === null) return null;
+    const ports = this.player
+      .units(UnitType.Port)
+      .filter(
+        (port) =>
+          port.isActive() &&
+          !port.isMarkedForDeletion() &&
+          !port.isUnderConstruction(),
+      );
+    if (ports.length === 0) return null;
+    const targets = planObservedNationalNavalTargets(
+      observation,
+      ports.map((port) => ({
+        x: this.game.x(port.tile()),
+        y: this.game.y(port.tile()),
+      })),
+    );
+    if (targets.length === 0) {
+      // Sight loss or peace stops NEW orders, but does not erase the cooldown:
+      // otherwise a route briefly hidden and reacquired would fund an
+      // immediate duplicate ship. In-flight ships retain engine behavior.
+      return null;
+    }
+    if (
+      this.nationalNavalMission !== null &&
+      observation.tick - this.nationalNavalMission.dispatchedAtTick < 100
+    )
+      return null;
+
+    for (const target of targets) {
+      // Recheck after observation; a public WAR record cannot override the
+      // current sovereign/imperial authority or an allied exemption.
+      if (
+        !war.authorizeOffensiveAction(this.player.id(), target.ownerId) ||
+        !this.game.hasPlayer(target.ownerId) ||
+        this.player.isFriendly(this.game.player(target.ownerId)) ||
+        !this.game.isValidCoord(target.x, target.y)
+      )
+        continue;
+      const tile = this.game.ref(target.x, target.y);
+      if (!this.game.isWater(tile)) continue;
+      const component = this.game.getWaterComponent(tile);
+      if (component === null) continue;
+      if (
+        !ports.some((port) =>
+          this.game.hasWaterComponent(port.tile(), component),
+        )
+      )
+        continue;
+
+      const warships = this.player
+        .units(UnitType.Warship)
+        .filter(
+          (ship) =>
+            ship.isActive() &&
+            !ship.isMarkedForDeletion() &&
+            !ship.isUnderConstruction() &&
+            ship.health() > 0 &&
+            ship.warshipState().state === "patrolling" &&
+            this.game.getWaterComponent(ship.tile()) === component,
+        )
+        .sort(
+          (a, b) =>
+            this.game.manhattanDist(a.tile(), tile) -
+              this.game.manhattanDist(b.tile(), tile) || a.id() - b.id(),
+        );
+      const closest = warships[0];
+      if (closest !== undefined) {
+        // Existing patrol coverage is inherited NAV-01/02, not new strategy.
+        const patrol = closest.warshipState().patrolTile;
+        if (
+          patrol !== undefined &&
+          this.game.euclideanDistSquared(patrol, tile) <=
+            (this.game.config().warshipPatrolRange() / 2) ** 2
+        )
+          continue;
+        this.game.addExecution(
+          new MoveWarshipExecution(this.player, [closest.id()], tile),
+        );
+        this.nationalNavalMission = {
+          vesselId: target.vesselId,
+          targetOwnerId: target.ownerId,
+          dispatchedAtTick: observation.tick,
+        };
+        return "move";
+      }
+      // A ship in another disconnected ocean cannot be retasked. A new one
+      // must be genuinely affordable and physically built at OUR own port.
+      if (
+        this.player.units(UnitType.Warship).length >= 10 ||
+        this.spareGold() < this.cost(UnitType.Warship) ||
+        this.player.canBuild(UnitType.Warship, tile) === false
+      )
+        continue;
+      this.game.addExecution(
+        new ConstructionExecution(this.player, UnitType.Warship, tile),
+      );
+      this.nationalNavalMission = {
+        vesselId: target.vesselId,
+        targetOwnerId: target.ownerId,
+        dispatchedAtTick: observation.tick,
+      };
+      return "build";
+    }
+    return null;
+  }
+
+  /**
+   * Sixth-original defensive escort, deliberately distinct from inherited
+   * offensive merchant interception. The input is the SAME current-tick,
+   * recipient-visible observation given to human clients; no hidden ship
+   * lookup or inferred enemy route is allowed.
+   *
+   * Existing WAR/combat executions, not this AI planner, cause combat,
+   * captures and commercial payouts. A proposed purchase is a real original
+   * ConstructionExecution charged by WarshipExecution at an owned port.
+   */
+  dispatchNationalNavalEscort(
+    observation: NationalObservation,
+  ): "move" | "build" | "cover" | null {
+    if (
+      !this.game.config().nationalMode() ||
+      this.game.config().isUnitDisabled(UnitType.Warship) ||
+      observation.observerId !== this.player.id() ||
+      observation.tick !== this.game.ticks() ||
+      !this.player.isAlive() ||
+      !this.player.hasSpawned()
+    )
+      return null;
+    const war = this.game.nationalWarAuthority();
+    if (war === null) return null;
+    if (
+      this.nationalNavalEscortMission !== null &&
+      observation.tick - this.nationalNavalEscortMission.dispatchedAtTick < 80
+    )
+      return null;
+
+    const targets = planObservedNationalNavalEscorts(observation);
+    for (const target of targets) {
+      if (
+        !this.game.hasPlayer(target.merchantOwnerId) ||
+        !this.game.hasPlayer(target.raiderOwnerId)
+      )
+        continue;
+      const merchant = this.game.player(target.merchantOwnerId);
+      const raider = this.game.player(target.raiderOwnerId);
+      if (
+        !merchant.isAlive() ||
+        !merchant.hasSpawned() ||
+        !raider.isAlive() ||
+        !raider.hasSpawned() ||
+        (merchant !== this.player && !this.player.isFriendly(merchant)) ||
+        this.player.isFriendly(raider) ||
+        !war.authorizeOffensiveAction(this.player.id(), raider.id()) ||
+        !war.authorizeOffensiveAction(raider.id(), merchant.id()) ||
+        !this.game.isValidCoord(target.x, target.y)
+      )
+        continue;
+      // Do not substitute a guessed or stale merchant. Own units are the
+      // only first-party units examined by this dispatcher.
+      if (
+        merchant === this.player &&
+        !this.player
+          .units(UnitType.TradeShip)
+          .some(
+            (ship) =>
+              ship.isActive() &&
+              !ship.isMarkedForDeletion() &&
+              String(ship.id()) === target.merchantId &&
+              ship.targetUnit()?.type() === UnitType.Port &&
+              ship.targetUnit()?.isActive() === true &&
+              ship.targetUnit()?.isMarkedForDeletion() === false &&
+              ship.targetUnit()?.owner() !== this.player &&
+              this.player.canTrade(ship.targetUnit()!.owner()) &&
+              this.game.x(ship.tile()) === target.merchantX &&
+              this.game.y(ship.tile()) === target.merchantY,
+          )
+      )
+        continue;
+
+      if (!this.game.isValidCoord(target.merchantX, target.merchantY)) continue;
+      const tile = this.game.ref(target.x, target.y);
+      const merchantTile = this.game.ref(target.merchantX, target.merchantY);
+      if (!this.game.isWater(tile) || !this.game.isWater(merchantTile))
+        continue;
+      const component = this.game.getWaterComponent(tile);
+      if (
+        component === null ||
+        this.game.getWaterComponent(merchantTile) !== component
+      )
+        continue;
+
+      const warships = this.player
+        .units(UnitType.Warship)
+        .filter(
+          (ship) =>
+            ship.isActive() &&
+            !ship.isMarkedForDeletion() &&
+            !ship.isUnderConstruction() &&
+            ship.health() > 0 &&
+            ship.warshipState().state === "patrolling" &&
+            this.game.getWaterComponent(ship.tile()) === component,
+        )
+        .sort(
+          (a, b) =>
+            this.game.manhattanDist(a.tile(), tile) -
+              this.game.manhattanDist(b.tile(), tile) || a.id() - b.id(),
+        );
+      const closest = warships[0];
+      if (closest !== undefined) {
+        const patrol = closest.warshipState().patrolTile;
+        if (
+          patrol === undefined ||
+          this.game.euclideanDistSquared(patrol, tile) > 4
+        ) {
+          this.game.addExecution(
+            new MoveWarshipExecution(this.player, [closest.id()], tile),
+          );
+        }
+        this.nationalNavalEscortMission = {
+          merchantId: target.merchantId,
+          raiderId: target.raiderId,
+          raiderOwnerId: target.raiderOwnerId,
+          dispatchedAtTick: observation.tick,
+        };
+        return patrol !== undefined &&
+          this.game.euclideanDistSquared(patrol, tile) <= 4
+          ? "cover"
+          : "move";
+      }
+
+      const ports = this.player
+        .units(UnitType.Port)
+        .filter(
+          (port) =>
+            port.isActive() &&
+            !port.isMarkedForDeletion() &&
+            !port.isUnderConstruction() &&
+            this.game.hasWaterComponent(port.tile(), component),
+        );
+      if (
+        ports.length === 0 ||
+        this.player.units(UnitType.Warship).length >= 10 ||
+        this.spareGold() < this.cost(UnitType.Warship) ||
+        this.player.canBuild(UnitType.Warship, tile) === false
+      )
+        continue;
+
+      this.game.addExecution(
+        new ConstructionExecution(this.player, UnitType.Warship, tile),
+      );
+      this.nationalNavalEscortMission = {
+        merchantId: target.merchantId,
+        raiderId: target.raiderId,
+        raiderOwnerId: target.raiderOwnerId,
+        dispatchedAtTick: observation.tick,
+      };
+      return "build";
+    }
+    return null;
   }
 
   maybeSpawnWarship(): boolean {
@@ -627,5 +951,25 @@ export const NationWarshipBehaviorSnapshot = snapshotType({
     trackedTradeShips: z.array(zRef()),
     trackedIncomingTransportShips: z.array(zRef()),
     dealtWithTransportShip: z.array(zRef()),
+    // Additive optional entry preserves old FFA and pre-NATIONAL snapshots.
+    nationalNavalMission: z
+      .object({
+        vesselId: z.string(),
+        targetOwnerId: z.string(),
+        dispatchedAtTick: z.number().int().nonnegative(),
+      })
+      .nullable()
+      .optional(),
+    // Optional additive field: snapshots without defensive escort data and
+    // all legacy FFA files retain their original version-one interpretation.
+    nationalNavalEscortMission: z
+      .object({
+        merchantId: z.string(),
+        raiderId: z.string(),
+        raiderOwnerId: z.string(),
+        dispatchedAtTick: z.number().int().nonnegative(),
+      })
+      .nullable()
+      .optional(),
   }),
 });

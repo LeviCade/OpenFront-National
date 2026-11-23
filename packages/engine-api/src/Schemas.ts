@@ -66,10 +66,14 @@ export type Intent =
   | NationalIssueSanctionIntent
   | NationalRespondSanctionIntent
   | NationalResolveSanctionIntent
+  | NationalOfferSanctionSettlementIntent
+  | NationalDecideSanctionSettlementIntent
   | NationalIssueUltimatumIntent
   | NationalRespondUltimatumIntent
   | NationalResolveUltimatumIntent
-  | NationalReconnaissanceIntent;
+  | NationalReconnaissanceIntent
+  | NationalAssessmentIntent
+  | NationalCounterassessmentIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -170,6 +174,12 @@ export type NationalRespondSanctionIntent = z.infer<
 >;
 export type NationalResolveSanctionIntent = z.infer<
   typeof NationalResolveSanctionIntentSchema
+>;
+export type NationalOfferSanctionSettlementIntent = z.infer<
+  typeof NationalOfferSanctionSettlementIntentSchema
+>;
+export type NationalDecideSanctionSettlementIntent = z.infer<
+  typeof NationalDecideSanctionSettlementIntentSchema
 >;
 export type NationalIssueUltimatumIntent = z.infer<
   typeof NationalIssueUltimatumIntentSchema
@@ -819,6 +829,19 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       policy: z.object({
         workerIncomeBps: zb.uint({ min: 0, max: 10_000 }),
         nonWorkerIncomeBps: zb.uint({ min: 0, max: 10_000 }).optional(),
+        fixedGoldPerPayout: z
+          .string()
+          .regex(/^(0|[1-9][0-9]{0,127})$/)
+          .optional(),
+        revenueClasses: z
+          .object({
+            workers: z.boolean(),
+            maritime: z.boolean(),
+            rail: z.boolean(),
+            piracy: z.boolean(),
+          })
+          .strict()
+          .optional(),
         allowedConstruction: z.array(z.enum(UnitType)).max(16).nullable(),
       }),
     }),
@@ -885,6 +908,45 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
       response: z.enum(["none", "assist", "imperial", "both"]),
     }),
+    // C6 E2: an independent two-party transfer; not paid construction.
+    z.object({
+      kind: z.literal("request-relief"),
+      empireId: NationalPoliticalId,
+      reliefId: NationalPoliticalRequestId,
+      amount: z.string().regex(/^[1-9][0-9]{0,11}$/),
+    }),
+    z.object({
+      kind: z.literal("decide-relief"),
+      empireId: NationalPoliticalId,
+      reliefId: NationalPoliticalRequestId,
+      expectedVersion: zb.uint({ min: 0, max: 1 }),
+      decision: z.enum(["approve", "reject"]),
+    }),
+    // C5 C3 ECON-04/05: the same authenticated imperial administration.
+    // Append only: do not renumber historical binary command discriminants.
+    z.object({
+      kind: z.literal("set-economic-charter"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      delegateIds: z.array(MappedID).max(64),
+      allowInternal: z.boolean(),
+    }),
+    z.object({
+      kind: z.literal("set-member-trade"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      memberId: MappedID,
+      targetId: MappedID,
+      embargo: z.boolean(),
+    }),
+    z.object({
+      kind: z.literal("respond-member-sanction"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      memberId: MappedID,
+      sanctionId: NationalPoliticalId,
+      decision: z.enum(["comply", "refuse"]),
+    }),
   ],
 );
 
@@ -909,11 +971,33 @@ export const NationalRespondSanctionIntentSchema = z.object({
   sanctionId: NationalPoliticalId,
   decision: z.enum(["comply", "refuse"]),
   requestId: NationalPoliticalRequestId,
+  // Imperial member commands require an exact current grant epoch at execution.
+  expectedCharterVersion: zb
+    .uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 })
+    .optional(),
 });
 export const NationalResolveSanctionIntentSchema = z.object({
   type: z.literal("national_resolve_sanction"),
   sanctionId: NationalPoliticalId,
   decision: z.enum(["enforce", "back-down"]),
+  requestId: NationalPoliticalRequestId,
+});
+
+// C6 restitution. BigInt gold is encoded as a bounded positive decimal string;
+// no client-asserted actor, wallet or issuer identity is accepted.
+export const NationalOfferSanctionSettlementIntentSchema = z.object({
+  type: z.literal("national_offer_sanction_settlement"),
+  sanctionId: NationalPoliticalId,
+  amountGold: z.string().regex(/^[1-9][0-9]{0,17}$/),
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalDecideSanctionSettlementIntentSchema = z.object({
+  type: z.literal("national_decide_sanction_settlement"),
+  sanctionId: NationalPoliticalId,
+  // A sanction recipient uses the same canonical nation-ID grammar as issuance.
+  recipientId: NationalWarId,
+  offerId: NationalPoliticalRequestId,
+  decision: z.enum(["accept", "refuse"]),
   requestId: NationalPoliticalRequestId,
 });
 
@@ -947,6 +1031,24 @@ export const NationalReconnaissanceIntentSchema = z.object({
   centerY: zb.uint({ min: 0, max: 65_535 }),
   requestId: NationalPoliticalRequestId,
 });
+
+export const NationalAssessmentIntentSchema = z.object({
+  type: z.literal("national_buy_national_assessment"),
+  targetId: NationalPoliticalId,
+  requestId: NationalPoliticalRequestId,
+});
+export type NationalAssessmentIntent = z.infer<
+  typeof NationalAssessmentIntentSchema
+>;
+
+/** Defender is always the authenticated actor, never a caller-chosen nation. */
+export const NationalCounterassessmentIntentSchema = z.object({
+  type: z.literal("national_buy_counterassessment"),
+  requestId: NationalPoliticalRequestId,
+});
+export type NationalCounterassessmentIntent = z.infer<
+  typeof NationalCounterassessmentIntentSchema
+>;
 
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
@@ -997,6 +1099,10 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalRespondUltimatumIntentSchema,
   NationalResolveUltimatumIntentSchema,
   NationalReconnaissanceIntentSchema,
+  NationalOfferSanctionSettlementIntentSchema,
+  NationalDecideSanctionSettlementIntentSchema,
+  NationalAssessmentIntentSchema,
+  NationalCounterassessmentIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

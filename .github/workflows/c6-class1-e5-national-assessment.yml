@@ -1,0 +1,73 @@
+name: C6 Class One E5 — distinct paid national assessment AI
+
+on:
+  push:
+    branches:
+      - feature/c6-class1-e5-ai-national-assessment-20261123
+  pull_request:
+    paths:
+      - packages/engine/src/national/ai/NationalAssessmentStrategy.ts
+      - packages/engine/src/execution/NationExecution.ts
+      - tests/national/C6Class1E5NationalAssessment.test.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e5-focused:
+    name: C6 E5 actual Game/strategy/typecheck/lint/format/build
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Exact checkout SHA
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Whole-repository TypeScript
+        run: npm run typecheck
+      - name: C6 assessment, inherited paid recon, WAR bridge, FFA controls
+        run: |
+          npx --no-install vitest run --project node tests/national/C6Class1E5NationalAssessment.test.ts tests/national/C5Class3AIRecon.test.ts tests/national/C5Class2FundedRecon.test.ts tests/national/RoundTenNationExecutionBridge.test.ts
+      - name: Pinned touched formatter
+        run: |
+          npx --no-install oxfmt --check packages/engine/src/national/ai/NationalAssessmentStrategy.ts packages/engine/src/execution/NationExecution.ts tests/national/C6Class1E5NationalAssessment.test.ts
+      - name: Formatter diff only on failure
+        if: failure()
+        run: |
+          npx --no-install oxfmt --write packages/engine/src/national/ai/NationalAssessmentStrategy.ts packages/engine/src/execution/NationExecution.ts tests/national/C6Class1E5NationalAssessment.test.ts
+          git diff -- packages/engine/src/national/ai/NationalAssessmentStrategy.ts packages/engine/src/execution/NationExecution.ts tests/national/C6Class1E5NationalAssessment.test.ts
+      - name: Touched-source lint
+        run: |
+          npx --no-install oxlint packages/engine/src/national/ai/NationalAssessmentStrategy.ts packages/engine/src/execution/NationExecution.ts tests/national/C6Class1E5NationalAssessment.test.ts
+      - name: Production build
+        run: npm run build-prod
+
+  e5-full-suite:
+    name: C6 E5 complete workspace regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Exact checkout SHA
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: npm run lint
+      - run: npm test
+      # Global format gate remains authoritative and will flag pre-existing
+      # Conductor-owned command documentation; E5 must not overwrite it.
+      - run: npm run format:check
