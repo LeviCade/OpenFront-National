@@ -488,6 +488,30 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     ).toBe(true);
   });
 
+  it("preserves identical subsequent combat, troop receipts and WAR after snapshot restore", async () => {
+    const game = await found();
+    setResponse(game, "both");
+    game.player(CROWN).setTroops(0);
+    game.player(MEMBER).setTroops(1);
+    game.player(DONOR).setTroops(reserve(game) + 10_000);
+    game.player(ENEMY).setTroops(30_000);
+    hit(game, 5_000);
+    expect(imperialLayers(game)).toHaveLength(1);
+    const { restored } = await roundTrip(game, "plains");
+    for (const sim of [game, restored]) {
+      sim.player(ENEMY).setTroops(20_000);
+      hit(sim, 3_000);
+      expect(imperialLayers(sim)).toHaveLength(1);
+      expect(ledger(sim).levy.processed).toHaveLength(2);
+    }
+    expect(restored.nationalWarState()).toEqual(game.nationalWarState());
+    expect(restored.player(DONOR).troops()).toBe(game.player(DONOR).troops());
+    expect(restored.player(MEMBER).numTilesOwned()).toBe(
+      game.player(MEMBER).numTilesOwned(),
+    );
+    expect(snapshotGameData(restored).game).toEqual(snapshotGameData(game).game);
+  });
+
   it("limits twenty microattack clicks to one non-refreshing donor campaign allowance", async () => {
     const game = await found();
     setResponse(game, "assist");
