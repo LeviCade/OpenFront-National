@@ -1,0 +1,46 @@
+name: C5 Third Class E5 — autonomous paid intelligence
+on:
+  push:
+    branches:
+      - feature/c5-class3-e5-ai-funded-intelligence-20261122
+  pull_request:
+    paths:
+      - packages/engine/src/national/ai/NationalReconStrategy.ts
+      - packages/engine/src/execution/NationExecution.ts
+      - tests/national/C5Class3AIRecon.test.ts
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  e5-engine-acceptance:
+    name: E5 exact-head AI recon / typecheck / regression / lint / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Assert exact committed source
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Typecheck entire project
+        run: npm run typecheck
+      - name: Real GameRunner AI recon and inherited regional recon
+        run: |
+          npx --no-install vitest run --project node tests/national/C5Class3AIRecon.test.ts tests/national/C5Class2FundedRecon.test.ts tests/national/RoundTenNationExecutionBridge.test.ts
+      - name: Pinned source formatter
+        run: npx --no-install oxfmt --check packages/engine/src/national/ai/NationalReconStrategy.ts packages/engine/src/execution/NationExecution.ts tests/national/C5Class3AIRecon.test.ts
+      - name: Capture exact formatter diff on failure
+        if: failure()
+        run: |
+          npx --no-install oxfmt --write packages/engine/src/national/ai/NationalReconStrategy.ts packages/engine/src/execution/NationExecution.ts tests/national/C5Class3AIRecon.test.ts
+          git diff -- packages/engine/src/national/ai/NationalReconStrategy.ts packages/engine/src/execution/NationExecution.ts tests/national/C5Class3AIRecon.test.ts
+      - name: Source lint
+        run: npx --no-install oxlint packages/engine/src/national/ai/NationalReconStrategy.ts packages/engine/src/execution/NationExecution.ts tests/national/C5Class3AIRecon.test.ts
+      - name: Production build
+        run: npm run build-prod
