@@ -7,6 +7,7 @@ import {
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
+import { EmbargoExecution } from "@openfront/engine/execution/EmbargoExecution";
 import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
 import { TrainExecution } from "@openfront/engine/execution/TrainExecution";
@@ -613,4 +614,58 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
     );
     expect(balances(game)).toEqual(before);
   });
+
+  it("three external economies receive real trades while a blocked imperial voyage mints no treasury gold", async () => {
+    const { game, ports } = await fixture();
+    join(game);
+    decree(game, {
+      workerIncomeBps: 10_000,
+      nonWorkerIncomeBps: 10_000,
+      fixedGoldPerPayout: "999999999",
+    });
+    const before = balances(game);
+    const tradeCD = new TradeShipExecution(
+      game.player(C),
+      ports.outsider1,
+      ports.outsider2,
+    );
+    game.addExecution(tradeCD);
+    until(game, () => !tradeCD.isActive());
+    const tradeDE = new TradeShipExecution(
+      game.player(D),
+      ports.outsider2,
+      ports.outsider3,
+    );
+    game.addExecution(tradeDE);
+    until(game, () => !tradeDE.isActive());
+    const externallyPaid = witness("three-external-economies", game, before);
+    for (const index of [2, 3, 4]) {
+      expect(
+        externallyPaid.personal[index].maritime -
+          before.personal[index].maritime,
+      ).toBeGreaterThan(0n);
+      expect(
+        externallyPaid.personal[index].gold -
+          before.personal[index].gold,
+      ).toBeGreaterThan(0n);
+    }
+    expect(externallyPaid.treasury).toBe(before.treasury);
+
+    // A failed admission does not become an income event or a new tax.
+    game.addExecution(new EmbargoExecution(game.player(B), C, "start"));
+    ticks(game, 2);
+    expect(game.player(B).canTrade(game.player(C))).toBe(false);
+    const deniedBefore = balances(game);
+    const denied = new TradeShipExecution(
+      game.player(B),
+      ports.member,
+      ports.outsider1,
+    );
+    game.addExecution(denied);
+    ticks(game, 2);
+    expect(denied.isActive()).toBe(false);
+    expect(balances(game)).toEqual(deniedBefore);
+    witness("embargo-no-income-no-imperial-credit", game, deniedBefore);
+  });
+
 });
