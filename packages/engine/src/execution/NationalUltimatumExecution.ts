@@ -153,22 +153,22 @@ export class NationalUltimatumExecution implements Execution {
       return;
     const game = this.game!;
     const politics = game.nationalPoliticalAuthority();
-    if (
-      politics?.empireOf(row.target) === row.empire &&
-      living(game, row.target)
-    ) {
-      row.phase = "acceded";
-      row.credibility = "kept";
-      row.version++;
-      return;
-    }
+    // A crown change invalidates the prior emperor's offer even if the
+    // target joins later; stale success must never be resurrected on replay.
     if (
       !this.currentEmperor() ||
-      politics?.empireOf(row.target) !== null ||
-      !living(game, row.target)
+      !living(game, row.target) ||
+      (politics?.empireOf(row.target) !== null &&
+        politics?.empireOf(row.target) !== row.empire)
     ) {
       row.phase = "expired";
       row.credibility = "void";
+      row.version++;
+      return;
+    }
+    if (politics?.empireOf(row.target) === row.empire) {
+      row.phase = "acceded";
+      row.credibility = "kept";
       row.version++;
       return;
     }
@@ -280,6 +280,7 @@ export class NationalUltimatumExecution implements Execution {
     tick: number,
     admittedEmpire: string | null,
     admittedPolicyVersion: number | null,
+    authenticatedClientId: ClientID | null,
   ): boolean {
     const row = this.record!;
     const game = this.game!;
@@ -340,7 +341,7 @@ export class NationalUltimatumExecution implements Execution {
           policyVersion: admittedPolicyVersion,
         },
         id,
-        this.clientId ?? undefined,
+        authenticatedClientId ?? undefined,
       );
       if (
         result.accepted !== true ||
@@ -395,6 +396,7 @@ export class NationalUltimatumExecution implements Execution {
         tick,
         this.admissionEmpire,
         this.admissionPolicyVersion,
+        this.clientId,
       );
     }
     if (accepted && owner.record!.actions.length < 64) {
