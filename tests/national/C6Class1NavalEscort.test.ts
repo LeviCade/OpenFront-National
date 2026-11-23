@@ -101,8 +101,9 @@ function run(game: Game, ticks: number): void {
 async function activeThreat(withBot = false) {
   const state = await fixture(withBot);
   const { game, a, b, aPort, cPort } = state;
-  // A fully paid first-party voyage is queued through the real GameRunner.
-  // Do not advance past the bot's next strategy interval before the raider exists.
+  // Align the paid voyage with the bot's observation schedule; the
+  // execution queue takes two physical ticks to spawn an actual merchant.
+  if (game.ticks() < 3) run(game, 3 - game.ticks());
   game.addExecution(new TradeShipExecution(a, aPort, cPort));
   run(game, 2);
   const merchant = a.units(UnitType.TradeShip)[0];
@@ -243,10 +244,13 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
     });
     game.addExecution(new WarshipExecution(existing));
     const gold = a.gold();
+    const observedRaiderTile = raider.tile();
     expect(behavior.dispatchNationalNavalEscort(observed)).toBe("move");
     run(game, 2);
     expect(a.units(UnitType.Warship)).toHaveLength(1);
-    expect(existing.warshipState().patrolTile).toBe(raider.tile());
+    // The REAL hostile warship continues moving between order and test.
+    // Compare against the ordered observed coordinate, not its later tile.
+    expect(existing.warshipState().patrolTile).toBe(observedRaiderTile);
     expect(a.gold()).toBe(gold);
   });
 
