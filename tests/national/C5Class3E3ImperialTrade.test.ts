@@ -411,28 +411,42 @@ describe("C5 C3 E3 imperial member economic charter on real Game", () => {
     charter(game, a, 0, [DELEGATE]);
     const id = issue(game, b, TARGET, [DELEGATE, MEMBER], "member-refusal");
     respond(game, c, id, "refuse", "member-explicit-refusal", 1);
-    expect(NationalSanctionExecution.viewFor(game, c)[0].response).toBe("refuse");
+    expect(NationalSanctionExecution.viewFor(game, c)[0].response).toBe(
+      "refuse",
+    );
     expect(c.canTrade(e)).toBe(true);
     expect(d.canTrade(e)).toBe(true);
     until(
       game,
-      () => NationalSanctionExecution.viewFor(game, b)[0].phase === "decision-required",
+      () =>
+        NationalSanctionExecution.viewFor(game, b)[0].phase ===
+        "decision-required",
       300,
     );
     // A foreign issuer's resolve choice is independent: emperor is NOT issuer.
-    game.addExecution(new NationalSanctionExecution(a, {
-      type: "national_resolve_sanction", sanctionId: id,
-      decision: "enforce", requestId: "forged-emperor-issuer",
-    }));
+    game.addExecution(
+      new NationalSanctionExecution(a, {
+        type: "national_resolve_sanction",
+        sanctionId: id,
+        decision: "enforce",
+        requestId: "forged-emperor-issuer",
+      }),
+    );
     run(game);
     expect(b.canTrade(c)).toBe(true);
     const before = b.tradeGold();
-    game.addExecution(new NationalSanctionExecution(b, {
-      type: "national_resolve_sanction", sanctionId: id,
-      decision: "enforce", requestId: "issuer-enforce-member-refusal",
-    }));
+    game.addExecution(
+      new NationalSanctionExecution(b, {
+        type: "national_resolve_sanction",
+        sanctionId: id,
+        decision: "enforce",
+        requestId: "issuer-enforce-member-refusal",
+      }),
+    );
     run(game);
-    expect(NationalSanctionExecution.viewFor(game, b)[0].phase).toBe("enforced");
+    expect(NationalSanctionExecution.viewFor(game, b)[0].phase).toBe(
+      "enforced",
+    );
     expect(b.canTrade(c)).toBe(false);
     expect(b.canTrade(d)).toBe(false);
     expect(c.canTrade(e)).toBe(true);
@@ -450,31 +464,49 @@ describe("C5 C3 E3 imperial member economic charter on real Game", () => {
     const cmd = {
       kind: "imperial-administration" as const,
       command: {
-        kind: "set-economic-charter" as const, empireId: EMPIRE,
-        expectedVersion: 0, delegateIds: [DELEGATE], allowInternal: false,
+        kind: "set-economic-charter" as const,
+        empireId: EMPIRE,
+        expectedVersion: 0,
+        delegateIds: [DELEGATE],
+        allowInternal: false,
       },
     };
     const original = game.performNationalPoliticalCommandWithOutcome(
-      a, cmd, "c5-e3-journal-charter",
+      a,
+      cmd,
+      "c5-e3-journal-charter",
     );
     expect(original.accepted).toBe(true);
     expect(original.requestId).toBe("c5-e3-journal-charter");
-    expect(game.nationalPoliticalCommandResults(a).some(
-      (row) => row.requestId === "c5-e3-journal-charter" && row.accepted,
-    )).toBe(true);
+    expect(
+      game
+        .nationalPoliticalCommandResults(a)
+        .some(
+          (row) => row.requestId === "c5-e3-journal-charter" && row.accepted,
+        ),
+    ).toBe(true);
     expect(game.nationalPoliticalCommandResults(b)).toEqual([]);
     expect(game.nationalPoliticalCommandResults(c)).toEqual([]);
     expect(game.nationalEconomicCharterFor(c)?.version).toBe(1);
     // A duplicate cannot silently re-enforce an outdated economic decree.
-    expect(() => game.performNationalPoliticalCommandWithOutcome(
-      a, cmd, "c5-e3-journal-charter",
-    )).toThrow(/stale sovereign replay authority/);
+    expect(() =>
+      game.performNationalPoliticalCommandWithOutcome(
+        a,
+        cmd,
+        "c5-e3-journal-charter",
+      ),
+    ).toThrow(/stale sovereign replay authority/);
     expect(game.nationalEconomicCharterFor(c)?.version).toBe(1);
-    expect(() => game.performNationalPoliticalCommandWithOutcome(
-      d, cmd, "c5-e3-journal-charter",
-    )).toThrow(/reused foreign request ID/);
+    expect(() =>
+      game.performNationalPoliticalCommandWithOutcome(
+        d,
+        cmd,
+        "c5-e3-journal-charter",
+      ),
+    ).toThrow(/reused foreign request ID/);
     const spoof = game.performNationalPoliticalCommandWithOutcome(
-      d, { ...cmd, command: { ...cmd.command, expectedVersion: 1 } },
+      d,
+      { ...cmd, command: { ...cmd.command, expectedVersion: 1 } },
       "c5-e3-journal-impostor",
     );
     expect(spoof.accepted).toBe(false);
@@ -483,5 +515,4 @@ describe("C5 C3 E3 imperial member economic charter on real Game", () => {
     expect(noPolicy).toEqual([]);
     trace(game, "journal-receipt-and-epoch-replay");
   });
-
 });
