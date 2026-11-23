@@ -15,6 +15,9 @@ on:
       - "packages/engine/src/national/observation/NationalReconnaissance.ts"
       - "tests/ui/national/NationalSovereignActions.test.ts"
       - "tests/ui/national/NationalSovereignControls.test.ts"
+      - "src/client/controllers/NationalMapTargetController.ts"
+      - "tests/ui/national/NationalReconMapPick.test.ts"
+      - "src/client/replay/codec/FrameNormalizer.ts"
       - ".github/workflows/c5-class3-e1-native-sovereign.yml"
   workflow_dispatch:
 permissions:
@@ -48,7 +51,7 @@ jobs:
           case "$GATE" in
             typecheck) npm run typecheck ;;
             focused-tests)
-              npx --no-install vitest run tests/ui/national/NationalSovereignActions.test.ts tests/ui/national/NationalSovereignControls.test.ts tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalReconPurchase.test.ts
+              npx --no-install vitest run tests/ui/national/NationalSovereignActions.test.ts tests/ui/national/NationalSovereignControls.test.ts tests/ui/national/NationalReconMapPick.test.ts tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalReconPurchase.test.ts
               npx --no-install vitest run --project node tests/national/C5Class2FundedRecon.test.ts tests/national/C5Class2ImperialUltimatum.test.ts
               ;;
             format) npm run format:check ;;
