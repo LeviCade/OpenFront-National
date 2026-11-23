@@ -136,6 +136,23 @@ export class NationalUltimatumExecution implements Execution {
       );
   }
 
+  /** Other diplomacy must never buy away this separate enforced embargo. */
+  static hasEnforcedEmbargoPair(
+    game: Game,
+    ownerId: string,
+    targetId: string,
+  ): boolean {
+    return this.records(game).some((execution) => {
+      const row = execution.record!;
+      return (
+        row.phase === "enforced" &&
+        row.threat === "embargo" &&
+        row.target === targetId &&
+        row.imposedMembers.includes(ownerId)
+      );
+    });
+  }
+
   private currentEmperor(): Player | null {
     const game = this.game!;
     const row = this.record!;

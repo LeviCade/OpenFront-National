@@ -5,6 +5,7 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import { IntentSchema } from "@openfront/engine-api/Schemas";
 import { NationalSanctionExecution } from "@openfront/engine/execution/NationalSanctionExecution";
+import { NationalUltimatumExecution } from "@openfront/engine/execution/NationalUltimatumExecution";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
 import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
@@ -344,6 +345,80 @@ describe("C6 Class 1 E3: actual enforced bilateral restitution", () => {
     offer(world2.game, world2.c, sanctioned, "12000", "c6-unsafe-owner");
     expect(status(world2.game, world2.b, sanctioned)).toBeUndefined();
     expect(world2.b.canTrade(world2.c)).toBe(false);
+  });
+
+
+  it("cannot pay to erase an independently enforced imperial ultimatum embargo", async () => {
+    const { game, a, b } = await world();
+    send(game, a, {
+      type: "national_issue_sanction",
+      scope: "imperial",
+      targetId: TARGET,
+      recipientIds: [ISSUER],
+      durationTicks: 12,
+      requestId: "c6-ultimatum-conflict-sanction",
+    });
+    const sanctions = NationalSanctionExecution.viewFor(game, a);
+    const sanctionId = sanctions[sanctions.length - 1]!.id;
+    until(
+      game,
+      () =>
+        NationalSanctionExecution.viewFor(game, a).some(
+          (row) =>
+            row.id === sanctionId && row.phase === "decision-required",
+        ),
+      30,
+    );
+    send(game, a, {
+      type: "national_resolve_sanction",
+      sanctionId,
+      decision: "enforce",
+      requestId: "c6-ultimatum-conflict-enforce",
+    });
+    expect(a.canTrade(b)).toBe(false);
+    game.addExecution(
+      new NationalUltimatumExecution(a, {
+        type: "national_issue_ultimatum",
+        empireId: EMPIRE,
+        targetId: ISSUER,
+        threat: "embargo",
+        durationTicks: 12,
+        requestId: "c6-ultimatum-overlap-issue",
+      }),
+    );
+    run(game);
+    const ultimatums = NationalUltimatumExecution.viewFor(game, a);
+    const ultimatumId = ultimatums[ultimatums.length - 1]!.id;
+    until(
+      game,
+      () =>
+        NationalUltimatumExecution.viewFor(game, a).some(
+          (row) =>
+            row.id === ultimatumId && row.phase === "decision-required",
+        ),
+      30,
+    );
+    game.addExecution(
+      new NationalUltimatumExecution(a, {
+        type: "national_resolve_ultimatum",
+        ultimatumId,
+        decision: "enforce",
+        requestId: "c6-ultimatum-overlap-enforce",
+      }),
+    );
+    run(game);
+    expect(
+      NationalUltimatumExecution.hasEnforcedEmbargoPair(
+        game,
+        a.id(),
+        b.id(),
+      ),
+    ).toBe(true);
+    const before = [a.gold(), b.gold()];
+    offer(game, b, sanctionId, "23000", "c6-ultimatum-cross-reason-offer");
+    expect(status(game, a, sanctionId)).toBeUndefined();
+    expect([a.gold(), b.gold()]).toEqual(before);
+    expect(a.canTrade(b)).toBe(false);
   });
 
   it("freezes imperial crown authority at enforcement; succession invalidates outstanding bilateral settlement", async () => {

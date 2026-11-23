@@ -17,6 +17,7 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
+import { NationalUltimatumExecution } from "./NationalUltimatumExecution";
 
 const commandSchema = z.discriminatedUnion("type", [
   NationalIssueSanctionIntentSchema,
@@ -481,7 +482,12 @@ export class NationalSanctionExecution implements Execution {
         !entry ||
         entry.createdAt !== claim.createdAt ||
         target.hasManualEmbargoAgainst(owner) ||
-        game.nationalWarAuthority()?.atWar(owner.id(), target.id())
+        game.nationalWarAuthority()?.atWar(owner.id(), target.id()) ||
+        NationalUltimatumExecution.hasEnforcedEmbargoPair(
+          game,
+          owner.id(),
+          target.id(),
+        )
       )
         return null;
       const overlap = NationalSanctionExecution.records(game).some((other) => {
