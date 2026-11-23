@@ -1,5 +1,7 @@
-import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/NationalAssessmentView";
-import { NationalAssessmentViewSchema } from "@openfront/engine-api/game/NationalAssessmentView";
+import {
+  NationalAssessmentViewSchema,
+  validateNationalAssessmentPacket,
+} from "@openfront/engine-api/game/NationalAssessmentView";
 
 const valid = {
   version: 1 as const,

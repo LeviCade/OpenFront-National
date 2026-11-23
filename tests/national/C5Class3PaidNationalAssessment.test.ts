@@ -1,9 +1,13 @@
 import { GameType, PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
-import { NationalAssessmentIntentSchema } from "@openfront/engine-api/Schemas";
+import { NationalAssessmentIntentSchema, type GameConfig } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
+import { NationalServerRecipientSession } from "@openfront/engine/national/observation/NationalServerOutbound";
+import { encodeNationalRecipientProjection } from "../../src/server/national/NationalRecipientWire";
+import { parseTrustedNationalProjection } from "../../src/client/TrustedNationalSession";
+import { TestConfig } from "../util/TestConfig";
 import {
   NATIONAL_ASSESSMENT_COST,
   NATIONAL_ASSESSMENT_DURATION_TICKS,
@@ -20,8 +24,20 @@ const TARGET = new PlayerInfo("Secret Victim", PlayerType.Nation, null, "assessm
 const ALLY = new PlayerInfo("Reciprocal Member", PlayerType.Nation, null, "assessment-ally");
 const STRANGER = new PlayerInfo("Enemy", PlayerType.Nation, null, "assessment-stranger");
 
+/** Private NATIONAL requires the real trusted-server authority flag, not a browser config override. */
+class TrustedAssessmentConfig extends TestConfig {
+  constructor(config: GameConfig, replay: boolean) {
+    super(config, replay, false, false, true);
+  }
+}
+
 async function active(nationalMode = true, gameType = GameType.Singleplayer) {
-  const game = await setup("big_plains", { nationalMode, gameType }, [BUYER, OTHER, TARGET, ALLY, STRANGER]);
+  const game = await setup(
+    "big_plains", { nationalMode, gameType },
+    [BUYER, OTHER, TARGET, ALLY, STRANGER],
+    undefined,
+    gameType === GameType.Private ? TrustedAssessmentConfig : TestConfig,
+  );
   game.addExecution(
     new SpawnExecution("assessment", BUYER, game.ref(20, 100)),
     new SpawnExecution("assessment", OTHER, game.ref(18, 15)),
@@ -263,6 +279,38 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
     expect(buyer.gold()).toBeLessThan(before);
     expect(packet(game, OTHER.clientID!).nationalAssessments?.items).toEqual([]);
     expect(packet(game, BUYER.clientID!).nationalAssessments?.items).toHaveLength(1);
+
+    // End-to-end trusted host packet whitelist and browser decoder,
+    // with a real authenticated principal and its current observer-map page.
+    const liveLink = {
+      clientID: BUYER.clientID!,
+      sessionId: "assessment-real-private-socket",
+      isConnected: () => true,
+      isSpectator: () => false,
+    };
+    const session = new NationalServerRecipientSession(game, liveLink);
+    const hostFiltered = session.projectGameUpdate(packet(game, BUYER.clientID!));
+    expect(hostFiltered).not.toBeNull();
+    const hostEncoded = encodeNationalRecipientProjection(hostFiltered!);
+    const browserDecoded = parseTrustedNationalProjection(hostEncoded, hostFiltered!.tick);
+    expect(browserDecoded.nationalAssessments).toMatchObject({
+      recipientId: BUYER.id,
+      items: [expect.objectContaining({
+        targetId: TARGET.id, confidence: "coarse-estimate",
+      })],
+    });
+    expect(hostEncoded).not.toContain('"requestId":"private-canonical"');
+    expect(hostEncoded).not.toContain('"cost":"1200"');
+    const foreign = new NationalServerRecipientSession(game, {
+      ...liveLink,
+      clientID: OTHER.clientID!,
+      sessionId: "assessment-other-private-socket",
+    });
+    const foreignFiltered = foreign.projectGameUpdate(packet(game, OTHER.clientID!));
+    expect(foreignFiltered?.nationalAssessments?.items).toEqual([]);
+    expect(parseTrustedNationalProjection(
+      encodeNationalRecipientProjection(foreignFiltered!), foreignFiltered!.tick,
+    ).nationalAssessments).toMatchObject({ recipientId: OTHER.id, items: [] });
   });
 
   it("leaves ordinary non-NATIONAL FFA without assessment authority", async () => {
