@@ -74,7 +74,8 @@ jobs:
           set -e
           if [ "$status" -eq 0 ]; then exit 0; fi
           mapfile -t observed < <(
-            grep -E '^([A-Za-z0-9._/-]+) \([0-9]+ms\)$' /tmp/c6-e6-repository-format.log \
+            sed -E 's/\x1B\[[0-9;]*m//g' /tmp/c6-e6-repository-format.log \
+              | grep -E '^([A-Za-z0-9._/-]+) \([0-9]+ms\)$' \
               | sed -E 's/ \([0-9]+ms\)$//' | LC_ALL=C sort
           )
           expected=(
