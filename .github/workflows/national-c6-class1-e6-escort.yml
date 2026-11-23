@@ -1,0 +1,81 @@
+name: C6 Class One E6 - defensive naval escort acceptance
+
+on:
+  pull_request:
+    branches:
+      - stage3/conductor6-class1-integration-20261123
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  c6-class1-e6:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact engineer SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "C6_E6_EXACT_SHA=$EXPECTED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Install reproducible dependencies
+        run: npm run inst
+      - name: Typecheck all workspaces
+        if: success() || failure()
+        run: npm run typecheck
+      - name: Fifth inheritance and Sixth original real naval witness
+        if: success() || failure()
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/C5Class3NavalAI.test.ts \
+            tests/national/C5Class3NavalPerf.test.ts \
+            tests/national/C6Class1NavalEscort.test.ts \
+            tests/national/C4Class2EconomicMaritime.test.ts \
+            tests/national/NationalAIRealWar.test.ts \
+            tests/NationWarshipNukeReserve.test.ts \
+            tests/Warship.test.ts \
+            tests/national/NationalObservation.test.ts \
+            tests/national/NationalLiveObservation.test.ts \
+            tests/national/NationalWarSides.test.ts \
+            tests/national/C5ImperialWarPolicy.test.ts \
+            tests/national/RoundNineWarAuthorityGame.test.ts \
+            tests/national/RoundTenNationExecutionBridge.test.ts
+      - name: Full regression
+        if: success() || failure()
+        run: npm test
+      - name: Lint
+        if: success() || failure()
+        run: npm run lint
+      - name: Pinned full format check
+        if: success() || failure()
+        run: npm run format:check
+      - name: Emit exact formatted source on failure
+        if: failure()
+        run: |
+          FILES=(
+            packages/engine/src/national/ai/NationalNavalEscortStrategy.ts
+            packages/engine/src/execution/nation/NationWarshipBehavior.ts
+            packages/engine/src/execution/NationExecution.ts
+            tests/national/C6Class1NavalEscort.test.ts
+          )
+          npx --no-install oxfmt --write "${FILES[@]}"
+          for file in "${FILES[@]}"; do
+            echo "C6E6_FORMAT_BEGIN:$file"
+            base64 -w76 "$file" | sed 's/^/C6E6_BASE64:/'
+            echo "C6E6_FORMAT_END:$file"
+          done
+      - name: Production build
+        if: success() || failure()
+        run: npm run build-prod
