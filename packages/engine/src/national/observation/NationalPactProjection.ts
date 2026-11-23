@@ -134,6 +134,13 @@ export function projectNationalImperialAdministration(
         ? null
         : [...source.allowedConstruction],
     treasury: source.treasury,
+    ...(source.reliefRequests === undefined
+      ? {}
+      : {
+          reliefRequests: source.reliefRequests.map((request) => ({
+            ...request,
+          })),
+        }),
     canAmend: source.canAmend,
     ...(source.armyMode === undefined
       ? {}
