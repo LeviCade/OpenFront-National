@@ -11,8 +11,8 @@ import {
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
-import { NationExecution } from "@openfront/engine/execution/NationExecution";
 import { NationalUltimatumExecution } from "@openfront/engine/execution/NationalUltimatumExecution";
+import { NationExecution } from "@openfront/engine/execution/NationExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
@@ -391,7 +391,9 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
       issuerId: H,
       targetId: A,
     });
-    expect(NationalUltimatumExecution.viewFor(game, game.player(B))).toEqual([]);
+    expect(NationalUltimatumExecution.viewFor(game, game.player(B))).toEqual(
+      [],
+    );
     const runner = runnerFor(game);
     let refused = false;
     for (let i = 0; i < 120; i++) {
@@ -426,5 +428,4 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
     const replay = await roundTrip(restored, "plains");
     expect(diffSnapshots(original.bytes, replay.bytes)).toEqual([]);
   });
-
 });
