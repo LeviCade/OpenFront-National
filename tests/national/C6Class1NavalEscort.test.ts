@@ -103,9 +103,11 @@ async function activeThreat(withBot = false) {
   const { game, a, b, aPort, cPort } = state;
   // Align the controlled encounter with the National bot's bounded
   // five-tick observation cadence, not an accidental blind planning interval.
-  if (game.ticks() < 4) run(game, 4 - game.ticks());
+  if (game.ticks() < 3) run(game, 3 - game.ticks());
   game.addExecution(new TradeShipExecution(a, aPort, cPort));
-  run(game, 1);
+  // Game.addExecution queues activation; the voyage is not live until the
+  // second physical tick. Start exactly before the bot's tick-five cadence.
+  run(game, 2);
   const merchant = a.units(UnitType.TradeShip)[0];
   expect(merchant).toBeDefined();
   expect(merchant.isActive()).toBe(true);
