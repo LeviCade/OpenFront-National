@@ -30,7 +30,7 @@ jobs:
           npx --no-install vitest run --project node tests/national/C5Class2FundedRecon.test.ts
       - name: Exact touched-source formatting
         run: |
-          npx --no-install oxfmt --check src/client/Transport.ts src/client/NationalReconPurchase.ts tests/ui/national/NationalReconPurchase.test.ts
+          npx --no-install oxfmt --check src/client/Transport.ts src/client/NationalReconPurchase.ts tests/ui/national/NationalReconPurchase.test.ts docs/release/NATIONAL_C5_CLASS3_ENGINEERING_CHARTER.md
       - name: Lint touched files
         run: npx --no-install oxlint src/client/Transport.ts src/client/NationalReconPurchase.ts tests/ui/national/NationalReconPurchase.test.ts
       - name: Production build
