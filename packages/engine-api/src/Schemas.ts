@@ -965,7 +965,8 @@ export const NationalOfferSanctionSettlementIntentSchema = z.object({
 export const NationalDecideSanctionSettlementIntentSchema = z.object({
   type: z.literal("national_decide_sanction_settlement"),
   sanctionId: NationalPoliticalId,
-  recipientId: MappedID,
+  // A sanction recipient uses the same canonical nation-ID grammar as issuance.
+  recipientId: NationalWarId,
   offerId: NationalPoliticalRequestId,
   decision: z.enum(["accept", "refuse"]),
   requestId: NationalPoliticalRequestId,
