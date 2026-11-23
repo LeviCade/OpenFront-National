@@ -99,7 +99,8 @@ function issue(game: Game, actor: Player, targetId: string,
     targetId, recipientIds: recipients, durationTicks: 190, requestId,
   }));
   run(game);
-  return NationalSanctionExecution.viewFor(game, actor).at(-1)!.id;
+  const views = NationalSanctionExecution.viewFor(game, actor);
+  return views[views.length - 1]!.id;
 }
 function respond(game: Game, player: Player, sanctionId: string,
                  decision: "comply" | "refuse", requestId: string,
@@ -232,7 +233,7 @@ describe("C5 C3 E3 imperial member economic charter on real Game", () => {
   });
 
   it("retains current charter, embargo and paid-trade hash through snapshot/replay; collapse invalidates queued imperial grants", async () => {
-    const { game, a, b, c, d, e, src, dst } = await world();
+    const { game, a, b, c, e } = await world();
     charter(game, a, 0, [DELEGATE]);
     const id = issue(game, b, TARGET, [DELEGATE], "save-sanction");
     respond(game, c, id, "comply", "save-comply", 1);

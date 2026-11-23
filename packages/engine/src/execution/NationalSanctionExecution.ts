@@ -503,9 +503,19 @@ export class NationalSanctionExecution implements Execution {
   }
 }
 
-export type NationalEconomicDemandView = ReturnType<
+// Backward-compatible issuer/recipient DTO. Third-Class member-only fields
+// are optional for existing NATIONAL economic AI fixture producers.
+type ProjectedEconomicDemand = ReturnType<
   typeof NationalSanctionExecution.viewFor
 >[number];
+export type NationalEconomicDemandView = Omit<
+  ProjectedEconomicDemand,
+  "recipientId" | "charterVersion" | "canRespond"
+> & {
+  recipientId?: string | null;
+  charterVersion?: number | null;
+  canRespond?: boolean;
+};
 
 export const NationalSanctionExecutionSnapshot = execSnapshotType({
   name: "NationalSanction",
