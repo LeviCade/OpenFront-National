@@ -51,6 +51,12 @@ import {
   type NationalReconMemory,
 } from "../national/ai/NationalReconStrategy";
 import {
+  initialNationalAssessmentAIMemory,
+  planNationalAssessment,
+  recordNationalAssessmentAttempt,
+  type NationalAssessmentAIMemory,
+} from "../national/ai/NationalAssessmentStrategy";
+import {
   collectLiveNationalObservation,
   liveNationalWarAuthority,
 } from "../national/observation/LiveObservation";
@@ -130,6 +136,8 @@ export class NationExecution implements Execution {
   private nationalEconomicMemory: NationalEconomicMemory | null = null;
   // E5: private, bounded, actor-owned paid-recon history; never a second wallet.
   private nationalReconMemory: NationalReconMemory | null = null;
+  // C6 E5: separate bounded 1,200-gold assessment purchase receipts.
+  private nationalAssessmentMemory: NationalAssessmentAIMemory | null = null;
 
   constructor(
     private gameID: GameID,
@@ -492,6 +500,75 @@ export class NationExecution implements Execution {
         return;
       }
     }
+    // C6 E5 original: independent 1,200-gold assessment, NOT geographic
+    // reconnaissance. The optional method is supplied by E4's authoritative
+    // Game-owned purchase code after Conductor integration. Absence is a
+    // no-op: never fabricate a purchase, grant, ledger entry or visible report.
+    const assessmentDecision = planNationalAssessment(
+      observation,
+      this.nationalAssessmentMemory ??
+        initialNationalAssessmentAIMemory(player.id()),
+    );
+    this.nationalAssessmentMemory = assessmentDecision.memory;
+    const assessmentGame = this.mg as Game & {
+      performNationalAssessment?: (
+        actor: Player,
+        targetId: string,
+        requestId: string,
+      ) => {
+        payerId: string;
+        targetId: string;
+        requestId: string;
+        effectiveTick: number;
+        expiresAtTick: number;
+      };
+    };
+    if (
+      assessmentDecision.purchase !== null &&
+      typeof assessmentGame.performNationalAssessment === "function"
+    ) {
+      const targetId = assessmentDecision.purchase.targetId;
+      const requestId =
+        "ai_assessment_" +
+        (simpleHash(player.id() + ":" + targetId) >>> 0).toString(36) +
+        "_" +
+        ticks.toString(36);
+      let expiresAtTick: number | null = null;
+      try {
+        const grant = assessmentGame.performNationalAssessment(
+          player,
+          targetId,
+          requestId,
+        );
+        if (
+          grant.payerId === player.id() &&
+          grant.targetId === targetId &&
+          grant.requestId === requestId &&
+          grant.effectiveTick === ticks
+        ) {
+          expiresAtTick = grant.expiresAtTick;
+        }
+      } catch {
+        // A denied canonical purchase never becomes a free assessment.
+      }
+      this.nationalAssessmentMemory = recordNationalAssessmentAttempt(
+        observation,
+        assessmentDecision.memory,
+        targetId,
+        requestId,
+        expiresAtTick,
+      );
+      if (expiresAtTick !== null) {
+        // Re-observe the paid report through E4's recipient projector next
+        // tick before attempting another military action against this rival.
+        this.nationalPlannerMemory = {
+          ...(this.nationalPlannerMemory ??
+            initialNationalPlannerMemory(player.id())),
+          nextPlanningTick: ticks + 1,
+        };
+        return;
+      }
+    }
     const remembered = advanceLastKnown(
       observation,
       this.nationalSightMemory,
@@ -638,6 +715,13 @@ export class NationExecution implements Execution {
     // unsound while this genuinely paid reconnaissance lease remains live.
     // An existing defensive WAR is likewise preserved, not fabricated.
     if (targetId !== null && reconDecision.holdOffenseAgainst === targetId)
+      return;
+    // A real recipient-scoped coarse assessment can justify conserving
+    // troops against this WAR enemy. No treaty bypass or new WAR command.
+    if (
+      targetId !== null &&
+      assessmentDecision.holdOffenseAgainst === targetId
+    )
       return;
 
     // The planner knows only verified frontier IDs. Confirm adjacency again
@@ -1004,6 +1088,17 @@ export class NationExecution implements Execution {
                   : { ...this.nationalReconMemory.lastDiscovery },
             },
           }),
+      ...(this.nationalAssessmentMemory === null
+        ? {}
+        : {
+            nationalAssessmentMemory: {
+              observerId: this.nationalAssessmentMemory.observerId,
+              nextDecisionTick: this.nationalAssessmentMemory.nextDecisionTick,
+              attempts: this.nationalAssessmentMemory.attempts.map((a) => ({
+                ...a,
+              })),
+            },
+          }),
       // Omit entirely for legacy games and pre-economics snapshots; an
       // optional null field would needlessly mutate old snapshot bytes.
       ...(this.nationalEconomicMemory === null
@@ -1070,6 +1165,7 @@ export class NationExecution implements Execution {
     this.nationalSightMemory = s.nationalSightMemory;
     this.nationalEconomicMemory = s.nationalEconomicMemory ?? null;
     this.nationalReconMemory = s.nationalReconMemory ?? null;
+    this.nationalAssessmentMemory = s.nationalAssessmentMemory ?? null;
     this.behaviorsInitialized = s.behaviors !== null;
     const b = s.behaviors;
     const player = this.player;
@@ -1219,6 +1315,24 @@ const NationStateSchema = z.object({
           expiresAtTick: z.number().int().nonnegative(),
         })
         .nullable(),
+    })
+    .optional(),
+  // Optional on existing v2 and legacy FFA snapshots; no version inflation.
+  nationalAssessmentMemory: z
+    .object({
+      observerId: z.string(),
+      nextDecisionTick: z.number().int().nonnegative(),
+      attempts: z
+        .array(
+          z.object({
+            targetId: z.string(),
+            requestId: z.string().min(1).max(128),
+            purchasedTick: z.number().int().nonnegative(),
+            expiresAtTick: z.number().int().nonnegative(),
+            outcome: z.enum(["accepted", "rejected"]),
+          }),
+        )
+        .max(3),
     })
     .optional(),
   nationalEconomicMemory: z
