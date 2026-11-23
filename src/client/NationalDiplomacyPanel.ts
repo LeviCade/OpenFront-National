@@ -162,26 +162,40 @@ export class NationalDiplomacyPanel extends LitElement {
 
   private reconMapBus: EventBus | null = null;
 
-  private readonly onReconMapPoint = (event: NationalReconMapPointSelectedEvent) => {
+  private readonly onReconMapPoint = (
+    event: NationalReconMapPointSelectedEvent,
+  ) => {
     const game = this.game;
     if (!this.reconMapPicking) return;
     this.reconMapPicking = false;
-    if (!this.sovereignReady || !game || event.gameId !== game.gameID() ||
-      !game.isValidCoord(event.x, event.y)) {
-      this.reconStatus = "Map authority changed; selection and purchase canceled.";
+    if (
+      !this.sovereignReady ||
+      !game ||
+      event.gameId !== game.gameID() ||
+      !game.isValidCoord(event.x, event.y)
+    ) {
+      this.reconStatus =
+        "Map authority changed; selection and purchase canceled.";
       return;
     }
     this.reconCenterX = String(event.x);
     this.reconCenterY = String(event.y);
     this.expanded = true;
-    this.reconStatus = "Game map center selected. Review target, cost and consent before purchase.";
+    this.reconStatus =
+      "Game map center selected. Review target, cost and consent before purchase.";
   };
 
   private bindReconMap(): void {
     if (this.reconMapBus === this.eventBus) return;
-    this.reconMapBus?.off(NationalReconMapPointSelectedEvent, this.onReconMapPoint);
+    this.reconMapBus?.off(
+      NationalReconMapPointSelectedEvent,
+      this.onReconMapPoint,
+    );
     this.reconMapBus = this.eventBus;
-    this.reconMapBus?.on(NationalReconMapPointSelectedEvent, this.onReconMapPoint);
+    this.reconMapBus?.on(
+      NationalReconMapPointSelectedEvent,
+      this.onReconMapPoint,
+    );
   }
 
   override connectedCallback(): void {
@@ -196,7 +210,10 @@ export class NationalDiplomacyPanel extends LitElement {
 
   override disconnectedCallback(): void {
     this.cancelReconMapPick();
-    this.reconMapBus?.off(NationalReconMapPointSelectedEvent, this.onReconMapPoint);
+    this.reconMapBus?.off(
+      NationalReconMapPointSelectedEvent,
+      this.onReconMapPoint,
+    );
     this.reconMapBus = null;
     super.disconnectedCallback();
   }
@@ -2517,21 +2534,27 @@ export class NationalDiplomacyPanel extends LitElement {
 
   private chooseReconMapCenter(): void {
     if (!this.sovereignReady || !this.game || !this.eventBus) {
-      this.reconStatus = "A verified active game seat is required to choose a map center.";
+      this.reconStatus =
+        "A verified active game seat is required to choose a map center.";
       return;
     }
     this.bindReconMap();
     this.reconMapPicking = true;
     this.expanded = false;
-    this.reconStatus = "Tap the actual map to choose your center; this does not purchase intelligence or attack.";
-    this.eventBus.emit(new NationalReconMapPickRequestedEvent(this.game.gameID(), true));
+    this.reconStatus =
+      "Tap the actual map to choose your center; this does not purchase intelligence or attack.";
+    this.eventBus.emit(
+      new NationalReconMapPickRequestedEvent(this.game.gameID(), true),
+    );
   }
 
   private cancelReconMapPick(): void {
     if (!this.reconMapPicking) return;
     this.reconMapPicking = false;
     if (this.game)
-      this.eventBus?.emit(new NationalReconMapPickRequestedEvent(this.game.gameID(), false));
+      this.eventBus?.emit(
+        new NationalReconMapPickRequestedEvent(this.game.gameID(), false),
+      );
   }
 
   private useOwnMapPosition(): void {
@@ -2751,16 +2774,36 @@ export class NationalDiplomacyPanel extends LitElement {
             </select>
           </label>
           <p class="text-xs text-slate-300">
-            Tap the actual game map to select the purchase center. During selection the diplomacy sheet closes so mobile taps are not obstructed. Target selection never reveals a hidden enemy.
+            Tap the actual game map to select the purchase center. During
+            selection the diplomacy sheet closes so mobile taps are not
+            obstructed. Target selection never reveals a hidden enemy.
           </p>
           <div class="flex flex-wrap gap-2">
-            <button type="button" class="min-h-11 rounded border border-white/30 p-2"
-              @click=${this.chooseReconMapCenter}>Choose center on map</button>
-            ${this.reconMapPicking ? html`<button type="button"
+            <button
+              type="button"
               class="min-h-11 rounded border border-white/30 p-2"
-              @click=${this.cancelReconMapPick}>Cancel map selection</button>` : nothing}
-            <button type="button" class="min-h-11 rounded border border-white/30 p-2"
-              @click=${this.useOwnMapPosition}>Use my visible map position</button>
+              @click=${this.chooseReconMapCenter}
+            >
+              Choose center on map
+            </button>
+            ${
+              this.reconMapPicking
+                ? html`<button
+                    type="button"
+                    class="min-h-11 rounded border border-white/30 p-2"
+                    @click=${this.cancelReconMapPick}
+                  >
+                    Cancel map selection
+                  </button>`
+                : nothing
+            }
+            <button
+              type="button"
+              class="min-h-11 rounded border border-white/30 p-2"
+              @click=${this.useOwnMapPosition}
+            >
+              Use my visible map position
+            </button>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <label
