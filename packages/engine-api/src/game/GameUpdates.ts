@@ -153,6 +153,19 @@ export interface NationalUltimatumViewData {
   }[];
 }
 
+export interface NationalAssessmentViewData {
+  readonly version: 1;
+  readonly recipientId: PlayerID;
+  readonly items: readonly {
+    readonly targetId: PlayerID;
+    readonly paidBy: PlayerID;
+    readonly confidence: "coarse-estimate";
+    readonly effectiveTick: number;
+    readonly expiresAtTick: number;
+    readonly treasuryGoldBand: { readonly lower: string; readonly upperExclusive: string };
+    readonly militaryTroopsBand: { readonly lower: string; readonly upperExclusive: string };
+  }[];
+}
 export interface GameUpdateViewData {
   tick: number;
   updates: GameUpdates;
@@ -164,6 +177,7 @@ export interface GameUpdateViewData {
    */
   nationalAccessionOffers?: NationalAccessionOffersViewData;
   nationalUltimatums?: NationalUltimatumViewData;
+  nationalAssessments?: NationalAssessmentViewData;
   nationalPactDisclosure?: NationalPactDisclosureWireData;
   nationalImperialAdministration?: NationalImperialAdministrationWire;
   /**

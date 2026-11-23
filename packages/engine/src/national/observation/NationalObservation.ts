@@ -7,6 +7,7 @@
  *
  * Integration awaits the conductor's M0 political/wire/snapshot contracts.
  */
+import type { NationalAssessmentReport } from "./NationalAssessment";
 import type {
   AssetKind,
   SovereignStatus,
@@ -180,6 +181,7 @@ export interface NationalObservation {
   readonly wars: readonly NationalWar[];
   readonly ownResources: { readonly troops: number; readonly treasury: number };
   readonly visibleAssets: readonly VisibleAsset[];
+  readonly assessments?: readonly NationalAssessmentReport[];
   readonly frontiers: readonly {
     readonly targetId: NationId;
     readonly access: "land" | "naval";
