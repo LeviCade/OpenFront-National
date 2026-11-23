@@ -92,6 +92,7 @@ import {
   type NationalRecipientPactView,
   type NationalImperialAdministrationCommand,
   type NationalImperialAdministrationView,
+  type NationalEconomicCharterView,
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import {
@@ -1316,6 +1317,20 @@ export class GameImpl implements Game {
     return this._national?.imperialAdministrationFor(observer.id()) ?? null;
   }
 
+  nationalEconomicCharterFor(
+    observer: Player,
+  ): NationalEconomicCharterView | null {
+    if (
+      !this._national ||
+      this._players.get(observer.id()) !== observer ||
+      !observer.hasSpawned() ||
+      !observer.isAlive()
+    )
+      return null;
+    this.synchronizeNationalState();
+    return this._national.economicCharterFor(observer.id());
+  }
+
   /**
    * Resolve the CURRENT live constituent and physical structure at execution
    * time. Pending orders carry identifiers, never borrowed unit objects.
@@ -1366,6 +1381,64 @@ export class GameImpl implements Game {
         break;
       case "set-standing-defense-policy":
         this._national.setStandingDefensePolicy(actor.id(), command);
+        break;
+      case "set-economic-charter":
+        this._national.setEconomicCharter(
+          actor.id(),
+          command.empireId,
+          command.expectedVersion,
+          command.delegateIds,
+          command.allowInternal,
+        );
+        break;
+      case "set-member-trade": {
+        const member = this._players.get(command.memberId);
+        const target = this._players.get(command.targetId);
+        const auth = this._national.authority();
+        const charter =
+          member && this._national.economicCharterFor(member.id());
+        if (
+          !member ||
+          !target ||
+          member === target ||
+          !member.hasSpawned() ||
+          !member.isAlive() ||
+          !target.hasSpawned() ||
+          !target.isAlive() ||
+          auth.empireOf(member.id()) !== command.empireId ||
+          !charter ||
+          charter.version !== command.expectedVersion ||
+          (auth.empireOf(target.id()) === command.empireId &&
+            !charter.allowInternal)
+        )
+          throw new Error("NATIONAL: unauthorized constituent trade order");
+        // No global embargo: mutate precisely this member/target Player pair.
+        // No treasury credit/debit occurs unless a later legal trade pays.
+        if (command.embargo) member.addEmbargo(target, false);
+        else member.stopEmbargo(target);
+        this._national.advanceEconomicEpoch(
+          actor.id(),
+          command.empireId,
+          command.expectedVersion,
+        );
+        break;
+      }
+      case "respond-member-sanction":
+        NationalSanctionExecution.emperorRespond(
+          this,
+          actor,
+          command.memberId,
+          command.sanctionId,
+          command.decision,
+          command.empireId,
+          command.expectedVersion,
+          () =>
+            this._national!.advanceEconomicEpoch(
+              actor.id(),
+              command.empireId,
+              command.expectedVersion,
+            ),
+        );
         break;
       case "transfer-troops": {
         const source = this._players.get(command.sourceId);
@@ -1822,8 +1895,24 @@ export class GameImpl implements Game {
   ): boolean {
     const authority = this.nationalPoliticalAuthority();
     if (!authority?.alive(actorId)) return false;
-    if (command.kind === "imperial-administration")
-      return authority.emperorOf(command.command.empireId) === actorId;
+    if (command.kind === "imperial-administration") {
+      if (authority.emperorOf(command.command.empireId) !== actorId)
+        return false;
+      const detail = command.command;
+      // A prior accepted imperial economic command is not an evergreen
+      // credential. Even the same emperor cannot replay a spent CAS epoch.
+      if (
+        detail.kind === "set-economic-charter" ||
+        detail.kind === "set-member-trade" ||
+        detail.kind === "respond-member-sanction"
+      ) {
+        return (
+          this._national?.economicCharterFor(actorId)?.version ===
+          detail.expectedVersion
+        );
+      }
+      return true;
+    }
     if (
       command.kind === "transfer-crown" ||
       command.kind === "set-national-peace-delegation"
