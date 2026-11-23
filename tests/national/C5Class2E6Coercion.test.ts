@@ -337,20 +337,16 @@ describe("C5 Class Two E6 sovereign coercion — AI-01/04/05/06/07, ECON-06/07",
       ),
     };
     const unknownObs = projected(unknown);
-    expect(
-      assessImperialShelter(
-        unknownObs,
-        unknownObs.coalitions[0],
-        initialNationalCoercionMemory(A),
-      ).independentRoute,
-    ).toBe(false);
+    expect(unknownObs).toEqual(obs);
+    const seen = unknownObs.visibleAssets.find((a) => a.ownerId === B);
+    expect(seen?.strength).toBeUndefined();
     expect(
       planObservedImperialCoercion(
         unknownObs,
         [demand()],
         initialNationalCoercionMemory(A),
       )?.kind,
-    ).toBe("acknowledge-consent");
+    ).toBe("resist");
   });
 
   it("AI-05 refuses a publicly overwhelmed and historically collapsing protector", () => {
