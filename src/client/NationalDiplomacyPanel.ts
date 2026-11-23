@@ -3,11 +3,15 @@ import type { NationalUltimatumViewData } from "@openfront/engine-api/game/GameU
 import type { NationalImperialAdministrationView } from "@openfront/engine-api/game/NationalImperialView";
 import type { NationalPactTerms } from "@openfront/engine-api/game/NationalPactView";
 import type { EventBus } from "@openfront/shared/EventBus";
-import { html, LitElement, nothing } from "lit";
+import { html, LitElement, nothing, type PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { keyed } from "lit/directives/keyed.js";
 import { repeat } from "lit/directives/repeat.js";
-import { NationalMapTargetSelectedEvent } from "./controllers/NationalMapTargetController";
+import {
+  NationalMapTargetSelectedEvent,
+  NationalReconMapPickRequestedEvent,
+  NationalReconMapPointSelectedEvent,
+} from "./controllers/NationalMapTargetController";
 import {
   confirmedNationalDiplomacy,
   createNationalDiplomacyRequestId,
@@ -127,6 +131,7 @@ export class NationalDiplomacyPanel extends LitElement {
   @state() private reconTargetId = "";
   @state() private reconCenterX = "";
   @state() private reconCenterY = "";
+  @state() private reconMapPicking = false;
   @state() private sovereignStatus = "";
   @state() private reconStatus = "";
   private sovereignAttempt: {
@@ -154,6 +159,47 @@ export class NationalDiplomacyPanel extends LitElement {
     requestId: string;
     expiresAtTick: number;
   } | null = null;
+
+  private reconMapBus: EventBus | null = null;
+
+  private readonly onReconMapPoint = (event: NationalReconMapPointSelectedEvent) => {
+    const game = this.game;
+    if (!this.reconMapPicking) return;
+    this.reconMapPicking = false;
+    if (!this.sovereignReady || !game || event.gameId !== game.gameID() ||
+      !game.isValidCoord(event.x, event.y)) {
+      this.reconStatus = "Map authority changed; selection and purchase canceled.";
+      return;
+    }
+    this.reconCenterX = String(event.x);
+    this.reconCenterY = String(event.y);
+    this.expanded = true;
+    this.reconStatus = "Game map center selected. Review target, cost and consent before purchase.";
+  };
+
+  private bindReconMap(): void {
+    if (this.reconMapBus === this.eventBus) return;
+    this.reconMapBus?.off(NationalReconMapPointSelectedEvent, this.onReconMapPoint);
+    this.reconMapBus = this.eventBus;
+    this.reconMapBus?.on(NationalReconMapPointSelectedEvent, this.onReconMapPoint);
+  }
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this.bindReconMap();
+  }
+
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    super.willUpdate(changed);
+    if (changed.has("eventBus")) this.bindReconMap();
+  }
+
+  override disconnectedCallback(): void {
+    this.cancelReconMapPick();
+    this.reconMapBus?.off(NationalReconMapPointSelectedEvent, this.onReconMapPoint);
+    this.reconMapBus = null;
+    super.disconnectedCallback();
+  }
 
   createRenderRoot() {
     return this;
@@ -485,6 +531,7 @@ export class NationalDiplomacyPanel extends LitElement {
     this.sovereignStatus = "Connection interrupted; ultimatum outcome unknown.";
     this.reconAttempt = null;
     this.reconConfirmed = null;
+    this.cancelReconMapPick();
     this.reconStatus = "Connection interrupted; purchase outcome unknown.";
     this.selectWarTarget("");
     if (this.confirmedDiplomacy !== null) {
@@ -2468,6 +2515,25 @@ export class NationalDiplomacyPanel extends LitElement {
     }
   }
 
+  private chooseReconMapCenter(): void {
+    if (!this.sovereignReady || !this.game || !this.eventBus) {
+      this.reconStatus = "A verified active game seat is required to choose a map center.";
+      return;
+    }
+    this.bindReconMap();
+    this.reconMapPicking = true;
+    this.expanded = false;
+    this.reconStatus = "Tap the actual map to choose your center; this does not purchase intelligence or attack.";
+    this.eventBus.emit(new NationalReconMapPickRequestedEvent(this.game.gameID(), true));
+  }
+
+  private cancelReconMapPick(): void {
+    if (!this.reconMapPicking) return;
+    this.reconMapPicking = false;
+    if (this.game)
+      this.eventBus?.emit(new NationalReconMapPickRequestedEvent(this.game.gameID(), false));
+  }
+
   private useOwnMapPosition(): void {
     const game = this.game;
     const actor = game?.myPlayer();
@@ -2685,16 +2751,17 @@ export class NationalDiplomacyPanel extends LitElement {
             </select>
           </label>
           <p class="text-xs text-slate-300">
-            Choose real game-map coordinates. Use your visible location as a
-            starting point; coordinates never auto-pan to an unseen opponent.
+            Tap the actual game map to select the purchase center. During selection the diplomacy sheet closes so mobile taps are not obstructed. Target selection never reveals a hidden enemy.
           </p>
-          <button
-            type="button"
-            class="min-h-11 rounded border border-white/30 p-2"
-            @click=${this.useOwnMapPosition}
-          >
-            Use my visible map position
-          </button>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="min-h-11 rounded border border-white/30 p-2"
+              @click=${this.chooseReconMapCenter}>Choose center on map</button>
+            ${this.reconMapPicking ? html`<button type="button"
+              class="min-h-11 rounded border border-white/30 p-2"
+              @click=${this.cancelReconMapPick}>Cancel map selection</button>` : nothing}
+            <button type="button" class="min-h-11 rounded border border-white/30 p-2"
+              @click=${this.useOwnMapPosition}>Use my visible map position</button>
+          </div>
           <div class="grid grid-cols-2 gap-2">
             <label
               >Map X
