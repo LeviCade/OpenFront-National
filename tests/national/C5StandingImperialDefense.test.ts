@@ -488,6 +488,33 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     ).toBe(true);
   });
 
+  it("rolls back a provisional imperial WAR and refunds the attacker when the actual donor transaction fails", async () => {
+    const game = await found();
+    setResponse(game, "both");
+    game.player(DONOR).setTroops(reserve(game) + 20_000);
+    game.player(ENEMY).setTroops(10_000);
+    const before = ledger(game);
+    const realTroops = [CROWN, MEMBER, DONOR, ENEMY, OTHER].map((id) =>
+      game.player(id).troops(),
+    );
+    Object.assign(game, {
+      applyNationalDefenseLevy: (
+        _requests: Parameters<Game["applyNationalDefenseLevy"]>[0],
+      ) => {
+        throw new Error("injected real debit transaction refusal");
+      },
+    });
+    const assault = new AttackExecution(5_000, game.player(ENEMY), MEMBER);
+    assault.init(game, game.ticks());
+    expect(assault.isActive()).toBe(false);
+    expect(imperialLayers(game)).toHaveLength(0);
+    expect(ledger(game)).toEqual(before);
+    expect(
+      [CROWN, MEMBER, DONOR, ENEMY, OTHER].map((id) => game.player(id).troops()),
+    ).toEqual(realTroops);
+    expect(game.player(ENEMY).outgoingAttacks()).toHaveLength(0);
+  });
+
   it("preserves identical subsequent combat, troop receipts and WAR after snapshot restore", async () => {
     const game = await found();
     setResponse(game, "both");
