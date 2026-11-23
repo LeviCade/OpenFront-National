@@ -24,24 +24,21 @@ describe("C5 E6 bounded naval planning on 100 independent nations", () => {
         treasury: 200_000,
       }),
     );
-    const wars: NationalWorld["wars"] = Array.from(
-      { length: 50 },
-      (_, i) => ({
-        id: "nav-perf-war-" + i,
-        scope: "national" as const,
-        first: {
-          kind: "nation" as const,
-          stableId: "sovereign-" + (2 * i),
-          activeMemberIds: ["sovereign-" + (2 * i)],
-        },
-        second: {
-          kind: "nation" as const,
-          stableId: "sovereign-" + (2 * i + 1),
-          activeMemberIds: ["sovereign-" + (2 * i + 1)],
-        },
-        startedTick: 1,
-      }),
-    );
+    const wars: NationalWorld["wars"] = Array.from({ length: 50 }, (_, i) => ({
+      id: "nav-perf-war-" + i,
+      scope: "national" as const,
+      first: {
+        kind: "nation" as const,
+        stableId: "sovereign-" + 2 * i,
+        activeMemberIds: ["sovereign-" + 2 * i],
+      },
+      second: {
+        kind: "nation" as const,
+        stableId: "sovereign-" + (2 * i + 1),
+        activeMemberIds: ["sovereign-" + (2 * i + 1)],
+      },
+      startedTick: 1,
+    }));
     const assets: NationalWorld["assets"] = Array.from(
       { length: 2500 },
       (_, i) => ({
@@ -96,14 +93,17 @@ describe("C5 E6 bounded naval planning on 100 independent nations", () => {
     const elapsedMs = performance.now() - start;
     expect(selected).toBeGreaterThan(0);
     expect(elapsedMs).toBeLessThan(8000);
-    console.info("C5_NAVAL_PERF=" + JSON.stringify({
-      independentNations: 100,
-      totalShips: 2500,
-      grants: grants.length,
-      observationsAndPlans: 200,
-      selected,
-      elapsedMs: Number(elapsedMs.toFixed(2)),
-      budgetMs: 8000,
-    }));
+    console.info(
+      "C5_NAVAL_PERF=" +
+        JSON.stringify({
+          independentNations: 100,
+          totalShips: 2500,
+          grants: grants.length,
+          observationsAndPlans: 200,
+          selected,
+          elapsedMs: Number(elapsedMs.toFixed(2)),
+          budgetMs: 8000,
+        }),
+    );
   });
 });
