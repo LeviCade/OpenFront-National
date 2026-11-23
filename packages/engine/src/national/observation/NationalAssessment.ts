@@ -5,6 +5,8 @@ import type { Game } from "../../game/Game";
 export const NATIONAL_ASSESSMENT_COST = 1200n;
 export const NATIONAL_ASSESSMENT_DURATION_TICKS = 900;
 const MAX_JOURNAL = 4096;
+/** Never exceed the strict per-recipient trusted wire DTO item capacity. */
+const MAX_ACTIVE_GRANTS = 2048;
 const id = z
   .string()
   .min(1)
@@ -88,6 +90,14 @@ export class NationalAssessment {
       throw new Error("NATIONAL assessment: duplicate request");
     if (this.grants.length >= MAX_JOURNAL)
       throw new Error("NATIONAL assessment: purchase journal exhausted");
+    let activeCount = 0;
+    for (const grant of this.grants)
+      if (grant.effectiveTick <= now && now < grant.expiresAtTick)
+        activeCount++;
+    // Bound a reciprocal empire's worst-case packet before spending gold.
+    // Expired receipts remain in the journal to reject request replay.
+    if (activeCount >= MAX_ACTIVE_GRANTS)
+      throw new Error("NATIONAL assessment: active report capacity exhausted");
     // Confidential measurements are inaccessible until admission and debit.
     charge();
     let grant: NationalAssessmentGrant;
@@ -134,6 +144,7 @@ export class NationalAssessment {
   static restore(raw: unknown, now: number): NationalAssessment {
     const source = NationalAssessmentSnapshotSchema.parse(raw);
     const state = new NationalAssessment();
+    let activeCount = 0;
     for (const g of source.grants) {
       const key = state.key(g.payerId, g.requestId);
       if (
@@ -152,6 +163,10 @@ export class NationalAssessment {
         BigInt(g.militaryTroopsBand.lower) % 100000n !== 0n
       )
         throw new Error("NATIONAL assessment: invalid restored grant");
+      if (g.effectiveTick <= now && now < g.expiresAtTick)
+        activeCount++;
+      if (activeCount > MAX_ACTIVE_GRANTS)
+        throw new Error("NATIONAL assessment: invalid restored active capacity");
       state.grants.push(g);
       state.ids.add(key);
       const own = state.byPayer.get(g.payerId) ?? [];

@@ -512,6 +512,54 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
         foreignFiltered!.tick,
       ).nationalAssessments,
     ).toMatchObject({ recipientId: OTHER.id, items: [] });
+    const spectator = new NationalServerRecipientSession(game, {
+      clientID: null,
+      sessionId: "assessment-spectator-socket",
+      isConnected: () => true,
+      isSpectator: () => true,
+    });
+    const spectatorPacket = spectator.projectGameUpdate(
+      packet(game, OTHER.clientID!),
+    );
+    expect(spectatorPacket).not.toHaveProperty("nationalAssessments");
+    expect(encodeNationalRecipientProjection(spectatorPacket!)).not.toContain(
+      "nationalAssessments",
+    );
+  });
+
+  it("caps 2048 simultaneous reports before debit and reopens capacity on expiry while preserving replay receipts", () => {
+    const ledger = new NationalAssessment();
+    let debits = 0;
+    const bands = () => ({
+      treasuryGoldBand: { lower: "2500", upperExclusive: "5000" },
+      militaryTroopsBand: { lower: "100000", upperExclusive: "200000" },
+    });
+    for (let i = 0; i < 2048; i++) {
+      ledger.buy(
+        "payer" + i, "target" + i, 10, "grant" + i,
+        () => { debits++; }, () => { debits--; }, bands,
+      );
+    }
+    expect(debits).toBe(2048);
+    expect(() => ledger.buy(
+      "payer2049", "target2049", 10, "overCapacity",
+      () => { debits++; }, () => { debits--; }, bands,
+    )).toThrow(/active report capacity/);
+    expect(debits).toBe(2048);
+    expect(ledger.activeFor("payer0", 910)).toEqual([]);
+    const restored = NationalAssessment.restore(ledger.snapshot(), 910);
+    expect(restored.activeFor("payer0", 910)).toEqual([]);
+    expect(() => restored.buy(
+      "payer0", "target0", 910, "grant0",
+      () => { debits++; }, () => { debits--; }, bands,
+    )).toThrow(/duplicate/);
+    expect(debits).toBe(2048);
+    restored.buy(
+      "newpayer", "newtarget", 910, "reopened",
+      () => { debits++; }, () => { debits--; }, bands,
+    );
+    expect(debits).toBe(2049);
+    expect(restored.activeFor("newpayer", 910)).toHaveLength(1);
   });
 
   it("leaves ordinary non-NATIONAL FFA without assessment authority", async () => {
