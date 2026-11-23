@@ -249,11 +249,14 @@ export function assessImperialShelter(
   const reliableContact =
     seenHostileArmy.length > 0 &&
     seenHostileArmy.every(
-      (asset) => asset.strength !== undefined &&
-        Number.isFinite(asset.strength) && asset.strength >= 0,
+      (asset) =>
+        asset.strength !== undefined &&
+        Number.isFinite(asset.strength) &&
+        asset.strength >= 0,
     );
   const observedContactForce = seenHostileArmy.reduce(
-    (total, asset) => total + (asset.strength ?? 0), 0,
+    (total, asset) => total + (asset.strength ?? 0),
+    0,
   );
   const viableDefense =
     activeWar &&
@@ -263,9 +266,11 @@ export function assessImperialShelter(
     observation.ownResources.troops >= observedContactForce * 1.5;
   const independentRoute =
     viableDefense ||
-    ((observation.unownedFrontier === true && (!activeWar || observation.ownResources.troops >= 1_500)) ||
+    (observation.unownedFrontier === true &&
+      (!activeWar || observation.ownResources.troops >= 1_500)) ||
     (!activeWar &&
-      observation.ownResources.troops >= 4_000 && self.landPercent >= 0.4));
+      observation.ownResources.troops >= 4_000 &&
+      self.landPercent >= 0.4);
   const empireLand = empire.members.reduce(
     (sum, id) =>
       sum +
