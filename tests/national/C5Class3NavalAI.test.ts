@@ -11,6 +11,7 @@ import { NationEmojiBehavior } from "@openfront/engine/execution/nation/NationEm
 import { NationWarshipBehavior } from "@openfront/engine/execution/nation/NationWarshipBehavior";
 import { NationExecution } from "@openfront/engine/execution/NationExecution";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
+import { WarshipExecution } from "@openfront/engine/execution/WarshipExecution";
 import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { planObservedNationalNavalTargets } from "@openfront/engine/national/ai/NationalNavalStrategy";
@@ -317,6 +318,30 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
       ),
     ).toEqual([]);
   });
+  it("retasks a funded existing ship across a connected sea without buying a phantom second hull", async () => {
+    const { game, a, behavior, fixedEnemyMerchant } = await fixture();
+    const originalPatrol = game.ref(8, 1);
+    const active = a.buildUnit(UnitType.Warship, game.ref(8, 9), {
+      patrolTile: originalPatrol,
+    });
+    game.addExecution(new WarshipExecution(active));
+    const gold = a.gold();
+    const observation = collectLiveNationalObservation(game, A).observation;
+    const destination = fixedEnemyMerchant.tile();
+    expect(originalPatrol).not.toBe(destination);
+    expect(behavior.dispatchNationalNavalPressure(observation)).toBe("move");
+    advance(game, 3);
+    expect(active.warshipState().patrolTile).toBe(destination);
+    expect(a.units(UnitType.Warship)).toHaveLength(1);
+    expect(a.gold()).toBe(gold);
+    const visited = new Set<number>([active.tile()]);
+    for (let i = 0; i < 20 && active.isActive(); i++) {
+      game.executeNextTick();
+      visited.add(active.tile());
+    }
+    expect(visited.size).toBeGreaterThan(1);
+  });
+
   it("one observed ship cannot trigger duplicate spending when sight drops and returns", async () => {
     const { game, a, b, cPort, behavior, fixedEnemyMerchant } =
       await fixture();
