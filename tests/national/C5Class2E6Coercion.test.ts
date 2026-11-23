@@ -300,6 +300,26 @@ describe("C5 Class Two E6 sovereign coercion — AI-01/04/05/06/07, ECON-06/07",
     ).toBe("resist");
   });
 
+  it("AI-04 preserves a defensible sovereign even during WAR; unknown enemy strength is never assumed zero",()=>{
+    const base=baseWorld();
+    const w:NationalWorld={...base,
+      nations:base.nations.map(n=>n.id===A?{...n,landPercent:5,troops:50_000}:n),
+      assets:base.assets.map(a=>a.ownerId===B?{...a,strength:5_000}:a),
+      frontiers:[{observerId:A,targetId:B,access:"land"},{observerId:A,targetId:C,access:"land"}],
+    };
+    const obs=projected(w);
+    expect(assessImperialShelter(obs,obs.coalitions[0],initialNationalCoercionMemory(A)))
+      .toMatchObject({existential:true,independentRoute:true});
+    expect(planObservedImperialCoercion(obs,[demand()],initialNationalCoercionMemory(A))?.kind)
+      .toBe("resist");
+    const unknown:NationalWorld={...w,assets:w.assets.map(a=>a.ownerId===B?{...a,strength:undefined}:a)};
+    const unknownObs=projected(unknown);
+    expect(assessImperialShelter(unknownObs,unknownObs.coalitions[0],initialNationalCoercionMemory(A)).independentRoute)
+      .toBe(false);
+    expect(planObservedImperialCoercion(unknownObs,[demand()],initialNationalCoercionMemory(A))?.kind)
+      .toBe("acknowledge-consent");
+  });
+
   it("AI-05 refuses a publicly overwhelmed and historically collapsing protector", () => {
     const w: NationalWorld = {
       ...baseWorld(),
