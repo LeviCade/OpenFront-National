@@ -48,7 +48,8 @@ import {
   type PactIntent,
 } from "./NationalPactState";
 import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
-import { NationalAssessmentControls } from "./NationalAssessmentControls";
+import "./NationalAssessmentControls";
+import type { NationalAssessmentControls } from "./NationalAssessmentControls";
 import { nationalReconQuote } from "./NationalSovereignActions";
 import { GoToPlayerEvent } from "./TransformHandler";
 import {
