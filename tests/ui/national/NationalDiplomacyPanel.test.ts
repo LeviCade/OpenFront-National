@@ -1207,4 +1207,50 @@ describe("C4 E4 native constitutional controls", () => {
       ),
     ).toBeNull();
   });
+  it("keeps mobile spawn taps unobstructed, then supports sheet reopen, Escape and focus restoration", async () => {
+    const viewport = Object.getOwnPropertyDescriptor(window, "innerWidth");
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 390,
+    });
+    try {
+      const { element, optionsState } = await mount({ spawned: false });
+      const toggle = element.querySelector<HTMLButtonElement>(
+        'button[aria-controls="national-diplomacy-content"]',
+      )!;
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      // A tap on the diplomacy header cannot cover the real first spawn tap.
+      toggle.click();
+      await element.updateComplete;
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(element.querySelector("#national-diplomacy-content")).toBeNull();
+
+      optionsState.spawned = true;
+      element.refresh();
+      await element.updateComplete;
+      toggle.click();
+      await element.updateComplete;
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(element.querySelector("#national-diplomacy-content")).not.toBeNull();
+
+      element.querySelector<HTMLElement>("section")!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+      await element.updateComplete;
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(element.querySelector("#national-diplomacy-content")).toBeNull();
+      await Promise.resolve();
+      expect(document.activeElement).toBe(toggle);
+      toggle.click();
+      await element.updateComplete;
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    } finally {
+      if (viewport) {
+        Object.defineProperty(window, "innerWidth", viewport);
+      } else {
+        Reflect.deleteProperty(window, "innerWidth");
+      }
+    }
+  });
+
 });
