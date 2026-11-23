@@ -32,12 +32,6 @@ import {
   type NationalEconomicMemory,
 } from "../national/ai/NationalEconomicPlanner";
 import {
-  initialNationalReconMemory,
-  planNationalRecon,
-  recordNationalReconAttempt,
-  type NationalReconMemory,
-} from "../national/ai/NationalReconStrategy";
-import {
   deriveNationalWarSides,
   initialNationalPlannerMemory,
   planNationalInterest,
@@ -50,6 +44,12 @@ import {
   recordAIPoliticalOutcome,
   type AIPoliticalMemory,
 } from "../national/ai/NationalPoliticalStrategy";
+import {
+  initialNationalReconMemory,
+  planNationalRecon,
+  recordNationalReconAttempt,
+  type NationalReconMemory,
+} from "../national/ai/NationalReconStrategy";
 import {
   collectLiveNationalObservation,
   liveNationalWarAuthority,
@@ -485,7 +485,8 @@ export class NationExecution implements Execution {
         // Reobserve through the ordinary same-principal fog projector NEXT
         // tick, before considering the pre-purchase offensive campaign.
         this.nationalPlannerMemory = {
-          ...(this.nationalPlannerMemory ?? initialNationalPlannerMemory(player.id())),
+          ...(this.nationalPlannerMemory ??
+            initialNationalPlannerMemory(player.id())),
           nextPlanningTick: ticks + 1,
         };
         return;
@@ -994,7 +995,9 @@ export class NationExecution implements Execution {
             nationalReconMemory: {
               observerId: this.nationalReconMemory.observerId,
               nextDecisionTick: this.nationalReconMemory.nextDecisionTick,
-              attempts: this.nationalReconMemory.attempts.map((a) => ({ ...a })),
+              attempts: this.nationalReconMemory.attempts.map((a) => ({
+                ...a,
+              })),
               lastDiscovery:
                 this.nationalReconMemory.lastDiscovery === null
                   ? null

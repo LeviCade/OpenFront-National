@@ -1,5 +1,11 @@
-import type { NationalObservation, VisibleAsset } from "../observation/NationalObservation";
-import { REGIONAL_RECON_COST, REGIONAL_RECON_DURATION_TICKS } from "../observation/NationalReconnaissance";
+import type {
+  NationalObservation,
+  VisibleAsset,
+} from "../observation/NationalObservation";
+import {
+  REGIONAL_RECON_COST,
+  REGIONAL_RECON_DURATION_TICKS,
+} from "../observation/NationalReconnaissance";
 import { deriveNationalWarSides } from "./NationalPlanner";
 
 /**
@@ -54,7 +60,9 @@ const DENIED_COOLDOWN_TICKS = 180;
 const militaryKinds = new Set(["army", "warship", "transport"]);
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-export function initialNationalReconMemory(observerId: string): NationalReconMemory {
+export function initialNationalReconMemory(
+  observerId: string,
+): NationalReconMemory {
   return { observerId, nextDecisionTick: 0, attempts: [], lastDiscovery: null };
 }
 
@@ -80,7 +88,10 @@ export function planNationalRecon(
   if (observation.observerId !== previous.observerId)
     throw new Error("NATIONAL recon AI: principal mismatch");
   const self = observation.nations.find((n) => n.id === observation.observerId);
-  const sides = deriveNationalWarSides(observation.wars, observation.observerId);
+  const sides = deriveNationalWarSides(
+    observation.wars,
+    observation.observerId,
+  );
   const protectedPartners = new Set(sides.allies);
   for (const pact of observation.coalitions) {
     if (pact.members.includes(observation.observerId)) {
@@ -88,7 +99,9 @@ export function planNationalRecon(
     }
   }
   const discoveries = previous.attempts
-    .filter((a) => a.outcome === "accepted" && observation.tick < a.expiresAtTick)
+    .filter(
+      (a) => a.outcome === "accepted" && observation.tick < a.expiresAtTick,
+    )
     .flatMap((a) =>
       observation.visibleAssets
         .filter((v) => validForeignMilitary(v, a.targetId, observation.tick))
@@ -116,7 +129,8 @@ export function planNationalRecon(
     memory.lastDiscovery !== null &&
     observation.tick < memory.lastDiscovery.expiresAtTick &&
     observation.frontiers.some(
-      (f) => f.targetId === memory.lastDiscovery!.targetId && f.access === "land",
+      (f) =>
+        f.targetId === memory.lastDiscovery!.targetId && f.access === "land",
     )
       ? memory.lastDiscovery.targetId
       : null;

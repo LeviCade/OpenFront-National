@@ -40,16 +40,47 @@ function observedFixture(): NationalObservation {
     observerId: A,
     tick: 25,
     nations: [
-      { id: A, name: "Scout", alive: true, status: "independent", landPercent: 3 },
-      { id: B, name: "Rival", alive: true, status: "independent", landPercent: 12 },
-      { id: C, name: "Third", alive: true, status: "independent", landPercent: 8 },
-      { id: D, name: "Fourth", alive: true, status: "independent", landPercent: 9 },
+      {
+        id: A,
+        name: "Scout",
+        alive: true,
+        status: "independent",
+        landPercent: 3,
+      },
+      {
+        id: B,
+        name: "Rival",
+        alive: true,
+        status: "independent",
+        landPercent: 12,
+      },
+      {
+        id: C,
+        name: "Third",
+        alive: true,
+        status: "independent",
+        landPercent: 8,
+      },
+      {
+        id: D,
+        name: "Fourth",
+        alive: true,
+        status: "independent",
+        landPercent: 9,
+      },
     ],
     coalitions: [],
     wars: [],
     ownResources: { troops: 5_000, treasury: 3_000 },
     visibleAssets: [
-      { id: "factory_1", ownerId: B, kind: "structure", x: 125, y: 100, source: "border" },
+      {
+        id: "factory_1",
+        ownerId: B,
+        kind: "structure",
+        x: 125,
+        y: 100,
+        source: "border",
+      },
     ],
     frontiers: [{ targetId: B, access: "land" }],
     diplomaticEvents: [],
@@ -58,9 +89,9 @@ function observedFixture(): NationalObservation {
 }
 
 function memoryOf(game: Game) {
-  const exec = game.executions().find(
-    (e) => e instanceof NationExecution && e.playerID() === A,
-  );
+  const exec = game
+    .executions()
+    .find((e) => e instanceof NationExecution && e.playerID() === A);
   expect(exec).toBeDefined();
   return (
     exec as unknown as {
@@ -88,8 +119,13 @@ async function seededFourNations() {
   const bot = new NationExecution(ID, nations[0]);
   game.addExecution(
     bot,
-    ...infos.map((info, index) =>
-      new SpawnExecution(ID, info, game.ref(nations[index].spawnCell!.x, nations[index].spawnCell!.y)),
+    ...infos.map(
+      (info, index) =>
+        new SpawnExecution(
+          ID,
+          info,
+          game.ref(nations[index].spawnCell!.x, nations[index].spawnCell!.y),
+        ),
     ),
   );
   game.executeNextTick();
@@ -119,21 +155,23 @@ async function seededFourNations() {
   const currentGold = scout.gold();
   scout.removeGold(currentGold);
   scout.addGold(3_500n);
-  const anchor = game.player(B).buildUnit(
-    UnitType.Factory,
-    game.ref(137, 100),
-    {},
-  );
-  const hidden = game.player(B).buildUnit(
-    UnitType.TransportShip,
-    game.ref(190, 100),
-    { troops: 900_000 },
-  );
+  const anchor = game
+    .player(B)
+    .buildUnit(UnitType.Factory, game.ref(137, 100), {});
+  const hidden = game
+    .player(B)
+    .buildUnit(UnitType.TransportShip, game.ref(190, 100), { troops: 900_000 });
   const initial = collectLiveNationalObservation(game, A).observation;
   expect(initial.nations).toHaveLength(4);
-  expect(initial.frontiers.some((f) => f.targetId === B && f.access === "land")).toBe(true);
-  expect(initial.visibleAssets.some((a) => a.id === String(anchor.id()))).toBe(true);
-  expect(initial.visibleAssets.some((a) => a.id === String(hidden.id()))).toBe(false);
+  expect(
+    initial.frontiers.some((f) => f.targetId === B && f.access === "land"),
+  ).toBe(true);
+  expect(initial.visibleAssets.some((a) => a.id === String(anchor.id()))).toBe(
+    true,
+  );
+  expect(initial.visibleAssets.some((a) => a.id === String(hidden.id()))).toBe(
+    false,
+  );
 
   const war = game.performNationalWarCommandWithOutcome(scout, {
     kind: "declare-national",
@@ -171,11 +209,32 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
       centerY: 100,
     });
     expect(plan.holdOffenseAgainst).toBeNull();
-    expect(planNationalRecon({ ...view, ownResources: { troops: 5_000, treasury: 2_499 } }, fresh).purchase).toBeNull();
-    expect(planNationalRecon({ ...view, unownedFrontier: true }, fresh).purchase).toBeNull();
-    expect(planNationalRecon({ ...view, frontiers: [] }, fresh).purchase).toBeNull();
-    expect(planNationalRecon({ ...view, visibleAssets: [] }, fresh).purchase).toBeNull();
-    expect(planNationalRecon({ ...view, nations: view.nations.map((n) => n.id === A ? { ...n, status: "member" as const } : n) }, fresh).purchase).toBeNull();
+    expect(
+      planNationalRecon(
+        { ...view, ownResources: { troops: 5_000, treasury: 2_499 } },
+        fresh,
+      ).purchase,
+    ).toBeNull();
+    expect(
+      planNationalRecon({ ...view, unownedFrontier: true }, fresh).purchase,
+    ).toBeNull();
+    expect(
+      planNationalRecon({ ...view, frontiers: [] }, fresh).purchase,
+    ).toBeNull();
+    expect(
+      planNationalRecon({ ...view, visibleAssets: [] }, fresh).purchase,
+    ).toBeNull();
+    expect(
+      planNationalRecon(
+        {
+          ...view,
+          nations: view.nations.map((n) =>
+            n.id === A ? { ...n, status: "member" as const } : n,
+          ),
+        },
+        fresh,
+      ).purchase,
+    ).toBeNull();
     const allied: NationalObservation = {
       ...view,
       coalitions: [
@@ -197,14 +256,24 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
         n.id === B ? { ...n, controllerKind: "ai" } : n,
       ),
     } as NationalObservation;
-    expect(planNationalRecon(human, fresh).purchase).toEqual(planNationalRecon(ai, fresh).purchase);
-    expect(() => planNationalRecon({ ...view, observerId: D }, fresh)).toThrow(/principal mismatch/);
+    expect(planNationalRecon(human, fresh).purchase).toEqual(
+      planNationalRecon(ai, fresh).purchase,
+    );
+    expect(() => planNationalRecon({ ...view, observerId: D }, fresh)).toThrow(
+      /principal mismatch/,
+    );
 
     const funded = recordNationalReconAttempt(
-      view, fresh, plan.purchase!, "ai_recon_seed", view.tick + 600,
+      view,
+      fresh,
+      plan.purchase!,
+      "ai_recon_seed",
+      view.tick + 600,
     );
     expect(funded.attempts).toHaveLength(1);
-    expect(planNationalRecon({ ...view, tick: 26 }, funded).purchase).toBeNull();
+    expect(
+      planNationalRecon({ ...view, tick: 26 }, funded).purchase,
+    ).toBeNull();
     const revealed: NationalObservation = {
       ...view,
       tick: 26,
@@ -225,11 +294,24 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     expect(after.holdOffenseAgainst).toBe(B);
     expect(after.memory.lastDiscovery?.assetId).toBe("hidden_enemy_transport");
     expect(after.memory.lastDiscovery?.expiresAtTick).toBe(625);
-    expect(planNationalRecon({ ...revealed, tick: 625, visibleAssets: view.visibleAssets }, after.memory).holdOffenseAgainst).toBeNull();
-    const rejected = recordNationalReconAttempt(view, fresh, plan.purchase!, "ai_recon_denied", null);
+    expect(
+      planNationalRecon(
+        { ...revealed, tick: 625, visibleAssets: view.visibleAssets },
+        after.memory,
+      ).holdOffenseAgainst,
+    ).toBeNull();
+    const rejected = recordNationalReconAttempt(
+      view,
+      fresh,
+      plan.purchase!,
+      "ai_recon_denied",
+      null,
+    );
     expect(rejected.attempts[0].outcome).toBe("rejected");
     expect(rejected.nextDecisionTick).toBe(view.tick + 180);
-    expect(planNationalRecon({ ...view, tick: view.tick + 181 }, rejected).purchase).toBeNull();
+    expect(
+      planNationalRecon({ ...view, tick: view.tick + 181 }, rejected).purchase,
+    ).toBeNull();
   });
 
   it("buys via real Game-owned actor, deducts exactly 500 gold and changes an executed war decision against denied-purchase control", async () => {
@@ -239,7 +321,9 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     const controlRunner = runnerFor(control);
     const denied = vi
       .spyOn(control, "performNationalReconnaissance")
-      .mockImplementation(() => { throw new Error("control experiment: no intelligence sale"); });
+      .mockImplementation(() => {
+        throw new Error("control experiment: no intelligence sale");
+      });
     const paid = vi.spyOn(active, "performNationalReconnaissance");
     const debits = vi.spyOn(active.player(A), "removeGold");
     const activeAdd = vi.spyOn(active, "addExecution");
@@ -248,7 +332,11 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     const controlBefore = control.player(A).gold();
     expect(activeBefore).toBe(controlBefore);
     expect(active.nationalReconnaissanceFor(A)).toHaveLength(0);
-    expect(collectLiveNationalObservation(active, A).observation.visibleAssets.some((a) => a.id === String(hidden.id()))).toBe(false);
+    expect(
+      collectLiveNationalObservation(active, A).observation.visibleAssets.some(
+        (a) => a.id === String(hidden.id()),
+      ),
+    ).toBe(false);
 
     for (let i = 0; i < 14; i++) {
       next(active, activeRunner);
@@ -260,11 +348,21 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     expect(paid.mock.calls[0].slice(1, 4)).toEqual([B, 137, 100]);
     expect(accepted).toHaveLength(1);
     expect(accepted[0]).toMatchObject({ payerId: A, targetId: B, cost: "500" });
-    expect(debits.mock.calls.filter(([amount]) => amount === REGIONAL_RECON_COST)).toHaveLength(1);
+    expect(
+      debits.mock.calls.filter(([amount]) => amount === REGIONAL_RECON_COST),
+    ).toHaveLength(1);
     expect(control.nationalReconnaissanceFor(A)).toHaveLength(0);
     expect(denied).toHaveBeenCalledTimes(1);
-    expect(collectLiveNationalObservation(active, A).observation.visibleAssets.find((a) => a.id === String(hidden.id()))?.source).toBe("recon");
-    expect(collectLiveNationalObservation(control, A).observation.visibleAssets.some((a) => a.id === String(hidden.id()))).toBe(false);
+    expect(
+      collectLiveNationalObservation(active, A).observation.visibleAssets.find(
+        (a) => a.id === String(hidden.id()),
+      )?.source,
+    ).toBe("recon");
+    expect(
+      collectLiveNationalObservation(control, A).observation.visibleAssets.some(
+        (a) => a.id === String(hidden.id()),
+      ),
+    ).toBe(false);
     const history = memoryOf(active);
     expect(history?.attempts).toHaveLength(1);
     expect(history?.attempts[0].outcome).toBe("accepted");
@@ -273,19 +371,35 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     // Not a planner-only score: the control makes an actual Game attack order,
     // while newly seen military intelligence prevents the active bot's order.
     const attacks = (spy: typeof activeAdd) =>
-      spy.mock.calls.flat().filter((e): e is AttackExecution => e instanceof AttackExecution);
+      spy.mock.calls
+        .flat()
+        .filter((e): e is AttackExecution => e instanceof AttackExecution);
     expect(attacks(controlAdd).length).toBeGreaterThan(0);
     expect(attacks(activeAdd)).toHaveLength(0);
-    expect(active.player(A).gold() - control.player(A).gold()).toBe(-REGIONAL_RECON_COST);
+    expect(active.player(A).gold() - control.player(A).gold()).toBe(
+      -REGIONAL_RECON_COST,
+    );
     const { restored, bytes, again } = await roundTrip(active, "big_plains");
     expect(again).toEqual(bytes);
     expect(restored.nationalReconnaissanceFor(A)).toEqual(accepted);
     expect(memoryOf(restored)).toEqual(history);
-    expect(collectLiveNationalObservation(restored, A).observation.visibleAssets.find((a) => a.id === String(hidden.id()))?.source).toBe("recon");
+    expect(
+      collectLiveNationalObservation(
+        restored,
+        A,
+      ).observation.visibleAssets.find((a) => a.id === String(hidden.id()))
+        ?.source,
+    ).toBe("recon");
     const duplicate = accepted[0];
-    expect(() => restored.performNationalReconnaissance(
-      restored.player(A), B, duplicate.centerX, duplicate.centerY, duplicate.requestId,
-    )).toThrow(/duplicate/);
+    expect(() =>
+      restored.performNationalReconnaissance(
+        restored.player(A),
+        B,
+        duplicate.centerX,
+        duplicate.centerY,
+        duplicate.requestId,
+      ),
+    ).toThrow(/duplicate/);
     paid.mockRestore();
     denied.mockRestore();
     activeAdd.mockRestore();
@@ -301,10 +415,18 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     expect(lease).toBeDefined();
     expect(memoryOf(game)?.attempts).toHaveLength(1);
     while (game.ticks() < lease.expiresAtTick - 1) game.executeNextTick();
-    expect(collectLiveNationalObservation(game, A).observation.visibleAssets.find((a) => a.id === String(hidden.id()))?.source).toBe("recon");
+    expect(
+      collectLiveNationalObservation(game, A).observation.visibleAssets.find(
+        (a) => a.id === String(hidden.id()),
+      )?.source,
+    ).toBe("recon");
     game.executeNextTick();
     expect(game.ticks()).toBe(lease.expiresAtTick);
-    expect(collectLiveNationalObservation(game, A).observation.visibleAssets.find((a) => a.id === String(hidden.id()))).toBeUndefined();
+    expect(
+      collectLiveNationalObservation(game, A).observation.visibleAssets.find(
+        (a) => a.id === String(hidden.id()),
+      ),
+    ).toBeUndefined();
     expect(game.nationalReconnaissanceFor(A)).toHaveLength(0);
     const history = memoryOf(game);
     expect(history?.attempts).toHaveLength(1);
@@ -313,8 +435,8 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     expect(memoryOf(restored)).toEqual(history);
     for (let i = 0; i < 800; i++) game.executeNextTick();
     expect(memoryOf(game)?.attempts.length).toBeLessThanOrEqual(4);
-    expect(memoryOf(game)?.attempts.map((a) => a.requestId)).toEqual(
-      [...new Set(memoryOf(game)?.attempts.map((a) => a.requestId))],
-    );
+    expect(memoryOf(game)?.attempts.map((a) => a.requestId)).toEqual([
+      ...new Set(memoryOf(game)?.attempts.map((a) => a.requestId)),
+    ]);
   }, 120_000);
 });
