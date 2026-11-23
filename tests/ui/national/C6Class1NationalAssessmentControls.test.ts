@@ -231,7 +231,7 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
     state.tick = 220;
     element.refresh();
     await element.updateComplete;
-    expect(element.textContent).toContain("outcome is unknown");
+    expect(element.textContent).toContain("purchase result is unknown");
   });
 
   it("fails closed on insufficient gold, spectator, replay, Private without trust, dead seat and no public roster", async () => {
