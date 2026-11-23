@@ -1,4 +1,4 @@
-import { PlayerInfo, PlayerType, UnitType, GameType } from "@openfront/engine-api/game/GameTypes";
+import { PlayerInfo, PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import { IntentSchema } from "@openfront/engine-api/Schemas";
 import { NationalSanctionExecution } from "@openfront/engine/execution/NationalSanctionExecution";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";

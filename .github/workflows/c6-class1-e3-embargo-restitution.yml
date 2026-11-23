@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: c6-c1-e3-\u0024{{ github.ref }}
+  group: c6-c1-e3-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   real-restitution:
@@ -22,7 +22,7 @@ jobs:
           submodules: false
       - name: Verify exact checkout
         env:
-          CHECKOUT_SHA: \u0024{{ github.sha }}
+          CHECKOUT_SHA: ${{ github.sha }}
         run: test "$(git rev-parse HEAD)" = "$CHECKOUT_SHA"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:

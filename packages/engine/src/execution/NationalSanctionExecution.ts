@@ -740,11 +740,12 @@ type ProjectedEconomicDemand = ReturnType<
 >[number];
 export type NationalEconomicDemandView = Omit<
   ProjectedEconomicDemand,
-  "recipientId" | "charterVersion" | "canRespond"
+  "recipientId" | "charterVersion" | "canRespond" | "settlements"
 > & {
   recipientId?: string | null;
   charterVersion?: number | null;
   canRespond?: boolean;
+  settlements?: ProjectedEconomicDemand["settlements"];
 };
 
 export const NationalSanctionExecutionSnapshot = execSnapshotType({
