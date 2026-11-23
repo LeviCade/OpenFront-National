@@ -244,6 +244,8 @@ describe("C5 Class Two E6 sovereign coercion — AI-01/04/05/06/07, ECON-06/07",
         initialNationalCoercionMemory(A),
       )?.kind,
     ).toBe("acknowledge-consent");
+    expect(planAIPoliticalInterest(obs, initialAIPoliticalMemory(), 25, [], [demand()]).decision?.command)
+      .toBeNull(); // canonical E3 "accept" response MUST be observed first
     expect(
       planObservedImperialCoercion(
         obs,
