@@ -71,6 +71,24 @@ describe("C5 E6 bounded naval planning on 100 independent nations", () => {
       frontiers: [],
       diplomaticEvents: [],
     };
+    // Adding an actual foreign port with NO legitimate sight grant must be
+    // observationally indistinguishable to sovereign-0.
+    const unseenPortWorld: NationalWorld = {
+      ...world,
+      assets: [
+        ...assets,
+        {
+          id: "secret-east-harbor",
+          ownerId: "sovereign-1",
+          kind: "structure",
+          x: 990,
+          y: 990,
+        },
+      ],
+    };
+    expect(
+      projectNationalObservation(unseenPortWorld, "sovereign-0"),
+    ).toEqual(projectNationalObservation(world, "sovereign-0"));
     const ownPorts = [
       { x: 101, y: 201 },
       { x: 140, y: 240 },
