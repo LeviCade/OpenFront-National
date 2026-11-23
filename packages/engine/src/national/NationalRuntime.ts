@@ -43,6 +43,7 @@ import {
   proposePactAmendment,
   setNationalPeaceDelegation,
   setImperialWarPolicy,
+  setImperialStandingDefensePolicy,
   transferCrown,
   validatePolitics,
   type LastSovereignResult,
@@ -109,6 +110,9 @@ const politicsSchema = z.object({
       delegatedNationalPeace: z.array(z.string()).optional(),
       delegatedNationalDeclarations: z.array(z.string()).optional(),
       accessionWarResponse: z.enum(["none", "imperial"]).optional(),
+      standingDefenseResponse: z
+        .enum(["none", "assist", "imperial", "both"])
+        .optional(),
       warPolicyVersion: counter.optional(),
     }),
   ),
@@ -205,6 +209,12 @@ export type NationalImperialAdministrationCommand =
       response: "none" | "imperial";
       declarationDelegates: PlayerID[];
       peaceDelegates: PlayerID[];
+    }
+  | {
+      kind: "set-standing-defense-policy";
+      empireId: string;
+      expectedVersion: number;
+      response: "none" | "assist" | "imperial" | "both";
     };
 
 export interface NationalImperialAdministrationView extends Omit<
@@ -222,6 +232,7 @@ export interface NationalImperialAdministrationView extends Omit<
   readonly troopContributions: readonly { memberId: string; total: string }[];
   readonly warPolicyVersion: number;
   readonly accessionWarResponse: "none" | "imperial";
+  readonly standingDefenseResponse: "none" | "assist" | "imperial" | "both";
   readonly nationalDeclarationDelegates: readonly PlayerID[];
   readonly nationalPeaceDelegates: readonly PlayerID[];
 }
@@ -497,6 +508,7 @@ export class NationalRuntime {
       ),
       warPolicyVersion: empire.warPolicyVersion ?? 0,
       accessionWarResponse: empire.accessionWarResponse ?? "none",
+      standingDefenseResponse: empire.standingDefenseResponse ?? "none",
       nationalDeclarationDelegates: Object.freeze([
         ...(empire.delegatedNationalDeclarations ?? []),
       ]),
@@ -931,6 +943,40 @@ export class NationalRuntime {
     return (
       this.politics.empires.find((e) => e.id === empireId)
         ?.accessionWarResponse ?? "none"
+    );
+  }
+
+  /** Engine-only read: no client-supplied donor roster or claimed empire. */
+  standingDefenseFor(defenderId: PlayerID): {
+    readonly empireId: string;
+    readonly response: "none" | "assist" | "imperial" | "both";
+  } | null {
+    if (!this.politics.nations.some((n) => n.id === defenderId && n.alive))
+      return null;
+    const empire = this.politics.empires.find((e) =>
+      e.memberIds.includes(defenderId),
+    );
+    return empire
+      ? {
+          empireId: empire.id,
+          response: empire.standingDefenseResponse ?? "none",
+        }
+      : null;
+  }
+
+  setStandingDefensePolicy(
+    actorId: PlayerID,
+    command: Extract<
+      NationalImperialAdministrationCommand,
+      { kind: "set-standing-defense-policy" }
+    >,
+  ): void {
+    this.politics = setImperialStandingDefensePolicy(
+      this.politics,
+      command.empireId,
+      actorId,
+      command.expectedVersion,
+      command.response,
     );
   }
 

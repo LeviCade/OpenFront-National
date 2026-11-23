@@ -1,0 +1,81 @@
+name: C5 Class Two E3 — sovereign imperial ultimatum real engine
+on:
+  pull_request:
+    branches:
+      - stage3/conductor5-class2-integration-20261122
+    paths:
+      - ".github/workflows/c5-class2-e3-imperial-ultimatum.yml"
+      - "packages/engine-api/src/Schemas.ts"
+      - "packages/engine-api/src/game/GameUpdates.ts"
+      - "packages/engine/src/execution/NationalUltimatumExecution.ts"
+      - "packages/engine/src/execution/ExecutionManager.ts"
+      - "packages/engine/src/snapshot/ExecutionRegistry.ts"
+      - "packages/engine/src/game/GameImpl.ts"
+      - "packages/engine/src/national/observation/NationalOutbound.ts"
+      - "packages/engine/src/national/observation/NationalServerOutbound.ts"
+      - "tests/national/C5Class2ImperialUltimatum.test.ts"
+permissions:
+  contents: read
+concurrency:
+  group: c5-c2-e3-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  authoritative-ultimatum:
+    if: github.head_ref == 'feature/c5-class2-e3-imperial-ultimatum-20261122'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact PR head
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Typecheck all workspaces
+        run: npm run typecheck
+      - name: New real-host imperial ultimatum scenarios
+        if: success() || failure()
+        run: npx --no-install vitest run --project node tests/national/C5Class2ImperialUltimatum.test.ts
+      - name: Established sanctions, accession and canonical WAR regressions
+        if: success() || failure()
+        run: >-
+          npx --no-install vitest run --project node
+          tests/national/C4Class2EconomicIngress.test.ts
+          tests/national/NationalAccessionPacketsR11.test.ts
+          tests/national/C5ImperialWarPolicy.test.ts
+      - name: Legacy FFA embargo and shipping regressions
+        if: success() || failure()
+        run: >-
+          npx --no-install vitest run --project node
+          tests/core/executions/EmbargoAllExecution.test.ts
+          tests/core/executions/TradeShipExecution.test.ts
+      - name: Lint all source
+        if: success() || failure()
+        run: npm run lint
+      - name: Check exact formatting for every E3 touched file
+        if: success() || failure()
+        run: >-
+          npx --no-install oxfmt --check
+          .github/workflows/c5-class2-e3-imperial-ultimatum.yml
+          packages/engine-api/src/Schemas.ts
+          packages/engine-api/src/game/GameUpdates.ts
+          packages/engine/src/execution/ExecutionManager.ts
+          packages/engine/src/execution/NationalUltimatumExecution.ts
+          packages/engine/src/game/GameImpl.ts
+          packages/engine/src/national/observation/NationalOutbound.ts
+          packages/engine/src/national/observation/NationalServerOutbound.ts
+          packages/engine/src/snapshot/ExecutionRegistry.ts
+          src/client/replay/codec/FrameNormalizer.ts
+          tests/national/C5Class2ImperialUltimatum.test.ts
+      - name: Production build
+        if: success() || failure()
+        run: npm run build-prod

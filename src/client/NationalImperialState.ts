@@ -8,6 +8,7 @@ export type ImperialPolicyCommand =
       empireId: string;
       policy: {
         workerIncomeBps: number;
+        nonWorkerIncomeBps?: number;
         allowedConstruction: UnitType[] | null;
       };
     }
@@ -18,13 +19,25 @@ export type ImperialPolicyCommand =
       thresholdBps: number;
     };
 
+/** Executor-owned imperial works, never a client-side state mutation. */
+export type ImperialWorksCommand = {
+  kind: "upgrade-structure" | "demolish-structure";
+  empireId: string;
+  memberId: string;
+  unitId: number;
+};
+
+export type ImperialAdministrationCommand =
+  | ImperialPolicyCommand
+  | ImperialWorksCommand;
+
 export const imperialConstructionCategories: readonly UnitType[] = [
   ...new Set([...Structures.types, UnitType.Warship]),
 ];
 /** E1 owns the exact appended intent schema. Standalone E4 must not create an
  * alternative wire command or show a functional control before it exists. */
 export function parseImperialCommand(
-  command: ImperialPolicyCommand,
+  command: ImperialAdministrationCommand,
   requestId: string,
 ): Intent | null {
   const parsed = IntentSchema.safeParse({
@@ -45,6 +58,7 @@ export function imperialPolicyKey(
     view.empireId,
     view.canAmend,
     view.workerIncomeBps,
+    view.nonWorkerIncomeBps,
     view.allowedConstruction,
     view.armyMode,
     view.hybridThresholdBps,
@@ -62,6 +76,9 @@ export function imperialPolicyIntentAvailable(
           empireId: view.empireId,
           policy: {
             workerIncomeBps: view.workerIncomeBps,
+            ...(view.nonWorkerIncomeBps === undefined
+              ? {}
+              : { nonWorkerIncomeBps: view.nonWorkerIncomeBps }),
             allowedConstruction:
               view.allowedConstruction === null
                 ? null

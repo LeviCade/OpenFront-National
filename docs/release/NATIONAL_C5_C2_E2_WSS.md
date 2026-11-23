@@ -1,0 +1,16 @@
+# C5 Second Class E2 — hosted NATIONAL WSS boundary and witnessed gates
+
+This PR changes the **real** Worker admission boundary; it does **not** introduce a second runner or a new account server. A NATIONAL match requires an exact allowed browser `Origin` before the JWT, `/users/@me`, one-seat claim, and recipient-specific projection checks. The server refuses absent, opaque, cross-site, wildcard, ambiguous, and sibling origins; local development recognizes only localhost:9000/3000. Hosted origins are generated from `SITE_HOST`, `GAME_HOST`/publicHost and its matching page host; the fixed desktop app renderer origin remains eligible. Existing lobby and legacy protocols are not newly Origin-gated.
+
+A real TLS test terminator generates a disposable self-signed cert, uses certificate-verified HTTPS for bearer-authenticated game creation and lookup, connects via certificate-verified `wss://localhost`, and **pipes actual TCP HTTP/upgrade and binary game frames** to the untouched real Worker port. It is not a mock WebSocket API or a hosted/public environment. The three real-account local protocol sessions then exercise the real Master/Worker/GameRunner, recipient projections, politics/war, revocation, and (in the durable matrix) SIGKILL and the original game's recovery through real WSS. The operator's HTTPS proxy must restrict its private HTTP backend; an Origin header is forgeable outside browsers, and only live signed accounts confer authority.
+
+## Host operator requirements (still external blockers)
+
+1. Obtain approved public HTTPS DNS, edge proxy, TLS certificate, and firewall rules that prevent direct plaintext Worker access. Terminate WSS and retain the original `Origin`; never allow browser-provided forwarded headers to augment the allowed host list. Persist `NATIONAL_RECOVERY_ROOT` with owned private shard locks and an unchanged worker mapping.
+2. Connect an independently authorized production account provider with signed EdDSA JWKS, live `/users/@me` ban/session revocation and configured anti-abuse verification. The local `@staging.invalid` service must **never** be exposed publicly.
+3. Have **three different consenting humans**, three independently validated real accounts and separate graphical machines actually join one PRIVATE NATIONAL lobby, execute legal national commands, witness confidential observations and actual combat/political ticks, test disconnect/reconnect/ban, and inspect durable restarts. Collect redacted network/game evidence and host review. Automated accounts and Chromium contexts do not satisfy this.
+4. Record external TLS and production configuration evidence separately; this automated test does not certify real OAuth, hardware GPU, signing provenance, public deployment, licensed media, or production readiness.
+
+## Limits
+
+Legacy lobby promotion is now refused unless every seated human's **current physical WebSocket** has independent allowed-Origin provenance. Reconnecting swaps the socket and cannot reuse the old approval; unauthorized spectators cannot ride a legacy-to-NATIONAL upgrade. Session revocation is currently bounded by the pre-existing 10-second account lease, not instantaneous across independent clients. A public release is not approved. No official percentage is claimed; the Manager alone certifies new M0 credit.

@@ -394,6 +394,20 @@ export class GameView implements GameLike {
   }
 
   /**
+   * Only the current authenticated recipient's presently observed terrain is
+   * addressable by a Private NATIONAL map marker. Public rosters and cached
+   * ownership are never proof of geographic sight.
+   */
+  public trustedTileObserved(tile: TileRef): boolean {
+    return (
+      this._trustedNationalProjection &&
+      this.trustedProjectionReady() &&
+      this.isValidRef(tile) &&
+      this.trustedSight?.tileStatus(tile) === "observed"
+    );
+  }
+
+  /**
    * Native intent eligibility, not an authority oracle. Undefined means the
    * current sight/war projection does not permit offering this action; null
    * is a positively sighted neutral land tile, never an unknown/fog tile.

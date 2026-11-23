@@ -11,6 +11,7 @@ import {
 import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
+import { NationalUltimatumExecution } from "@openfront/engine/execution/NationalUltimatumExecution";
 import { NationExecution } from "@openfront/engine/execution/NationExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
@@ -355,5 +356,84 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
     ).toBe(true);
     const { restored } = await roundTrip(game, "plains");
     expect(restored.nationalWarAuthority()?.atWar(A, B)).toBe(true);
+  });
+
+  it("C5 C2 integrated E3/E6: ordinary NationExecution rejects an unreachably threatening real imperial ultimatum", async () => {
+    const game = await seeded();
+    const crown = "c5_c2_real_bot_ultimatum";
+    game.performNationalCommand(game.player(H), {
+      kind: "found-empire",
+      empireId: crown,
+    });
+    // The issuer has real crown authority, but no observed frontier to bot A.
+    // The bot must reject the bluff through E3's own game execution—not a
+    // planner-only fixture, direct record edit, or artificial Game receipt.
+    game.addExecution(
+      new NationalUltimatumExecution(
+        game.player(H),
+        {
+          type: "national_issue_ultimatum",
+          empireId: crown,
+          targetId: A,
+          threat: "imperial-war",
+          durationTicks: 600,
+          requestId: "c5_c2_real_e3_e6_issue",
+        },
+        CLIENT,
+      ),
+    );
+    // The Game initializes newly queued executions after the active tick.
+    // Execute the second real tick so the E3 command, not a fixture, issues.
+    game.executeNextTick();
+    game.executeNextTick();
+    const initial = NationalUltimatumExecution.viewFor(game, game.player(A));
+    expect(initial).toHaveLength(1);
+    expect(initial[0]).toMatchObject({
+      phase: "pending",
+      role: "recipient",
+      issuerId: H,
+      targetId: A,
+    });
+    expect(NationalUltimatumExecution.viewFor(game, game.player(B))).toEqual(
+      [],
+    );
+    const runner = runnerFor(game);
+    let refused = false;
+    for (let i = 0; i < 120; i++) {
+      humanTurn(runner, game);
+      const view = NationalUltimatumExecution.viewFor(game, game.player(A))[0];
+      if (view?.response === "refuse") {
+        expect(view.phase).toBe("decision-required");
+        refused = true;
+        break;
+      }
+    }
+    expect(refused).toBe(true);
+    // The Game prunes the one-shot response executor after its real tick.
+    // The original issuing execution persists as the authoritative ledger;
+    // its recipient-only recorded decision is proof of the AI action.
+    expect(
+      game.executions().filter((x) => x instanceof NationalUltimatumExecution),
+    ).toHaveLength(1);
+    expect(
+      NationalUltimatumExecution.viewFor(game, game.player(A))[0],
+    ).toMatchObject({ phase: "decision-required", response: "refuse" });
+    expect(game.nationalPoliticalAuthority()?.empireOf(A)).toBeNull();
+    expect(game.nationalWarAuthority()?.atWar(H, A)).toBe(false);
+    const { bytes, again, restored } = await roundTrip(game, "plains");
+    expect([...again]).toEqual([...bytes]);
+    expect(
+      NationalUltimatumExecution.viewFor(restored, restored.player(A))[0],
+    ).toMatchObject({
+      phase: "decision-required",
+      response: "refuse",
+    });
+    for (let i = 0; i < 4; i++) {
+      game.executeNextTick();
+      restored.executeNextTick();
+    }
+    const original = await roundTrip(game, "plains");
+    const replay = await roundTrip(restored, "plains");
+    expect(diffSnapshots(original.bytes, replay.bytes)).toEqual([]);
   });
 });

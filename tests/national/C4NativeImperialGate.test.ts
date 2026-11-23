@@ -49,6 +49,64 @@ describe("C4 E4 imperial administration recipient boundary", () => {
       validateNationalImperialPacket(undefined, politics, null, 8),
     ).not.toThrow();
   });
+  it("delivers the member-only commercial allocation exactly and rejects hostile wire rates", () => {
+    const valid = { ...source, nonWorkerIncomeBps: 3750 };
+    expect(
+      readNationalImperialAdministration(valid, politics, "a", 8, "epoch")
+        ?.nonWorkerIncomeBps,
+    ).toBe(3750);
+    expect(
+      readNationalImperialAdministration(
+        { ...valid, recipientId: "b" },
+        politics,
+        "a",
+        8,
+        "epoch",
+      ),
+    ).toBeNull();
+    for (const bad of [-1, 10001, 1.5, "3750", null, Infinity, NaN]) {
+      expect(
+        readNationalImperialAdministration(
+          { ...valid, nonWorkerIncomeBps: bad },
+          politics,
+          "a",
+          8,
+          "epoch",
+        ),
+      ).toBeNull();
+    }
+    const intent = parseImperialCommand(
+      {
+        kind: "set-policy",
+        empireId: "empire",
+        policy: {
+          workerIncomeBps: 1250,
+          nonWorkerIncomeBps: 3750,
+          allowedConstruction: null,
+        },
+      },
+      "np_" + "7".repeat(32),
+    );
+    expect(intent).toMatchObject({
+      type: "national_imperial_administration",
+      command: { policy: { nonWorkerIncomeBps: 3750 } },
+    });
+    expect(
+      parseImperialCommand(
+        {
+          kind: "set-policy",
+          empireId: "empire",
+          policy: {
+            workerIncomeBps: 1250,
+            nonWorkerIncomeBps: 10001,
+            allowedConstruction: null,
+          },
+        },
+        "np_" + "8".repeat(32),
+      ),
+    ).toBeNull();
+  });
+
   it("readies the exact E1 hybrid reserve fields without numeric coercion", () => {
     const military = {
       armyMode: "hybrid",

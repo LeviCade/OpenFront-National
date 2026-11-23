@@ -65,7 +65,11 @@ export type Intent =
   | NationalImperialAdministrationIntent
   | NationalIssueSanctionIntent
   | NationalRespondSanctionIntent
-  | NationalResolveSanctionIntent;
+  | NationalResolveSanctionIntent
+  | NationalIssueUltimatumIntent
+  | NationalRespondUltimatumIntent
+  | NationalResolveUltimatumIntent
+  | NationalReconnaissanceIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -166,6 +170,19 @@ export type NationalRespondSanctionIntent = z.infer<
 >;
 export type NationalResolveSanctionIntent = z.infer<
   typeof NationalResolveSanctionIntentSchema
+>;
+export type NationalIssueUltimatumIntent = z.infer<
+  typeof NationalIssueUltimatumIntentSchema
+>;
+export type NationalRespondUltimatumIntent = z.infer<
+  typeof NationalRespondUltimatumIntentSchema
+>;
+export type NationalResolveUltimatumIntent = z.infer<
+  typeof NationalResolveUltimatumIntentSchema
+>;
+
+export type NationalReconnaissanceIntent = z.infer<
+  typeof NationalReconnaissanceIntentSchema
 >;
 
 export type Turn = z.infer<typeof TurnSchema>;
@@ -861,6 +878,13 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       declarationDelegates: z.array(MappedID).max(64),
       peaceDelegates: z.array(MappedID).max(64),
     }),
+    // Append only: preserve existing z.discriminatedUnion / binary variant IDs.
+    z.object({
+      kind: z.literal("set-standing-defense-policy"),
+      empireId: NationalPoliticalId,
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      response: z.enum(["none", "assist", "imperial", "both"]),
+    }),
   ],
 );
 
@@ -890,6 +914,37 @@ export const NationalResolveSanctionIntentSchema = z.object({
   type: z.literal("national_resolve_sanction"),
   sanctionId: NationalPoliticalId,
   decision: z.enum(["enforce", "back-down"]),
+  requestId: NationalPoliticalRequestId,
+});
+
+// ECON-06/07: issuer/crown/actor are derived from the authenticated client.
+export const NationalIssueUltimatumIntentSchema = z.object({
+  type: z.literal("national_issue_ultimatum"),
+  empireId: NationalPoliticalId,
+  targetId: NationalWarId,
+  threat: z.enum(["embargo", "imperial-war"]),
+  durationTicks: zb.uint({ min: 1, max: 6000 }),
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalRespondUltimatumIntentSchema = z.object({
+  type: z.literal("national_respond_ultimatum"),
+  ultimatumId: NationalPoliticalId,
+  decision: z.enum(["accept", "refuse"]),
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalResolveUltimatumIntentSchema = z.object({
+  type: z.literal("national_resolve_ultimatum"),
+  ultimatumId: NationalPoliticalId,
+  decision: z.enum(["enforce", "back-down", "withdraw"]),
+  requestId: NationalPoliticalRequestId,
+});
+
+/** Resource cost and lifetime are defined on the Game, never supplied by a client. */
+export const NationalReconnaissanceIntentSchema = z.object({
+  type: z.literal("national_buy_regional_recon"),
+  targetId: MappedID,
+  centerX: zb.uint({ min: 0, max: 65_535 }),
+  centerY: zb.uint({ min: 0, max: 65_535 }),
   requestId: NationalPoliticalRequestId,
 });
 
@@ -938,6 +993,10 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalIssueSanctionIntentSchema,
   NationalRespondSanctionIntentSchema,
   NationalResolveSanctionIntentSchema,
+  NationalIssueUltimatumIntentSchema,
+  NationalRespondUltimatumIntentSchema,
+  NationalResolveUltimatumIntentSchema,
+  NationalReconnaissanceIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

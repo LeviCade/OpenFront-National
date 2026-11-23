@@ -371,7 +371,17 @@ describe("R11 E3 recipient-only authoritative accession packet matrix", () => {
     expect(projected).not.toHaveProperty("privatePolitics");
     expect(projected).not.toHaveProperty("nationalCommandResults");
     expect(JSON.stringify(projected)).not.toContain("PRIVATE_PACT_CANARY");
-    expect(JSON.stringify(projected)).not.toContain("999991");
+    // Inspect exact leaf values, not floating-point digit substrings:
+    // legitimate tickExecutionDuration can serialize e.g. 0.2245619999999917.
+    // A forged hiddenTroops: 999991 is still detected anywhere in the packet.
+    const containsForgedTroops = (value: unknown): boolean =>
+      value === 999991 ||
+      (Array.isArray(value)
+        ? value.some(containsForgedTroops)
+        : value !== null && typeof value === "object"
+          ? Object.values(value).some(containsForgedTroops)
+          : false);
+    expect(containsForgedTroops(projected)).toBe(false);
     expect(offers(foreign)).toEqual([]);
     expect(projectNationalAccessionOffers(game, null)).toBeUndefined();
     expect(projectNationalAccessionOffers(game, C.id)?.offers).toEqual([]);

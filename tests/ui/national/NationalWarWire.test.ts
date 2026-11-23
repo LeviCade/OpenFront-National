@@ -858,4 +858,46 @@ describe("NATIONAL player-operated WAR/peace through real authenticated wire", (
     expect(panel.textContent).toContain("Connection interrupted");
     expect(panel.textContent).not.toContain("War accepted");
   });
+  it("does not misrepresent an emperor's delegated peace authority as map combat authority", async () => {
+    const { panel, state } = await setup({ emperor: true });
+    state.politics.empires[0].memberIds.push("nation-c");
+    state.conflicts = {
+      version: 1,
+      recipientId: "nation-a",
+      layers: [
+        {
+          id: "member-national-war",
+          scope: "national",
+          first: { kind: "nation", id: "nation-c" },
+          second: { kind: "nation", id: "nation-b" },
+          declaredBy: "nation-c",
+          startedTick: 10,
+          endedTick: null,
+        },
+      ],
+      motions: [],
+    };
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.querySelector("[data-national-map-combat]")).toBeNull();
+    expect(
+      panel.querySelector<HTMLSelectElement>("#national-peace-war-id")
+        ?.textContent,
+    ).toContain("member-national-war");
+
+    state.conflicts = {
+      ...state.conflicts,
+      layers: [
+        {
+          ...state.conflicts.layers[0],
+          id: "imperial-war",
+          scope: "imperial",
+          first: { kind: "empire", id: "Atlas" },
+        },
+      ],
+    };
+    panel.refresh();
+    await panel.updateComplete;
+    expect(panel.querySelector("[data-national-map-combat]")).not.toBeNull();
+  });
 });

@@ -74,6 +74,8 @@ export interface PoliticsEmpire {
   delegatedNationalDeclarations?: string[];
   /** Default is none; never invent intervention for a v1 empire. */
   accessionWarResponse?: "none" | "imperial";
+  /** Current crown's standing response to an authorized invasion of a member. */
+  standingDefenseResponse?: "none" | "assist" | "imperial" | "both";
   /** Mandatory compare-and-swap epoch for imperial WAR policy mutations. */
   warPolicyVersion?: number;
 }
@@ -234,6 +236,13 @@ export function validatePolitics(world: PoliticsProjection): void {
         e.accessionWarResponse === "none" ||
         e.accessionWarResponse === "imperial",
       "invalid imperial accession WAR response",
+    );
+    requireRule(
+      e.standingDefenseResponse === undefined ||
+        ["none", "assist", "imperial", "both"].includes(
+          e.standingDefenseResponse,
+        ),
+      "invalid imperial standing DEFENSE response",
     );
     requireRule(
       e.warPolicyVersion === undefined ||
@@ -917,6 +926,46 @@ export function setImperialWarPolicy(
   return next;
 }
 
+/**
+ * D-011: separate incoming-attack doctrine from accession-time WAR policy.
+ * Shares the existing WAR epoch so either amendment revokes queued grants.
+ * The current crown is the only writer. Transfer of the crown revokes the
+ * outgoing emperor's doctrine and invalidates all stale policy CAS epochs.
+ */
+export function setImperialStandingDefensePolicy(
+  world: PoliticsProjection,
+  empireId: string,
+  actorId: string,
+  expectedVersion: number,
+  response: "none" | "assist" | "imperial" | "both",
+): PoliticsProjection {
+  validatePolitics(world);
+  const current = empire(world, empireId);
+  requireRule(
+    current.leaderId === actorId,
+    "only incumbent emperor may change DEFENSE policy",
+  );
+  requireRule(
+    Number.isSafeInteger(expectedVersion) &&
+      expectedVersion >= 0 &&
+      expectedVersion === (current.warPolicyVersion ?? 0),
+    "stale imperial DEFENSE policy version",
+  );
+  requireRule(
+    response === "none" ||
+      response === "assist" ||
+      response === "imperial" ||
+      response === "both",
+    "invalid imperial DEFENSE response",
+  );
+  const next = copy(world);
+  const target = empire(next, empireId);
+  target.standingDefenseResponse = response;
+  target.warPolicyVersion = expectedVersion + 1;
+  validatePolitics(next);
+  return next;
+}
+
 /** Emperor may always transfer to a *surviving constituent*, without changing empire identity. */
 export function transferCrown(
   world: PoliticsProjection,
@@ -944,6 +993,9 @@ export function transferCrown(
   const target = empire(next, empireId);
   target.leaderId = successorId;
   target.crisisDeadlineMs = null;
+  // An old crown's standing WAR response cannot commit after succession.
+  // The new emperor must affirmatively authorize a fresh attack-time doctrine.
+  delete target.standingDefenseResponse;
   // Grants are appointments of the outgoing crown: NONE survive succession.
   // The successor may issue fresh grants through a new authenticated command.
   delete target.delegatedNationalPeace;

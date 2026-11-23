@@ -30,8 +30,10 @@ import {
   imperialPolicyIntentAvailable,
   imperialPolicyKey,
   parseImperialCommand,
+  type ImperialAdministrationCommand,
   type ImperialPolicyCommand,
 } from "./NationalImperialState";
+import { imperialStructureChoices } from "./NationalImperialWorks";
 import {
   pactActionAllowed,
   pactConsentKey,
@@ -935,6 +937,22 @@ export class NationalDiplomacyPanel extends LitElement {
     return null;
   }
 
+  /**
+   * Diplomatic representation is broader than combat authority: the emperor
+   * may negotiate a member's national WAR without becoming a belligerent.
+   * Never tell the emperor that their map Attack is legal for that layer.
+   */
+  private isOwnCombatWar(layer: NationalPublicWarLayer): boolean {
+    const actor = this.game?.myPlayer()?.id();
+    if (!actor) return false;
+    const empire = this.memberEmpire;
+    const fighting = (side: NationalPublicWarLayer["first"]) =>
+      side.kind === "nation"
+        ? side.id === actor
+        : side.id === empire?.id && empire.memberIds.includes(actor);
+    return fighting(layer.first) || fighting(layer.second);
+  }
+
   private eligiblePeaceWars(): readonly NationalPublicWarLayer[] {
     return (
       this.game
@@ -1019,7 +1037,11 @@ export class NationalDiplomacyPanel extends LitElement {
     this.eventBus?.emit(
       new NationalMapTargetSelectedEvent(player?.id() ?? null),
     );
-    if (player?.nameLocation?.() && player.isAlive()) {
+    if (
+      game?.isTrustedNationalProjection?.() !== true &&
+      player?.nameLocation?.() &&
+      player.isAlive()
+    ) {
       // Normal player-facing camera action: actual GameView name location.
       this.eventBus?.emit(new GoToPlayerEvent(player, 9));
     }
@@ -1234,6 +1256,7 @@ export class NationalDiplomacyPanel extends LitElement {
     actorId: string;
     pactId: string;
     type: "national_imperial_administration";
+    kind: ImperialAdministrationCommand["kind"];
     tick: number;
     requestId: string;
   } | null = null;
@@ -1270,21 +1293,39 @@ export class NationalDiplomacyPanel extends LitElement {
     );
     if (result === "pending") return;
     this.imperialAttempt = null;
+    const works =
+      attempt.kind === "upgrade-structure" ||
+      attempt.kind === "demolish-structure";
     this.imperialStatus =
       result === "accepted"
-        ? "Game accepted imperial policy command; current policy is shown above."
+        ? works
+          ? "Game accepted the imperial works command. Inspect the current structure roster for the authoritative result."
+          : "Game accepted imperial policy command; current policy is shown above."
         : result === "rejected"
-          ? "Game rejected imperial policy command."
-          : "Imperial policy outcome unconfirmed.";
+          ? "Game rejected imperial administration command."
+          : "Imperial administration outcome unconfirmed.";
   }
   private sendImperialPolicy(
-    command: ImperialPolicyCommand,
+    command: ImperialAdministrationCommand,
     displayedKey: string,
   ): void {
     if (this.imperialAttempt) return;
     const game = this.game,
       view = this.currentImperialView(),
       actor = game?.myPlayer();
+    const permitted =
+      game &&
+      view &&
+      (command.kind === "upgrade-structure" ||
+        command.kind === "demolish-structure")
+        ? imperialStructureChoices(game, view).some(
+            (choice) =>
+              choice.memberId === command.memberId &&
+              choice.unitId === command.unitId,
+          )
+        : view &&
+          (command.kind === "set-policy" || command.kind === "set-army-mode") &&
+          imperialPolicyIntentAvailable(view, command.kind);
     if (
       !game ||
       !view ||
@@ -1293,7 +1334,7 @@ export class NationalDiplomacyPanel extends LitElement {
       !this.eventBus ||
       imperialPolicyKey(view) !== displayedKey ||
       command.empireId !== view.empireId ||
-      !imperialPolicyIntentAvailable(view, command.kind)
+      !permitted
     ) {
       this.imperialStatus =
         "Policy or authority changed; review the current decree.";
@@ -1316,10 +1357,15 @@ export class NationalDiplomacyPanel extends LitElement {
       actorId: actor.id(),
       pactId: view.empireId,
       type: "national_imperial_administration",
+      kind: command.kind,
       tick: game.ticks(),
       requestId,
     };
-    this.imperialStatus = "Pending authoritative policy receipt.";
+    this.imperialStatus =
+      command.kind === "upgrade-structure" ||
+      command.kind === "demolish-structure"
+        ? "Pending authoritative imperial works receipt; no world change is confirmed."
+        : "Pending authoritative policy receipt.";
     try {
       this.eventBus.emit(new SendNationalImperialPolicyIntentEvent(intent));
     } catch {
@@ -1334,6 +1380,9 @@ export class NationalDiplomacyPanel extends LitElement {
       return nothing;
     const key = imperialPolicyKey(view),
       pending = this.imperialAttempt !== null;
+    const structures = this.game
+      ? imperialStructureChoices(this.game, view)
+      : [];
     const button =
       "rounded border border-amber-400/50 px-3 py-2 min-h-10 disabled:opacity-50 focus-visible:outline focus-visible:outline-2";
     const submit = (
@@ -1353,6 +1402,14 @@ export class NationalDiplomacyPanel extends LitElement {
         return;
       const bps = Number(raw);
       if (kind === "set-policy") {
+        const commercialRaw = data.get("commercialBasisPoints");
+        if (
+          view.nonWorkerIncomeBps !== undefined &&
+          (typeof commercialRaw !== "string" ||
+            !/^\d{1,5}$/.test(commercialRaw) ||
+            Number(commercialRaw) > 10000)
+        )
+          return;
         const categories = data.getAll("categories");
         if (
           !categories.every((c) =>
@@ -1366,6 +1423,9 @@ export class NationalDiplomacyPanel extends LitElement {
             empireId: view.empireId,
             policy: {
               workerIncomeBps: bps,
+              ...(view.nonWorkerIncomeBps === undefined
+                ? {}
+                : { nonWorkerIncomeBps: Number(commercialRaw) }),
               allowedConstruction:
                 data.get("constructionMode") === "all"
                   ? null
@@ -1389,6 +1449,64 @@ export class NationalDiplomacyPanel extends LitElement {
       }
       event.currentTarget.reset();
     };
+    const workForm = (kind: "upgrade-structure" | "demolish-structure") =>
+      html`<form
+        class="flex flex-col gap-2"
+        @submit=${(event: SubmitEvent) => {
+          event.preventDefault();
+          if (!(event.currentTarget instanceof HTMLFormElement)) return;
+          const data = new FormData(event.currentTarget);
+          const selected = data.get("structure");
+          if (typeof selected !== "string" || !data.has("confirm")) return;
+          const choice = structures.find(
+            (unit) => String(unit.unitId) === selected,
+          );
+          if (!choice) return;
+          this.sendImperialPolicy(
+            {
+              kind,
+              empireId: view.empireId,
+              memberId: choice.memberId,
+              unitId: choice.unitId,
+            },
+            key,
+          );
+        }}
+      >
+        <label>
+          ${kind === "upgrade-structure" ? "Upgrade" : "Demolish"} member
+          structure
+          <select
+            required
+            name="structure"
+            class="w-full min-h-11 rounded bg-slate-900 px-2 py-2"
+          >
+            <option value="">Select a currently visible structure</option>
+            ${structures.map(
+              (unit) =>
+                html`<option value=${String(unit.unitId)}>
+                  ${unit.label}
+                </option>`,
+            )}
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" name="confirm" required />
+          ${
+            kind === "upgrade-structure"
+              ? "Confirm treasury-funded upgrade (cost determined by the game)"
+              : "Confirm permanent demolition (no refund)"
+          }
+        </label>
+        <button
+          type="submit"
+          data-national-imperial-action=${kind}
+          class=${button}
+          ?disabled=${pending || structures.length === 0}
+        >
+          ${kind === "upgrade-structure" ? "Upgrade structure" : "Demolish structure"}
+        </button>
+      </form>`;
     return keyed(
       key,
       html`<div class="space-y-3">
@@ -1411,6 +1529,22 @@ export class NationalDiplomacyPanel extends LitElement {
               .value=${String(view.workerIncomeBps)}
               class="w-full rounded bg-slate-900 px-2 py-2"
           /></label>
+          ${
+            view.nonWorkerIncomeBps === undefined
+              ? nothing
+              : html`<label
+                  >Commercial allocation basis points (trade, rail, piracy)
+                  <input
+                    name="commercialBasisPoints"
+                    type="number"
+                    min="0"
+                    max="10000"
+                    step="1"
+                    required
+                    .value=${String(view.nonWorkerIncomeBps)}
+                    class="w-full rounded bg-slate-900 px-2 py-2"
+                /></label>`
+          }
           <label
             >Construction policy
             <select
@@ -1444,7 +1578,7 @@ export class NationalDiplomacyPanel extends LitElement {
           >
           <label
             ><input type="checkbox" name="confirm" required /> Confirm
-            empire-wide worker and construction decree</label
+            empire-wide worker, commercial and construction decree</label
           >
           <button
             type="submit"
@@ -1514,8 +1648,21 @@ export class NationalDiplomacyPanel extends LitElement {
               </form>`
             : nothing
         }
+        <section
+          aria-label="Imperial treasury works"
+          data-national-imperial-works
+          class="space-y-3 border-t border-amber-400/30 pt-3"
+        >
+          <h3 class="font-semibold">Imperial treasury works</h3>
+          <p class="text-xs text-slate-300">
+            Only structures currently disclosed for living imperial members are
+            listed. The game rechecks ownership, available treasury and
+            authority when executing. A form submission is not a completed work.
+          </p>
+          ${workForm("upgrade-structure")} ${workForm("demolish-structure")}
+        </section>
         <p>
-          Troop transfers, imperial-funded construction and dissolution have no
+          Reserve transfers and imperial-funded new construction have no
           controls here yet.
         </p>
       </div>`,
@@ -1544,6 +1691,14 @@ export class NationalDiplomacyPanel extends LitElement {
         Worker income allocated to treasury:
         ${(view.workerIncomeBps / 100).toFixed(2)}%
       </p>
+      ${
+        view.nonWorkerIncomeBps === undefined
+          ? nothing
+          : html`<p>
+              Trade, rail and piracy income allocated to treasury:
+              ${(view.nonWorkerIncomeBps / 100).toFixed(2)}%
+            </p>`
+      }
       <p>
         Member construction authority:
         ${view.allowedConstruction === null ? "All regulated construction categories permitted" : view.allowedConstruction.length ? view.allowedConstruction.join(", ") : "No regulated construction categories permitted"}
@@ -1964,7 +2119,7 @@ export class NationalDiplomacyPanel extends LitElement {
       this.lastDiplomacySubmission === null;
     const combatWars =
       conflicts?.layers.filter(
-        (layer) => layer.endedTick === null && this.ourWarSide(layer) !== null,
+        (layer) => layer.endedTick === null && this.isOwnCombatWar(layer),
       ) ?? [];
     // Real GameRunner player attack projection only, not an intent counter.
     const observedOutgoingAttacks =

@@ -69,6 +69,7 @@ import {
   SharedWaterCacheSnapshot,
 } from "../execution/nation/SharedWaterCache";
 import { NationalSanctionExecution } from "../execution/NationalSanctionExecution";
+import { NationalUltimatumExecution } from "../execution/NationalUltimatumExecution";
 import { NationExecution } from "../execution/NationExecution";
 import { SpawnTimerExecution } from "../execution/SpawnTimerExecution";
 import { TribeExecution } from "../execution/TribeExecution";
@@ -93,6 +94,12 @@ import {
   type NationalImperialAdministrationView,
 } from "../national/NationalRuntime";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
+import {
+  NationalReconnaissance,
+  NationalReconnaissanceSnapshotSchema,
+  REGIONAL_RECON_COST,
+  type RegionalReconGrant,
+} from "../national/observation/NationalReconnaissance";
 import {
   NationalGovernanceState,
   NationalGovernanceSnapshotSchema,
@@ -219,6 +226,7 @@ export class GameImpl implements Game {
   private _isPaused: boolean = false;
   private _winner: Player | Team | null = null;
   private _national: NationalRuntime | null = null;
+  private _nationalRecon: NationalReconnaissance | null = null;
   /** One persisted principal journal + human sight store per NATIONAL Game. */
   private _nationalGovernance: NationalGovernanceState | null = null;
   /** E2 WAR/LEVY is canonically stored here, never in a WeakMap or fork. */
@@ -271,6 +279,7 @@ export class GameImpl implements Game {
           this._playersBySmallID.map((p) => p.id()),
         );
         this._nationalGovernance = new NationalGovernanceState();
+        this._nationalRecon = new NationalReconnaissance();
         this._nationalWar = new NationalWarStateService(
           this.nationalPoliticalAuthority()!,
           this.nationalTroopDebits(),
@@ -1006,9 +1015,17 @@ export class GameImpl implements Game {
       ) {
         throw new Error("NATIONAL levy: attack not formally authorized");
       }
-      const expectedDonors = this.nationalMdaAllies(attack.defenderId).filter(
-        (id) => id !== attack.attackerId,
-      );
+      const response = this._national.standingDefenseFor(attack.defenderId);
+      const imperialDonors =
+        response?.response === "assist" || response?.response === "both"
+          ? this._national.authority().membersOf(response.empireId)
+          : [];
+      const expectedDonors = [
+        ...new Set([
+          ...this.nationalMdaAllies(attack.defenderId),
+          ...imperialDonors,
+        ]),
+      ].filter((id) => id !== attack.attackerId && id !== attack.defenderId);
       const suppliedDonors = attack.eligible.map((e) => e.source.nationId);
       if (
         suppliedDonors.length !== expectedDonors.length ||
@@ -1023,12 +1040,18 @@ export class GameImpl implements Game {
         const id = entry.source.nationId;
         if (
           this.nationalLevySource(id) !== entry.source ||
-          !political.pacts.some(
-            (p) =>
-              p.kind === "MDA" &&
-              p.memberIds.includes(attack.defenderId) &&
-              p.memberIds.includes(id),
-          )
+          !(
+            political.pacts.some(
+              (p) =>
+                p.kind === "MDA" &&
+                p.memberIds.includes(attack.defenderId) &&
+                p.memberIds.includes(id),
+            ) || imperialDonors.includes(id)
+          ) ||
+          entry.maximumFraction !== (imperialDonors.includes(id) ? 1 : 0.1) ||
+          entry.protectedCapacityFraction !== 0.3 ||
+          entry.troopCapacity !==
+            Math.floor(this._config.maxTroops(this.player(id)))
         ) {
           throw new Error(
             "NATIONAL levy: not an authoritative MDA contributor",
@@ -1037,6 +1060,143 @@ export class GameImpl implements Game {
       }
     }
     return this._nationalWar.interceptAcceptedAttacks(attacks);
+  }
+
+  /**
+   * Authoritative attack-time empire defense. Called ONLY after AttackExecution
+   * has validated a funded, border-reaching offensive attack. This uses the
+   * identical snapshotted WAR + LEVY service and atomic PlayerImpl CAS as MDA.
+   * Neither browser intent nor emperor can invent a donor/war/attack receipt.
+   */
+  interceptNationalIncomingAttack(
+    attackId: string,
+    attackerId: PlayerID,
+    defenderId: PlayerID,
+    troops: number,
+  ): DefenseResult {
+    if (this._national === null || this._nationalWar === null)
+      throw new Error("NATIONAL defense: mode not enabled");
+    if (
+      typeof attackId !== "string" ||
+      attackId.length === 0 ||
+      attackId.length > 256 ||
+      !Number.isSafeInteger(troops) ||
+      troops < 1
+    )
+      throw new Error("NATIONAL defense: malformed accepted invasion");
+    this.synchronizeNationalState();
+    if (
+      !this._nationalWar.authority.authorizeOffensiveAction(
+        attackerId,
+        defenderId,
+      ) ||
+      !this._players.get(attackerId)?.hasSpawned() ||
+      !this._players.get(attackerId)?.isAlive() ||
+      !this._players.get(defenderId)?.hasSpawned() ||
+      !this._players.get(defenderId)?.isAlive()
+    )
+      throw new Error("NATIONAL defense: unlawful or dead-member attack");
+
+    const response = this._national.standingDefenseFor(defenderId);
+    // A previously committed attack is replayed by the existing ledger even
+    // after a policy, troop balance, member or crown mutation.
+    const alreadyProcessed = this._nationalWar
+      .snapshot()
+      .levy.processed.some((record) => record.attackId === attackId);
+    if (!alreadyProcessed) {
+      // Formal WAR alone is insufficient: a caller cannot synthesize a
+      // battlefield receipt for an army that the real Game never accepted.
+      // Compare against the actual funded outgoing attack and the exact
+      // pre-interception cancellation/consolidation calculation performed by
+      // AttackExecution. An engine-only adapter is not a client credential.
+      const attacker = this._players.get(attackerId)!;
+      const defender = this._players.get(defenderId)!;
+      const battle = attacker
+        .outgoingAttacks()
+        .find((a) => a.id() === attackId);
+      if (
+        !battle ||
+        !battle.isActive() ||
+        battle.attacker() !== attacker ||
+        battle.target() !== defender
+      )
+        throw new Error("NATIONAL defense: no real accepted invading army");
+      let projected = battle.troops();
+      for (const incoming of attacker.incomingAttacks()) {
+        if (incoming.attacker() !== defender) continue;
+        if (incoming.troops() > projected)
+          throw new Error("NATIONAL defense: canceled incoming battle");
+        projected -= incoming.troops();
+      }
+      if (battle.sourceTile() === null) {
+        for (const outgoing of attacker.outgoingAttacks()) {
+          if (outgoing !== battle && outgoing.target() === defender)
+            projected += outgoing.troops();
+        }
+      }
+      if (projected < 1 || Math.floor(projected) !== troops)
+        throw new Error("NATIONAL defense: forged invading troop strength");
+    }
+    const mode = alreadyProcessed ? "none" : (response?.response ?? "none");
+    const plan =
+      response && (mode === "imperial" || mode === "both")
+        ? this._nationalWar.prepareStandingDefenseWar(
+            response.empireId,
+            attackerId,
+            defenderId,
+            this._ticks,
+          )
+        : null;
+
+    const mda = new Set(this.nationalMdaAllies(defenderId));
+    const imperials = new Set(
+      response && (mode === "assist" || mode === "both")
+        ? this._national.authority().membersOf(response.empireId)
+        : [],
+    );
+    const donorIds = [...new Set([...mda, ...imperials])]
+      .filter((id) => id !== attackerId && id !== defenderId)
+      .sort();
+    const eligible = alreadyProcessed
+      ? []
+      : donorIds.map((id) => {
+          const source = this.nationalLevySource(id);
+          const donor = this._players.get(id);
+          if (!source || !donor || !donor.hasSpawned() || !donor.isAlive())
+            throw new Error("NATIONAL defense: invalid standing donor");
+          return {
+            source,
+            troopCapacity: Math.floor(this._config.maxTroops(donor)),
+            maximumFraction: imperials.has(id) ? 1 : 0.1,
+            protectedCapacityFraction: 0.3,
+          };
+        });
+    const campaignId = `national:${attackerId.length}:${attackerId}:${defenderId.length}:${defenderId}`;
+    // One transaction across both MDA and imperial contributors; one campaign
+    // allowance per real donor, shared across repeated clicks/fronts.
+    // A declaration made AFTER troop CAS would turn a late WAR failure into
+    // an uncompensated donor loss. Enact the preflighted WAR under the same
+    // synchronous Game tick lock BEFORE spending, and roll it back if the
+    // actual donor transaction refuses the attack. No speculative WAR is
+    // visible outside this indivisible engine operation.
+    const beforeWar = plan ? this._nationalWar.snapshot() : null;
+    if (plan) this._nationalWar.enactStandingDefenseWar(plan, this._ticks);
+    try {
+      return this.applyNationalDefenseLevy([
+        {
+          attackId,
+          confirmedAccepted: true,
+          campaignId,
+          attackerId,
+          defenderId,
+          attackingTroops: troops,
+          eligible,
+        },
+      ])[0];
+    } catch (error) {
+      if (beforeWar) this._nationalWar.restore(beforeWar);
+      throw error;
+    }
   }
 
   /**
@@ -1203,6 +1363,9 @@ export class GameImpl implements Game {
         break;
       case "set-war-policy":
         this._national.setWarPolicy(actor.id(), command);
+        break;
+      case "set-standing-defense-policy":
+        this._national.setStandingDefensePolicy(actor.id(), command);
         break;
       case "transfer-troops": {
         const source = this._players.get(command.sourceId);
@@ -1485,6 +1648,57 @@ export class GameImpl implements Game {
   nationalWinner(): PlayerID | null {
     this.synchronizeNationalState();
     return this._national?.winner() ?? null;
+  }
+
+  /**
+   * Authenticate against the SAME original Game principal as diplomacy and
+   * war. Gold is debited from PlayerImpl once; durable lease is the receipt.
+   * No client chooses the payer, effective tick, price, radius or duration.
+   */
+  performNationalReconnaissance(
+    actor: Player,
+    targetId: PlayerID,
+    centerX: number,
+    centerY: number,
+    requestId: string,
+    authenticatedClientID?: ClientID,
+  ): RegionalReconGrant {
+    if (this._nationalRecon === null || !this._config.nationalMode())
+      throw new Error("NATIONAL recon: mode not enabled");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
+    if (
+      this.inSpawnPhase() ||
+      !actor.hasSpawned() ||
+      !actor.isAlive() ||
+      !this._players.has(targetId) ||
+      !this._players.get(targetId)!.isAlive() ||
+      targetId === actor.id() ||
+      !Number.isSafeInteger(centerX) ||
+      !Number.isSafeInteger(centerY) ||
+      !this.isValidCoord(centerX, centerY)
+    )
+      throw new Error("NATIONAL recon: inactive principal or invalid region");
+    return this._nationalRecon.buy(
+      actor.id(),
+      targetId,
+      centerX,
+      centerY,
+      this._ticks,
+      requestId,
+      () => {
+        if (actor.gold() < REGIONAL_RECON_COST)
+          throw new Error("NATIONAL recon: insufficient gold");
+        const spent = actor.removeGold(REGIONAL_RECON_COST);
+        if (spent !== REGIONAL_RECON_COST) {
+          actor.addGold(spent);
+          throw new Error("NATIONAL recon: non-atomic gold debit");
+        }
+      },
+    );
+  }
+
+  nationalReconnaissanceFor(payerId: PlayerID): readonly RegionalReconGrant[] {
+    return this._nationalRecon?.activeFor(payerId, this._ticks) ?? [];
   }
 
   /** Trusted player object from authenticated execution, never caller-supplied ID. */
@@ -1988,11 +2202,16 @@ export class GameImpl implements Game {
     if (this._national !== null) {
       hash += this._national.stateHash();
       hash += NationalSanctionExecution.stateHash(this);
+      hash += NationalUltimatumExecution.stateHash(this);
     }
     if (this._nationalWar !== null)
       hash += simpleHash(JSON.stringify(this._nationalWar.snapshot()));
     if (this._nationalGovernance !== null)
       hash += simpleHash(JSON.stringify(this._nationalGovernance.snapshot()));
+    // Paid intelligence is authoritative game state, not UI cache. Its
+    // immutable replay journal must be represented in the match state hash.
+    if (this._nationalRecon !== null)
+      hash += simpleHash(JSON.stringify(this._nationalRecon.snapshot()));
     return hash;
   }
 
@@ -2942,6 +3161,7 @@ export class GameImpl implements Game {
       national: this._national?.snapshot() ?? null,
       nationalWar: this._nationalWar?.snapshot() ?? null,
       nationalGovernance: this._nationalGovernance?.snapshot() ?? null,
+      nationalRecon: this._nationalRecon?.snapshot() ?? null,
     };
   }
 
@@ -3007,6 +3227,22 @@ export class GameImpl implements Game {
     if (this._config.nationalMode()) {
       if (s.national === null)
         throw new Error("NATIONAL snapshot state missing");
+      this._nationalRecon =
+        s.nationalRecon === null
+          ? new NationalReconnaissance()
+          : NationalReconnaissance.restore(s.nationalRecon, this._ticks);
+      // A restored lease must still point to real match participants and
+      // a real coordinate; a forged snapshot must never manufacture intel.
+      for (const grant of this._nationalRecon.snapshot().grants) {
+        if (
+          !this._players.has(grant.payerId) ||
+          !this._players.has(grant.targetId) ||
+          !this.isValidCoord(grant.centerX, grant.centerY)
+        )
+          throw new Error(
+            "NATIONAL recon: invalid restored identity or region",
+          );
+      }
       this._national = NationalRuntime.restore(
         s.national,
         this._playersBySmallID.map((p) => p.id()),
@@ -3037,6 +3273,9 @@ export class GameImpl implements Game {
       if (s.national !== null)
         throw new Error("NATIONAL data in legacy snapshot");
       this._national = null;
+      if (s.nationalRecon !== null)
+        throw new Error("NATIONAL recon data in legacy snapshot");
+      this._nationalRecon = null;
       if (s.nationalGovernance !== null)
         throw new Error("NATIONAL governance in legacy game snapshot");
       this._nationalGovernance = null;
@@ -3132,7 +3371,7 @@ export class GameImpl implements Game {
 
 export const GameSnapshot = snapshotType({
   name: "Game",
-  version: 4,
+  version: 5,
   migrations: {
     1: (data: unknown) => ({
       ...(data as Record<string, unknown>),
@@ -3145,6 +3384,10 @@ export const GameSnapshot = snapshotType({
     3: (data: unknown) => ({
       ...(data as Record<string, unknown>),
       nationalGovernance: null,
+    }),
+    4: (data: unknown) => ({
+      ...(data as Record<string, unknown>),
+      nationalRecon: null,
     }),
   },
   schema: z.object({
@@ -3183,6 +3426,7 @@ export const GameSnapshot = snapshotType({
     national: NationalRuntimeSnapshotSchema.nullable(),
     nationalWar: NationalWarStateSnapshotSchema.nullable(),
     nationalGovernance: NationalGovernanceSnapshotSchema.nullable(),
+    nationalRecon: NationalReconnaissanceSnapshotSchema.nullable(),
   }),
 });
 export type GameState = z.infer<typeof GameSnapshot.schema>;

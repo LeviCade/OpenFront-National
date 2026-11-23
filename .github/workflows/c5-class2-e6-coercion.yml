@@ -1,0 +1,45 @@
+name: C5 Class Two E6 Sovereign Coercion — exact head
+on:
+  push:
+    branches:
+      - feature/c5-class2-e6-ai-credible-coercion-20261122
+  pull_request:
+    branches:
+      - stage3/conductor5-class2-integration-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sovereign-coercion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact branch SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: npm run typecheck
+      - name: E6 adversarial recipient plus GameRunner command/replay
+        run: npx --no-install vitest run --project node tests/national/C5Class2E6Coercion.test.ts tests/national/C5AIPoliticalStrategy.test.ts tests/national/C5AIPoliticalGame.test.ts
+      - name: All source Vitest projects — NATIONAL and legacy FFA regression
+        run: npm test
+      - name: Formatting witness
+        if: success() || failure()
+        run: |
+          npx --no-install oxfmt --check packages/engine/src/national/ai/NationalCoercionStrategy.ts packages/engine/src/national/ai/NationalPoliticalStrategy.ts packages/engine/src/execution/NationExecution.ts tests/national/C5Class2E6Coercion.test.ts .github/workflows/c5-class2-e6-coercion.yml
+      - name: Lint
+        if: success() || failure()
+        run: npm run lint
+      - name: Build
+        if: success() || failure()
+        run: npm run build-prod
