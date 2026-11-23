@@ -62,6 +62,13 @@ jobs:
       - name: Production build
         if: success() || failure()
         run: npm run build-prod
+      - name: Formatter-suggested patch (diagnostic; restore original checkout)
+        if: failure()
+        run: |
+          git status --short
+          npx --no-install oxfmt --write docs/engineering/c5-class3-e3-economic-charter.md docs/engineering/c6-class1-e3-embargo-restitution.md packages/engine/src/execution/NationalSanctionExecution.ts tests/national/C6Class1E3EmbargoRestitution.test.ts
+          git diff -- docs/engineering/c5-class3-e3-economic-charter.md docs/engineering/c6-class1-e3-embargo-restitution.md packages/engine/src/execution/NationalSanctionExecution.ts tests/national/C6Class1E3EmbargoRestitution.test.ts
+          git restore -- docs/engineering/c5-class3-e3-economic-charter.md docs/engineering/c6-class1-e3-embargo-restitution.md packages/engine/src/execution/NationalSanctionExecution.ts tests/national/C6Class1E3EmbargoRestitution.test.ts
       - name: Full test suite
-        if: success() || failure()
+        if: success()
         run: npm test

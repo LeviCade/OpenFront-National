@@ -130,6 +130,28 @@ function decide(game: Game, issuer: Player, sanctionId: string,
     type: "national_decide_sanction_settlement", sanctionId, recipientId,
     offerId, decision, requestId,
   });
+  // CI forensic signal: authorization and ownership, without revealing balances.
+  const stored = game.executions().find((execution) => {
+    const record = execution as unknown as {
+      demand?: { id: string; recipients: readonly { id: string }[] } | null;
+    };
+    return execution instanceof NationalSanctionExecution &&
+      record.demand?.id === sanctionId;
+  }) as unknown as {
+    demand: {
+      recipients: readonly { id: string; enforcement?: { offer: { status: string } | null } }[];
+    };
+    controllingIssuer(): Player | null;
+    settlementOwners(row: { id: string }): readonly Player[] | null;
+  } | undefined;
+  const row = stored?.demand.recipients.find((r) => r.id === recipientId);
+  console.info("C6_E3_DECISION_DIAGNOSTIC=" + JSON.stringify({
+    sanctionId,
+    actorCurrentIssuer: stored?.controllingIssuer() === issuer,
+    owners: row ? (stored?.settlementOwners(row)?.map((p) => p.id()) ?? null) : null,
+    result: row?.enforcement?.offer?.status ?? null,
+    decision,
+  }));
 }
 function status(game: Game, issuer: Player, sanctionId: string) {
   return NationalSanctionExecution.viewFor(game, issuer)
@@ -243,7 +265,8 @@ describe("C6 Class 1 E3: actual enforced bilateral restitution", () => {
     send(game,a,{type:"national_issue_sanction",scope:"imperial",
       targetId:TARGET, recipientIds:[ISSUER],durationTicks:190,
       requestId:"imperial-restitution"});
-    const id=NationalSanctionExecution.viewFor(game,a).at(-1)!.id;
+    const issuerViews = NationalSanctionExecution.viewFor(game, a);
+    const id = issuerViews[issuerViews.length - 1]!.id;
     until(game,()=>NationalSanctionExecution.viewFor(game,a)
       .some((d)=>d.id===id && d.phase==="decision-required"),300);
     send(game,a,{type:"national_resolve_sanction",sanctionId:id,
