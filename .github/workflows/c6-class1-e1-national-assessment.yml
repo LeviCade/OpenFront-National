@@ -53,7 +53,7 @@ jobs:
               npm run typecheck
               ;;
             native-ui)
-              npx --no-install vitest run --project client \
+              npx --no-install vitest run \
                 tests/ui/national/C6Class1NationalAssessmentControls.test.ts \
                 tests/ui/national/NationalSovereignActions.test.ts \
                 tests/ui/national/NationalSovereignControls.test.ts \
