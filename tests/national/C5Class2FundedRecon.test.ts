@@ -203,6 +203,28 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     );
     expect(packetHasUnit(packet(game, BUYER.clientID!), ship.id())).toBe(false);
     expect(game.nationalReconnaissanceFor(BUYER.id)).toEqual([]);
+    // Reconnection from an authoritative snapshot cannot renew an expired
+    // lease or erase the durable duplicate-request receipt.
+    const { restored: reconnected, bytes, again } = await roundTrip(
+      game,
+      "big_plains",
+    );
+    expect(again).toEqual(bytes);
+    expect(reconnected.nationalReconnaissanceFor(BUYER.id)).toEqual([]);
+    expect(visible(reconnected, BUYER.id, factory.id())).toBeUndefined();
+    expect(
+      packetHasUnit(packet(reconnected, BUYER.clientID!), factory.id()),
+    ).toBe(false);
+    expect(() =>
+      reconnected.performNationalReconnaissance(
+        reconnected.player(BUYER.id),
+        TARGET.id,
+        185,
+        175,
+        "paid_recon_1",
+        BUYER.clientID!,
+      ),
+    ).toThrow(/duplicate/);
   });
 
   it("shares an active purchase only among present reciprocal empire members", async () => {
@@ -332,10 +354,20 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     expect(again).toEqual(bytes);
     // GameImpl first INITs queued executions, then invokes tick on the next
     // turn. The original and restored Game must match across both boundaries.
+    const originalDebits = vi.spyOn(game.player(BUYER.id), "removeGold");
+    const restoredDebits = vi.spyOn(restored.player(BUYER.id), "removeGold");
     game.executeNextTick();
     restored.executeNextTick();
     game.executeNextTick();
     restored.executeNextTick();
+    expect(
+      originalDebits.mock.calls.filter(([gold]) => gold === REGIONAL_RECON_COST),
+    ).toHaveLength(1);
+    expect(
+      restoredDebits.mock.calls.filter(([gold]) => gold === REGIONAL_RECON_COST),
+    ).toHaveLength(1);
+    originalDebits.mockRestore();
+    restoredDebits.mockRestore();
     // The real game can also credit recurring income on execution ticks;
     // compare exact post-turn balances to the independently restored game.
     const paidBalance = game.player(BUYER.id).gold();
@@ -403,6 +435,19 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     expect(
       NationalReconnaissance.restore(ledger.snapshot(), 5).snapshot(),
     ).toEqual(ledger.snapshot());
+    const forged = ledger.snapshot();
+    expect(() =>
+      NationalReconnaissance.restore(
+        {
+          ...forged,
+          grants: [
+            { ...forged.grants[0], expiresAtTick: 606 },
+            ...forged.grants.slice(1),
+          ],
+        },
+        5,
+      ),
+    ).toThrow(/invalid restored grant/);
     console.info(
       "[M7 120-nation ledger] active=120 elapsedMs=" + elapsed.toFixed(3),
     );

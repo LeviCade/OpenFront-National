@@ -2052,6 +2052,10 @@ export class GameImpl implements Game {
       hash += simpleHash(JSON.stringify(this._nationalWar.snapshot()));
     if (this._nationalGovernance !== null)
       hash += simpleHash(JSON.stringify(this._nationalGovernance.snapshot()));
+    // Paid intelligence is authoritative game state, not UI cache. Its
+    // immutable replay journal must be represented in the match state hash.
+    if (this._nationalRecon !== null)
+      hash += simpleHash(JSON.stringify(this._nationalRecon.snapshot()));
     return hash;
   }
 
