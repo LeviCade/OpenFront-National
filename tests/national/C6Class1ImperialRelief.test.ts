@@ -486,7 +486,10 @@ describe("C6 C1 E2 — real imperial relief", () => {
     const a = game.player(A);
     const b = game.player(B);
     const c = game.player(C);
-    const execute = (actor: Player, command: Parameters<Game["performNationalImperialAdministration"]>[1]) =>
+    const execute = (
+      actor: Player,
+      command: Parameters<Game["performNationalImperialAdministration"]>[1],
+    ) =>
       game.performNationalImperialAdministration(
         actor,
         command,
@@ -542,8 +545,12 @@ describe("C6 C1 E2 — real imperial relief", () => {
         c.clientID() ?? undefined,
       ),
     ).toThrow("stale authenticated actor session");
-    expect(() => execute(c, requestCommand)).toThrow("living non-emperor member");
-    expect(game.nationalImperialAdministrationFor(b)?.reliefRequests).toEqual([]);
+    expect(() => execute(c, requestCommand)).toThrow(
+      "living non-emperor member",
+    );
+    expect(game.nationalImperialAdministrationFor(b)?.reliefRequests).toEqual(
+      [],
+    );
     execute(b, requestCommand);
     const approval = {
       kind: "decide-relief" as const,
@@ -552,9 +559,9 @@ describe("C6 C1 E2 — real imperial relief", () => {
       expectedVersion: 0,
       decision: "approve" as const,
     };
-    expect(() => game.performNationalImperialAdministration(a, approval)).toThrow(
-      "missing authenticated actor session",
-    );
+    expect(() =>
+      game.performNationalImperialAdministration(a, approval),
+    ).toThrow("missing authenticated actor session");
     expect(() =>
       game.performNationalImperialAdministration(
         a,
@@ -567,7 +574,9 @@ describe("C6 C1 E2 — real imperial relief", () => {
     execute(a, approval);
     expect(treasury(game)).toBe(40n);
     expect(b.gold() - before).toBe(31n);
-    expect(() => execute(a, approval)).toThrow("stale, foreign or unauthorized relief decision");
+    expect(() => execute(a, approval)).toThrow(
+      "stale, foreign or unauthorized relief decision",
+    );
     expect(treasury(game)).toBe(40n);
     expect(b.gold() - before).toBe(31n);
     expect(
