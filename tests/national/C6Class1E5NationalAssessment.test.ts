@@ -347,9 +347,7 @@ type RealAssessmentGame = Game & {
     effectiveTick: number;
     expiresAtTick: number;
   };
-  nationalAssessmentsFor: (
-    payerId: string,
-  ) => readonly {
+  nationalAssessmentsFor: (payerId: string) => readonly {
     payerId: string;
     targetId: string;
     cost: string;
@@ -466,8 +464,11 @@ describe("C6 E5 isolated-source GameRunner fails closed without E4", () => {
     async () => {
       const game = await fourNations();
       const debit = vi.spyOn(game.player(A), "removeGold");
-      const regional = vi.spyOn(game, "performNationalReconnaissance")
-        .mockImplementation(() => { throw new Error("regional control disabled"); });
+      const regional = vi
+        .spyOn(game, "performNationalReconnaissance")
+        .mockImplementation(() => {
+          throw new Error("regional control disabled");
+        });
       const run = runner(game);
       for (let i = 0; i < 12; i++) next(game, run);
       expect("performNationalAssessment" in game).toBe(false);
@@ -540,10 +541,7 @@ describe("C6 E5 GameRunner + E4 canonical authority integration", () => {
       const attacks = (spy: typeof activeAdd) =>
         spy.mock.calls
           .flat()
-          .filter(
-            (e): e is AttackExecution =>
-              e instanceof AttackExecution,
-          );
+          .filter((e): e is AttackExecution => e instanceof AttackExecution);
       expect(attacks(controlAdd).length).toBeGreaterThan(0);
       expect(attacks(activeAdd)).toHaveLength(0);
       const { restored, bytes, again } = await roundTrip(active, "big_plains");
