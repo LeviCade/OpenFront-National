@@ -43,3 +43,14 @@
 
 ## Status at commission freeze
 The charter is a real committed contract, **not evidence that engineers already performed work**. No second-class original point awarded by planning. Manager official balance **84%**, minimum **89%**.
+
+## Issued complete one-shot engineer commissions — November 23, 2026
+
+- **E1 [Issue #201](https://github.com/LeviCade/OpenFront-National/issues/201)** · `feature/conductor6-class2-e1-native-imperial-20261123` · M9 new native imperial relief/settlement controls; E4 receipt client repair non-point.
+- **E2 [Issue #202](https://github.com/LeviCade/OpenFront-National/issues/202)** · `feature/conductor6-class2-e2-coalition-votes-20261123` · M2 coalition multi-party admission.
+- **E3 [Issue #203](https://github.com/LeviCade/OpenFront-National/issues/203)** · `feature/conductor6-class2-e3-blockade-and-embargo-20261123` · M6 player-directed physical naval blockade; escrow/embargo causal debt belongs to First Class.
+- **E4 [Issue #204](https://github.com/LeviCade/OpenFront-National/issues/204)** · `feature/conductor6-class2-e4-treaty-defense-20261123` · M4 treaty-specific defense policy; exact paid assessment purchase ID is First-Class non-point repair.
+- **E5 [Issue #205](https://github.com/LeviCade/OpenFront-National/issues/205)** · `feature/conductor6-class2-e5-negotiated-peace-ai-20261123` · M8 AI legal peace negotiations with real WAR GameRunner outcomes.
+- **E6 [Issue #206](https://github.com/LeviCade/OpenFront-National/issues/206)** · `feature/conductor6-class2-e6-sovereign-endgame-20261123` · M9 actual sovereign winner and accessible transfer/collapse notices; hardware/humans require independent evidence.
+
+All six issue bodies contain the complete commission (founding SHA, one response, exclusive files, narrow shared-file collision boundaries, real positive/hostile scenarios, exact-head checks, draft PR and final handoff). Branch creation and issue publication **do not** indicate an engineer has begun or delivered code. Every engineer works separately from canonical founding SHA while the Conductor reserves the staging tree.
