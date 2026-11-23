@@ -37,6 +37,8 @@ jobs:
           persist-credentials: false
           submodules: false
       - run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - name: Reject temporary write-enabled format jobs
+        run: test ! -e .github/workflows/c5-class3-e1-formatter-once.yml
       - uses: actions/setup-node@v4
         with:
           node-version: "24.15.0"
