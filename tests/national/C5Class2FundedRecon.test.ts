@@ -151,12 +151,15 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     expect(JSON.stringify(observed)).not.toContain("987654");
     expect(JSON.stringify(observed)).not.toContain("landingDestination");
 
+    const afterWire = buyer.gold();
     expect(() =>
       game.performNationalReconnaissance(
         buyer, TARGET.id, 185, 175, "paid_recon_1", BUYER.clientID!,
       ),
     ).toThrow(/duplicate/);
-    expect(buyer.gold()).toBe(before - REGIONAL_RECON_COST);
+    // Ordinary turn execution may earn independent worker gold; replays
+    // may not remove even one extra unit of the current exact balance.
+    expect(buyer.gold()).toBe(afterWire);
 
     ship.move(game.ref(15, 15));
     expect(visible(game, BUYER.id, ship.id())).toBeUndefined();
@@ -194,7 +197,9 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
       buyer, TARGET.id, 185, 175, "shared_recon_1", BUYER.clientID!,
     );
     expect(visible(game, ALLY.id, factory.id())).toBeUndefined();
-    expect(visible(game, STRANGER.id, factory.id())).toBeUndefined();
+    // A nearby outsider can legitimately see this factory by its OWN border
+    // sensor, but cannot inherit the buyer's paid "recon" provenance.
+    expect(visible(game, STRANGER.id, factory.id())?.source).not.toBe("recon");
 
     game.performNationalCommand(buyer, {
       kind: "found-empire", empireId: "recon_empire",
