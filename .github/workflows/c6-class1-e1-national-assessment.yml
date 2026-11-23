@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/c6-class1-e1-assessment-native-ui-20261123
+  pull_request:
+    branches:
+      - stage3/conductor6-class1-integration-20261123
   workflow_dispatch:
 
 permissions:
