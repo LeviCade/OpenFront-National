@@ -54,6 +54,11 @@ jobs:
           packages/engine/src/game/GameImpl.ts
           packages/engine/src/execution/NationalSanctionExecution.ts
           tests/national/C5Class3E3ImperialTrade.test.ts
+      - name: Output remaining formatter delta
+        if: success() || failure()
+        run: |
+          npx --no-install oxfmt --write packages/engine/src/national/NationalRuntime.ts
+          git diff -- packages/engine/src/national/NationalRuntime.ts
       - name: Lint
         if: success() || failure()
         run: npm run lint
