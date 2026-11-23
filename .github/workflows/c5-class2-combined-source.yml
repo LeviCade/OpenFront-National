@@ -57,6 +57,8 @@ jobs:
                 tests/national/C5Class2E6Coercion.test.ts \
                 tests/national/C5ImperialCentralCombat.test.ts \
                 tests/national/C5Class1E5EconomicAI.test.ts \
+                tests/national/C5AIPoliticalGame.test.ts \
+                tests/national/ConflictLiveGame.test.ts \
                 tests/national/NationalAccessionPacketsR11.test.ts \
                 tests/national/C4NativeImperialGate.test.ts \
                 tests/core/snapshot/FullGameSnapshot.test.ts
