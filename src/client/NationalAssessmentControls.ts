@@ -61,7 +61,7 @@ export class NationalAssessmentControls extends LitElement {
       return null;
     if (
       mode === GameType.Private &&
-      (!game.trustedProjectionReady() ||
+      (!game.trustedProjectionReady?.() ||
         !hasTrustedNationalPrivateCapability(bus, game.gameID()))
     )
       return null;
@@ -71,7 +71,7 @@ export class NationalAssessmentControls extends LitElement {
   private get currentReports(): readonly NationalAssessmentClientReport[] {
     const context = this.activeContext;
     if (!context) return [];
-    const view = context.game.nationalAssessments();
+    const view = context.game.nationalAssessments?.() ?? null;
     return view?.recipientId === context.actor.id() ? view.items : [];
   }
 
@@ -258,10 +258,10 @@ export class NationalAssessmentControls extends LitElement {
                   Target: ${context.game.player(report.targetId)?.name() ?? report.targetId}
                 </p>
                 <p>Paid by: ${context.game.player(report.paidBy)?.name() ?? report.paidBy}</p>
-                <p>Gold estimate: ${report.treasuryGoldBand.lower}–&lt;${report.treasuryGoldBand.upperExclusive}</p>
-                <p>Troop estimate: ${report.militaryTroopsBand.lower}–&lt;${report.militaryTroopsBand.upperExclusive}</p>
+                <p>${report.confidence === "shielded-coarse-estimate" ? "Shielded gold estimate" : "Gold estimate"}: ${report.treasuryGoldBand.lower}–&lt;${report.treasuryGoldBand.upperExclusive}</p>
+                <p>${report.confidence === "shielded-coarse-estimate" ? "Shielded troop estimate" : "Troop estimate"}: ${report.militaryTroopsBand.lower}–&lt;${report.militaryTroopsBand.upperExclusive}</p>
                 <p class="text-xs text-slate-300">
-                  Coarse purchase-time estimate, not live exact values.
+                  ${report.confidence === "shielded-coarse-estimate" ? "Counterassessment shield active: truthful broader purchase-time bands." : "Coarse purchase-time estimate."} Not live exact values.
                   Effective tick ${report.effectiveTick}; expires at tick
                   ${report.expiresAtTick} (${report.expiresAtTick - context.game.ticks()} ticks remaining).
                 </p>
