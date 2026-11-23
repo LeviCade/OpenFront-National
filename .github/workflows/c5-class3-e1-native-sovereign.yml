@@ -1,0 +1,58 @@
+name: C5 Third Class E1 — exact native sovereign UI witness
+on:
+  pull_request:
+    branches:
+      - stage3/conductor5-class3-integration-20261122
+    paths:
+      - "src/client/NationalDiplomacyPanel.ts"
+      - "src/client/NationalSovereignActions.ts"
+      - "src/client/Transport.ts"
+      - "src/client/view/GameView.ts"
+      - "packages/engine-api/src/game/GameUpdates.ts"
+      - "packages/engine-api/src/game/NationalReconView.ts"
+      - "packages/engine/src/execution/NationalUltimatumExecution.ts"
+      - "packages/engine/src/national/observation/NationalOutbound.ts"
+      - "packages/engine/src/national/observation/NationalReconnaissance.ts"
+      - "tests/ui/national/NationalSovereignActions.test.ts"
+      - "tests/ui/national/NationalSovereignControls.test.ts"
+      - ".github/workflows/c5-class3-e1-native-sovereign.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    name: E1 source — ${{ matrix.gate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [typecheck, focused-tests, format, lint, production-build]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Execute source acceptance
+        env:
+          GATE: ${{ matrix.gate }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GATE" in
+            typecheck) npm run typecheck ;;
+            focused-tests)
+              npx --no-install vitest run tests/ui/national/NationalSovereignActions.test.ts tests/ui/national/NationalSovereignControls.test.ts tests/ui/national/NationalDiplomacyPanel.test.ts tests/ui/national/NationalReconPurchase.test.ts
+              npx --no-install vitest run --project node tests/national/C5Class2FundedRecon.test.ts tests/national/C5Class2ImperialUltimatum.test.ts
+              ;;
+            format) npm run format:check ;;
+            lint) npm run lint ;;
+            production-build) npm run build-prod ;;
+            *) exit 2 ;;
+          esac
