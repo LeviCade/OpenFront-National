@@ -175,6 +175,46 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
     ).toBeNull();
   });
 
+  it("accepts E4 truthful counterassessment bands only when marked shielded, and labels them in UI", async () => {
+    const shielded = {
+      ...validReport,
+      confidence: "shielded-coarse-estimate" as const,
+      treasuryGoldBand: { lower: "10000", upperExclusive: "20000" },
+      militaryTroopsBand: { lower: "400000", upperExclusive: "800000" },
+    };
+    const valid = packet([shielded]);
+    expect(readNationalAssessmentView(valid, "nation-a", 21)).toEqual(valid);
+    expect(
+      readNationalAssessmentView(
+        packet([{ ...shielded, confidence: "coarse-estimate" }]),
+        "nation-a",
+        21,
+      ),
+    ).toBeNull();
+    expect(
+      readNationalAssessmentView(
+        packet([{ ...validReport, confidence: "shielded-coarse-estimate" }]),
+        "nation-a",
+        21,
+      ),
+    ).toBeNull();
+    expect(
+      readNationalAssessmentView(
+        packet([{ ...shielded, militaryTroopsBand: { lower: "400000", upperExclusive: "400001" } }]),
+        "nation-a",
+        21,
+      ),
+    ).toBeNull();
+    const { element, state } = await mount();
+    state.tick = 21;
+    state.reports = valid;
+    element.refresh();
+    await element.updateComplete;
+    expect(element.textContent).toContain("Counterassessment shield active");
+    expect(element.textContent).toContain("Shielded troop estimate");
+    expect(element.textContent).not.toContain("100000");
+  });
+
   it("quotes actual player gold and emits one opaque authenticated request, never debits the browser wallet", async () => {
     const { element, state, sent } = await mount();
     expect(element.textContent).toContain("1200");
