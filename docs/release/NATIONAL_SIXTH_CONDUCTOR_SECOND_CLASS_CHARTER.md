@@ -2,11 +2,11 @@
 
 **Command:** [Manager's Issue #200](https://github.com/LeviCade/OpenFront-National/issues/200) · [84% certified verdict #199](https://github.com/LeviCade/OpenFront-National/issues/199) · [immutable weighted ledger #20](https://github.com/LeviCade/OpenFront-National/issues/20).
 
-**Official name:** **SIXTH CONDUCTOR — SECOND CLASS**. The Sixth is the Conductor's succession number, *not* a class number. Do not propagate historical “Sixth Class” misnomers in new work.
+**Official name:** **SIXTH CONDUCTOR — SECOND CLASS**. The Sixth is the Conductor's succession number, _not_ a class number. Do not propagate historical “Sixth Class” misnomers in new work.
 
 **Official start:** 84%. **Mandatory +5 genuinely NEW, Manager-certified Second-Class points to survive:** 89%. Only the Manager awards credits; up to six genuinely separate development feature witnesses are commissioned as margin. Historical Fifth and Sixth First Class 11 contributions are already scored. Retrospective First-Class E3 embargo-causality repair, First-Class E1 exact-purchase ID repair, historical local WSS/recovery, prior AI recon/naval/ultimatum, and preexisting core mechanics are NOT among the six new opportunities.
 
-**Common immutable founding SHA:** `e9eb83cd9a18663d6e40d2b2e88219bed7fccb57` (canonical approved `stage3/integration-20261115` HEAD, Git tree `5eee8066a3dbab4a87438f4122763b17bddb7e17`). **Conductor staging**: `stage3/conductor6-class2-integration-20261123`. Six engineers start from this EXACT SHA. Engineer PRs target Second-Class staging and remain DRAFT, unmerged. Conductor owns integration and later canonical *development* Stage 3 promotion only after acceptance. Never modify `main` or deploy publicly.
+**Common immutable founding SHA:** `e9eb83cd9a18663d6e40d2b2e88219bed7fccb57` (canonical approved `stage3/integration-20261115` HEAD, Git tree `5eee8066a3dbab4a87438f4122763b17bddb7e17`). **Conductor staging**: `stage3/conductor6-class2-integration-20261123`. Six engineers start from this EXACT SHA. Engineer PRs target Second-Class staging and remain DRAFT, unmerged. Conductor owns integration and later canonical _development_ Stage 3 promotion only after acceptance. Never modify `main` or deploy publicly.
 
 ## Frozen six genuinely original scenario opportunities
 
@@ -40,6 +40,7 @@
 6. Quality/credit gate: six **separately measurable NEW capabilities** above; fixes E3 embargo owner and E1/E4 purchase receipt are **additional non-point repairs**. Retrospective E3 belongs to Sixth Conductor First Class. Manager alone certifies any percentages.
 
 ## Status at commission freeze
+
 The charter is a real committed contract, **not evidence that engineers already performed work**. No second-class original point awarded by planning. Manager official balance **84%**, minimum **89%**.
 
 ## Issued complete one-shot engineer commissions — November 23, 2026
