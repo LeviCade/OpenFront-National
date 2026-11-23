@@ -31,7 +31,7 @@ jobs:
       - run: npm install --global --ignore-scripts npm@12.1.0
       - run: npm run inst
       - name: Actual Game embargo settlement, hosted and negative controls
-        run: npx --no-install vitest run --project node tests/national/C6Class1E3EmbargoRestitution.test.ts tests/national/C5Class3E3ImperialTrade.test.ts
+        run: npx --no-install vitest run --project node tests/national/C6Class1E3EmbargoRestitution.test.ts tests/national/C6Class1E3SettlementIngress.test.ts tests/national/C5Class3E3ImperialTrade.test.ts
       - name: Existing economy and WAR regressions
         if: success() || failure()
         run: >-
@@ -53,6 +53,8 @@ jobs:
           packages/engine/src/execution/NationalSanctionExecution.ts
           packages/engine/src/execution/NationalUltimatumExecution.ts
           tests/national/C6Class1E3EmbargoRestitution.test.ts
+          tests/national/C6Class1E3SettlementIngress.test.ts
+          tests/national/C6Class1E3SettlementIngress.test.ts
           docs/engineering/c6-class1-e3-embargo-restitution.md
       - name: Lint
         if: success() || failure()
@@ -67,8 +69,11 @@ jobs:
         if: failure()
         run: |
           npx --no-install oxfmt --write docs/engineering/c5-class3-e3-economic-charter.md docs/engineering/c6-class1-e3-embargo-restitution.md packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/execution/NationalUltimatumExecution.ts tests/national/C6Class1E3EmbargoRestitution.test.ts
+          tests/national/C6Class1E3SettlementIngress.test.ts
           git diff -- docs/engineering/c5-class3-e3-economic-charter.md docs/engineering/c6-class1-e3-embargo-restitution.md packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/execution/NationalUltimatumExecution.ts tests/national/C6Class1E3EmbargoRestitution.test.ts
+          tests/national/C6Class1E3SettlementIngress.test.ts
           git restore -- docs/engineering/c5-class3-e3-economic-charter.md docs/engineering/c6-class1-e3-embargo-restitution.md packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/execution/NationalUltimatumExecution.ts tests/national/C6Class1E3EmbargoRestitution.test.ts
+          tests/national/C6Class1E3SettlementIngress.test.ts
       - name: Full test suite
         if: success()
         run: npm test
