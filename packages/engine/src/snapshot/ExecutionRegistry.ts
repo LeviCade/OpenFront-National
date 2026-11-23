@@ -20,9 +20,9 @@ import { MarkDisconnectedExecutionSnapshot } from "../execution/MarkDisconnected
 import { MirvExecutionSnapshot } from "../execution/MIRVExecution";
 import { MissileSiloExecutionSnapshot } from "../execution/MissileSiloExecution";
 import { MoveWarshipExecutionSnapshot } from "../execution/MoveWarshipExecution";
+import { NationalAssessmentExecutionSnapshot } from "../execution/NationalAssessmentExecution";
 import { NationalFoundEmpireExecutionSnapshot } from "../execution/NationalFoundEmpireExecution";
 import { NationalReconExecutionSnapshot } from "../execution/NationalReconExecution";
-import { NationalAssessmentExecutionSnapshot } from "../execution/NationalAssessmentExecution";
 import { NationalSanctionExecutionSnapshot } from "../execution/NationalSanctionExecution";
 import { NationalUltimatumExecutionSnapshot } from "../execution/NationalUltimatumExecution";
 import { NationalWarExecutionSnapshot } from "../execution/NationalWarExecution";

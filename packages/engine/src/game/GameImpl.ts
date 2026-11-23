@@ -93,12 +93,14 @@ import {
   type NationalImperialAdministrationCommand,
   type NationalImperialAdministrationView,
 } from "../national/NationalRuntime";
-import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import {
-  NationalAssessment, NationalAssessmentSnapshotSchema,
-  NATIONAL_ASSESSMENT_COST, captureNationalAssessmentBands,
+  NationalAssessment,
+  NationalAssessmentSnapshotSchema,
+  NATIONAL_ASSESSMENT_COST,
+  captureNationalAssessmentBands,
   type NationalAssessmentGrant,
 } from "../national/observation/NationalAssessment";
+import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import {
   NationalReconnaissance,
   NationalReconnaissanceSnapshotSchema,
@@ -1710,19 +1712,30 @@ export class GameImpl implements Game {
 
   /** Game-owned gold debit and post-admission bounded foreign assessment. */
   performNationalAssessment(
-    actor: Player, targetId: PlayerID, requestId: string,
+    actor: Player,
+    targetId: PlayerID,
+    requestId: string,
     authenticatedClientID?: ClientID,
   ): NationalAssessmentGrant {
     if (this._nationalAssessment === null || !this._config.nationalMode())
       throw new Error("NATIONAL assessment: mode not enabled");
     this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
     const target = this._players.get(targetId);
-    if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive() ||
-        !target || !target.hasSpawned() || !target.isAlive() ||
-        targetId === actor.id())
+    if (
+      this.inSpawnPhase() ||
+      !actor.hasSpawned() ||
+      !actor.isAlive() ||
+      !target ||
+      !target.hasSpawned() ||
+      !target.isAlive() ||
+      targetId === actor.id()
+    )
       throw new Error("NATIONAL assessment: inactive or invalid target");
     return this._nationalAssessment.buy(
-      actor.id(), targetId, this._ticks, requestId,
+      actor.id(),
+      targetId,
+      this._ticks,
+      requestId,
       () => {
         if (actor.gold() < NATIONAL_ASSESSMENT_COST)
           throw new Error("NATIONAL assessment: insufficient gold");
@@ -1732,11 +1745,15 @@ export class GameImpl implements Game {
           throw new Error("NATIONAL assessment: non-atomic debit");
         }
       },
-      () => { actor.addGold(NATIONAL_ASSESSMENT_COST); },
+      () => {
+        actor.addGold(NATIONAL_ASSESSMENT_COST);
+      },
       () => captureNationalAssessmentBands(target.gold(), target.troops()),
     );
   }
-  nationalAssessmentsFor(payerId: PlayerID): readonly NationalAssessmentGrant[] {
+  nationalAssessmentsFor(
+    payerId: PlayerID,
+  ): readonly NationalAssessmentGrant[] {
     return this._nationalAssessment?.activeFor(payerId, this._ticks) ?? [];
   }
 
@@ -3274,7 +3291,10 @@ export class GameImpl implements Game {
           ? new NationalAssessment()
           : NationalAssessment.restore(s.nationalAssessment, this._ticks);
       for (const grant of this._nationalAssessment.snapshot().grants) {
-        if (!this._players.has(grant.payerId) || !this._players.has(grant.targetId))
+        if (
+          !this._players.has(grant.payerId) ||
+          !this._players.has(grant.targetId)
+        )
           throw new Error("NATIONAL assessment: invalid restored identity");
       }
       this._nationalRecon =

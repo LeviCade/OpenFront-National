@@ -954,7 +954,9 @@ export const NationalAssessmentIntentSchema = z.object({
   targetId: NationalPoliticalId,
   requestId: NationalPoliticalRequestId,
 });
-export type NationalAssessmentIntent = z.infer<typeof NationalAssessmentIntentSchema>;
+export type NationalAssessmentIntent = z.infer<
+  typeof NationalAssessmentIntentSchema
+>;
 
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,

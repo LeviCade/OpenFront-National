@@ -11,9 +11,9 @@ import {
   GameUpdateType,
   type GameUpdateViewData,
 } from "@openfront/engine-api/game/GameUpdates";
+import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/NationalAssessmentView";
 import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
-import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/NationalAssessmentView";
 import {
   NATIONAL_OBSERVER_MAX_TILES,
   NATIONAL_OBSERVER_MAX_UNITS,
@@ -171,7 +171,8 @@ export function encodeNationalRecipientProjection(
             version: 1 as const,
             recipientId: filtered.nationalAssessments.recipientId,
             items: filtered.nationalAssessments.items.map((r) => ({
-              targetId: r.targetId, paidBy: r.paidBy,
+              targetId: r.targetId,
+              paidBy: r.paidBy,
               confidence: r.confidence,
               effectiveTick: r.effectiveTick,
               expiresAtTick: r.expiresAtTick,

@@ -1,7 +1,7 @@
 import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
+import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/NationalAssessmentView";
 import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
-import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/NationalAssessmentView";
 import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { simpleHash } from "@openfront/engine-lib/Util";
@@ -220,7 +220,9 @@ export function parseTrustedNationalProjection(
   ) {
     throw new Error("NATIONAL invalid recipient projection");
   }
-  const map = record(parsed.nationalObserverMap) ? parsed.nationalObserverMap : null;
+  const map = record(parsed.nationalObserverMap)
+    ? parsed.nationalObserverMap
+    : null;
   validateNationalAssessmentPacket(
     parsed.nationalAssessments,
     typeof map?.observerId === "string" ? map.observerId : null,

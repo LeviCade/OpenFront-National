@@ -162,8 +162,14 @@ export interface NationalAssessmentViewData {
     readonly confidence: "coarse-estimate";
     readonly effectiveTick: number;
     readonly expiresAtTick: number;
-    readonly treasuryGoldBand: { readonly lower: string; readonly upperExclusive: string };
-    readonly militaryTroopsBand: { readonly lower: string; readonly upperExclusive: string };
+    readonly treasuryGoldBand: {
+      readonly lower: string;
+      readonly upperExclusive: string;
+    };
+    readonly militaryTroopsBand: {
+      readonly lower: string;
+      readonly upperExclusive: string;
+    };
   }[];
 }
 export interface GameUpdateViewData {

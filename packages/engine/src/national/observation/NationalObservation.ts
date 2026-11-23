@@ -1,3 +1,7 @@
+import type {
+  AssetKind,
+  SovereignStatus,
+} from "@openfront/engine-api/game/NationalRecipientView";
 /**
  * NATIONAL observation boundary (D-002, D-017; FOG-01, FOG-02, FOG-07).
  *
@@ -8,10 +12,6 @@
  * Integration awaits the conductor's M0 political/wire/snapshot contracts.
  */
 import type { NationalAssessmentReport } from "./NationalAssessment";
-import type {
-  AssetKind,
-  SovereignStatus,
-} from "@openfront/engine-api/game/NationalRecipientView";
 
 export type {
   AssetKind,
