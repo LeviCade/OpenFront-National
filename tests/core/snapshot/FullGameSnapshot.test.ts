@@ -207,6 +207,11 @@ describe.each(VARIANTS)("full game snapshots: %s", (_, overrides) => {
         // NATIONAL-only sanctions are exercised by authoritative ECON tests,
         // never by the legacy FFA snapshot scenario.
         "NationalSanction",
+        // NATIONAL-only ultimatum and purchased reconnaissance executions have
+        // separate real-game GameRunner / snapshot and replay acceptance.
+        // A legacy FFA scenario must never create either command.
+        "NationalUltimatum",
+        "NationalRecon",
       ]);
       const missing = EXECUTION_SNAPSHOT_TYPES.map((t) => t.name).filter(
         (name) => !reference.execTypes.has(name) && !neverStored.has(name),
