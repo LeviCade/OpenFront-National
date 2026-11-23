@@ -1,4 +1,4 @@
-import { PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
+import { GameType, PlayerInfo, PlayerType } from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import { NationalAssessmentIntentSchema } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
@@ -20,8 +20,8 @@ const TARGET = new PlayerInfo("Secret Victim", PlayerType.Nation, null, "assessm
 const ALLY = new PlayerInfo("Reciprocal Member", PlayerType.Nation, null, "assessment-ally");
 const STRANGER = new PlayerInfo("Enemy", PlayerType.Nation, null, "assessment-stranger");
 
-async function active(nationalMode = true) {
-  const game = await setup("big_plains", { nationalMode }, [BUYER, OTHER, TARGET, ALLY, STRANGER]);
+async function active(nationalMode = true, gameType = GameType.Singleplayer) {
+  const game = await setup("big_plains", { nationalMode, gameType }, [BUYER, OTHER, TARGET, ALLY, STRANGER]);
   game.addExecution(
     new SpawnExecution("assessment", BUYER, game.ref(20, 100)),
     new SpawnExecution("assessment", OTHER, game.ref(18, 15)),
@@ -234,6 +234,35 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
     expect(NationalAssessment.restore(ledger.snapshot(), 907).snapshot()).toEqual(ledger.snapshot());
     console.info("[M7 120 nation assessment] reports=120 bytes=" + bytes +
       " ms=" + ms.toFixed(3));
+  });
+
+  it("binds an original authenticated player in a real Private NATIONAL GameRunner, not another Private seat", async () => {
+    const game = await active(true, GameType.Private);
+    const buyer = game.player(BUYER.id);
+    buyer.addGold(2500n);
+    const before = buyer.gold();
+    expect(() => game.performNationalAssessment(
+      buyer, TARGET.id, "private-unbound",
+    )).toThrow(/missing authenticated actor session/);
+    expect(() => game.performNationalAssessment(
+      buyer, TARGET.id, "private-forged", OTHER.clientID!,
+    )).toThrow(/stale authenticated actor session/);
+    expect(buyer.gold()).toBe(before);
+    const execution = new Executor(game, "assessment-private", BUYER.clientID!).createExec({
+      type: "national_buy_national_assessment",
+      targetId: TARGET.id,
+      requestId: "private-canonical",
+      clientID: BUYER.clientID!,
+    });
+    game.addExecution(execution);
+    const beforeTick = game.ticks();
+    game.executeNextTick();
+    game.executeNextTick();
+    expect(game.ticks()).toBe(beforeTick + 2);
+    expect(game.nationalAssessmentsFor(BUYER.id)).toHaveLength(1);
+    expect(buyer.gold()).toBeLessThan(before);
+    expect(packet(game, OTHER.clientID!).nationalAssessments?.items).toEqual([]);
+    expect(packet(game, BUYER.clientID!).nationalAssessments?.items).toHaveLength(1);
   });
 
   it("leaves ordinary non-NATIONAL FFA without assessment authority", async () => {
