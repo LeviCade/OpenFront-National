@@ -40,7 +40,14 @@ jobs:
             typecheck) npm run typecheck ;;
             all-tests) npm test ;;
             lint) npm run lint ;;
-            pinned-format) npm run format:check ;;
+            pinned-format)
+              if ! npm run format:check; then
+                echo "::error::Pinned formatter failed; report exact command-document diff"
+                npx --no-install oxfmt --write docs/release/NATIONAL_C6_CLASS1_COMMAND.md
+                git diff -- docs/release/NATIONAL_C6_CLASS1_COMMAND.md
+                exit 1
+              fi
+              ;;
             production-build) npm run build-prod ;;
             *) exit 1 ;;
           esac
