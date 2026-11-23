@@ -312,7 +312,8 @@ describe("C6 Class One E5: DISTINCT funded national assessment policy", () => {
         accepted,
       ).holdOffenseAgainst,
     ).toBeNull();
-    const sharedReport = { ...paidReport(view), paidBy: D };
+    // An existing genuine actor-paid report must not trigger another sale.
+    const sharedReport = paidReport(view);
     expect(
       planNationalAssessment(
         { ...view, assessments: [sharedReport] },
@@ -531,6 +532,7 @@ describe("C6 E5 GameRunner + E4 canonical authority integration", () => {
         },
       );
       const purchases = vi.spyOn(buyer, "performNationalAssessment");
+      const initializedAttack = vi.spyOn(AttackExecution.prototype, "init");
       const disabledBuy = vi
         .spyOn(disabled, "performNationalAssessment")
         .mockImplementation(() => {
@@ -545,6 +547,7 @@ describe("C6 E5 GameRunner + E4 canonical authority integration", () => {
         next(control, controlRunner);
       }
       expect(purchases).toHaveBeenCalledTimes(1);
+      expect(purchases.mock.calls[0][0]).toBe(active.player(A));
       expect(disabledBuy).toHaveBeenCalledTimes(1);
       expect(buyer.nationalAssessmentsFor(A)).toHaveLength(1);
       expect(disabled.nationalAssessmentsFor(A)).toHaveLength(0);
@@ -568,6 +571,18 @@ describe("C6 E5 GameRunner + E4 canonical authority integration", () => {
           .filter((e): e is AttackExecution => e instanceof AttackExecution);
       expect(attacks(controlAdd).length).toBeGreaterThan(0);
       expect(attacks(activeAdd)).toHaveLength(0);
+      // GameRunner must initialize the live authority execution, not merely
+      // enqueue a proposed command in the unarmed negative control.
+      const processedFor = (game: Game) =>
+        initializedAttack.mock.contexts.filter(
+          (execution) =>
+            execution instanceof AttackExecution &&
+            execution.targetID() === B &&
+            (execution as unknown as { _owner: ReturnType<Game["player"]> })
+              ._owner === game.player(A),
+        );
+      expect(processedFor(control).length).toBeGreaterThan(0);
+      expect(processedFor(active)).toHaveLength(0);
       const { restored, bytes, again } = await roundTrip(active, "big_plains");
       expect(again).toEqual(bytes);
       expect(memoryOf(restored)).toEqual(memoryOf(active));
@@ -582,6 +597,7 @@ describe("C6 E5 GameRunner + E4 canonical authority integration", () => {
       purchases.mockRestore();
       disabledBuy.mockRestore();
       debit.mockRestore();
+      initializedAttack.mockRestore();
     },
     120_000,
   );

@@ -395,7 +395,8 @@ export class NationExecution implements Execution {
     };
     // Escort friendly actual commerce first. E6 alone supplies both engines.
     // A dispatched escort suppresses offensive naval pressure this tick.
-    const escorted = nationalNaval.dispatchNationalNavalEscort?.(observation) ?? null;
+    const escorted =
+      nationalNaval.dispatchNationalNavalEscort?.(observation) ?? null;
     if (escorted === null) {
       nationalNaval.dispatchNationalNavalPressure?.(observation);
     }
