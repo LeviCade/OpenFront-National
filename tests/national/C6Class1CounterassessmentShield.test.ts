@@ -22,6 +22,8 @@ import {
 } from "@openfront/engine/national/observation/NationalAssessment";
 import { NationalServerRecipientSession } from "@openfront/engine/national/observation/NationalServerOutbound";
 import { parseTrustedNationalProjection } from "../../src/client/TrustedNationalSession";
+import { StreamingEncoder } from "../../src/client/replay/codec/encode/StreamingEncoder";
+import { VIEW_DATA_ROUTING } from "../../src/client/replay/codec/FrameNormalizer";
 import { encodeNationalRecipientProjection } from "../../src/server/national/NationalRecipientWire";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
@@ -537,5 +539,100 @@ describe("C6 C1 E4: bounded and independently restorable shield ledger", () => {
     const migrated = NationalAssessment.restore(fifth, 11);
     expect(migrated.activeFor("payer", 11)[0].confidence).toBeUndefined();
     expect(migrated.snapshot().shields).toEqual([]);
+  });
+});
+
+describe("C6 C1 E4: replay and reciprocal empire invariants", () => {
+  it("produces identical public replay binary and event data with shielded private report removed", async () => {
+    const game = await active();
+    const defender = game.player(DEFENDER.id);
+    const buyer = game.player(BUYER.id);
+    defender.addGold(6000n);
+    buyer.addGold(6000n);
+    game.performNationalCounterassessment(
+      defender,
+      "replay-private-shield",
+      DEFENDER.clientID!,
+    );
+    game.performNationalAssessment(
+      buyer,
+      DEFENDER.id,
+      "replay-private-report",
+      BUYER.clientID!,
+    );
+    const privatePacket = packet(game, BUYER.clientID!);
+    expect(privatePacket.nationalAssessments?.items[0].confidence).toBe(
+      "shielded-coarse-estimate",
+    );
+    expect(VIEW_DATA_ROUTING.nationalAssessments).toBe("dropped");
+    const options = {
+      mapWidth: game.width(),
+      mapHeight: game.height(),
+      terrain: new Uint8Array(game.width() * game.height()),
+      numLandTiles: 0,
+      gameStartInfo: {},
+      keyframeInterval: 1,
+      gzip: (bytes: Uint8Array) => bytes,
+    };
+    async function encode(view: GameUpdateViewData) {
+      const replay = new StreamingEncoder(options);
+      replay.pushFrame(view);
+      replay.end();
+      return replay.takeAppend();
+    }
+    const publicPacket = { ...privatePacket };
+    delete publicPacket.nationalAssessments;
+    const [privateEncoded, publicEncoded] = await Promise.all([
+      encode(privatePacket),
+      encode(publicPacket),
+    ]);
+    expect(privateEncoded.chunks).toEqual(publicEncoded.chunks);
+    expect(privateEncoded.players).toEqual(publicEncoded.players);
+    expect(privateEncoded.events).toEqual(publicEncoded.events);
+    expect(privateEncoded.unitTypes).toEqual(publicEncoded.unitTypes);
+  });
+
+  it("preserves original lawful empire-member confidence through a crown transfer while shielding outsiders", async () => {
+    const game = await active(true, GameType.Singleplayer);
+    const defender = game.player(DEFENDER.id);
+    const buyer = game.player(BUYER.id);
+    const outsider = game.player(OTHER.id);
+    defender.addGold(8000n);
+    buyer.addGold(5000n);
+    outsider.addGold(5000n);
+    game.performNationalCommand(defender, {
+      kind: "found-empire",
+      empireId: "c6-e4-reciprocal",
+    });
+    game.performNationalCommand(defender, {
+      kind: "offer-empire",
+      empireId: "c6-e4-reciprocal",
+      candidateId: BUYER.id,
+    });
+    game.performNationalCommand(buyer, {
+      kind: "accept-empire",
+      empireId: "c6-e4-reciprocal",
+      candidateId: BUYER.id,
+    });
+    const shield = game.performNationalCounterassessment(
+      defender, "empire-shield", DEFENDER.clientID!,
+    );
+    expect(shield.defenderId).toBe(DEFENDER.id);
+    game.performNationalCommand(defender, {
+      kind: "transfer-crown",
+      empireId: "c6-e4-reciprocal",
+      successorId: BUYER.id,
+    });
+    const memberReport = game.performNationalAssessment(
+      buyer, DEFENDER.id, "lawful-member", BUYER.clientID!,
+    );
+    expect(memberReport.confidence).toBe("coarse-estimate");
+    const outsiderReport = game.performNationalAssessment(
+      outsider, DEFENDER.id, "hostile-outsider", OTHER.clientID!,
+    );
+    expect(outsiderReport.confidence).toBe("shielded-coarse-estimate");
+    expect(projectLiveNationalAssessments(game, OTHER.id)[0].confidence).toBe(
+      "shielded-coarse-estimate",
+    );
   });
 });
