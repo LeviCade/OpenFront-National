@@ -1236,9 +1236,11 @@ describe("C4 E4 native constitutional controls", () => {
         element.querySelector("#national-diplomacy-content"),
       ).not.toBeNull();
 
-      element.querySelector<HTMLElement>("section")!.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-      );
+      element
+        .querySelector<HTMLElement>("section")!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
       await element.updateComplete;
       expect(toggle.getAttribute("aria-expanded")).toBe("false");
       expect(element.querySelector("#national-diplomacy-content")).toBeNull();
