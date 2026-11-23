@@ -131,9 +131,9 @@ export class NationWarshipBehavior {
       })),
     );
     if (targets.length === 0) {
-      // Peace, lost sight or destroyed trade routes cannot produce a NEW
-      // hostile command. In-flight ships retain ordinary engine behavior.
-      this.nationalNavalMission = null;
+      // Sight loss or peace stops NEW orders, but does not erase the cooldown:
+      // otherwise a route briefly hidden and reacquired would fund an
+      // immediate duplicate ship. In-flight ships retain engine behavior.
       return null;
     }
     if (
