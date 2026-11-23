@@ -170,10 +170,7 @@ export class NationalDiplomacyPanel extends LitElement {
     // Cross-session map events have no authority over this live selection.
     if (!game || event.gameId !== game.gameID()) return;
     this.reconMapPicking = false;
-    if (
-      !this.sovereignReady ||
-      !game.isValidCoord(event.x, event.y)
-    ) {
+    if (!this.sovereignReady || !game.isValidCoord(event.x, event.y)) {
       this.reconStatus =
         "Map authority changed; selection and purchase canceled.";
       return;
