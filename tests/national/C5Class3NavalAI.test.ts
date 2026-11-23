@@ -343,17 +343,16 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
   });
 
   it("one observed ship cannot trigger duplicate spending when sight drops and returns", async () => {
-    const { game, a, b, cPort, behavior, fixedEnemyMerchant } =
-      await fixture();
+    const { game, a, b, cPort, behavior, fixedEnemyMerchant } = await fixture();
     const first = collectLiveNationalObservation(game, A).observation;
     const spy = vi.spyOn(game, "addExecution");
     try {
       expect(behavior.dispatchNationalNavalPressure(first)).toBe("build");
       fixedEnemyMerchant.delete(false);
       const lost = collectLiveNationalObservation(game, A).observation;
-      expect(
-        planObservedNationalNavalTargets(lost, [{ x: 7, y: 10 }]),
-      ).toEqual([]);
+      expect(planObservedNationalNavalTargets(lost, [{ x: 7, y: 10 }])).toEqual(
+        [],
+      );
       expect(behavior.dispatchNationalNavalPressure(lost)).toBeNull();
       const acquired = b.buildUnit(UnitType.TradeShip, game.ref(8, 5), {
         targetUnit: cPort,
@@ -369,8 +368,7 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
       const orders = spy.mock.calls.flatMap(([...calls]) => calls);
       expect(
         orders.filter(
-          (execution) =>
-            execution.constructor.name === "ConstructionExecution",
+          (execution) => execution.constructor.name === "ConstructionExecution",
         ),
       ).toHaveLength(1);
     } finally {
@@ -449,13 +447,16 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
     expect(a.gold()).toBe(treasury);
     expect(a.units(UnitType.Warship)).toHaveLength(1);
     expect(ownShip.warshipState().patrolTile).toBe(beforePatrol);
-    console.info("C5_NAVAL_DISCONNECTED=" + JSON.stringify({
-      westComponent: west,
-      eastComponent: east,
-      treasury: treasury.toString(),
-      observedMerchantId: merchant.id(),
-      strandedWarshipId: ownShip.id(),
-    }));
+    console.info(
+      "C5_NAVAL_DISCONNECTED=" +
+        JSON.stringify({
+          westComponent: west,
+          eastComponent: east,
+          treasury: treasury.toString(),
+          observedMerchantId: merchant.id(),
+          strandedWarshipId: ownShip.id(),
+        }),
+    );
   });
 
   it("identical-seed four-nation GameRunner CONTROL versus live paid neutral trade", async () => {
@@ -533,8 +534,14 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
           activePiracy: game.player(A).piracyGold().toString(),
           controlPiracy: control.player(A).piracyGold().toString(),
           activeWarshipPos: deployed[0].tile(),
-          activeBShips: game.player(B).units(UnitType.TradeShip).map((u) => [u.id(),u.tile(),u.isActive()]),
-          controlBShips: control.player(B).units(UnitType.TradeShip).map((u) => [u.id(),u.tile(),u.isActive()]),
+          activeBShips: game
+            .player(B)
+            .units(UnitType.TradeShip)
+            .map((u) => [u.id(), u.tile(), u.isActive()]),
+          controlBShips: control
+            .player(B)
+            .units(UnitType.TradeShip)
+            .map((u) => [u.id(), u.tile(), u.isActive()]),
         }),
     );
     expect(control.player(B).tradeGold()).toBeGreaterThan(0n);
