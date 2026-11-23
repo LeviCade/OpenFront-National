@@ -327,6 +327,14 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
       ),
     );
     game.addExecution(new TradeShipExecution(game.player(C), cPort, bPort));
+    // An actual paid B -> C voyage, not a manufactured static TradeShip.
+    // This is the hostile shipping income the NATIONAL navy must suppress.
+    const otherBPort = control.player(B).units(UnitType.Port)[0];
+    const otherCPort = control.player(C).units(UnitType.Port)[0];
+    control.addExecution(
+      new TradeShipExecution(control.player(B), otherBPort, otherCPort),
+    );
+    game.addExecution(new TradeShipExecution(game.player(B), bPort, cPort));
     const unmodified = vi
       .spyOn(NationWarshipBehavior.prototype, "dispatchNationalNavalPressure")
       .mockReturnValue(null);
@@ -351,6 +359,21 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
     const firstPosition = deployed[0].tile();
     advanceRunner(control, 95);
     advanceRunner(game, 95);
+    console.info(
+      "C5_NAVAL_PAID_ROUTE_DIAGNOSTIC=" +
+        JSON.stringify({
+          realWar: game.nationalWarAuthority()?.atWar(A, B),
+          activeB: game.player(B).tradeGold().toString(),
+          controlB: control.player(B).tradeGold().toString(),
+          activeC: game.player(C).tradeGold().toString(),
+          controlC: control.player(C).tradeGold().toString(),
+          activePiracy: game.player(A).piracyGold().toString(),
+          controlPiracy: control.player(A).piracyGold().toString(),
+          activeWarshipPos: deployed[0].tile(),
+          activeBShips: game.player(B).units(UnitType.TradeShip).map((u) => [u.id(),u.tile(),u.isActive()]),
+          controlBShips: control.player(B).units(UnitType.TradeShip).map((u) => [u.id(),u.tile(),u.isActive()]),
+        }),
+    );
     expect(control.player(B).tradeGold()).toBeGreaterThan(0n);
     expect(game.player(B).tradeGold()).toBeLessThan(
       control.player(B).tradeGold(),
