@@ -458,4 +458,59 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     }
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
   });
+
+  it("a distant lawful declaration cannot teleport an army or annex land", async () => {
+    const { game, act, view } = await fixture();
+    establish(act);
+    const target = game.player(IDS[1]);
+    const issuer = game.player(IDS[0]);
+    const foreignTiles = target.numTilesOwned();
+    const imperialTiles = issuer.numTilesOwned();
+    act(0, issue("imperial-war", IDS[1], "c5_c2_distant_war"));
+    const demand = view(1)[0];
+    act(1, respond(demand.id, "refuse", "c5_c2_distant_refusal"));
+    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
+    act(0, resolve(demand.id, "enforce", "c5_c2_distant_declaration"));
+    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(true);
+    expect(issuer.outgoingAttacks()).toHaveLength(0);
+    const control = (await roundTrip(game, "plains")).restored;
+
+    // Real, socket-stamped GameRunner attack: there is no shared border,
+    // transport mission or lawful shortcut merely because WAR was declared.
+    act(0, { type: "attack", targetID: IDS[1], troops: 10_000 });
+    expect(issuer.outgoingAttacks()).toHaveLength(0);
+    expect(target.numTilesOwned()).toBe(foreignTiles);
+    expect(issuer.numTilesOwned()).toBe(imperialTiles);
+    expectNoArtificialResources(game, control);
+    const { bytes, again } = await roundTrip(game, "plains");
+    expect(again).toEqual(bytes);
+    console.info("C5_C2_DISTANCE_BLUFF_WITNESS=" + JSON.stringify({
+      actorId: IDS[0], targetId: IDS[1], legalWar: true,
+      incomingBorder: false, actualAttack: false,
+      targetTilesBefore: foreignTiles, targetTilesAfter: target.numTilesOwned(),
+      ownerGold: issuer.gold().toString(), ownerTroops: issuer.troops(),
+    }));
+  });
+
+  it("an unanswered demand expires, then records a credibility loss without declaring WAR", async () => {
+    const { game, act, view, host } = await fixture();
+    establish(act);
+    act(0, issue("imperial-war", IDS[1], "c5_c2_timeout_demand", 1));
+    const id = view(1)[0].id;
+    const deadline = view(1)[0].deadlineTick;
+    expect(game.nationalPoliticalAuthority()?.empireOf(IDS[1])).toBeNull();
+    for (let i = 0; i < 305; i++) host.tick();
+    const final = view(1).find((r) => r.id === id)!;
+    expect(game.ticks()).toBeGreaterThan(deadline + 300);
+    expect(final).toMatchObject({
+      phase: "backed-down", credibility: "broken", response: "none",
+      warId: null,
+    });
+    expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
+    expect(game.nationalPoliticalAuthority()?.empireOf(IDS[1])).toBeNull();
+    const { bytes, again, restored } = await roundTrip(game, "plains");
+    expect(again).toEqual(bytes);
+    expect(NationalUltimatumExecution.viewFor(restored, restored.player(IDS[1]))[0].phase)
+      .toBe("backed-down");
+  });
 });
