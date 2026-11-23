@@ -1617,13 +1617,15 @@ export class GameImpl implements Game {
   creditNationalCommercialIncome(
     player: Player,
     gross: bigint,
-    source: "maritime" | "rail" | "piracy",
+    source: "maritime" | "rail" | "piracy" | undefined,
     tile?: TileRef,
   ): void {
     if (this._national && this._players.get(player.id()) !== player)
       throw new Error("NATIONAL: invalid commercial income owner");
+    if (this._national && source === undefined)
+      throw new Error("NATIONAL: commercial income requires a named payout source");
     player.addGold(
-      this._national?.routeNonWorkerIncome(player.id(), gross, source) ?? gross,
+      this._national?.routeNonWorkerIncome(player.id(), gross, source ?? "maritime") ?? gross,
       tile,
     );
   }
