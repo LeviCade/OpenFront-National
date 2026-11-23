@@ -59,6 +59,7 @@ import {
   SendUpdateGameConfigIntentEvent,
 } from "./LobbyEvents";
 import { LocalServer } from "./LocalServer";
+import { parseNationalAssessmentPurchaseIntent } from "./NationalAssessmentClient";
 import type { PactIntent } from "./NationalPactState";
 import {
   acceptTrustedNationalPrivateCapability,
@@ -67,6 +68,7 @@ import {
   type TrustedNationalStartLike,
 } from "./NationalPrivateCapability";
 import { parseNationalReconnaissanceIntent } from "./NationalReconPurchase";
+import { parseNationalUltimatumIntent } from "./NationalSovereignActions";
 import { describeSocketClose } from "./SocketClose";
 import { TrustedNationalProjectionRejectedEvent } from "./TrustedNationalSession";
 import { homeHref, translateText } from "./Utils";
@@ -130,6 +132,16 @@ export class SendNationalImperialPolicyIntentEvent implements GameEvent {
 
 /** Ordinary authenticated NATIONAL transport for one paid recon request. */
 export class SendNationalReconnaissanceIntentEvent implements GameEvent {
+  constructor(public readonly candidate: unknown) {}
+}
+
+/** Separate E4 Game-owned 1,200-gold assessment, not a regional recon. */
+export class SendNationalAssessmentIntentEvent implements GameEvent {
+  constructor(public readonly candidate: unknown) {}
+}
+
+/** Typed sovereign action routed through the existing authenticated game seat. */
+export class SendNationalUltimatumIntentEvent implements GameEvent {
   constructor(public readonly candidate: unknown) {}
 }
 
@@ -430,6 +442,19 @@ export class Transport {
     this.subscribe(SendNationalReconnaissanceIntentEvent, (e) => {
       if (!this.nationalDiplomacyWireEnabled()) return;
       const parsed = parseNationalReconnaissanceIntent(e.candidate);
+      if (parsed !== null) this.sendIntent(parsed);
+    });
+    this.subscribe(SendNationalAssessmentIntentEvent, (e) => {
+      if (!this.nationalDiplomacyWireEnabled()) return;
+      const parsed = parseNationalAssessmentPurchaseIntent(e.candidate);
+      if (parsed === null) return;
+      // The E4 schema/engine owns this new intent variant. This adapter does
+      // not change IntentSchema or bypass the authenticated sendIntent gate.
+      this.sendIntent(parsed as unknown as Intent);
+    });
+    this.subscribe(SendNationalUltimatumIntentEvent, (e) => {
+      if (!this.nationalDiplomacyWireEnabled()) return;
+      const parsed = parseNationalUltimatumIntent(e.candidate);
       if (parsed !== null) this.sendIntent(parsed);
     });
     this.subscribe(SendNationalImperialPolicyIntentEvent, (e) => {

@@ -1,8 +1,24 @@
 import { Cell, GameType } from "@openfront/engine-api/game/GameTypes";
 import { EventBus, GameEvent } from "@openfront/shared/EventBus";
 import { Controller } from "../Controller";
+import { hasTrustedNationalPrivateCapability } from "../NationalPrivateCapability";
 import { TransformHandler } from "../TransformHandler";
 import type { GameView } from "../view";
+
+/** Scouting center on an actual map tap; neither a purchase nor a sight grant. */
+export class NationalReconMapPickRequestedEvent implements GameEvent {
+  constructor(
+    public readonly gameId: string,
+    public readonly active: boolean,
+  ) {}
+}
+export class NationalReconMapPointSelectedEvent implements GameEvent {
+  constructor(
+    public readonly gameId: string,
+    public readonly x: number,
+    public readonly y: number,
+  ) {}
+}
 
 /** A user's actual WAR target selection, NOT an attack or authorization. */
 export class NationalMapTargetSelectedEvent implements GameEvent {
@@ -51,6 +67,8 @@ export function isNationalOpponentTile(
 export class NationalMapTargetController implements Controller {
   private targetId: string | null = null;
   private marker: HTMLDivElement | null = null;
+  private reconArmed = false;
+  private savedCursor: string | null = null;
 
   constructor(
     private readonly game: GameView,
@@ -62,6 +80,88 @@ export class NationalMapTargetController implements Controller {
   private readonly onSelection = (event: NationalMapTargetSelectedEvent) => {
     this.targetId = event.playerId;
     this.tick();
+  };
+
+  private canPickRecon(): boolean {
+    const cfg = this.game.config().gameConfig();
+    const actor = this.game.myPlayer();
+    if (
+      !this.marker ||
+      !cfg.nationalMode ||
+      this.game.config().isReplay() ||
+      this.game.isSpectator() ||
+      this.game.inSpawnPhase() ||
+      !actor?.isAlive() ||
+      !actor.hasSpawned()
+    )
+      return false;
+    if (cfg.gameType === GameType.Singleplayer) return true;
+    return (
+      cfg.gameType === GameType.Private &&
+      this.game.isTrustedNationalProjection?.() === true &&
+      this.game.trustedProjectionReady?.() === true &&
+      hasTrustedNationalPrivateCapability(this.bus, this.game.gameID())
+    );
+  }
+
+  private disarmRecon(): void {
+    this.reconArmed = false;
+    if (this.savedCursor !== null) {
+      this.inputSurface.style.cursor = this.savedCursor;
+      this.savedCursor = null;
+    }
+  }
+
+  private readonly onReconRequest = (
+    event: NationalReconMapPickRequestedEvent,
+  ) => {
+    if (event.gameId !== this.game.gameID()) return;
+    if (!event.active || !this.canPickRecon()) {
+      this.disarmRecon();
+      return;
+    }
+    if (!this.reconArmed) {
+      this.savedCursor = this.inputSurface.style.cursor;
+      this.inputSurface.style.cursor = "crosshair";
+    }
+    this.reconArmed = true;
+  };
+
+  /** Capture before InputHandler: map selection is never an attack or build. */
+  private readonly onReconPointerDown = (event: PointerEvent) => {
+    if (!this.reconArmed) return;
+    if (!this.canPickRecon()) {
+      this.disarmRecon();
+      return;
+    }
+    if (event.button !== 0 || event.isPrimary === false) return;
+    const bounds = this.inputSurface.getBoundingClientRect();
+    if (
+      event.clientX < bounds.left ||
+      event.clientY < bounds.top ||
+      event.clientX >= bounds.right ||
+      event.clientY >= bounds.bottom
+    )
+      return;
+    const top = document.elementFromPoint?.(event.clientX, event.clientY);
+    if (top && top !== this.inputSurface && !this.inputSurface.contains(top))
+      return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const p = this.transform.screenToWorldCoordinates(
+      event.clientX,
+      event.clientY,
+    );
+    if (
+      !Number.isSafeInteger(p.x) ||
+      !Number.isSafeInteger(p.y) ||
+      !this.game.isValidCoord(p.x, p.y)
+    )
+      return;
+    this.disarmRecon();
+    this.bus.emit(
+      new NationalReconMapPointSelectedEvent(this.game.gameID(), p.x, p.y),
+    );
   };
 
   private readonly onLeave = () => this.dispose();
@@ -88,6 +188,12 @@ export class NationalMapTargetController implements Controller {
     );
     document.body.appendChild(this.marker);
     this.bus.on(NationalMapTargetSelectedEvent, this.onSelection);
+    this.bus.on(NationalReconMapPickRequestedEvent, this.onReconRequest);
+    this.inputSurface.addEventListener(
+      "pointerdown",
+      this.onReconPointerDown,
+      true,
+    );
     document.addEventListener("leave-lobby", this.onLeave);
   }
 
@@ -111,6 +217,7 @@ export class NationalMapTargetController implements Controller {
   }
 
   public tick(): void {
+    if (this.reconArmed && !this.canPickRecon()) this.disarmRecon();
     if (!this.marker) return;
     const id = this.targetId;
     const viewer = this.game.myPlayer();
@@ -189,7 +296,14 @@ export class NationalMapTargetController implements Controller {
   }
 
   public dispose(): void {
+    this.disarmRecon();
     this.bus.off(NationalMapTargetSelectedEvent, this.onSelection);
+    this.bus.off(NationalReconMapPickRequestedEvent, this.onReconRequest);
+    this.inputSurface.removeEventListener(
+      "pointerdown",
+      this.onReconPointerDown,
+      true,
+    );
     document.removeEventListener("leave-lobby", this.onLeave);
     this.marker?.remove();
     this.marker = null;

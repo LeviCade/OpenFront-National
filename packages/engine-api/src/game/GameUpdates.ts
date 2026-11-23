@@ -122,6 +122,8 @@ export interface NationalCommandResultViewData {
   readonly reason?: string;
 }
 
+export type { NationalReconnaissanceViewData } from "./NationalReconView";
+
 /** Private principal-bound coercive diplomacy; never part of public politics. */
 export interface NationalUltimatumViewData {
   readonly version: 1;
@@ -150,6 +152,8 @@ export interface NationalUltimatumViewData {
     readonly warId: string | null;
     readonly imposedMembers: readonly PlayerID[];
     readonly requestId: string | null;
+    /** Only request IDs accepted from this exact viewer; never other principals. */
+    readonly acknowledgedRequestIds: readonly string[];
   }[];
 }
 
@@ -184,6 +188,7 @@ export interface GameUpdateViewData {
   nationalAccessionOffers?: NationalAccessionOffersViewData;
   nationalUltimatums?: NationalUltimatumViewData;
   nationalAssessments?: NationalAssessmentViewData;
+  nationalReconnaissance?: import("./NationalReconView").NationalReconnaissanceViewData;
   nationalPactDisclosure?: NationalPactDisclosureWireData;
   nationalImperialAdministration?: NationalImperialAdministrationWire;
   /**
