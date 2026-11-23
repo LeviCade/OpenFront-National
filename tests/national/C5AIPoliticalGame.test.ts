@@ -382,6 +382,9 @@ describe("C5 E4 live constitutional political AI (AI-01/03/04/05/06; COAL)", () 
         CLIENT,
       ),
     );
+    // The Game initializes newly queued executions after the active tick.
+    // Execute the second real tick so the E3 command, not a fixture, issues.
+    game.executeNextTick();
     game.executeNextTick();
     const initial = NationalUltimatumExecution.viewFor(game, game.player(A));
     expect(initial).toHaveLength(1);

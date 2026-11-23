@@ -217,6 +217,9 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
         authorizeOffensiveAction: () => true,
         atWar: () => true,
       }),
+      // Exercise the original MDA adapter fallback, not E4's live battlefield
+      // port. Real GameImpl always retains its stricter incoming-attack gate.
+      interceptNationalIncomingAttack: undefined,
       // This fixture intentionally removes the canonical service, rather than
       // mistaking an authoritative empty (no-treaty) roster for a missing port.
       nationalMdaAllies: undefined,
@@ -255,6 +258,19 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
     });
     expect(authorizeNationalAttack(game, north.id(), south.id())).toBe(true);
     const before = [north.troops(), south.troops()];
+    // E4 production cannot accept a synthetic army without an actual battle.
+    expect(() =>
+      interceptNationalAttack(
+        game,
+        "accepted-without-treaty",
+        north.id(),
+        south.id(),
+        10_000,
+      ),
+    ).toThrow("no real accepted invading army");
+    // Earlier round's adapter-only contract still requires a valid empty MDA
+    // roster to mean no deduction, not missing service.
+    Object.assign(game, { interceptNationalIncomingAttack: undefined });
     const receipt = interceptNationalAttack(
       game,
       "accepted-without-treaty",
@@ -287,6 +303,7 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
           atWar: () => true,
         }),
         nationalMdaAllies: () => roster,
+        interceptNationalIncomingAttack: undefined,
         applyNationalDefenseLevy: () => {
           throw new Error("must not reach the debit adapter");
         },
@@ -321,6 +338,7 @@ describe("Round Four REAL Game / AttackExecution NATIONAL gate", () => {
         atWar: () => true,
       }),
       nationalMdaAllies: () => [east.id()],
+      interceptNationalIncomingAttack: undefined,
       nationalLevySource: () => null,
       applyNationalDefenseLevy: () => {
         throw new Error("must not debit missing contributor");
