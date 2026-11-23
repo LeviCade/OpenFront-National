@@ -385,7 +385,7 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
     const height = 18;
     const grid = Array.from({ length: width * height }, (_, i) => {
       const x = i % width;
-      return x < 4 || x === 20 || x >= 36 ? L : W;
+      return x < 4 || (x >= 18 && x <= 23) || x >= 36 ? L : W;
     });
     const game = createGame(
       { width, height, grid },
