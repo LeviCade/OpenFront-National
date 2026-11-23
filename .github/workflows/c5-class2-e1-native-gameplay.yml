@@ -72,7 +72,7 @@ jobs:
             exit 1
           fi
   source-regression:
-    name: Full source, lint and build (non-GPU)
+    name: Full source tests, lint and repository format (non-GPU)
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
@@ -90,4 +90,25 @@ jobs:
       - run: npm test
       - run: npm run lint
       - run: npm run format:check
+
+  production-build:
+    name: Exact-source production build (non-GPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Assert exact source
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
       - run: npm run build-prod
