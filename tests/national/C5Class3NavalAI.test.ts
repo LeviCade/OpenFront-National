@@ -16,6 +16,7 @@ import { GameRunner } from "@openfront/engine/GameRunner";
 import { planObservedNationalNavalTargets } from "@openfront/engine/national/ai/NationalNavalStrategy";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import { describe, expect, it, vi } from "vitest";
+import { createGame, L, W } from "../core/pathfinding/_fixtures";
 import { setup } from "../util/Setup";
 import { diffSnapshots, roundTrip } from "../util/Snapshot";
 import { TestConfig } from "../util/TestConfig";
@@ -316,6 +317,84 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
       ),
     ).toEqual([]);
   });
+  it("an ACTUAL disconnected sea denies visible enemy commerce, and a stranded fleet cannot teleport", () => {
+    const width = 40;
+    const height = 18;
+    const grid = Array.from({ length: width * height }, (_, i) => {
+      const x = i % width;
+      return x < 4 || x === 20 || x >= 36 ? L : W;
+    });
+    const game = createGame(
+      { width, height, grid },
+      { nationalMode: true, instantBuild: true },
+    );
+    game.addPlayer(new PlayerInfo("Navy", PlayerType.Nation, null, A));
+    game.addPlayer(new PlayerInfo("Enemy", PlayerType.Human, null, B));
+    game.endSpawnPhase();
+    const a = game.player(A);
+    const b = game.player(B);
+    const ownCoast = game.ref(3, 9);
+    const enemyCoast = game.ref(36, 9);
+    a.conquer(ownCoast);
+    b.conquer(enemyCoast);
+    a.setSpawnTile(ownCoast);
+    b.setSpawnTile(enemyCoast);
+    a.addGold(1_000_000n);
+    b.addGold(1_000_000n);
+    const ownPort = a.buildUnit(UnitType.Port, ownCoast, {});
+    const enemyPort = b.buildUnit(UnitType.Port, enemyCoast, {});
+    const merchant = b.buildUnit(UnitType.TradeShip, game.ref(30, 9), {
+      targetUnit: enemyPort,
+      lastSetSafeFromPirates: -100,
+    });
+    expect(
+      game.performNationalWarCommandWithOutcome(a, {
+        kind: "declare-national",
+        warId: "c5-disconnected-seas",
+        aggressorId: A,
+        targetId: B,
+      }).accepted,
+    ).toBe(true);
+    const live = collectLiveNationalObservation(game, A).observation;
+    expect(
+      live.visibleAssets.some((asset) => asset.id === String(merchant.id())),
+    ).toBe(true);
+    const east = game.getWaterComponent(merchant.tile());
+    const west = game.getWaterComponent(ownPort.tile());
+    expect(east).not.toBeNull();
+    expect(west).not.toBeNull();
+    expect(east).not.toBe(west);
+    const ownShip = a.buildUnit(UnitType.Warship, game.ref(10, 9), {
+      patrolTile: game.ref(10, 9),
+    });
+    const random = new PseudoRandom(99);
+    const ai = new NationWarshipBehavior(
+      random,
+      game,
+      a,
+      new NationEmojiBehavior(random, game, a),
+    );
+    const treasury = a.gold();
+    const beforePatrol = ownShip.warshipState().patrolTile;
+    const spy = vi.spyOn(game, "addExecution");
+    try {
+      expect(ai.dispatchNationalNavalPressure(live)).toBeNull();
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(a.gold()).toBe(treasury);
+    expect(a.units(UnitType.Warship)).toHaveLength(1);
+    expect(ownShip.warshipState().patrolTile).toBe(beforePatrol);
+    console.info("C5_NAVAL_DISCONNECTED=" + JSON.stringify({
+      westComponent: west,
+      eastComponent: east,
+      treasury: treasury.toString(),
+      observedMerchantId: merchant.id(),
+      strandedWarshipId: ownShip.id(),
+    }));
+  });
+
   it("identical-seed four-nation GameRunner CONTROL versus live paid neutral trade", async () => {
     const { game, bPort, cPort } = await fixture(true);
     const {
