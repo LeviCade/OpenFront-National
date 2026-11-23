@@ -398,34 +398,49 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
       again,
     } = await roundTrip(game, "half_land_half_ocean");
     expect(again).toEqual(bytes);
+    expect(a.units(UnitType.Warship)).toHaveLength(0);
     const before = a.gold();
     const price = game.unitInfo(UnitType.Warship).cost(game, a);
-    // Control disables ONLY the new Sixth escort; inherited Fifth offense and
-    // all real WAR, trade, piracy and autonomous warship combat still run.
-    const off = vi
-      .spyOn(NationWarshipBehavior.prototype, "dispatchNationalNavalEscort")
+    // The captured merchant can later become an enemy-flagged ship, which
+    // legitimately triggers inherited Fifth offensive pressure. Disable that
+    // independent behavior in BOTH worlds to isolate Sixth defensive value.
+    // All real WAR, piracy, trade and autonomous warship combat remain active.
+    const inheritedOff = vi
+      .spyOn(NationWarshipBehavior.prototype, "dispatchNationalNavalPressure")
       .mockReturnValue(null);
+    let disabledEscortCalls = 0;
     try {
-      run(control, 65);
+      const off = vi
+        .spyOn(NationWarshipBehavior.prototype, "dispatchNationalNavalEscort")
+        .mockImplementation(() => {
+          disabledEscortCalls++;
+          return null;
+        });
+      try {
+        run(control, 65);
+      } finally {
+        off.mockRestore();
+      }
+      run(game, 8);
+      const {
+        restored: escortReplay,
+        bytes: escortBytes,
+        again: escortAgain,
+      } = await roundTrip(game, "half_land_half_ocean");
+      expect(escortAgain).toEqual(escortBytes);
+      run(game, 12);
+      run(escortReplay, 12);
+      expect(
+        diffSnapshots(
+          (await roundTrip(game, "half_land_half_ocean")).bytes,
+          (await roundTrip(escortReplay, "half_land_half_ocean")).bytes,
+        ),
+      ).toEqual([]);
+      run(game, 45);
     } finally {
-      off.mockRestore();
+      inheritedOff.mockRestore();
     }
-    run(game, 8);
-    const {
-      restored: escortReplay,
-      bytes: escortBytes,
-      again: escortAgain,
-    } = await roundTrip(game, "half_land_half_ocean");
-    expect(escortAgain).toEqual(escortBytes);
-    run(game, 12);
-    run(escortReplay, 12);
-    expect(
-      diffSnapshots(
-        (await roundTrip(game, "half_land_half_ocean")).bytes,
-        (await roundTrip(escortReplay, "half_land_half_ocean")).bytes,
-      ),
-    ).toEqual([]);
-    run(game, 45);
+    expect(disabledEscortCalls).toBeGreaterThan(0);
     const ourShips = game.player(A).units(UnitType.Warship);
     const controlShips = control.player(A).units(UnitType.Warship);
     const liveRaider = b.units(UnitType.Warship).find((u) => u.id() === raider.id());
@@ -448,6 +463,7 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
       controlRaiderHealth: health(controlRaider),
       activeEscortShips: ourShips.map((u) => [u.id(), u.tile(), u.isActive()]),
       controlEscortShips: controlShips.length,
+      disabledEscortCalls,
     };
     console.info("C6_ESCORT_TWIN_GAME_RUNNER=" + JSON.stringify(data));
     expect(controlShips).toHaveLength(0);
