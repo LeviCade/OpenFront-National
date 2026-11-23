@@ -242,6 +242,8 @@ export class GameView implements GameLike {
   public setTrustedProjectionReady(ready: boolean): void {
     if (!this._trustedNationalProjection) return;
     this._trustedProjectionReady = ready;
+    // No assessment survives revoked Private authority into a future socket.
+    if (!ready) this._nationalAssessments = null;
   }
 
   /**
@@ -586,7 +588,9 @@ export class GameView implements GameLike {
 
   /** Private, current, strictly validated E4 Game-funded strength reports. */
   public nationalAssessments(): Readonly<NationalAssessmentClientView> | null {
-    return this._nationalAssessments;
+    return this._trustedNationalProjection && !this._trustedProjectionReady
+      ? null
+      : this._nationalAssessments;
   }
 
   public nationalPoliticalResults(): readonly Readonly<NationalPoliticalResult>[] {
@@ -863,7 +867,9 @@ export class GameView implements GameLike {
             );
       // E4 owns the DTO and authenticated recipient filtering; E1 only consumes.
       this._nationalAssessments =
-        gu.tick < previousTick
+        gu.tick < previousTick ||
+        this._config.isReplay() ||
+        (this._trustedNationalProjection && !this._trustedProjectionReady)
           ? null
           : readNationalAssessmentView(
               assessed.nationalAssessments,
