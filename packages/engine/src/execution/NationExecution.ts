@@ -368,7 +368,12 @@ export class NationExecution implements Execution {
     // before any E5 recon decision. No foreign Game.units inspection or
     // reconnaissance memory mutation. FFA remains on its original path.
     if (!this.behaviorsInitialized) this.initializeBehaviors();
-    this.warshipBehavior.dispatchNationalNavalPressure(observation);
+    // E6 defensive duty takes precedence over inherited offensive pressure.
+    // E5 owns all subsequent reconnaissance and assessment decisions.
+    const escorted = this.warshipBehavior.dispatchNationalNavalEscort(observation);
+    if (escorted === null) {
+      this.warshipBehavior.dispatchNationalNavalPressure(observation);
+    }
     // Both AI and humans have access to identical authenticated observations
     // and own trading permissions. No global foreign route or balance scan.
     const demands = NationalSanctionExecution.viewFor(this.mg, player);
