@@ -251,6 +251,56 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     expect(imperialLayers(game)[0].endedTick).not.toBeNull();
   });
 
+  it("has an exact pre-growth physical 50K against 45K interception receipt", async () => {
+    const game = await found();
+    setResponse(game, "both");
+    game.player(CROWN).setTroops(0);
+    game.player(MEMBER).setTroops(1);
+    const protectedReserve = reserve(game);
+    game.player(DONOR).setTroops(protectedReserve + 45_000);
+    game.player(ENEMY).setTroops(50_000);
+    const territoryBefore = game.player(MEMBER).numTilesOwned();
+    const goldBefore = roster.map((p) => game.player(p.id).gold().toString());
+    const attack = new AttackExecution(50_000, game.player(ENEMY), MEMBER);
+    attack.init(game, game.ticks());
+    expect(attack.isActive()).toBe(true);
+    const received = ledger(game).levy.processed[0].result;
+    expect(received.attackTroopsBefore).toBe(50_000);
+    expect(received.intercepted).toBe(45_000);
+    expect(received.remainingAttackingTroops).toBe(5_000);
+    expect(received.contributions).toEqual([
+      { nationId: DONOR, troopsDebited: 45_000 },
+    ]);
+    expect(game.player(DONOR).troops()).toBe(protectedReserve);
+    expect(game.player(ENEMY).troops()).toBe(0);
+    expect(game.player(ENEMY).outgoingAttacks()).toHaveLength(1);
+    expect(game.player(ENEMY).outgoingAttacks()[0].troops()).toBe(5_000);
+    expect(game.player(MEMBER).numTilesOwned()).toBe(territoryBefore);
+    expect(roster.map((p) => game.player(p.id).gold().toString())).toEqual(
+      goldBefore,
+    );
+    expect(imperialLayers(game)).toHaveLength(1);
+    console.info(
+      "C5E4_PRE_GROWTH_EXACT_RECEIPT " +
+        JSON.stringify({
+          attackerTroopsBefore: 50_000,
+          attackerWalletAfter: game.player(ENEMY).troops(),
+          attackerInFlightAfter: 5_000,
+          defenderTerritoryBefore: territoryBefore,
+          defenderTerritoryAfter: game.player(MEMBER).numTilesOwned(),
+          donorBefore: protectedReserve + 45_000,
+          donorAfter: game.player(DONOR).troops(),
+          donorDebited: received.intercepted,
+          originalNationalWarLayers: ledger(game).wars.layers.filter(
+            (row) => row.scope === "national",
+          ).length,
+          imperialWarLayers: imperialLayers(game).length,
+          goldBefore,
+          goldAfter: roster.map((p) => game.player(p.id).gold().toString()),
+        }),
+    );
+  });
+
   it("honors all four modes on real combat and permits full shield only with funded real reserves", async () => {
     for (const response of ["none", "assist", "imperial", "both"] as const) {
       const game = await found();
@@ -528,6 +578,37 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     expect(
       attacker.outgoingAttacks().some((attack) => attack.target() === defender),
     ).toBe(true);
+  });
+
+  it("revokes an enqueued standing response when the crown transfers or the empire dissolves", async () => {
+    for (const transition of ["transfer", "dissolve"] as const) {
+      const game = await found();
+      setResponse(game, "both");
+      game.player(MEMBER).setTroops(1);
+      game.player(DONOR).setTroops(reserve(game) + 30_000);
+      game.player(ENEMY).setTroops(10_000);
+      game.addExecution(new AttackExecution(10_000, game.player(ENEMY), MEMBER));
+      if (transition === "transfer") {
+        game.performNationalCommand(game.player(CROWN), {
+          kind: "transfer-crown",
+          empireId: EMPIRE,
+          successorId: DONOR,
+        });
+        expect(
+          game.nationalImperialAdministrationFor(game.player(DONOR))
+            ?.standingDefenseResponse,
+        ).toBe("none");
+      } else {
+        game.performNationalCommand(game.player(CROWN), {
+          kind: "dissolve",
+          empireId: EMPIRE,
+        });
+      }
+      tick(game);
+      expect(imperialLayers(game)).toHaveLength(0);
+      expect(ledger(game).levy.processed).toHaveLength(1);
+      expect(ledger(game).levy.processed[0].result.intercepted).toBe(0);
+    }
   });
 
   it("rolls back a provisional imperial WAR and refunds the attacker when the actual donor transaction fails", async () => {
