@@ -1009,7 +1009,7 @@ describe("C4 E4 native constitutional controls", () => {
     Object.assign(element.game!, {
       players: () => [
         players[0],
-        { ...players[1], id: () => "ABCDEF12", units: () => [city] },
+        { ...players[1], id: (): string => "ABCDEF12", units: () => [city] },
         { ...players[2], units: () => [foreign] },
       ],
     });
@@ -1162,7 +1162,10 @@ describe("C4 E4 native constitutional controls", () => {
     };
     const players = element.game!.players();
     Object.assign(element.game!, {
-      players: () => [players[0], { ...players[1], id: () => "ABCDEF12", units: () => [city] }],
+      players: () => [
+        players[0],
+        { ...players[1], id: (): string => "ABCDEF12", units: () => [city] },
+      ],
     });
     element.refresh();
     await element.updateComplete;
