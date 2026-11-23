@@ -1,0 +1,146 @@
+name: C6 First Class - Exact Source, Dual Inheritance Acceptance
+on:
+  push:
+    branches:
+      - stage3/conductor6-class1-integration-20261123
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c6-first-class-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  full-source:
+    name: C6 exact source - ${{ matrix.gate }}
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [typecheck, all-tests, lint, pinned-format, production-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact pushed source (never synthetic PR merge)
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Run full exact-head gate
+        env:
+          GATE: ${{ matrix.gate }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GATE" in
+            typecheck) npm run typecheck ;;
+            all-tests) npm test ;;
+            lint) npm run lint ;;
+            pinned-format) npm run format:check ;;
+            production-build) npm run build-prod ;;
+            *) exit 1 ;;
+          esac
+  six-predecessor-features:
+    name: C6 historical Fifth - combined authoritative witnesses
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Refuse to certify absent Fifth integrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in \
+            tests/national/C5Class3ImperialRevenue.test.ts \
+            tests/national/C5Class3E3ImperialTrade.test.ts \
+            tests/national/C5Class3PaidNationalAssessment.test.ts \
+            tests/national/C5Class3AIRecon.test.ts \
+            tests/national/C5Class3NavalAI.test.ts \
+            tests/ui/national/NationalSovereignControls.test.ts; do
+              test -f "$f" || { echo "MISSING HISTORICAL INTEGRATION: $f" >&2; exit 1; }
+          done
+      - name: Execute combined Fifth authoritative gameplay contracts
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/C5Class3ImperialRevenue.test.ts \
+            tests/national/C5Class3E3ImperialTrade.test.ts \
+            tests/national/C5Class3PaidNationalAssessment.test.ts \
+            tests/national/C5Class3AIRecon.test.ts \
+            tests/national/C5Class3NavalAI.test.ts \
+            tests/national/C5Class3AssessmentWire.test.ts \
+            tests/national/C5Class2FundedRecon.test.ts
+          npx --no-install vitest run \
+            tests/ui/national/NationalSovereignControls.test.ts \
+            tests/ui/national/NationalReconMapPick.test.ts
+  six-new-scenarios:
+    name: C6 ORIGINAL - six nonduplicative integration witnesses
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Fail closed if any Sixth-original scenario is missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in \
+            tests/ui/national/C6Class1NationalAssessmentControls.test.ts \
+            tests/national/C6Class1ImperialRelief.test.ts \
+            tests/national/C6Class1EmbargoSettlement.test.ts \
+            tests/national/C6Class1CounterassessmentShield.test.ts \
+            tests/national/C6Class1AINationalAssessment.test.ts \
+            tests/national/C6Class1NavalEscort.test.ts; do
+              test -f "$f" || { echo "MISSING SIXTH ORIGINAL SCENARIO: $f" >&2; exit 1; }
+          done
+      - name: Real GameRunner original economic diplomatic intelligence AI/naval outcomes
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/C6Class1ImperialRelief.test.ts \
+            tests/national/C6Class1EmbargoSettlement.test.ts \
+            tests/national/C6Class1CounterassessmentShield.test.ts \
+            tests/national/C6Class1AINationalAssessment.test.ts \
+            tests/national/C6Class1NavalEscort.test.ts
+          npx --no-install vitest run tests/ui/national/C6Class1NationalAssessmentControls.test.ts
+  hostile-snapshot-nonregression:
+    name: C6 defensive authority, snapshot, FFA non-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - run: |
+          npx --no-install vitest run --project node \
+            tests/core/snapshot/FullGameSnapshot.test.ts \
+            tests/national/C5Class2FundedRecon.test.ts \
+            tests/national/C5Class2ImperialUltimatum.test.ts \
+            tests/national/NationalLiveObservation.test.ts \
+            tests/national/C4Class2EconomicMaritime.test.ts
