@@ -113,7 +113,6 @@ export function readNationalAssessmentView(
     input.items.length > 2048
   )
     return null;
-  const seen = new Set<string>();
   const items: NationalAssessmentClientReport[] = [];
   for (const row of input.items as unknown[]) {
     if (
@@ -154,9 +153,8 @@ export function readNationalAssessmentView(
       shielded ? 400000n : 100000n,
     );
     if (!treasuryGoldBand || !militaryTroopsBand) return null;
-    const key = [row.targetId, row.paidBy, row.effectiveTick].join(":");
-    if (seen.has(key)) return null;
-    seen.add(key);
+    // E4 permits distinct, paid request IDs at the same Game tick.
+    // They are indistinguishable in this DTO; do not discard lawful repeats.
     items.push({
       targetId: row.targetId,
       paidBy: row.paidBy,
