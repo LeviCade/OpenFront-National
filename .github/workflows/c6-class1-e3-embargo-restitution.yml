@@ -54,7 +54,6 @@ jobs:
           packages/engine/src/execution/NationalUltimatumExecution.ts
           tests/national/C6Class1E3EmbargoRestitution.test.ts
           tests/national/C6Class1E3SettlementIngress.test.ts
-          tests/national/C6Class1E3SettlementIngress.test.ts
           docs/engineering/c6-class1-e3-embargo-restitution.md
       - name: Lint
         if: success() || failure()
@@ -68,12 +67,9 @@ jobs:
       - name: Show exact formatter repair against original checkout
         if: failure()
         run: |
-          npx --no-install oxfmt --write docs/engineering/c5-class3-e3-economic-charter.md docs/engineering/c6-class1-e3-embargo-restitution.md packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/execution/NationalUltimatumExecution.ts tests/national/C6Class1E3EmbargoRestitution.test.ts
-          tests/national/C6Class1E3SettlementIngress.test.ts
-          git diff -- docs/engineering/c5-class3-e3-economic-charter.md docs/engineering/c6-class1-e3-embargo-restitution.md packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/execution/NationalUltimatumExecution.ts tests/national/C6Class1E3EmbargoRestitution.test.ts
-          tests/national/C6Class1E3SettlementIngress.test.ts
-          git restore -- docs/engineering/c5-class3-e3-economic-charter.md docs/engineering/c6-class1-e3-embargo-restitution.md packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/execution/NationalUltimatumExecution.ts tests/national/C6Class1E3EmbargoRestitution.test.ts
-          tests/national/C6Class1E3SettlementIngress.test.ts
+          npx --no-install oxfmt --write docs/engineering/c5-class3-e3-economic-charter.md docs/engineering/c6-class1-e3-embargo-restitution.md packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/execution/NationalUltimatumExecution.ts tests/national/C6Class1E3EmbargoRestitution.test.ts tests/national/C6Class1E3SettlementIngress.test.ts
+          git diff -- docs/engineering/c5-class3-e3-economic-charter.md docs/engineering/c6-class1-e3-embargo-restitution.md packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/execution/NationalUltimatumExecution.ts tests/national/C6Class1E3EmbargoRestitution.test.ts tests/national/C6Class1E3SettlementIngress.test.ts
+          git restore -- docs/engineering/c5-class3-e3-economic-charter.md docs/engineering/c6-class1-e3-embargo-restitution.md packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/execution/NationalUltimatumExecution.ts tests/national/C6Class1E3EmbargoRestitution.test.ts tests/national/C6Class1E3SettlementIngress.test.ts
       - name: Full test suite
         if: success()
         run: npm test
