@@ -66,6 +66,8 @@ export type Intent =
   | NationalIssueSanctionIntent
   | NationalRespondSanctionIntent
   | NationalResolveSanctionIntent
+  | NationalOfferSanctionSettlementIntent
+  | NationalDecideSanctionSettlementIntent
   | NationalIssueUltimatumIntent
   | NationalRespondUltimatumIntent
   | NationalResolveUltimatumIntent
@@ -170,6 +172,12 @@ export type NationalRespondSanctionIntent = z.infer<
 >;
 export type NationalResolveSanctionIntent = z.infer<
   typeof NationalResolveSanctionIntentSchema
+>;
+export type NationalOfferSanctionSettlementIntent = z.infer<
+  typeof NationalOfferSanctionSettlementIntentSchema
+>;
+export type NationalDecideSanctionSettlementIntent = z.infer<
+  typeof NationalDecideSanctionSettlementIntentSchema
 >;
 export type NationalIssueUltimatumIntent = z.infer<
   typeof NationalIssueUltimatumIntentSchema
@@ -946,6 +954,23 @@ export const NationalResolveSanctionIntentSchema = z.object({
   requestId: NationalPoliticalRequestId,
 });
 
+// C6 restitution. BigInt gold is encoded as a bounded positive decimal string;
+// no client-asserted actor, wallet or issuer identity is accepted.
+export const NationalOfferSanctionSettlementIntentSchema = z.object({
+  type: z.literal("national_offer_sanction_settlement"),
+  sanctionId: NationalPoliticalId,
+  amountGold: z.string().regex(/^[1-9][0-9]{0,17}$/),
+  requestId: NationalPoliticalRequestId,
+});
+export const NationalDecideSanctionSettlementIntentSchema = z.object({
+  type: z.literal("national_decide_sanction_settlement"),
+  sanctionId: NationalPoliticalId,
+  recipientId: MappedID,
+  offerId: NationalPoliticalRequestId,
+  decision: z.enum(["accept", "refuse"]),
+  requestId: NationalPoliticalRequestId,
+});
+
 // ECON-06/07: issuer/crown/actor are derived from the authenticated client.
 export const NationalIssueUltimatumIntentSchema = z.object({
   type: z.literal("national_issue_ultimatum"),
@@ -1026,6 +1051,8 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalRespondUltimatumIntentSchema,
   NationalResolveUltimatumIntentSchema,
   NationalReconnaissanceIntentSchema,
+  NationalOfferSanctionSettlementIntentSchema,
+  NationalDecideSanctionSettlementIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

@@ -237,6 +237,8 @@ export class Executor {
       case "national_issue_sanction":
       case "national_respond_sanction":
       case "national_resolve_sanction":
+      case "national_offer_sanction_settlement":
+      case "national_decide_sanction_settlement":
         return new NationalSanctionExecution(player, intent, intent.clientID);
       case "national_issue_ultimatum":
       case "national_respond_ultimatum":
