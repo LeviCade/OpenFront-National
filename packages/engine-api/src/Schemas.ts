@@ -951,7 +951,7 @@ export const NationalReconnaissanceIntentSchema = z.object({
 
 export const NationalAssessmentIntentSchema = z.object({
   type: z.literal("national_buy_national_assessment"),
-  targetId: MappedID,
+  targetId: NationalPoliticalId,
   requestId: NationalPoliticalRequestId,
 });
 export type NationalAssessmentIntent = z.infer<typeof NationalAssessmentIntentSchema>;
