@@ -260,7 +260,7 @@ describe("C6 C1 E2 — real imperial relief", () => {
           reliefId: "wrong-session-request",
           amount: "1",
         },
-        game.player(C).clientID(),
+        game.player(C).clientID() ?? undefined,
       ),
     ).toThrow("stale authenticated actor session");
     expect(() =>
@@ -273,7 +273,7 @@ describe("C6 C1 E2 — real imperial relief", () => {
           expectedVersion: 0,
           decision: "reject",
         },
-        game.player(B).clientID(),
+        game.player(B).clientID() ?? undefined,
       ),
     ).toThrow("stale authenticated actor session");
     expect(() => request(game, "emperor-self", "20", A)).toThrow();
