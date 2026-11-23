@@ -242,7 +242,9 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
       ],
     };
     expect(planNationalRecon(threatened, fresh).purchase?.targetId).toBe(B);
-    expect(planNationalRecon({ ...threatened, wars: [] }, fresh).purchase).toBeNull();
+    expect(
+      planNationalRecon({ ...threatened, wars: [] }, fresh).purchase,
+    ).toBeNull();
     expect(plan.holdOffenseAgainst).toBeNull();
     expect(
       planNationalRecon(
