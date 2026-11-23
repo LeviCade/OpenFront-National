@@ -71,5 +71,9 @@ jobs:
             packages/engine/src/snapshot/ExecutionRegistry.ts \
             tests/national/C6Class1CounterassessmentShield.test.ts \
             tests/national/C6Class1CounterassessmentWire.test.ts
+          npx --no-install oxfmt --write \
+            docs/release/C5_CLASS3_E4_PAID_NATIONAL_ASSESSMENT.md \
+            docs/release/C6_CLASS1_E4_COUNTERASSESSMENT.md
           git diff --stat
+          git --no-pager diff -- docs/release/C5_CLASS3_E4_PAID_NATIONAL_ASSESSMENT.md docs/release/C6_CLASS1_E4_COUNTERASSESSMENT.md
           git --no-pager diff -- packages/engine/src/national/observation/NationalAssessment.ts packages/engine/src/execution/NationalCounterassessmentExecution.ts packages/engine/src/game/GameImpl.ts packages/engine/src/game/Game.ts packages/engine-api/src/Schemas.ts packages/engine-api/src/game/GameUpdates.ts packages/engine-api/src/game/NationalAssessmentView.ts packages/engine/src/execution/ExecutionManager.ts packages/engine/src/snapshot/ExecutionRegistry.ts tests/national/C6Class1CounterassessmentShield.test.ts tests/national/C6Class1CounterassessmentWire.test.ts
