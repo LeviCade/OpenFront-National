@@ -2871,7 +2871,6 @@ export class NationalDiplomacyPanel extends LitElement {
                   }
                 </p>
                 ${this.renderPacts()} ${this.renderImperialAdministration()}
-                ${this.renderSovereignActions()}
                 ${
                   politics
                     ? html`<div class="space-y-2">
@@ -3535,6 +3534,7 @@ export class NationalDiplomacyPanel extends LitElement {
                       </button>`,
                   )}
                 </div>
+                ${this.renderSovereignActions()}
               </div>`
             : nothing
         }
