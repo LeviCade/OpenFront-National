@@ -69,7 +69,8 @@ export type Intent =
   | NationalIssueUltimatumIntent
   | NationalRespondUltimatumIntent
   | NationalResolveUltimatumIntent
-  | NationalReconnaissanceIntent;
+  | NationalReconnaissanceIntent
+  | NationalAssessmentIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -948,6 +949,15 @@ export const NationalReconnaissanceIntentSchema = z.object({
   requestId: NationalPoliticalRequestId,
 });
 
+export const NationalAssessmentIntentSchema = z.object({
+  type: z.literal("national_buy_national_assessment"),
+  targetId: NationalPoliticalId,
+  requestId: NationalPoliticalRequestId,
+});
+export type NationalAssessmentIntent = z.infer<
+  typeof NationalAssessmentIntentSchema
+>;
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -997,6 +1007,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalRespondUltimatumIntentSchema,
   NationalResolveUltimatumIntentSchema,
   NationalReconnaissanceIntentSchema,
+  NationalAssessmentIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

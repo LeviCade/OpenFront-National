@@ -754,6 +754,27 @@ export class NationalOutboundFilter {
       this.observerId,
     );
     const privateUltimatums = projectNationalUltimatums(game, this.observerId);
+    // Same post-entitlement Game projection for human and AI; no raw state.
+    const privateAssessments =
+      verified !== null &&
+      this.observerId !== null &&
+      game.hasPlayer(this.observerId) &&
+      game.player(this.observerId).isAlive() &&
+      game.player(this.observerId).hasSpawned()
+        ? {
+            version: 1 as const,
+            recipientId: this.observerId,
+            items: (verified.observation.assessments ?? []).map((report) => ({
+              targetId: report.targetId,
+              paidBy: report.paidBy,
+              confidence: report.confidence,
+              effectiveTick: report.effectiveTick,
+              expiresAtTick: report.expiresAtTick,
+              treasuryGoldBand: { ...report.treasuryGoldBand },
+              militaryTroopsBand: { ...report.militaryTroopsBand },
+            })),
+          }
+        : undefined;
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
     return {
@@ -786,6 +807,9 @@ export class NationalOutboundFilter {
       ...(privateUltimatums === undefined
         ? {}
         : { nationalUltimatums: privateUltimatums }),
+      ...(privateAssessments === undefined
+        ? {}
+        : { nationalAssessments: privateAssessments }),
       tick: data.tick,
       updates,
       packedTileUpdates: new Uint32Array(packedTile),
