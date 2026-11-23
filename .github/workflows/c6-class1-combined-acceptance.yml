@@ -43,8 +43,8 @@ jobs:
             pinned-format)
               if ! npm run format:check; then
                 echo "::error::Pinned formatter failed; report exact command-document diff"
-                npx --no-install oxfmt --write docs/release/NATIONAL_C6_CLASS1_COMMAND.md
-                git diff -- docs/release/NATIONAL_C6_CLASS1_COMMAND.md
+                npx --no-install oxfmt --write docs/release/NATIONAL_C5_CLASS3_E6_NAVAL_HANDOFF.md
+                git diff -- docs/release/NATIONAL_C5_CLASS3_E6_NAVAL_HANDOFF.md
                 exit 1
               fi
               ;;
