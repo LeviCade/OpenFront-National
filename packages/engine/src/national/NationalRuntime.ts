@@ -581,6 +581,36 @@ export class NationalRuntime {
     );
   }
 
+  /**
+   * No delegation may survive succession or a lost constituent. Keep the
+   * previous version as a monotonic compare-and-swap tombstone and advance
+   * it exactly once on each actual political roster change.
+   */
+  private reconcileEconomicCharters(next: PoliticsProjection): void {
+    for (const [empireId, charter] of this.economicCharters) {
+      const empire = next.empires.find((item) => item.id === empireId);
+      if (!empire) continue; // settleCollapsed permanently retires this row
+      const sameCrown = charter.ownerId === empire.leaderId;
+      const kept = sameCrown
+        ? charter.delegateIds.filter((id) => empire.memberIds.includes(id))
+        : [];
+      if (sameCrown && kept.length === charter.delegateIds.length) continue;
+      this.economicCharters.set(
+        empireId,
+        economicCharterSchema.parse({
+          ...charter,
+          ownerId: empire.leaderId,
+          delegateIds: kept,
+          allowInternal: sameCrown && charter.allowInternal,
+          version:
+            charter.version < Number.MAX_SAFE_INTEGER - 1
+              ? charter.version + 1
+              : 1,
+        }),
+      );
+    }
+  }
+
   setImperialPolicy(
     actorId: PlayerID,
     empireId: string,
@@ -1236,6 +1266,7 @@ export class NationalRuntime {
     ).state;
     validatePolitics(next);
     this.settleCollapsed(next, disposition);
+    this.reconcileEconomicCharters(next);
     this.politics = next;
     this.lastTick = tick;
   }
@@ -1539,6 +1570,7 @@ export class NationalRuntime {
       default:
         throw new Error("NATIONAL: unsupported political command");
     }
+    this.reconcileEconomicCharters(next);
     this.politics = next;
   }
 

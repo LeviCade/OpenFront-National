@@ -6,7 +6,7 @@
 - ECON OPEN-13 deterministic implementation choice: an external demand's presence never grants economic authority. A separate, current crown-owned, compare-and-swap charter must delegate the responding member. Epochs increment on charter replacement and each emperor decision; existing permissions remain in Player-owned embargoes.
 - A foreign demand to embargo another member of the same empire does not automatically compel it. The current emperor must opt in explicitly via `allowInternal=true`; no WAR or coalition betrayal authorization follows.
 - Each new restriction is exactly one member↔target bilateral Player embargo. It affects actual merchant ship and train canTrade checks at departure and settlement and carries no synthetic treasury credit. Engineer Two's existing `creditNationalCommercialIncome` and split logic are authoritative and untouched.
-- Crown transfer invalidates former emperor grants by owner mismatch. Dissolution deletes the charter. A stale user command or accepted journal receipt never revives an old epoch.
+- Crown transfer cancels former emperor grants, clears internal-embargo authorization and bumps the version. Eliminated constituents are pruned from delegate lists with a fresh epoch. Dissolution deletes the charter. A stale user command or accepted journal receipt never revives an old epoch.
 
 ## Authenticated typed command contract
 `NationalImperialAdministrationCommandSchema` **append-only** variants:
