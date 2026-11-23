@@ -129,6 +129,22 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
   it("selects only current visible WAR enemy merchants; hides ports, allies and neutral vessels", async () => {
     const { game, a, b, c, d, cPort, dPort, behavior, fixedEnemyMerchant } =
       await fixture();
+    // A and D actually form an empire. This is a legitimate allied merchant,
+    // not merely a second uninvolved neutral vessel.
+    game.performNationalCommand(a, {
+      kind: "found-empire",
+      empireId: "c5-nav-merchant-alliance",
+    });
+    game.performNationalCommand(a, {
+      kind: "offer-empire",
+      empireId: "c5-nav-merchant-alliance",
+      candidateId: D,
+    });
+    game.performNationalCommand(d, {
+      kind: "accept-empire",
+      empireId: "c5-nav-merchant-alliance",
+      candidateId: D,
+    });
     const neutral = c.buildUnit(UnitType.TradeShip, game.ref(8, 12), {
       targetUnit: cPort,
     });
@@ -136,6 +152,14 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
       targetUnit: dPort,
     });
     const sight = collectLiveNationalObservation(game, A);
+    expect(
+      sight.observation.coalitions.some(
+        (cohort) =>
+          cohort.kind === "empire" &&
+          cohort.members.includes(A) &&
+          cohort.members.includes(D),
+      ),
+    ).toBe(true);
     const ports = [{ x: 7, y: 10 }];
     const targets = planObservedNationalNavalTargets(sight.observation, ports);
     expect(targets.map((t) => t.vesselId)).toEqual([
