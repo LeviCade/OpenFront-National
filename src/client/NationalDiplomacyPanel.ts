@@ -167,11 +167,11 @@ export class NationalDiplomacyPanel extends LitElement {
   ) => {
     const game = this.game;
     if (!this.reconMapPicking) return;
+    // Cross-session map events have no authority over this live selection.
+    if (!game || event.gameId !== game.gameID()) return;
     this.reconMapPicking = false;
     if (
       !this.sovereignReady ||
-      !game ||
-      event.gameId !== game.gameID() ||
       !game.isValidCoord(event.x, event.y)
     ) {
       this.reconStatus =
