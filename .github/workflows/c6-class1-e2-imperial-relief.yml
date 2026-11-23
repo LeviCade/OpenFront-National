@@ -1,0 +1,92 @@
+name: C6 C1 E2 — Imperial Relief Acceptance
+on:
+  push:
+    branches:
+      - feature/c6-class1-e2-imperial-relief-20261123
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c6-c1-e2-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    name: E2 immutable source — ${{ matrix.gate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        gate:
+          [
+            typecheck,
+            relief-game,
+            inherited-live-income,
+            lint,
+            pinned-format,
+            production-build,
+            regression,
+            full-tests,
+          ]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact triggering commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Execute actual source acceptance
+        shell: bash
+        env:
+          GATE: ${{ matrix.gate }}
+        run: |
+          set -euo pipefail
+          case "$GATE" in
+            typecheck) npm run typecheck ;;
+            relief-game)
+              npx --no-install vitest run --project node tests/national/C6Class1ImperialRelief.test.ts
+              ;;
+            inherited-live-income)
+              npx --no-install vitest run --project node tests/national/C5Class3ImperialRevenue.test.ts
+              ;;
+            lint) npm run lint ;;
+            pinned-format)
+              npm run format:check || {
+                npx --no-install oxfmt --write \
+                  packages/engine-api/src/game/NationalImperialView.ts \
+                  packages/engine-api/src/Schemas.ts \
+                  packages/engine/src/national/NationalRuntime.ts \
+                  packages/engine/src/national/observation/NationalPactProjection.ts \
+                  packages/engine/src/game/GameImpl.ts \
+                  tests/national/C6Class1ImperialRelief.test.ts \
+                  docs/release/C6_CLASS1_E2_IMPERIAL_RELIEF.md \
+                  .github/workflows/c6-class1-e2-imperial-relief.yml
+                git diff --stat
+                git diff -- \
+                  packages/engine-api/src/game/NationalImperialView.ts \
+                  packages/engine-api/src/Schemas.ts \
+                  packages/engine/src/national/NationalRuntime.ts \
+                  packages/engine/src/national/observation/NationalPactProjection.ts \
+                  packages/engine/src/game/GameImpl.ts \
+                  tests/national/C6Class1ImperialRelief.test.ts \
+                  docs/release/C6_CLASS1_E2_IMPERIAL_RELIEF.md \
+                  .github/workflows/c6-class1-e2-imperial-relief.yml
+                exit 1
+              }
+              ;;
+            production-build) npm run build-prod ;;
+            regression)
+              npx --no-install vitest run --project node \
+                tests/national/ImperialSpendingClassFive.test.ts \
+                tests/national/C4Class2EconomicMaritime.test.ts \
+                tests/LiveTradeRevenue.test.ts \
+                tests/TradeTrainScenarios.test.ts
+              ;;
+            full-tests) npm test ;;
+            *) echo "unknown gate" >&2; exit 1 ;;
+          esac
