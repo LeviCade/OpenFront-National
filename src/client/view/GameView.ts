@@ -30,6 +30,10 @@ import {
 } from "@openfront/engine-api/game/NationalPactView";
 import type { NationalReconnaissanceViewData } from "@openfront/engine-api/game/NationalReconView";
 import {
+  readNationalAssessmentView,
+  type NationalAssessmentClientView,
+} from "../NationalAssessmentClient";
+import {
   GameLike,
   ReadonlyTileSet,
   UnitPredicate,
@@ -128,6 +132,7 @@ export class GameView implements GameLike {
   private _nationalPoliticalResults: readonly NationalPoliticalResult[] = [];
   private _nationalUltimatums: NationalUltimatumViewData | null = null;
   private _nationalReconnaissance: NationalReconnaissanceViewData | null = null;
+  private _nationalAssessments: NationalAssessmentClientView | null = null;
   private _trustedProjectionReady = false;
   private trustedPrincipal: string | null = null;
   private trustedSight: NationalObserverMapContinuity | null = null;
@@ -139,6 +144,7 @@ export class GameView implements GameLike {
       this._nationalPactReceipts = [];
       this._nationalUltimatums = null;
       this._nationalReconnaissance = null;
+    this._nationalAssessments = null;
     }
     this.trustedPrincipal = principal;
   }
@@ -250,6 +256,7 @@ export class GameView implements GameLike {
     this._nationalPactReceipts = [];
     this._nationalUltimatums = null;
     this._nationalReconnaissance = null;
+    this._nationalAssessments = null;
     this._trustedProjectionReady = false;
     this._trustedSpawnReady = false;
     this.trustedPendingTiles = [];
@@ -577,6 +584,11 @@ export class GameView implements GameLike {
     return this._nationalReconnaissance;
   }
 
+  /** Private, current, strictly validated E4 Game-funded strength reports. */
+  public nationalAssessments(): Readonly<NationalAssessmentClientView> | null {
+    return this._nationalAssessments;
+  }
+
   public nationalPoliticalResults(): readonly Readonly<NationalPoliticalResult>[] {
     return this._nationalPoliticalResults;
   }
@@ -602,6 +614,7 @@ export class GameView implements GameLike {
     this._nationalPoliticalResults = [];
     this._nationalUltimatums = null;
     this._nationalReconnaissance = null;
+    this._nationalAssessments = null;
   }
   private startTick: Tick | null = null;
   private smallIDToID = new Map<number, PlayerID>();
@@ -793,13 +806,18 @@ export class GameView implements GameLike {
 
     const previousTick = this.lastUpdate?.tick ?? -1;
     // Never keep an unvalidated or revoked constitutional snapshot in the raw renderer cache.
+    const assessed = gu as GameUpdateViewData & { nationalAssessments?: unknown };
     this.lastUpdate =
       gu.nationalPactDisclosure === undefined &&
-      gu.nationalImperialAdministration === undefined
+      gu.nationalImperialAdministration === undefined &&
+      assessed.nationalAssessments === undefined
         ? gu
         : { ...gu };
     delete this.lastUpdate.nationalPactDisclosure;
     delete this.lastUpdate.nationalImperialAdministration;
+    delete (this.lastUpdate as GameUpdateViewData & { nationalAssessments?: unknown }).nationalAssessments;
+    // An FFA view or an absent report must never preserve an earlier private lease.
+    this._nationalAssessments = null;
 
     // Legacy/replay test adapters can provide a partial Config without
     // gameConfig(). Keep ordinary FFA view updates entirely unchanged.
@@ -836,6 +854,15 @@ export class GameView implements GameLike {
           ? null
           : readNationalReconnaissanceView(
               gu.nationalReconnaissance,
+              currentActorId,
+              gu.tick,
+            );
+      // E4 owns the DTO and authenticated recipient filtering; E1 only consumes.
+      this._nationalAssessments =
+        gu.tick < previousTick
+          ? null
+          : readNationalAssessmentView(
+              assessed.nationalAssessments,
               currentActorId,
               gu.tick,
             );
