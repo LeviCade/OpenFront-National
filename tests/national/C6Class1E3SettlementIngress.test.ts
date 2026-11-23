@@ -159,8 +159,11 @@ describe("C6 first-class E3 private-match restitution ingress", () => {
     });
     expect(view(issuer)[0].settlements[0]?.status).toBe("pending");
     expect(view(payer)[0].requestId).toBeNull();
-    expect([issuer.gold(), payer.gold()]).toEqual(before);
+    // GameRunner advances workers on every tick. An unaccepted offer
+    // must produce only identical ordinary income, never a transfer.
+    expect(issuer.gold() - before[0]).toBe(payer.gold() - before[1]);
 
+    const beforeForgery = [issuer.gold(), payer.gold()];
     act(2, {
       type: "national_decide_sanction_settlement",
       sanctionId: id,
@@ -171,13 +174,27 @@ describe("C6 first-class E3 private-match restitution ingress", () => {
       clientID: clients[0],
     });
     expect(view(issuer)[0].settlements[0]?.status).toBe("pending");
-    expect([issuer.gold(), payer.gold()]).toEqual(before);
+    expect(issuer.gold() - beforeForgery[0]).toBe(
+      payer.gold() - beforeForgery[1],
+    );
     expect(issuer.canTrade(payer)).toBe(false);
 
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
 
+    // Calibrate natural worker revenue over precisely the two ticks that
+    // one submitted host decision advances. No payment can hide as income.
+    const neutralBefore = [issuer.gold(), payer.gold()];
+    host.tick();
+    host.tick();
+    restored.executeNextTick();
+    restored.executeNextTick();
+    const passive = [
+      issuer.gold() - neutralBefore[0],
+      payer.gold() - neutralBefore[1],
+    ];
+    const acceptanceBefore = [issuer.gold(), payer.gold()];
     const accept = {
       type: "national_decide_sanction_settlement",
       sanctionId: id,
@@ -187,9 +204,13 @@ describe("C6 first-class E3 private-match restitution ingress", () => {
       requestId: "c6-host-authorized-accept",
     };
     const receipt = act(0, accept);
-    expect(issuer.gold() - before[0]).toBe(25_000n);
-    expect(before[1] - payer.gold()).toBe(25_000n);
-    expect(issuer.gold() + payer.gold()).toBe(before[0] + before[1]);
+    const issuerTransfer = issuer.gold() - acceptanceBefore[0] - passive[0];
+    const payerTransfer = acceptanceBefore[1] - payer.gold() + passive[1];
+    expect(issuerTransfer).toBe(25_000n);
+    expect(payerTransfer).toBe(25_000n);
+    expect(issuerTransfer).toBe(payerTransfer);
+    expect(issuer.gold() + payer.gold() - acceptanceBefore[0] - acceptanceBefore[1])
+      .toBe(passive[0] + passive[1]);
     expect(issuer.canTrade(payer)).toBe(true);
     expect(view(issuer)[0].settlements[0]?.status).toBe("accepted");
 
@@ -206,20 +227,27 @@ describe("C6 first-class E3 private-match restitution ingress", () => {
     );
     restored.executeNextTick();
     restored.executeNextTick();
-    expect(restoredIssuer.gold() - restoredBefore[0]).toBe(25_000n);
-    expect(restoredBefore[1] - restoredPayer.gold()).toBe(25_000n);
+    expect(restoredIssuer.gold() - restoredBefore[0] - passive[0]).toBe(
+      25_000n,
+    );
+    expect(restoredBefore[1] - restoredPayer.gold() + passive[1]).toBe(
+      25_000n,
+    );
     expect(restoredIssuer.canTrade(restoredPayer)).toBe(true);
     expect(
       NationalSanctionExecution.viewFor(restored, restoredIssuer)[0]
         .settlements[0]?.status,
     ).toBe("accepted");
 
+    const replayBefore = [issuer.gold(), payer.gold()];
     act(0, {
       ...accept,
       requestId: "c6-host-replay-new-id",
     });
-    expect(issuer.gold() - before[0]).toBe(25_000n);
-    expect(before[1] - payer.gold()).toBe(25_000n);
+    expect([
+      issuer.gold() - replayBefore[0],
+      payer.gold() - replayBefore[1],
+    ]).toEqual(passive);
 
     console.info(
       "C6_E3_PRIVATE_INGRESS_WITNESS=" +
@@ -230,7 +258,8 @@ describe("C6 first-class E3 private-match restitution ingress", () => {
           exactConservation: true,
           resumedTrade: issuer.canTrade(payer),
           restoredPayment:
-            restoredIssuer.gold() - restoredBefore[0] === 25_000n,
+            restoredIssuer.gold() - restoredBefore[0] - passive[0] ===
+            25_000n,
           digest: receipt.replayDigest,
           tick: game.ticks(),
         }),
