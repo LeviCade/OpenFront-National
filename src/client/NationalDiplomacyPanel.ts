@@ -48,6 +48,7 @@ import {
   type PactIntent,
 } from "./NationalPactState";
 import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
+import { NationalAssessmentControls } from "./NationalAssessmentControls";
 import { nationalReconQuote } from "./NationalSovereignActions";
 import { GoToPlayerEvent } from "./TransformHandler";
 import {
@@ -227,6 +228,9 @@ export class NationalDiplomacyPanel extends LitElement {
     this.refreshPact();
     this.refreshImperialPolicy();
     this.refreshSovereignActions();
+    this.querySelector<NationalAssessmentControls>(
+      "national-assessment-controls",
+    )?.refresh();
     const game = this.game;
     const player = game?.myPlayer();
     const politics = game?.nationalPolitics() ?? null;
@@ -3642,6 +3646,10 @@ export class NationalDiplomacyPanel extends LitElement {
                   )}
                 </div>
                 ${this.renderSovereignActions()}
+                <national-assessment-controls
+                  .game=${game}
+                  .eventBus=${this.eventBus}
+                ></national-assessment-controls>
               </div>`
             : nothing
         }
