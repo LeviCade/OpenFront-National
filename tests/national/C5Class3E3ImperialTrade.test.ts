@@ -1,4 +1,8 @@
-import { PlayerInfo, PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
+import {
+  PlayerInfo,
+  PlayerType,
+  UnitType,
+} from "@openfront/engine-api/game/GameTypes";
 import { NationalSanctionExecution } from "@openfront/engine/execution/NationalSanctionExecution";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
 import { TrainExecution } from "@openfront/engine/execution/TrainExecution";
@@ -12,7 +16,11 @@ import { roundTrip } from "../util/Snapshot";
 
 const MAP = "half_land_half_ocean";
 const [CROWN, ISSUER, DELEGATE, MEMBER, TARGET] = [
-  "c5-e3-crown", "c5-e3-issuer", "c5-e3-delegate", "c5-e3-member", "c5-e3-target",
+  "c5-e3-crown",
+  "c5-e3-issuer",
+  "c5-e3-delegate",
+  "c5-e3-member",
+  "c5-e3-target",
 ];
 const EMPIRE = "c5-e3-empire";
 const people = [CROWN, ISSUER, DELEGATE, MEMBER, TARGET].map(
@@ -27,21 +35,36 @@ function until(game: Game, predicate: () => boolean, max = 110): void {
   expect(predicate()).toBe(true);
 }
 function trace(game: Game, label: string) {
-  console.info("C5_E3_IMPERIAL_TRADE_WITNESS=" + JSON.stringify({
-    label, tick: game.ticks(),
-    money: people.map((i) => {
-      const p = game.player(i.id);
-      return { id: p.id(), gold: p.gold().toString(),
-        ship: p.tradeGold().toString(), rail: p.trainGold().toString(),
-        canTradeTarget: p.id() === TARGET ? null : p.canTrade(game.player(TARGET)) };
-    }),
-    charter: game.nationalEconomicCharterFor(game.player(DELEGATE)),
-    treasury: game.nationalImperialAdministrationFor(game.player(CROWN))?.treasury ?? null,
-    demands: NationalSanctionExecution.viewFor(game, game.player(ISSUER)),
-  }));
+  console.info(
+    "C5_E3_IMPERIAL_TRADE_WITNESS=" +
+      JSON.stringify({
+        label,
+        tick: game.ticks(),
+        money: people.map((i) => {
+          const p = game.player(i.id);
+          return {
+            id: p.id(),
+            gold: p.gold().toString(),
+            ship: p.tradeGold().toString(),
+            rail: p.trainGold().toString(),
+            canTradeTarget:
+              p.id() === TARGET ? null : p.canTrade(game.player(TARGET)),
+          };
+        }),
+        charter: game.nationalEconomicCharterFor(game.player(DELEGATE)),
+        treasury:
+          game.nationalImperialAdministrationFor(game.player(CROWN))
+            ?.treasury ?? null,
+        demands: NationalSanctionExecution.viewFor(game, game.player(ISSUER)),
+      }),
+  );
 }
 async function world() {
-  const game = await setup(MAP, { nationalMode: true, instantBuild: true }, people);
+  const game = await setup(
+    MAP,
+    { nationalMode: true, instantBuild: true },
+    people,
+  );
   const p = people.map((v, index) => {
     const player = game.player(v.id);
     const spawn = game.ref(1, 1 + index * 3);
@@ -65,10 +88,14 @@ async function world() {
   game.performNationalCommand(a, { kind: "found-empire", empireId: EMPIRE });
   for (const member of [c, d]) {
     game.performNationalCommand(a, {
-      kind: "offer-empire", empireId: EMPIRE, candidateId: member.id(),
+      kind: "offer-empire",
+      empireId: EMPIRE,
+      candidateId: member.id(),
     });
     game.performNationalCommand(member, {
-      kind: "accept-empire", empireId: EMPIRE, candidateId: member.id(),
+      kind: "accept-empire",
+      empireId: EMPIRE,
+      candidateId: member.id(),
     });
   }
   expect(game.nationalPoliticalAuthority()?.membersOf(EMPIRE)).toEqual(
@@ -76,39 +103,84 @@ async function world() {
   );
   return { game, a, b, c, d, e, src, dst, other };
 }
-function charter(game: Game, emperor: Player, expectedVersion: number,
-                 delegateIds: string[], allowInternal = false) {
+function charter(
+  game: Game,
+  emperor: Player,
+  expectedVersion: number,
+  delegateIds: string[],
+  allowInternal = false,
+) {
   game.performNationalCommand(emperor, {
     kind: "imperial-administration",
-    command: { kind: "set-economic-charter", empireId: EMPIRE,
-      expectedVersion, delegateIds, allowInternal },
+    command: {
+      kind: "set-economic-charter",
+      empireId: EMPIRE,
+      expectedVersion,
+      delegateIds,
+      allowInternal,
+    },
   });
 }
-function order(game: Game, emperor: Player, memberId: string, targetId: string,
-               embargo: boolean, expectedVersion: number) {
+function order(
+  game: Game,
+  emperor: Player,
+  memberId: string,
+  targetId: string,
+  embargo: boolean,
+  expectedVersion: number,
+) {
   game.performNationalCommand(emperor, {
     kind: "imperial-administration",
-    command: { kind: "set-member-trade", empireId: EMPIRE,
-      memberId, targetId, embargo, expectedVersion },
+    command: {
+      kind: "set-member-trade",
+      empireId: EMPIRE,
+      memberId,
+      targetId,
+      embargo,
+      expectedVersion,
+    },
   });
 }
-function issue(game: Game, actor: Player, targetId: string,
-               recipients: string[], requestId: string) {
-  game.addExecution(new NationalSanctionExecution(actor, {
-    type: "national_issue_sanction", scope: "national",
-    targetId, recipientIds: recipients, durationTicks: 190, requestId,
-  }));
+function issue(
+  game: Game,
+  actor: Player,
+  targetId: string,
+  recipients: string[],
+  requestId: string,
+) {
+  game.addExecution(
+    new NationalSanctionExecution(actor, {
+      type: "national_issue_sanction",
+      scope: "national",
+      targetId,
+      recipientIds: recipients,
+      durationTicks: 190,
+      requestId,
+    }),
+  );
   run(game);
   const views = NationalSanctionExecution.viewFor(game, actor);
   return views[views.length - 1]!.id;
 }
-function respond(game: Game, player: Player, sanctionId: string,
-                 decision: "comply" | "refuse", requestId: string,
-                 expectedCharterVersion?: number) {
-  game.addExecution(new NationalSanctionExecution(player, {
-    type: "national_respond_sanction", sanctionId, decision,
-    requestId, ...(expectedCharterVersion === undefined ? {} : { expectedCharterVersion }),
-  }));
+function respond(
+  game: Game,
+  player: Player,
+  sanctionId: string,
+  decision: "comply" | "refuse",
+  requestId: string,
+  expectedCharterVersion?: number,
+) {
+  game.addExecution(
+    new NationalSanctionExecution(player, {
+      type: "national_respond_sanction",
+      sanctionId,
+      decision,
+      requestId,
+      ...(expectedCharterVersion === undefined
+        ? {}
+        : { expectedCharterVersion }),
+    }),
+  );
   run(game);
 }
 function trade(game: Game, owner: Player, src: Unit, dst: Unit): bigint {
@@ -123,8 +195,14 @@ function railway(game: Game, sourcePlayer: Player, targetPlayer: Player) {
   const route = Array.from({ length: 12 }, (_, y) => game.ref(3, y + 1));
   sourcePlayer.conquer(route[0]);
   targetPlayer.conquer(route[route.length - 1]);
-  const source = new TrainStation(game, sourcePlayer.buildUnit(UnitType.City, route[0], {}));
-  const target = new TrainStation(game, targetPlayer.buildUnit(UnitType.City, route[route.length - 1], {}));
+  const source = new TrainStation(
+    game,
+    sourcePlayer.buildUnit(UnitType.City, route[0], {}),
+  );
+  const target = new TrainStation(
+    game,
+    targetPlayer.buildUnit(UnitType.City, route[route.length - 1], {}),
+  );
   const network = game.railNetwork();
   network.stationManager().addStation(source);
   network.stationManager().addStation(target);
@@ -146,16 +224,24 @@ describe("C5 C3 E3 imperial member economic charter on real Game", () => {
     const { game, a, b, c, d, e, src, dst, other } = await world();
     game.performNationalCommand(a, {
       kind: "imperial-administration",
-      command: { kind: "set-policy", empireId: EMPIRE, policy: {
-        workerIncomeBps: 0, nonWorkerIncomeBps: 4000, allowedConstruction: null,
-      } },
+      command: {
+        kind: "set-policy",
+        empireId: EMPIRE,
+        policy: {
+          workerIncomeBps: 0,
+          nonWorkerIncomeBps: 4000,
+          allowedConstruction: null,
+        },
+      },
     });
     const train = railway(game, c, e);
     const paidShip = trade(game, c, src, dst);
     const paidRail = train();
     expect(paidShip).toBeGreaterThan(0n);
     expect(paidRail).toBeGreaterThan(0n);
-    const initialTreasury = BigInt(game.nationalImperialAdministrationFor(a)!.treasury);
+    const initialTreasury = BigInt(
+      game.nationalImperialAdministrationFor(a)!.treasury,
+    );
     expect(initialTreasury).toBeGreaterThan(0n);
 
     charter(game, a, 0, [DELEGATE]);
@@ -163,31 +249,54 @@ describe("C5 C3 E3 imperial member economic charter on real Game", () => {
     expect(game.nationalEconomicCharterFor(c)?.delegated).toBe(true);
     expect(game.nationalEconomicCharterFor(d)?.delegated).toBe(false);
     // Forged principal and undelegated subordinates cannot change policy.
-    game.addExecution(new NationalSanctionExecution(c, {
-      type: "national_respond_sanction", sanctionId: id,
-      decision: "comply", expectedCharterVersion: 1,
-      requestId: "forged-origin",
-    }, "forged-client"));
+    game.addExecution(
+      new NationalSanctionExecution(
+        c,
+        {
+          type: "national_respond_sanction",
+          sanctionId: id,
+          decision: "comply",
+          expectedCharterVersion: 1,
+          requestId: "forged-origin",
+        },
+        "forged-client",
+      ),
+    );
     respond(game, d, id, "comply", "undelegated");
     expect(c.canTrade(e)).toBe(true);
     expect(d.canTrade(e)).toBe(true);
     respond(game, c, id, "comply", "delegated-yes", 1);
     expect(c.canTrade(e)).toBe(false);
     expect(d.canTrade(e)).toBe(true);
-    const noGold = [c.gold(), e.gold(), BigInt(game.nationalImperialAdministrationFor(a)!.treasury)];
+    const noGold = [
+      c.gold(),
+      e.gold(),
+      BigInt(game.nationalImperialAdministrationFor(a)!.treasury),
+    ];
     expect(trade(game, c, src, dst)).toBe(0n);
     expect(train()).toBe(0n);
-    expect([c.gold(), e.gold(), BigInt(game.nationalImperialAdministrationFor(a)!.treasury)]).toEqual(noGold);
+    expect([
+      c.gold(),
+      e.gold(),
+      BigInt(game.nationalImperialAdministrationFor(a)!.treasury),
+    ]).toEqual(noGold);
 
     order(game, a, DELEGATE, TARGET, false, 1);
     expect(c.canTrade(e)).toBe(true);
     expect(train()).toBeGreaterThan(0n);
     expect(trade(game, c, src, dst)).toBeGreaterThan(0n);
     expect(game.nationalEconomicCharterFor(c)?.version).toBe(2);
-    game.performNationalCommand(a, { kind: "imperial-administration", command: {
-      kind: "respond-member-sanction", empireId: EMPIRE,
-      expectedVersion: 2, memberId: MEMBER, sanctionId: id, decision: "comply",
-    } });
+    game.performNationalCommand(a, {
+      kind: "imperial-administration",
+      command: {
+        kind: "respond-member-sanction",
+        empireId: EMPIRE,
+        expectedVersion: 2,
+        memberId: MEMBER,
+        sanctionId: id,
+        decision: "comply",
+      },
+    });
     expect(d.canTrade(e)).toBe(false);
     expect(c.canTrade(e)).toBe(true);
     expect(trade(game, b, other, dst)).toBeGreaterThan(0n);
@@ -220,9 +329,16 @@ describe("C5 C3 E3 imperial member economic charter on real Game", () => {
     charter(game, a, 3, []);
     const external = issue(game, b, TARGET, [MEMBER], "revoked-grant");
     respond(game, d, external, "comply", "revoked-member", 3);
-    expect(NationalSanctionExecution.viewFor(game, d).find((v) => v.id === external)?.response).toBe("none");
+    expect(
+      NationalSanctionExecution.viewFor(game, d).find((v) => v.id === external)
+        ?.response,
+    ).toBe("none");
 
-    game.performNationalCommand(a, { kind: "transfer-crown", empireId: EMPIRE, successorId: DELEGATE });
+    game.performNationalCommand(a, {
+      kind: "transfer-crown",
+      empireId: EMPIRE,
+      successorId: DELEGATE,
+    });
     expect(game.nationalEconomicCharterFor(d)?.delegated).toBe(false);
     expect(() => order(game, a, MEMBER, TARGET, false, 4)).toThrow();
     expect(() => order(game, c, MEMBER, TARGET, false, 3)).toThrow();
@@ -241,24 +357,50 @@ describe("C5 C3 E3 imperial member economic charter on real Game", () => {
     const { restored, bytes, again } = await roundTrip(game, MAP);
     expect(again).toEqual(bytes);
     for (const g of [game, restored]) {
-      expect(g.nationalEconomicCharterFor(g.player(DELEGATE))?.delegated).toBe(true);
+      expect(g.nationalEconomicCharterFor(g.player(DELEGATE))?.delegated).toBe(
+        true,
+      );
       expect(g.player(DELEGATE).canTrade(g.player(TARGET))).toBe(false);
-      expect(trade(g, g.player(DELEGATE),
-        g.player(DELEGATE).units(UnitType.Port)[0],
-        g.player(TARGET).units(UnitType.Port)[0])).toBe(0n);
-      g.performNationalCommand(g.player(CROWN), { kind: "imperial-administration", command: {
-        kind: "set-economic-charter", empireId: EMPIRE,
-        expectedVersion: 1, delegateIds: [], allowInternal: false,
-      } });
-      respond(g, g.player(DELEGATE), id, "refuse", "stale-response-after-revoke", 1);
+      expect(
+        trade(
+          g,
+          g.player(DELEGATE),
+          g.player(DELEGATE).units(UnitType.Port)[0],
+          g.player(TARGET).units(UnitType.Port)[0],
+        ),
+      ).toBe(0n);
+      g.performNationalCommand(g.player(CROWN), {
+        kind: "imperial-administration",
+        command: {
+          kind: "set-economic-charter",
+          empireId: EMPIRE,
+          expectedVersion: 1,
+          delegateIds: [],
+          allowInternal: false,
+        },
+      });
+      respond(
+        g,
+        g.player(DELEGATE),
+        id,
+        "refuse",
+        "stale-response-after-revoke",
+        1,
+      );
       expect(g.player(DELEGATE).canTrade(g.player(TARGET))).toBe(false);
-      g.performNationalCommand(g.player(CROWN), { kind: "imperial-administration", command: {
-        kind: "dissolve", empireId: EMPIRE,
-      } });
+      g.performNationalCommand(g.player(CROWN), {
+        kind: "imperial-administration",
+        command: {
+          kind: "dissolve",
+          empireId: EMPIRE,
+        },
+      });
       expect(g.nationalEconomicCharterFor(g.player(DELEGATE))).toBeNull();
       // A previously stamped imperial grant MUST NOT revive as independent authority.
       respond(g, g.player(DELEGATE), id, "comply", "stale-after-collapse", 1);
-      expect(g.player(DELEGATE).hasManualEmbargoAgainst(g.player(TARGET))).toBe(true);
+      expect(g.player(DELEGATE).hasManualEmbargoAgainst(g.player(TARGET))).toBe(
+        true,
+      );
       expect(g.nationalPoliticalAuthority()?.empireOf(DELEGATE)).toBeNull();
     }
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));

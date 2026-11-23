@@ -128,10 +128,14 @@ const politicsSchema = z.object({
 });
 
 // One authority record per empire, attached to the canonical NATIONAL runtime.
- // It is NOT a trade ledger; actual embargoes remain Player-owned.
+// It is NOT a trade ledger; actual embargoes remain Player-owned.
 const economicCharterSchema = z.object({
   empireId: z.string().min(1).max(64),
-  version: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER - 1),
+  version: z
+    .number()
+    .int()
+    .min(1)
+    .max(Number.MAX_SAFE_INTEGER - 1),
   ownerId: z.string(),
   delegateIds: z.array(z.string()).max(64),
   allowInternal: z.boolean(),
@@ -485,8 +489,13 @@ export class NationalRuntime {
 
   /** Current crown owns all live grants; succession invalidates the former owner's grants. */
   economicCharterFor(memberId: PlayerID): NationalEconomicCharterView | null {
-    const empire = this.politics.empires.find((e) => e.memberIds.includes(memberId));
-    if (!empire || !this.politics.nations.some((n) => n.id === memberId && n.alive))
+    const empire = this.politics.empires.find((e) =>
+      e.memberIds.includes(memberId),
+    );
+    if (
+      !empire ||
+      !this.politics.nations.some((n) => n.id === memberId && n.alive)
+    )
       return null;
     const row = this.economicCharters.get(empire.id);
     const active = row?.ownerId === empire.leaderId;
@@ -495,16 +504,26 @@ export class NationalRuntime {
       emperorId: empire.leaderId,
       ownerId: row?.ownerId ?? null,
       version: row?.version ?? 0,
-      delegated: active && row.delegateIds.includes(memberId) && memberId !== empire.leaderId,
+      delegated:
+        active &&
+        row.delegateIds.includes(memberId) &&
+        memberId !== empire.leaderId,
       allowInternal: active && row.allowInternal,
     });
   }
 
-  private assertEconomicEpoch(actorId: PlayerID, empireId: string, expectedVersion: number): void {
+  private assertEconomicEpoch(
+    actorId: PlayerID,
+    empireId: string,
+    expectedVersion: number,
+  ): void {
     this.assertEmperor(actorId, empireId);
     const actual = this.economicCharters.get(empireId)?.version ?? 0;
-    if (!Number.isSafeInteger(expectedVersion) || expectedVersion !== actual ||
-        actual >= Number.MAX_SAFE_INTEGER - 1)
+    if (
+      !Number.isSafeInteger(expectedVersion) ||
+      expectedVersion !== actual ||
+      actual >= Number.MAX_SAFE_INTEGER - 1
+    )
       throw new Error("NATIONAL: stale imperial economic charter epoch");
   }
 
@@ -517,27 +536,49 @@ export class NationalRuntime {
   ): void {
     this.assertEconomicEpoch(actorId, empireId, expectedVersion);
     const empire = this.politics.empires.find((e) => e.id === empireId)!;
-    if (typeof allowInternal !== "boolean" || delegateIds.length > 64 ||
-        new Set(delegateIds).size !== delegateIds.length ||
-        delegateIds.some((id) => id === actorId || !empire.memberIds.includes(id) ||
-          !this.politics.nations.some((n) => n.id === id && n.alive)))
+    if (
+      typeof allowInternal !== "boolean" ||
+      delegateIds.length > 64 ||
+      new Set(delegateIds).size !== delegateIds.length ||
+      delegateIds.some(
+        (id) =>
+          id === actorId ||
+          !empire.memberIds.includes(id) ||
+          !this.politics.nations.some((n) => n.id === id && n.alive),
+      )
+    )
       throw new Error("NATIONAL: invalid imperial economic delegate");
-    this.economicCharters.set(empireId, economicCharterSchema.parse({
-      empireId, version: expectedVersion + 1, ownerId: actorId,
-      delegateIds: [...delegateIds].sort(), allowInternal,
-    }));
+    this.economicCharters.set(
+      empireId,
+      economicCharterSchema.parse({
+        empireId,
+        version: expectedVersion + 1,
+        ownerId: actorId,
+        delegateIds: [...delegateIds].sort(),
+        allowInternal,
+      }),
+    );
   }
 
   /** Invoke only after a Game-owned embargo or sanction-response command commits. */
-  advanceEconomicEpoch(actorId: PlayerID, empireId: string, expectedVersion: number): void {
+  advanceEconomicEpoch(
+    actorId: PlayerID,
+    empireId: string,
+    expectedVersion: number,
+  ): void {
     this.assertEconomicEpoch(actorId, empireId, expectedVersion);
     const prev = this.economicCharters.get(empireId);
     const sameOwner = prev?.ownerId === actorId;
-    this.economicCharters.set(empireId, economicCharterSchema.parse({
-      empireId, version: expectedVersion + 1, ownerId: actorId,
-      delegateIds: sameOwner ? prev.delegateIds : [],
-      allowInternal: sameOwner ? prev.allowInternal : false,
-    }));
+    this.economicCharters.set(
+      empireId,
+      economicCharterSchema.parse({
+        empireId,
+        version: expectedVersion + 1,
+        ownerId: actorId,
+        delegateIds: sameOwner ? prev.delegateIds : [],
+        allowInternal: sameOwner ? prev.allowInternal : false,
+      }),
+    );
   }
 
   setImperialPolicy(
@@ -1526,8 +1567,12 @@ export class NationalRuntime {
           }
         : {}),
       ...(this.economicCharters.size > 0
-        ? { economicCharters: [...this.economicCharters.values()].sort((a, b) =>
-            a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0) }
+        ? {
+            economicCharters: [...this.economicCharters.values()].sort(
+              (a, b) =>
+                a.empireId < b.empireId ? -1 : a.empireId > b.empireId ? 1 : 0,
+            ),
+          }
         : {}),
       ...(this.unclaimedTreasury > 0n
         ? { unclaimedTreasury: this.unclaimedTreasury.toString() }
@@ -1587,12 +1632,21 @@ export class NationalRuntime {
       restored.administration.set(row.empireId, row);
     }
     for (const charter of saved.economicCharters ?? []) {
-      const empire = saved.politics.empires.find((e) => e.id === charter.empireId);
-      if (!empire || restored.economicCharters.has(charter.empireId) ||
-          !empire.memberIds.includes(charter.ownerId) ||
-          new Set(charter.delegateIds).size !== charter.delegateIds.length ||
-          charter.delegateIds.some((id) => id === charter.ownerId || !empire.memberIds.includes(id)))
-        throw new Error("NATIONAL: invalid or orphan imperial economic charter");
+      const empire = saved.politics.empires.find(
+        (e) => e.id === charter.empireId,
+      );
+      if (
+        !empire ||
+        restored.economicCharters.has(charter.empireId) ||
+        !empire.memberIds.includes(charter.ownerId) ||
+        new Set(charter.delegateIds).size !== charter.delegateIds.length ||
+        charter.delegateIds.some(
+          (id) => id === charter.ownerId || !empire.memberIds.includes(id),
+        )
+      )
+        throw new Error(
+          "NATIONAL: invalid or orphan imperial economic charter",
+        );
       restored.economicCharters.set(charter.empireId, charter);
     }
     restored.unclaimedTreasury = BigInt(saved.unclaimedTreasury ?? "0");
