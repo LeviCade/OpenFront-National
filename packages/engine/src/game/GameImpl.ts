@@ -1007,9 +1007,17 @@ export class GameImpl implements Game {
       ) {
         throw new Error("NATIONAL levy: attack not formally authorized");
       }
-      const expectedDonors = this.nationalMdaAllies(attack.defenderId).filter(
-        (id) => id !== attack.attackerId,
-      );
+      const response = this._national.standingDefenseFor(attack.defenderId);
+      const imperialDonors =
+        response?.response === "assist" || response?.response === "both"
+          ? this._national.authority().membersOf(response.empireId)
+          : [];
+      const expectedDonors = [
+        ...new Set([
+          ...this.nationalMdaAllies(attack.defenderId),
+          ...imperialDonors,
+        ]),
+      ].filter((id) => id !== attack.attackerId && id !== attack.defenderId);
       const suppliedDonors = attack.eligible.map((e) => e.source.nationId);
       if (
         suppliedDonors.length !== expectedDonors.length ||
@@ -1024,12 +1032,18 @@ export class GameImpl implements Game {
         const id = entry.source.nationId;
         if (
           this.nationalLevySource(id) !== entry.source ||
-          !political.pacts.some(
-            (p) =>
-              p.kind === "MDA" &&
-              p.memberIds.includes(attack.defenderId) &&
-              p.memberIds.includes(id),
-          )
+          !(
+            political.pacts.some(
+              (p) =>
+                p.kind === "MDA" &&
+                p.memberIds.includes(attack.defenderId) &&
+                p.memberIds.includes(id),
+            ) || imperialDonors.includes(id)
+          ) ||
+          entry.maximumFraction !== (imperialDonors.includes(id) ? 1 : 0.1) ||
+          entry.protectedCapacityFraction !== 0.3 ||
+          entry.troopCapacity !==
+            Math.floor(this._config.maxTroops(this.player(id)))
         ) {
           throw new Error(
             "NATIONAL levy: not an authoritative MDA contributor",
@@ -1038,6 +1052,143 @@ export class GameImpl implements Game {
       }
     }
     return this._nationalWar.interceptAcceptedAttacks(attacks);
+  }
+
+  /**
+   * Authoritative attack-time empire defense. Called ONLY after AttackExecution
+   * has validated a funded, border-reaching offensive attack. This uses the
+   * identical snapshotted WAR + LEVY service and atomic PlayerImpl CAS as MDA.
+   * Neither browser intent nor emperor can invent a donor/war/attack receipt.
+   */
+  interceptNationalIncomingAttack(
+    attackId: string,
+    attackerId: PlayerID,
+    defenderId: PlayerID,
+    troops: number,
+  ): DefenseResult {
+    if (this._national === null || this._nationalWar === null)
+      throw new Error("NATIONAL defense: mode not enabled");
+    if (
+      typeof attackId !== "string" ||
+      attackId.length === 0 ||
+      attackId.length > 256 ||
+      !Number.isSafeInteger(troops) ||
+      troops < 1
+    )
+      throw new Error("NATIONAL defense: malformed accepted invasion");
+    this.synchronizeNationalState();
+    if (
+      !this._nationalWar.authority.authorizeOffensiveAction(
+        attackerId,
+        defenderId,
+      ) ||
+      !this._players.get(attackerId)?.hasSpawned() ||
+      !this._players.get(attackerId)?.isAlive() ||
+      !this._players.get(defenderId)?.hasSpawned() ||
+      !this._players.get(defenderId)?.isAlive()
+    )
+      throw new Error("NATIONAL defense: unlawful or dead-member attack");
+
+    const response = this._national.standingDefenseFor(defenderId);
+    // A previously committed attack is replayed by the existing ledger even
+    // after a policy, troop balance, member or crown mutation.
+    const alreadyProcessed = this._nationalWar
+      .snapshot()
+      .levy.processed.some((record) => record.attackId === attackId);
+    if (!alreadyProcessed) {
+      // Formal WAR alone is insufficient: a caller cannot synthesize a
+      // battlefield receipt for an army that the real Game never accepted.
+      // Compare against the actual funded outgoing attack and the exact
+      // pre-interception cancellation/consolidation calculation performed by
+      // AttackExecution. An engine-only adapter is not a client credential.
+      const attacker = this._players.get(attackerId)!;
+      const defender = this._players.get(defenderId)!;
+      const battle = attacker
+        .outgoingAttacks()
+        .find((a) => a.id() === attackId);
+      if (
+        !battle ||
+        !battle.isActive() ||
+        battle.attacker() !== attacker ||
+        battle.target() !== defender
+      )
+        throw new Error("NATIONAL defense: no real accepted invading army");
+      let projected = battle.troops();
+      for (const incoming of attacker.incomingAttacks()) {
+        if (incoming.attacker() !== defender) continue;
+        if (incoming.troops() > projected)
+          throw new Error("NATIONAL defense: canceled incoming battle");
+        projected -= incoming.troops();
+      }
+      if (battle.sourceTile() === null) {
+        for (const outgoing of attacker.outgoingAttacks()) {
+          if (outgoing !== battle && outgoing.target() === defender)
+            projected += outgoing.troops();
+        }
+      }
+      if (projected < 1 || Math.floor(projected) !== troops)
+        throw new Error("NATIONAL defense: forged invading troop strength");
+    }
+    const mode = alreadyProcessed ? "none" : (response?.response ?? "none");
+    const plan =
+      response && (mode === "imperial" || mode === "both")
+        ? this._nationalWar.prepareStandingDefenseWar(
+            response.empireId,
+            attackerId,
+            defenderId,
+            this._ticks,
+          )
+        : null;
+
+    const mda = new Set(this.nationalMdaAllies(defenderId));
+    const imperials = new Set(
+      response && (mode === "assist" || mode === "both")
+        ? this._national.authority().membersOf(response.empireId)
+        : [],
+    );
+    const donorIds = [...new Set([...mda, ...imperials])]
+      .filter((id) => id !== attackerId && id !== defenderId)
+      .sort();
+    const eligible = alreadyProcessed
+      ? []
+      : donorIds.map((id) => {
+          const source = this.nationalLevySource(id);
+          const donor = this._players.get(id);
+          if (!source || !donor || !donor.hasSpawned() || !donor.isAlive())
+            throw new Error("NATIONAL defense: invalid standing donor");
+          return {
+            source,
+            troopCapacity: Math.floor(this._config.maxTroops(donor)),
+            maximumFraction: imperials.has(id) ? 1 : 0.1,
+            protectedCapacityFraction: 0.3,
+          };
+        });
+    const campaignId = `national:${attackerId.length}:${attackerId}:${defenderId.length}:${defenderId}`;
+    // One transaction across both MDA and imperial contributors; one campaign
+    // allowance per real donor, shared across repeated clicks/fronts.
+    // A declaration made AFTER troop CAS would turn a late WAR failure into
+    // an uncompensated donor loss. Enact the preflighted WAR under the same
+    // synchronous Game tick lock BEFORE spending, and roll it back if the
+    // actual donor transaction refuses the attack. No speculative WAR is
+    // visible outside this indivisible engine operation.
+    const beforeWar = plan ? this._nationalWar.snapshot() : null;
+    if (plan) this._nationalWar.enactStandingDefenseWar(plan, this._ticks);
+    try {
+      return this.applyNationalDefenseLevy([
+        {
+          attackId,
+          confirmedAccepted: true,
+          campaignId,
+          attackerId,
+          defenderId,
+          attackingTroops: troops,
+          eligible,
+        },
+      ])[0];
+    } catch (error) {
+      if (beforeWar) this._nationalWar.restore(beforeWar);
+      throw error;
+    }
   }
 
   /**
@@ -1204,6 +1355,9 @@ export class GameImpl implements Game {
         break;
       case "set-war-policy":
         this._national.setWarPolicy(actor.id(), command);
+        break;
+      case "set-standing-defense-policy":
+        this._national.setStandingDefensePolicy(actor.id(), command);
         break;
       case "transfer-troops": {
         const source = this._players.get(command.sourceId);

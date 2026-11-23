@@ -15,6 +15,7 @@ import {
   type ConflictLedgerState,
   type ConflictParty,
   type PoliticsPort,
+  type StandingDefenseWarPlan,
 } from "../conflict/WarLedger";
 
 const id = z.string().min(1).max(256);
@@ -167,6 +168,24 @@ export class NationalWarStateService {
     tick: number,
   ): string[] {
     return this.wars.escalateAccessionWars(empireId, candidateId, tick);
+  }
+
+  prepareStandingDefenseWar(
+    empireId: string,
+    attackerId: string,
+    defenderId: string,
+    tick: number,
+  ): StandingDefenseWarPlan | null {
+    return this.wars.prepareStandingDefenseWar(
+      empireId,
+      attackerId,
+      defenderId,
+      tick,
+    );
+  }
+
+  enactStandingDefenseWar(plan: StandingDefenseWarPlan, tick: number): void {
+    this.wars.enactStandingDefenseWar(plan, tick);
   }
 
   /** Validate BOTH ledgers before touching the live state. */
