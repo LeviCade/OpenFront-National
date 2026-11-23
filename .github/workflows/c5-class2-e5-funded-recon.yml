@@ -3,11 +3,6 @@ on:
   push:
     branches:
       - feature/c5-class2-e5-funded-recon-intelligence-20261122
-  pull_request:
-    paths:
-      - "packages/engine/src/national/observation/**"
-      - "packages/engine/src/execution/NationalReconExecution.ts"
-      - "tests/national/C5Class2FundedRecon.test.ts"
   workflow_dispatch:
 permissions:
   contents: read
@@ -34,10 +29,16 @@ jobs:
       - name: Inherited fog regression
         run: npx --no-install vitest run --project node tests/national/NationalLiveObservation.test.ts tests/national/C5CoastalVisibility.test.ts
       - name: Source formatting (strict)
+        if: always()
         run: |
           npx --no-install oxfmt --write packages/engine/src/national/observation/NationalReconnaissance.ts packages/engine/src/national/observation/LiveObservation.ts packages/engine/src/national/observation/NationalObservation.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/game/Game.ts packages/engine/src/game/GameImpl.ts packages/engine/src/execution/NationalReconExecution.ts packages/engine/src/execution/ExecutionManager.ts packages/engine/src/execution/NationExecution.ts packages/engine/src/snapshot/ExecutionRegistry.ts packages/engine-api/src/Schemas.ts tests/national/C5Class2FundedRecon.test.ts
-          git diff --exit-code -- packages/engine/src/national/observation/NationalReconnaissance.ts packages/engine/src/national/observation/LiveObservation.ts packages/engine/src/national/observation/NationalObservation.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/game/Game.ts packages/engine/src/game/GameImpl.ts packages/engine/src/execution/NationalReconExecution.ts packages/engine/src/execution/ExecutionManager.ts packages/engine/src/execution/NationExecution.ts packages/engine/src/snapshot/ExecutionRegistry.ts packages/engine-api/src/Schemas.ts tests/national/C5Class2FundedRecon.test.ts
+          status=0
+          git diff --exit-code -- packages/engine/src/national/observation/NationalReconnaissance.ts packages/engine/src/national/observation/LiveObservation.ts packages/engine/src/national/observation/NationalObservation.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/game/Game.ts packages/engine/src/game/GameImpl.ts packages/engine/src/execution/NationalReconExecution.ts packages/engine/src/execution/ExecutionManager.ts packages/engine/src/execution/NationExecution.ts packages/engine/src/snapshot/ExecutionRegistry.ts packages/engine-api/src/Schemas.ts tests/national/C5Class2FundedRecon.test.ts || status=$?
+          git restore -- packages/engine/src/national/observation/NationalReconnaissance.ts packages/engine/src/national/observation/LiveObservation.ts packages/engine/src/national/observation/NationalObservation.ts packages/engine/src/national/politics/NationalGovernanceState.ts packages/engine/src/game/Game.ts packages/engine/src/game/GameImpl.ts packages/engine/src/execution/NationalReconExecution.ts packages/engine/src/execution/ExecutionManager.ts packages/engine/src/execution/NationExecution.ts packages/engine/src/snapshot/ExecutionRegistry.ts packages/engine-api/src/Schemas.ts tests/national/C5Class2FundedRecon.test.ts
+          exit "$status"
       - name: Lint
+        if: always()
         run: npm run lint
       - name: Production build
+        if: always()
         run: npm run build-prod
