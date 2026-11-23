@@ -167,13 +167,11 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
     expect(
       readNationalAssessmentView({ ...valid, secret: "key" }, "nation-a", 21),
     ).toBeNull();
+    // Multiple authenticated purchases may share a payer/target/tick.
     expect(
-      readNationalAssessmentView(
-        packet([validReport, validReport]),
-        "nation-a",
-        21,
-      ),
-    ).toBeNull();
+      readNationalAssessmentView(packet([validReport, validReport]), "nation-a", 21)
+        ?.items,
+    ).toHaveLength(2);
     expect(
       readNationalAssessmentView(
         packet([{ ...validReport, targetId: "nation-a" }]),
