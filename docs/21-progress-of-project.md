@@ -23,6 +23,24 @@ do not silently reweight future checkpoints.
 | M9 — player interface, independent QA, release readiness    |   **6** |
 | **TOTAL**                                                   | **100** |
 
+## Fifth Conductor Second Class final certification (73%) — November 22, 2026
+
+**OFFICIAL MANAGER CERTIFICATION: 73%.** [GitHub Issue #20](https://github.com/LeviCade/OpenFront-National/issues/20) is the governing ledger; all lower historical "current" statements below are superseded. **Started 67%; Fifth C2 delivered +6 entirely new accepted points; minimum was +5 (72%).** **Grade A — 3.78/4.00, GOLDEN REIGN; Fifth Conductor retained.**
+
+[PR #165](https://github.com/LeviCade/OpenFront-National/pull/165) MERGED to `stage3/integration-20261115` at `86b476d3ea8aa04821f2caac421738fe2fe1db21`, carrying exact accepted staged source `3499dcd42684e6e9a65a7d54e64fc93af75142d3`, reported identical Git tree `f6c62b1a9981439e84bf02ee099946732b1fcb8b`. [Combined exact-source #45092234362](https://github.com/LeviCade/OpenFront-National/actions/runs/45092234362) **6/6 success**: 849/849 full test files, 12,016 pass, one prior skip; 140/140 combined engine/native checks (94+46), TypeScript, lint, pinned format, build. [Independent R6 #45092239294](https://github.com/LeviCade/OpenFront-National/actions/runs/45092239294) **7/7 non-GPU jobs pass**, including source, prod dependencies and mutation gate. [Independent QA #45092239307](https://github.com/LeviCade/OpenFront-National/actions/runs/45092239307) SUCCESS for replay/hostile packets and CPU Chromium homepage only. [Real certificate-verified WSS operational #45092234423](https://github.com/LeviCade/OpenFront-National/actions/runs/45092234423) **4/4 success**; same game restored tick 458 and continued to 464, three **automated**, not human, authenticated seats, zero acknowledged tick loss. The canonical merge retains exact staged tree by documented Git tree identity; additional post-merge CI conclusions are not presumed.
+
+**Six NEW, non-duplicated awards:**
+- **M9 +1 / E1 #168:** native emperor upgrade/demolition UI plus current visibility/authorization/receipt-tested map selection. **Development UI only**, not a real human browser playthrough or public release.
+- **M0 +1 / E2 #166:** genuine localhost certificate-verified HTTPS/WSS network transport, exact WebSocket Origin and physical-socket promotion checks, hostile traffic refusal and reconnect; prior plaintext local admission/durable world not re-scored.
+- **M6 +1 / E3 #171:** enforceable sovereign ultimatum: timed issue, recipient response, current legitimate emperor/epoch, actual trade embargo or scoped WAR refusal consequences, secrecy, no automatic annexation.
+- **M5 +1 / E4 #167:** versioned emperor-selected standing attack-time defense, real donor-funded interception plus optional legal imperial WAR, CAS rollback/retreat; no re-award of MDA interception or prior WAR.
+- **M7 +1 / E5 #170:** authenticated 500-gold purchase of recipient-only 90-tile/600-tick regional target intelligence; real hidden units appear/expire/revoke, current reciprocal empire sharing, snapshot/replay and human/AI parity. Previous border/coastal visibility not re-scored.
+- **M8 +1 / E6 #169 with Conductor bridge:** AI uses legitimate ultimatum observation to refuse geographically unreachable threats through ordinary `NationExecution`/real Game command; distinctive from generic treaty AI and economic sanction policy.
+
+**Final accounting: previous 67% + Fifth C2 original +6 = 73%.** The prior 67% included Fourth C2 historical +8 and Fifth C1 original +6; neither has been re-awarded. **Fifth Third Class baseline 73%, mandatory 78%** (at least 5 new distinct points). Original 100-point M0–M9 weights and historic unallocated opening 16 unchanged.
+
+**NOT certified:** complete four-mode physical GPU game and human desktop/mobile playthrough (strict GPU/browser failed/skipped), 3 independently witnessed human graphical NATIONAL clients, externally authorized production OAuth/HTTPS/WSS host, privileged signed host/teardown, independent licensed asset rights, main deploy or release. **No public release.**
+
 ## Fifth Conductor First Class final certification (67%) — November 22, 2026
 
 **MANAGER'S OFFICIAL COMPLETION: 67%.** [Issue #20](https://github.com/LeviCade/OpenFront-National/issues/20) is the authoritative certificate. Any older "current" lines below are historic and superseded. The initial post-merge 64% audit was corrected after an independent exact-source review revealed three additional unscored **Fourth-Conductor** features from PR #147; this correction does **not** grant them to the Fifth.
