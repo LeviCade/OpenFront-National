@@ -160,6 +160,58 @@ afterEach(() => {
 });
 
 describe("C5 Class Three E1 native sovereign journey", () => {
+  it("the issuer uses the real enforcement intent, and only a matching changed Game row acknowledges it", async () => {
+    const { element, demands, state } = await mount();
+    state.ultimatums = [{
+      ...ultimatum,
+      phase: "decision-required",
+      response: "refuse",
+      version: 2,
+      requestId: null,
+    }];
+    element.refresh();
+    await element.updateComplete;
+    const enforce = [...element.querySelectorAll<HTMLButtonElement>(
+      "[data-national-ultimatum-id] button",
+    )].find((button) => button.textContent?.includes("Enforce original consequence"))!;
+    enforce.click();
+    await element.updateComplete;
+    expect(demands).toHaveLength(1);
+    expect(demands[0].candidate).toMatchObject({
+      type: "national_resolve_ultimatum",
+      ultimatumId: ultimatum.id,
+      decision: "enforce",
+    });
+    expect(element.textContent).toContain("Pending Game-owned ultimatum acknowledgement");
+    state.tick++;
+    state.ultimatums = [{
+      ...state.ultimatums[0],
+      version: 3,
+      phase: "enforced",
+      acknowledgedRequestIds: [(demands[0].candidate as { requestId: string }).requestId],
+    }];
+    element.refresh();
+    await element.updateComplete;
+    expect(element.textContent).toContain("Game confirmed enforce");
+  });
+
+  it("refuses a stale emperor at actual form submission even if old UI was rendered", async () => {
+    const { element, state, demands } = await mount();
+    const form = element.querySelector<HTMLFormElement>(
+      "section[data-national-ultimatums] form",
+    )!;
+    form.querySelector<HTMLSelectElement>('[name="target"]')!.value = "nation-b";
+    form.querySelector<HTMLInputElement>('[name="confirm"]')!.checked = true;
+    state.politics.empires[0] = {
+      ...state.politics.empires[0],
+      leaderId: "nation-b",
+    };
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await element.updateComplete;
+    expect(demands).toHaveLength(0);
+    expect(element.textContent).toContain("emperor authority changed");
+  });
+
   it("selects center from a real map event while the mobile diplomacy sheet is dismissed", async () => {
     const { element, bus } = await mount();
     const requested: NationalReconMapPickRequestedEvent[] = [];
