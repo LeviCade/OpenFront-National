@@ -1,5 +1,6 @@
 /** Sixth C1 E2: real Game and hostile replay acceptance. */
 import {
+  GameType,
   PlayerInfo,
   PlayerType,
   UnitType,
@@ -25,8 +26,16 @@ const map = "half_land_half_ocean";
 const roster = [A, B, C].map(
   (id, i) => new PlayerInfo(id, PlayerType.Human, "E2CLIENT" + i, id),
 );
-async function fixture(nationalMode = true) {
-  const game = await setup(map, { nationalMode, instantBuild: true }, roster);
+async function fixture(nationalMode = true, privateGame = false) {
+  const game = await setup(
+    map,
+    {
+      nationalMode,
+      instantBuild: true,
+      ...(privateGame ? { gameType: GameType.Private } : {}),
+    },
+    roster,
+  );
   roster.forEach((info, i) => {
     const player = game.player(info.id);
     const tile = game.ref(1, 1 + i * 4);
@@ -460,4 +469,103 @@ describe("C6 C1 E2 — real imperial relief", () => {
     ffa.creditNationalCommercialIncome(ffa.player(B), 17n);
     expect(ffa.player(B).gold() - old).toBe(17n);
   });
+  it("private sessions require authentic member and emperor admission for every gold transfer", async () => {
+    const { game, workers } = await fixture(true, true);
+    const a = game.player(A);
+    const b = game.player(B);
+    const c = game.player(C);
+    const execute = (actor: Player, command: Parameters<Game["performNationalImperialAdministration"]>[1]) =>
+      game.performNationalImperialAdministration(
+        actor,
+        command,
+        actor.clientID() ?? undefined,
+      );
+    game.performNationalCommand(
+      a,
+      { kind: "found-empire", empireId },
+      a.clientID() ?? undefined,
+    );
+    game.performNationalCommand(
+      a,
+      { kind: "offer-empire", empireId, candidateId: B },
+      a.clientID() ?? undefined,
+    );
+    game.performNationalCommand(
+      b,
+      { kind: "accept-empire", empireId, candidateId: B },
+      b.clientID() ?? undefined,
+    );
+    execute(a, {
+      kind: "set-policy",
+      empireId,
+      policy: {
+        workerIncomeBps: 10000,
+        nonWorkerIncomeBps: 0,
+        fixedGoldPerPayout: "0",
+        revenueClasses: {
+          workers: true,
+          maritime: true,
+          rail: true,
+          piracy: true,
+        },
+        allowedConstruction: null,
+      },
+    });
+    workerPayout(game, b, workers, 71n);
+    expect(treasury(game)).toBe(71n);
+    const before = b.gold();
+    const requestCommand = {
+      kind: "request-relief" as const,
+      empireId,
+      reliefId: "private-relief",
+      amount: "31",
+    };
+    expect(() =>
+      game.performNationalImperialAdministration(b, requestCommand),
+    ).toThrow("missing authenticated actor session");
+    expect(() =>
+      game.performNationalImperialAdministration(
+        b,
+        requestCommand,
+        c.clientID() ?? undefined,
+      ),
+    ).toThrow("stale authenticated actor session");
+    expect(() => execute(c, requestCommand)).toThrow("living non-emperor member");
+    expect(game.nationalImperialAdministrationFor(b)?.reliefRequests).toEqual([]);
+    execute(b, requestCommand);
+    const approval = {
+      kind: "decide-relief" as const,
+      empireId,
+      reliefId: "private-relief",
+      expectedVersion: 0,
+      decision: "approve" as const,
+    };
+    expect(() => game.performNationalImperialAdministration(a, approval)).toThrow(
+      "missing authenticated actor session",
+    );
+    expect(() =>
+      game.performNationalImperialAdministration(
+        a,
+        approval,
+        b.clientID() ?? undefined,
+      ),
+    ).toThrow("stale authenticated actor session");
+    expect(treasury(game)).toBe(71n);
+    expect(b.gold()).toBe(before);
+    execute(a, approval);
+    expect(treasury(game)).toBe(40n);
+    expect(b.gold() - before).toBe(31n);
+    expect(() => execute(a, approval)).toThrow("stale, foreign or unauthorized relief decision");
+    expect(treasury(game)).toBe(40n);
+    expect(b.gold() - before).toBe(31n);
+    expect(
+      projectNationalImperialAdministration(
+        game,
+        C,
+        ledger(game).politics,
+        game.ticks(),
+      ),
+    ).toBeUndefined();
+  });
+
 });
