@@ -6,7 +6,7 @@ import {
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { readNationalImperialAdministration } from "@openfront/engine-api/game/NationalImperialView";
-import { StampedIntentSchema } from "@openfront/engine-api/Schemas";
+import { StampedIntentSchema, type GameConfig } from "@openfront/engine-api/Schemas";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
@@ -19,6 +19,7 @@ import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
+import { TestConfig } from "../util/TestConfig";
 
 const [A, B, C] = ["C6R_A", "C6R_B", "C6R_C"];
 const empireId = "C6Relief";
@@ -26,6 +27,15 @@ const map = "half_land_half_ocean";
 const roster = [A, B, C].map(
   (id, i) => new PlayerInfo(id, PlayerType.Human, "E2CLIENT" + i, id),
 );
+/** Deliberately opt into the engine's trusted-server-only Private NATIONAL path.
+ * This is a server configuration fixture, not an external WSS identity claim.
+ */
+class TrustedPrivateNationalConfig extends TestConfig {
+  constructor(config: GameConfig, isReplay: boolean) {
+    super(config, isReplay, false, false, true);
+  }
+}
+
 async function fixture(nationalMode = true, privateGame = false) {
   const game = await setup(
     map,
@@ -35,6 +45,8 @@ async function fixture(nationalMode = true, privateGame = false) {
       ...(privateGame ? { gameType: GameType.Private } : {}),
     },
     roster,
+    undefined,
+    privateGame ? TrustedPrivateNationalConfig : TestConfig,
   );
   roster.forEach((info, i) => {
     const player = game.player(info.id);
