@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { GameType } from "@openfront/engine-api/game/GameTypes";
 import type { NationalUltimatumViewData } from "@openfront/engine-api/game/GameUpdates";
+import { NationalReconMapPickRequestedEvent, NationalReconMapPointSelectedEvent } from "../../../src/client/controllers/NationalMapTargetController";
 import { EventBus } from "@openfront/shared/EventBus";
 import { afterEach, describe, expect, it } from "vitest";
 import "../../../src/client/NationalDiplomacyPanel";
@@ -156,6 +157,27 @@ afterEach(() => {
 });
 
 describe("C5 Class Three E1 native sovereign journey", () => {
+  it("selects center from a real map event while the mobile diplomacy sheet is dismissed", async () => {
+    const { element, bus } = await mount();
+    const requested: NationalReconMapPickRequestedEvent[] = [];
+    bus.on(NationalReconMapPickRequestedEvent, (event) => requested.push(event));
+    const choose = [...element.querySelectorAll<HTMLButtonElement>(
+      "section[data-national-recon] button",
+    )].find((button) => button.textContent?.includes("Choose center on map"))!;
+    choose.click();
+    await element.updateComplete;
+    expect(requested).toHaveLength(1);
+    expect(requested[0]).toMatchObject({ gameId: "national-sovereign-ui", active: true });
+    expect(element.querySelector("section[data-national-recon]")).toBeNull();
+    bus.emit(new NationalReconMapPointSelectedEvent("other-session", 4, 6));
+    expect(element.querySelector("section[data-national-recon]")).toBeNull();
+    bus.emit(new NationalReconMapPointSelectedEvent("national-sovereign-ui", 12, 34));
+    await element.updateComplete;
+    expect(element.querySelector<HTMLInputElement>('section[data-national-recon] [name="centerX"]')?.value).toBe("12");
+    expect(element.querySelector<HTMLInputElement>('section[data-national-recon] [name="centerY"]')?.value).toBe("34");
+    expect(element.textContent).toContain("Game map center selected");
+  });
+
   it("a real emperor can issue exactly one demand and must await private Game receipt", async () => {
     const { element, demands, state } = await mount();
     await submitForm(
