@@ -799,7 +799,14 @@ export class NationalOutboundFilter {
         ? { packedMissileTimers: packed.packedMissileTimers }
         : {}),
       ...(playerNameViewData ? { playerNameViewData } : {}),
-      tickExecutionDuration: data.tickExecutionDuration,
+      // Performance timing is diagnostic, not diplomatic intelligence. Quantize
+      // noisy binary-float tails so a numeric suffix cannot resemble a secret.
+      tickExecutionDuration:
+        data.tickExecutionDuration === undefined
+          ? undefined
+          : Number.isFinite(data.tickExecutionDuration)
+            ? Math.round(data.tickExecutionDuration * 100) / 100
+            : 0,
       pendingTurns: data.pendingTurns,
     } as GameUpdateViewData;
   }
