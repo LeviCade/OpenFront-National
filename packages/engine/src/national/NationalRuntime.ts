@@ -605,7 +605,7 @@ export class NationalRuntime {
           version:
             charter.version < Number.MAX_SAFE_INTEGER - 1
               ? charter.version + 1
-              : 1,
+              : Number.MAX_SAFE_INTEGER - 1,
         }),
       );
     }

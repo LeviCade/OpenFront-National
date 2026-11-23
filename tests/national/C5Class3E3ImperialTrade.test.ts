@@ -345,8 +345,12 @@ describe("C5 C3 E3 imperial member economic charter on real Game", () => {
     // Succession is a versioned revocation, even before new orders.
     const { restored: successor, bytes, again } = await roundTrip(game, MAP);
     expect(again).toEqual(bytes);
-    expect(successor.nationalEconomicCharterFor(successor.player(MEMBER))?.version).toBe(5);
-    expect(successor.nationalEconomicCharterFor(successor.player(MEMBER))?.delegated).toBe(false);
+    expect(
+      successor.nationalEconomicCharterFor(successor.player(MEMBER))?.version,
+    ).toBe(5);
+    expect(
+      successor.nationalEconomicCharterFor(successor.player(MEMBER))?.delegated,
+    ).toBe(false);
     charter(game, c, 5, [MEMBER]);
     order(game, c, MEMBER, TARGET, false, 6);
     expect(d.canTrade(e)).toBe(true);
