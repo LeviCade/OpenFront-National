@@ -1,0 +1,65 @@
+name: C5 Class Two — Conductor combined exact-source acceptance
+on:
+  push:
+    branches:
+      - stage3/conductor5-class2-integration-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c5c2-combined-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  all-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [typecheck, full-tests, lint, pinned-format, production-build, integrated-features]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact conductor integration SHA
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Check entire source, not isolated PR refs
+        env:
+          GATE: ${{ matrix.gate }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$GATE" in
+            typecheck) npm run typecheck ;;
+            full-tests) npm test ;;
+            lint) npm run lint ;;
+            pinned-format) npm run format:check ;;
+            production-build) npm run build-prod ;;
+            integrated-features)
+              npx --no-install vitest run --project node \
+                tests/national/C5Class2FundedRecon.test.ts \
+                tests/national/C5Class2ImperialUltimatum.test.ts \
+                tests/national/C5StandingImperialDefense.test.ts \
+                tests/national/C5Class2E6Coercion.test.ts \
+                tests/national/C5ImperialCentralCombat.test.ts \
+                tests/national/C5Class1E5EconomicAI.test.ts \
+                tests/national/NationalAccessionPacketsR11.test.ts \
+                tests/national/C4NativeImperialGate.test.ts \
+                tests/core/snapshot/FullGameSnapshot.test.ts
+              npx --no-install vitest run \
+                tests/ui/national/NationalDiplomacyPanel.test.ts \
+                tests/ui/national/NationalHumanMapInputR11.test.ts \
+                tests/ui/national/NationalWarWire.test.ts
+              ;;
+            *) exit 2 ;;
+          esac
+      - name: Upload gate logs on failure
+        if: failure()
+        run: |
+          echo "C5 C2 exact source ${{ github.sha }} gate ${{ matrix.gate }} FAILED"
