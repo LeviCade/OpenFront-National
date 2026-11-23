@@ -11,12 +11,12 @@ import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
 import { TrainExecution } from "@openfront/engine/execution/TrainExecution";
 import { WarshipExecution } from "@openfront/engine/execution/WarshipExecution";
-import { GameRunner } from "@openfront/engine/GameRunner";
-import { GameSnapshot } from "@openfront/engine/game/GameImpl";
-import { NationalRuntime } from "@openfront/engine/national/NationalRuntime";
 import type { Game, Player, Unit } from "@openfront/engine/game/Game";
+import { GameSnapshot } from "@openfront/engine/game/GameImpl";
 import { Railroad } from "@openfront/engine/game/Railroad";
 import { TrainStation } from "@openfront/engine/game/TrainStation";
+import { GameRunner } from "@openfront/engine/GameRunner";
+import { NationalRuntime } from "@openfront/engine/national/NationalRuntime";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
@@ -57,7 +57,9 @@ async function fixture(nationalMode = true) {
   });
   game.executeNextTick();
   // Only the legitimate event being tested may produce new gold.
-  const zeroWorkers = vi.spyOn(game.config(), "goldAdditionRate").mockReturnValue(0n);
+  const zeroWorkers = vi
+    .spyOn(game.config(), "goldAdditionRate")
+    .mockReturnValue(0n);
   const port = (owner: Player, y: number): Unit => {
     const tile = game.ref(7, y);
     owner.conquer(tile);
@@ -115,7 +117,9 @@ function decree(
 }
 
 function treasury(game: Game, observer = A): bigint {
-  return BigInt(game.nationalImperialAdministrationFor(game.player(observer))!.treasury);
+  return BigInt(
+    game.nationalImperialAdministrationFor(game.player(observer))!.treasury,
+  );
 }
 
 function balances(game: Game) {
@@ -132,7 +136,11 @@ function balances(game: Game) {
   };
 }
 
-function witness(label: string, game: Game, before: ReturnType<typeof balances>) {
+function witness(
+  label: string,
+  game: Game,
+  before: ReturnType<typeof balances>,
+) {
   const after = balances(game);
   console.info(
     "C5_C3_E2_GOLD_WITNESS=" +
@@ -240,7 +248,11 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
       fixedGoldPerPayout: "19",
     });
     const before = balances(game);
-    const voyage = new TradeShipExecution(game.player(B), ports.member, ports.outsider1);
+    const voyage = new TradeShipExecution(
+      game.player(B),
+      ports.member,
+      ports.outsider1,
+    );
     game.addExecution(voyage);
     until(game, () => !voyage.isActive());
     const after = witness("maritime-physical-arrival", game, before);
@@ -249,18 +261,30 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
     const contribution = share(gross, 2500n, 19n);
     expect(gross).toBeGreaterThan(0n);
     expect(external).toBe(gross);
-    expect(after.personal[1].gold - before.personal[1].gold).toBe(gross - contribution);
+    expect(after.personal[1].gold - before.personal[1].gold).toBe(
+      gross - contribution,
+    );
     expect(after.personal[2].gold - before.personal[2].gold).toBe(gross);
     expect(after.treasury - before.treasury).toBe(contribution);
     expect(
-      after.personal[1].gold + after.personal[2].gold + after.treasury -
-      before.personal[1].gold - before.personal[2].gold - before.treasury,
+      after.personal[1].gold +
+        after.personal[2].gold +
+        after.treasury -
+        before.personal[1].gold -
+        before.personal[2].gold -
+        before.treasury,
     ).toBe(2n * gross);
     const { restored, bytes, again } = await roundTrip(game, map);
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
-    expect(restored.nationalImperialAdministrationFor(restored.player(B))?.fixedGoldPerPayout).toBe("19");
-    expect(restored.nationalImperialAdministrationFor(restored.player(B))?.revenueClasses).toEqual(all);
+    expect(
+      restored.nationalImperialAdministrationFor(restored.player(B))
+        ?.fixedGoldPerPayout,
+    ).toBe("19");
+    expect(
+      restored.nationalImperialAdministrationFor(restored.player(B))
+        ?.revenueClasses,
+    ).toEqual(all);
   });
 
   it("real rail stops respect disabled class and charge each enabled stop exactly once", async () => {
@@ -280,7 +304,9 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
     );
     const destination = new TrainStation(
       game,
-      game.player(C).buildUnit(UnitType.City, railTiles[railTiles.length - 1], {}),
+      game
+        .player(C)
+        .buildUnit(UnitType.City, railTiles[railTiles.length - 1], {}),
     );
     const network = game.railNetwork();
     network.stationManager().addStation(source);
@@ -289,7 +315,13 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
     source.addRailroad(rail);
     destination.addRailroad(rail);
     const runTrain = () => {
-      const train = new TrainExecution(network, game.player(B), source, destination, 1);
+      const train = new TrainExecution(
+        network,
+        game.player(B),
+        source,
+        destination,
+        1,
+      );
       game.addExecution(train);
       until(game, () => !train.isActive());
     };
@@ -307,7 +339,9 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
     const nextGross = after.personal[1].rail - charged.personal[1].rail;
     const credit = share(nextGross, 5000n, 19n);
     expect(nextGross).toBeGreaterThan(0n);
-    expect(after.personal[1].gold - charged.personal[1].gold).toBe(nextGross - credit);
+    expect(after.personal[1].gold - charged.personal[1].gold).toBe(
+      nextGross - credit,
+    );
     expect(after.treasury - charged.treasury).toBe(credit);
     // The external station still receives its own full, untaxed income.
     expect(after.personal[2].gold - charged.personal[2].gold).toBe(nextGross);
@@ -320,16 +354,22 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
     const before = balances(game);
     expect(() => decree(game, { fixedGoldPerPayout: "99" }, B)).toThrow();
     expect(game.nationalImperialAdministrationFor(game.player(C))).toBeNull();
-    expect(() => game.creditNationalCommercialIncome(game.player(B), 10n)).toThrow(
-      "requires a named payout source",
-    );
+    expect(() =>
+      game.creditNationalCommercialIncome(game.player(B), 10n),
+    ).toThrow("requires a named payout source");
     expect(balances(game)).toEqual(before);
     queuePolicy(game, A, "c5c3e2-accepted", "21");
     ticks(game, 2);
-    expect(game.nationalImperialAdministrationFor(game.player(A))?.fixedGoldPerPayout).toBe("21");
+    expect(
+      game.nationalImperialAdministrationFor(game.player(A))
+        ?.fixedGoldPerPayout,
+    ).toBe("21");
     queuePolicy(game, A, "c5c3e2-accepted", "77");
     ticks(game, 2);
-    expect(game.nationalImperialAdministrationFor(game.player(A))?.fixedGoldPerPayout).toBe("21");
+    expect(
+      game.nationalImperialAdministrationFor(game.player(A))
+        ?.fixedGoldPerPayout,
+    ).toBe("21");
     queuePolicy(game, A, "c5c3e2-stale", "85");
     game.performNationalCommand(game.player(A), {
       kind: "transfer-crown",
@@ -337,15 +377,21 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
       successorId: B,
     });
     ticks(game, 2);
-    expect(game.nationalImperialAdministrationFor(game.player(B))?.fixedGoldPerPayout).toBe("21");
     expect(
-      game.nationalPoliticalCommandResults(game.player(A)).find(
-        (x) => x.requestId === "c5c3e2-stale",
-      ),
+      game.nationalImperialAdministrationFor(game.player(B))
+        ?.fixedGoldPerPayout,
+    ).toBe("21");
+    expect(
+      game
+        .nationalPoliticalCommandResults(game.player(A))
+        .find((x) => x.requestId === "c5c3e2-stale"),
     ).toMatchObject({ accepted: false });
     expect(() => decree(game, { fixedGoldPerPayout: "80" }, A)).toThrow();
     decree(game, { workerIncomeBps: 1500, fixedGoldPerPayout: "5" }, B);
-    expect(game.nationalImperialAdministrationFor(game.player(A))?.fixedGoldPerPayout).toBe("5");
+    expect(
+      game.nationalImperialAdministrationFor(game.player(A))
+        ?.fixedGoldPerPayout,
+    ).toBe("5");
     const beforeDissolve = treasury(game, B);
     const emperorBefore = game.player(B).gold();
     game.performNationalImperialAdministration(game.player(B), {
@@ -359,7 +405,11 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
   it("executes a stamped decree through GameRunner and retains FFA without classification", async () => {
     const { game } = await fixture();
     join(game);
-    const runner = new GameRunner(game, new Executor(game, "c5c3e2", undefined), () => {});
+    const runner = new GameRunner(
+      game,
+      new Executor(game, "c5c3e2", undefined),
+      () => {},
+    );
     runner.addTurn({
       turnNumber: 0,
       intents: [
@@ -383,7 +433,10 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
     });
     expect(runner.executeNextTick()).toBe(true);
     game.executeNextTick();
-    expect(game.nationalImperialAdministrationFor(game.player(A))?.fixedGoldPerPayout).toBe("8");
+    expect(
+      game.nationalImperialAdministrationFor(game.player(A))
+        ?.fixedGoldPerPayout,
+    ).toBe("8");
     const { game: ffa } = await fixture(false);
     const ffaBefore = ffa.player(B).gold();
     ffa.creditNationalCommercialIncome(ffa.player(B), 101n);
@@ -399,7 +452,11 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
       fixedGoldPerPayout: "27",
     });
     const before = balances(game);
-    const voyage = new TradeShipExecution(game.player(A), ports.leader, ports.member);
+    const voyage = new TradeShipExecution(
+      game.player(A),
+      ports.leader,
+      ports.member,
+    );
     game.addExecution(voyage);
     until(game, () => !voyage.isActive());
     const after = witness("maritime-two-member-one-tick", game, before);
@@ -408,12 +465,20 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
     expect(grossA).toBeGreaterThan(0n);
     expect(grossB).toBe(grossA);
     const each = share(grossA, 1250n, 27n);
-    expect(after.personal[0].gold - before.personal[0].gold).toBe(grossA - each);
-    expect(after.personal[1].gold - before.personal[1].gold).toBe(grossA - each);
+    expect(after.personal[0].gold - before.personal[0].gold).toBe(
+      grossA - each,
+    );
+    expect(after.personal[1].gold - before.personal[1].gold).toBe(
+      grossA - each,
+    );
     expect(after.treasury - before.treasury).toBe(2n * each);
     expect(
-      after.personal[0].gold + after.personal[1].gold + after.treasury -
-        before.personal[0].gold - before.personal[1].gold - before.treasury,
+      after.personal[0].gold +
+        after.personal[1].gold +
+        after.treasury -
+        before.personal[0].gold -
+        before.personal[1].gold -
+        before.treasury,
     ).toBe(2n * grossA);
   });
 
@@ -473,7 +538,10 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
       fixedGoldPerPayout: "99",
       revenueClasses: { ...all, rail: false },
     });
-    const original = readVersioned(GameSnapshot, snapshotGameData(game).game).national!;
+    const original = readVersioned(
+      GameSnapshot,
+      snapshotGameData(game).game,
+    ).national!;
     const legacy = {
       ...original,
       administration: (original.administration ?? []).map((row) => ({
@@ -499,14 +567,18 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
     const initial = BigInt(restored.imperialAdministrationFor(A)!.treasury);
     const retained = restored.routeNonWorkerIncome(B, 111n, "maritime");
     expect(retained).toBe(75n);
-    expect(BigInt(restored.imperialAdministrationFor(A)!.treasury) - initial).toBe(36n);
+    expect(
+      BigInt(restored.imperialAdministrationFor(A)!.treasury) - initial,
+    ).toBe(36n);
     // An old client's percentage-only decree cannot silently reset an established new quota.
     game.performNationalImperialAdministration(game.player(A), {
       kind: "set-policy",
       empireId,
       policy: { workerIncomeBps: 4400, allowedConstruction: null },
     });
-    expect(game.nationalImperialAdministrationFor(game.player(A))).toMatchObject({
+    expect(
+      game.nationalImperialAdministrationFor(game.player(A)),
+    ).toMatchObject({
       workerIncomeBps: 4400,
       nonWorkerIncomeBps: 3300,
       fixedGoldPerPayout: "99",
@@ -536,8 +608,9 @@ describe("C5 Third Class E2 — original imperial revenue powers", () => {
         },
       }),
     ).toThrow();
-    expect(game.nationalImperialAdministrationFor(game.player(A))).toEqual(view);
+    expect(game.nationalImperialAdministrationFor(game.player(A))).toEqual(
+      view,
+    );
     expect(balances(game)).toEqual(before);
   });
-
 });

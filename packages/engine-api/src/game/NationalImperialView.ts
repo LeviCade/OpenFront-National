@@ -7,7 +7,9 @@ export interface NationalImperialAdministrationView {
   readonly nonWorkerIncomeBps?: number;
   /** Both optional for V1 hosts predating the revenue-class extension. */
   readonly fixedGoldPerPayout?: string;
-  readonly revenueClasses?: Readonly<Record<"workers" | "maritime" | "rail" | "piracy", boolean>>;
+  readonly revenueClasses?: Readonly<
+    Record<"workers" | "maritime" | "rail" | "piracy", boolean>
+  >;
   readonly allowedConstruction: readonly UnitType[] | null;
   readonly treasury: string;
   readonly canAmend: boolean;
@@ -84,7 +86,9 @@ export function readNationalImperialAdministration(
       (!record(value.revenueClasses) ||
         Object.keys(value.revenueClasses).length !== 4 ||
         !["workers", "maritime", "rail", "piracy"].every(
-          (key) => typeof (value.revenueClasses as Record<string, unknown>)[key] === "boolean",
+          (key) =>
+            typeof (value.revenueClasses as Record<string, unknown>)[key] ===
+            "boolean",
         ))) ||
     typeof value.treasury !== "string" ||
     !/^(0|[1-9][0-9]{0,127})$/.test(value.treasury) ||
@@ -152,7 +156,14 @@ export function readNationalImperialAdministration(
       : { fixedGoldPerPayout: value.fixedGoldPerPayout as string }),
     ...(value.revenueClasses === undefined
       ? {}
-      : { revenueClasses: { ...(value.revenueClasses as Record<"workers" | "maritime" | "rail" | "piracy", boolean>) } }),
+      : {
+          revenueClasses: {
+            ...(value.revenueClasses as Record<
+              "workers" | "maritime" | "rail" | "piracy",
+              boolean
+            >),
+          },
+        }),
     treasury: value.treasury,
     canAmend: value.canAmend,
     allowedConstruction: allowed === null ? null : ([...allowed] as UnitType[]),

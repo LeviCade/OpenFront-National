@@ -1623,9 +1623,15 @@ export class GameImpl implements Game {
     if (this._national && this._players.get(player.id()) !== player)
       throw new Error("NATIONAL: invalid commercial income owner");
     if (this._national && source === undefined)
-      throw new Error("NATIONAL: commercial income requires a named payout source");
+      throw new Error(
+        "NATIONAL: commercial income requires a named payout source",
+      );
     player.addGold(
-      this._national?.routeNonWorkerIncome(player.id(), gross, source ?? "maritime") ?? gross,
+      this._national?.routeNonWorkerIncome(
+        player.id(),
+        gross,
+        source ?? "maritime",
+      ) ?? gross,
       tile,
     );
   }

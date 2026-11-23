@@ -129,20 +129,27 @@ const politicsSchema = z.object({
 
 const exactGold = z.string().regex(/^(0|[1-9][0-9]*)$/);
 export type ImperialRevenueClass = "workers" | "maritime" | "rail" | "piracy";
-export type ImperialCommercialRevenueClass = Exclude<ImperialRevenueClass, "workers">;
-export type ImperialRevenueClasses = Readonly<Record<ImperialRevenueClass, boolean>>;
+export type ImperialCommercialRevenueClass = Exclude<
+  ImperialRevenueClass,
+  "workers"
+>;
+export type ImperialRevenueClasses = Readonly<
+  Record<ImperialRevenueClass, boolean>
+>;
 const allRevenueClasses: ImperialRevenueClasses = Object.freeze({
   workers: true,
   maritime: true,
   rail: true,
   piracy: true,
 });
-const revenueClassesSchema = z.object({
-  workers: z.boolean(),
-  maritime: z.boolean(),
-  rail: z.boolean(),
-  piracy: z.boolean(),
-}).strict();
+const revenueClassesSchema = z
+  .object({
+    workers: z.boolean(),
+    maritime: z.boolean(),
+    rail: z.boolean(),
+    piracy: z.boolean(),
+  })
+  .strict();
 const administrationSchema = z.object({
   empireId: z.string(),
   workerIncomeBps: z.number().int().min(0).max(10_000),
@@ -474,9 +481,7 @@ export class NationalRuntime {
       empireId,
       workerIncomeBps: policy.workerIncomeBps,
       nonWorkerIncomeBps:
-        policy.nonWorkerIncomeBps ??
-        previous?.nonWorkerIncomeBps ??
-        0,
+        policy.nonWorkerIncomeBps ?? previous?.nonWorkerIncomeBps ?? 0,
       fixedGoldPerPayout:
         policy.fixedGoldPerPayout ?? previous?.fixedGoldPerPayout ?? "0",
       revenueClasses:
@@ -844,11 +849,12 @@ export class NationalRuntime {
       e.memberIds.includes(memberId),
     );
     const row = empire && this.administration.get(empire.id);
-    if (!row || !(row.revenueClasses ?? allRevenueClasses)[source]) return gross;
+    if (!row || !(row.revenueClasses ?? allRevenueClasses)[source])
+      return gross;
     const rate =
       source === "workers"
         ? row.workerIncomeBps
-        : row.nonWorkerIncomeBps ?? 0;
+        : (row.nonWorkerIncomeBps ?? 0);
     const percent = splitWorkerIncome(gross, rate).imperial;
     const remaining = gross - percent;
     const fixed = BigInt(row.fixedGoldPerPayout ?? "0");
