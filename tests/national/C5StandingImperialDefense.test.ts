@@ -134,7 +134,7 @@ function imperialLayers(game: Game) {
   return ledger(game).wars.layers.filter((l) => l.scope === "imperial");
 }
 function reserve(game: Game): number {
-  return Math.ceil(game.config().maxTroops(game.player(DONOR)) * 0.3);
+  return Math.ceil(Math.floor(game.config().maxTroops(game.player(DONOR))) * 0.3);
 }
 
 describe("C5 C2 E4 — attack-time imperial defense", () => {
@@ -599,7 +599,7 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
             ?.standingDefenseResponse,
         ).toBe("none");
       } else {
-        game.performNationalCommand(game.player(CROWN), {
+        game.performNationalImperialAdministration(game.player(CROWN), {
           kind: "dissolve",
           empireId: EMPIRE,
         });
