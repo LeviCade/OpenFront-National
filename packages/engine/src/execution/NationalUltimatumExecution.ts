@@ -213,7 +213,8 @@ export class NationalUltimatumExecution implements Execution {
       !politics ||
       this.admissionEmpire !== command.empireId ||
       politics.emperorOf(command.empireId) !== this.actor.id() ||
-      politics.warPolicyVersionFor(this.actor.id()) !== this.admissionPolicyVersion
+      politics.warPolicyVersionFor(this.actor.id()) !==
+        this.admissionPolicyVersion
     )
       return;
     const target = living(game, command.targetId);
