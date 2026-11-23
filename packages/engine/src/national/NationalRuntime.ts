@@ -295,6 +295,8 @@ export type NationalImperialAdministrationCommand =
       reliefId: string;
       expectedVersion: number;
       decision: "approve" | "reject";
+    }
+  | {
       kind: "set-economic-charter";
       empireId: string;
       expectedVersion: number;

@@ -103,7 +103,7 @@ function paidReport(view: AssessmentObservation) {
     paidBy: A,
     effectiveTick: view.tick,
     expiresAtTick: view.tick + 900,
-    confidence: "coarse-estimate",
+    confidence: "coarse-estimate" as const,
     treasuryGoldBand: { lower: "2500", upperExclusive: "5000" },
     militaryTroopsBand: { lower: "800000", upperExclusive: "900000" },
   };
@@ -275,7 +275,7 @@ describe("C6 Class One E5: DISTINCT funded national assessment policy", () => {
     );
     const wide = {
       ...paidReport(view),
-      confidence: "shielded-coarse-estimate",
+      confidence: "shielded-coarse-estimate" as const,
       treasuryGoldBand: { lower: "0", upperExclusive: "10000" },
       militaryTroopsBand: { lower: "400000", upperExclusive: "800000" },
     };
@@ -305,7 +305,10 @@ describe("C6 Class One E5: DISTINCT funded national assessment policy", () => {
         accepted,
       ).holdOffenseAgainst,
     ).toBeNull();
-    const spoofed = { ...wide, confidence: "shielded-unverified" };
+    const spoofed = {
+      ...wide,
+      confidence: "shielded-unverified",
+    } as unknown as NonNullable<AssessmentObservation["assessments"]>[number];
     expect(
       planNationalAssessment(
         { ...view, tick: view.tick + 1, assessments: [spoofed] },

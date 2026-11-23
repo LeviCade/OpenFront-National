@@ -62,7 +62,6 @@ import {
 } from "../national/observation/LiveObservation";
 import {
   advanceLastKnown,
-  type NationalObservation,
   type NationalSightMemory,
 } from "../national/observation/NationalObservation";
 import {
