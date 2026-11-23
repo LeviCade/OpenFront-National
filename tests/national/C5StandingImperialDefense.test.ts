@@ -134,7 +134,9 @@ function imperialLayers(game: Game) {
   return ledger(game).wars.layers.filter((l) => l.scope === "imperial");
 }
 function reserve(game: Game): number {
-  return Math.ceil(Math.floor(game.config().maxTroops(game.player(DONOR))) * 0.3);
+  return Math.ceil(
+    Math.floor(game.config().maxTroops(game.player(DONOR))) * 0.3,
+  );
 }
 
 describe("C5 C2 E4 — attack-time imperial defense", () => {
@@ -198,9 +200,9 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
       "C5E4_INITIAL_INVASION_RECEIPT " +
         JSON.stringify({
           policy: "both",
-          policyVersion:
-            game.nationalImperialAdministrationFor(game.player(CROWN))
-              ?.warPolicyVersion,
+          policyVersion: game.nationalImperialAdministrationFor(
+            game.player(CROWN),
+          )?.warPolicyVersion,
           attack: 50_000,
           donorInitialTroops: initialDonor,
           donorControlAfterGrowth: baselineDonor,
@@ -212,9 +214,10 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
           attackerRemainingInFlight: recorded.remainingAttackingTroops,
           memberInitialTerritory: initialMemberTerritory,
           memberFinalTerritory: game.player(MEMBER).numTilesOwned(),
-          goldFinal: roster.map((p) =>
-            [p.id, game.player(p.id).gold().toString()],
-          ),
+          goldFinal: roster.map((p) => [
+            p.id,
+            game.player(p.id).gold().toString(),
+          ]),
           imperialWarId: imperial.id,
           imperialWarScope: imperial.scope,
           imperialWarStartedTick: imperial.startedTick,
@@ -587,7 +590,9 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
       game.player(MEMBER).setTroops(1);
       game.player(DONOR).setTroops(reserve(game) + 30_000);
       game.player(ENEMY).setTroops(10_000);
-      game.addExecution(new AttackExecution(10_000, game.player(ENEMY), MEMBER));
+      game.addExecution(
+        new AttackExecution(10_000, game.player(ENEMY), MEMBER),
+      );
       if (transition === "transfer") {
         game.performNationalCommand(game.player(CROWN), {
           kind: "transfer-crown",
@@ -633,7 +638,9 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     expect(imperialLayers(game)).toHaveLength(0);
     expect(ledger(game)).toEqual(before);
     expect(
-      [CROWN, MEMBER, DONOR, ENEMY, OTHER].map((id) => game.player(id).troops()),
+      [CROWN, MEMBER, DONOR, ENEMY, OTHER].map((id) =>
+        game.player(id).troops(),
+      ),
     ).toEqual(realTroops);
     expect(game.player(ENEMY).outgoingAttacks()).toHaveLength(0);
   });
@@ -659,7 +666,9 @@ describe("C5 C2 E4 — attack-time imperial defense", () => {
     expect(restored.player(MEMBER).numTilesOwned()).toBe(
       game.player(MEMBER).numTilesOwned(),
     );
-    expect(snapshotGameData(restored).game).toEqual(snapshotGameData(game).game);
+    expect(snapshotGameData(restored).game).toEqual(
+      snapshotGameData(game).game,
+    );
   });
 
   it("limits twenty microattack clicks to one non-refreshing donor campaign allowance", async () => {
