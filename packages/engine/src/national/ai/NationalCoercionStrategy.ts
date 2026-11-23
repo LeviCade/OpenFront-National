@@ -240,10 +240,32 @@ export function assessImperialShelter(
   const existential =
     (activeWar || (localDanger.length > 0 && self.landPercent <= 1)) &&
     (threat >= self.landPercent * 1.5 || self.landPercent <= 0.5);
+  // Wars are not automatic defeat. This route uses ONLY our own exact troop
+  // reserve and military formations the nation actually sees on its frontier.
+  // Unknown enemy strength never becomes an invented zero or exact counter.
+  const seenHostileArmy = observation.visibleAssets.filter(
+    (asset) => asset.kind === "army" && localDanger.includes(asset.ownerId),
+  );
+  const reliableContact =
+    seenHostileArmy.length > 0 &&
+    seenHostileArmy.every(
+      (asset) => asset.strength !== undefined &&
+        Number.isFinite(asset.strength) && asset.strength >= 0,
+    );
+  const observedContactForce = seenHostileArmy.reduce(
+    (total, asset) => total + (asset.strength ?? 0), 0,
+  );
+  const viableDefense =
+    activeWar &&
+    reliableContact &&
+    self.landPercent >= Math.max(0.4, threat * 0.35) &&
+    observation.ownResources.troops >= 20_000 &&
+    observation.ownResources.troops >= observedContactForce * 1.5;
   const independentRoute =
-    !activeWar &&
-    (observation.unownedFrontier === true ||
-      (observation.ownResources.troops >= 4000 && self.landPercent >= 0.4));
+    viableDefense ||
+    ((observation.unownedFrontier === true && observation.ownResources.troops >= 1_500) ||
+    (!activeWar &&
+      observation.ownResources.troops >= 4_000 && self.landPercent >= 0.4));
   const empireLand = empire.members.reduce(
     (sum, id) =>
       sum +
