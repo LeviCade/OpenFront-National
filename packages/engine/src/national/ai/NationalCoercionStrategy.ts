@@ -263,7 +263,7 @@ export function assessImperialShelter(
     observation.ownResources.troops >= observedContactForce * 1.5;
   const independentRoute =
     viableDefense ||
-    ((observation.unownedFrontier === true && observation.ownResources.troops >= 1_500) ||
+    ((observation.unownedFrontier === true && (!activeWar || observation.ownResources.troops >= 1_500)) ||
     (!activeWar &&
       observation.ownResources.troops >= 4_000 && self.landPercent >= 0.4));
   const empireLand = empire.members.reduce(
