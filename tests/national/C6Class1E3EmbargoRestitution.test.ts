@@ -179,7 +179,6 @@ function decide(
     decision,
     requestId,
   });
-
 }
 function status(game: Game, issuer: Player, sanctionId: string) {
   return NationalSanctionExecution.viewFor(game, issuer).find(
@@ -347,7 +346,6 @@ describe("C6 Class 1 E3: actual enforced bilateral restitution", () => {
     expect(world2.b.canTrade(world2.c)).toBe(false);
   });
 
-
   it("cannot pay to erase an independently enforced imperial ultimatum embargo", async () => {
     const { game, a, b } = await world();
     send(game, a, {
@@ -364,8 +362,7 @@ describe("C6 Class 1 E3: actual enforced bilateral restitution", () => {
       game,
       () =>
         NationalSanctionExecution.viewFor(game, a).some(
-          (row) =>
-            row.id === sanctionId && row.phase === "decision-required",
+          (row) => row.id === sanctionId && row.phase === "decision-required",
         ),
       30,
     );
@@ -393,8 +390,7 @@ describe("C6 Class 1 E3: actual enforced bilateral restitution", () => {
       game,
       () =>
         NationalUltimatumExecution.viewFor(game, a).some(
-          (row) =>
-            row.id === ultimatumId && row.phase === "decision-required",
+          (row) => row.id === ultimatumId && row.phase === "decision-required",
         ),
       30,
     );
@@ -408,11 +404,7 @@ describe("C6 Class 1 E3: actual enforced bilateral restitution", () => {
     );
     run(game);
     expect(
-      NationalUltimatumExecution.hasEnforcedEmbargoPair(
-        game,
-        a.id(),
-        b.id(),
-      ),
+      NationalUltimatumExecution.hasEnforcedEmbargoPair(game, a.id(), b.id()),
     ).toBe(true);
     const before = [a.gold(), b.gold()];
     offer(game, b, sanctionId, "23000", "c6-ultimatum-cross-reason-offer");
