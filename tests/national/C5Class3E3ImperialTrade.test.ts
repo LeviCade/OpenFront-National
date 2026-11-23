@@ -406,4 +406,82 @@ describe("C5 C3 E3 imperial member economic charter on real Game", () => {
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
     trace(game, "durable-replay-and-collapse");
   });
+  it("delegated refusal leaves foreign trade lawful while independent issuer enforces only its own recipients", async () => {
+    const { game, a, b, c, d, e, src, dst, other } = await world();
+    charter(game, a, 0, [DELEGATE]);
+    const id = issue(game, b, TARGET, [DELEGATE, MEMBER], "member-refusal");
+    respond(game, c, id, "refuse", "member-explicit-refusal", 1);
+    expect(NationalSanctionExecution.viewFor(game, c)[0].response).toBe("refuse");
+    expect(c.canTrade(e)).toBe(true);
+    expect(d.canTrade(e)).toBe(true);
+    until(
+      game,
+      () => NationalSanctionExecution.viewFor(game, b)[0].phase === "decision-required",
+      300,
+    );
+    // A foreign issuer's resolve choice is independent: emperor is NOT issuer.
+    game.addExecution(new NationalSanctionExecution(a, {
+      type: "national_resolve_sanction", sanctionId: id,
+      decision: "enforce", requestId: "forged-emperor-issuer",
+    }));
+    run(game);
+    expect(b.canTrade(c)).toBe(true);
+    const before = b.tradeGold();
+    game.addExecution(new NationalSanctionExecution(b, {
+      type: "national_resolve_sanction", sanctionId: id,
+      decision: "enforce", requestId: "issuer-enforce-member-refusal",
+    }));
+    run(game);
+    expect(NationalSanctionExecution.viewFor(game, b)[0].phase).toBe("enforced");
+    expect(b.canTrade(c)).toBe(false);
+    expect(b.canTrade(d)).toBe(false);
+    expect(c.canTrade(e)).toBe(true);
+    expect(d.canTrade(e)).toBe(true);
+    expect(a.canTrade(e)).toBe(true);
+    expect(trade(game, c, src, dst)).toBeGreaterThan(0n);
+    expect(trade(game, b, other, dst)).toBeGreaterThan(0n);
+    expect(b.tradeGold()).toBeGreaterThan(before);
+    expect(game.nationalWarAuthority()?.atWar(ISSUER, DELEGATE)).toBe(false);
+    trace(game, "member-refusal-and-scoped-issuer-enforcement");
+  });
+
+  it("authenticated political journal issues recipient-only receipts and rejects replay after spent CAS", async () => {
+    const { game, a, b, c, d } = await world();
+    const cmd = {
+      kind: "imperial-administration",
+      command: {
+        kind: "set-economic-charter", empireId: EMPIRE,
+        expectedVersion: 0, delegateIds: [DELEGATE], allowInternal: false,
+      },
+    } as const;
+    const original = game.performNationalPoliticalCommandWithOutcome(
+      a, cmd, "c5-e3-journal-charter",
+    );
+    expect(original.accepted).toBe(true);
+    expect(original.requestId).toBe("c5-e3-journal-charter");
+    expect(game.nationalPoliticalCommandResults(a).some(
+      (row) => row.requestId === "c5-e3-journal-charter" && row.accepted,
+    )).toBe(true);
+    expect(game.nationalPoliticalCommandResults(b)).toEqual([]);
+    expect(game.nationalPoliticalCommandResults(c)).toEqual([]);
+    expect(game.nationalEconomicCharterFor(c)?.version).toBe(1);
+    // A duplicate cannot silently re-enforce an outdated economic decree.
+    expect(() => game.performNationalPoliticalCommandWithOutcome(
+      a, cmd, "c5-e3-journal-charter",
+    )).toThrow(/stale sovereign replay authority/);
+    expect(game.nationalEconomicCharterFor(c)?.version).toBe(1);
+    expect(() => game.performNationalPoliticalCommandWithOutcome(
+      d, cmd, "c5-e3-journal-charter",
+    )).toThrow(/reused foreign request ID/);
+    const spoof = game.performNationalPoliticalCommandWithOutcome(
+      d, { ...cmd, command: { ...cmd.command, expectedVersion: 1 } },
+      "c5-e3-journal-impostor",
+    );
+    expect(spoof.accepted).toBe(false);
+    expect(game.nationalEconomicCharterFor(c)?.version).toBe(1);
+    const noPolicy = game.nationalPoliticalCommandResults(b);
+    expect(noPolicy).toEqual([]);
+    trace(game, "journal-receipt-and-epoch-replay");
+  });
+
 });

@@ -1864,8 +1864,24 @@ export class GameImpl implements Game {
   ): boolean {
     const authority = this.nationalPoliticalAuthority();
     if (!authority?.alive(actorId)) return false;
-    if (command.kind === "imperial-administration")
-      return authority.emperorOf(command.command.empireId) === actorId;
+    if (command.kind === "imperial-administration") {
+      if (authority.emperorOf(command.command.empireId) !== actorId)
+        return false;
+      const detail = command.command;
+      // A prior accepted imperial economic command is not an evergreen
+      // credential. Even the same emperor cannot replay a spent CAS epoch.
+      if (
+        detail.kind === "set-economic-charter" ||
+        detail.kind === "set-member-trade" ||
+        detail.kind === "respond-member-sanction"
+      ) {
+        return (
+          this._national?.economicCharterFor(actorId)?.version ===
+          detail.expectedVersion
+        );
+      }
+      return true;
+    }
     if (
       command.kind === "transfer-crown" ||
       command.kind === "set-national-peace-delegation"
