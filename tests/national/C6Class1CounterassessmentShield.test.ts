@@ -21,9 +21,9 @@ import {
   projectLiveNationalAssessments,
 } from "@openfront/engine/national/observation/NationalAssessment";
 import { NationalServerRecipientSession } from "@openfront/engine/national/observation/NationalServerOutbound";
-import { parseTrustedNationalProjection } from "../../src/client/TrustedNationalSession";
 import { StreamingEncoder } from "../../src/client/replay/codec/encode/StreamingEncoder";
 import { VIEW_DATA_ROUTING } from "../../src/client/replay/codec/FrameNormalizer";
+import { parseTrustedNationalProjection } from "../../src/client/TrustedNationalSession";
 import { encodeNationalRecipientProjection } from "../../src/server/national/NationalRecipientWire";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
@@ -615,7 +615,9 @@ describe("C6 C1 E4: replay and reciprocal empire invariants", () => {
       candidateId: BUYER.id,
     });
     const shield = game.performNationalCounterassessment(
-      defender, "empire-shield", DEFENDER.clientID!,
+      defender,
+      "empire-shield",
+      DEFENDER.clientID!,
     );
     expect(shield.defenderId).toBe(DEFENDER.id);
     game.performNationalCommand(defender, {
@@ -624,11 +626,17 @@ describe("C6 C1 E4: replay and reciprocal empire invariants", () => {
       successorId: BUYER.id,
     });
     const memberReport = game.performNationalAssessment(
-      buyer, DEFENDER.id, "lawful-member", BUYER.clientID!,
+      buyer,
+      DEFENDER.id,
+      "lawful-member",
+      BUYER.clientID!,
     );
     expect(memberReport.confidence).toBe("coarse-estimate");
     const outsiderReport = game.performNationalAssessment(
-      outsider, DEFENDER.id, "hostile-outsider", OTHER.clientID!,
+      outsider,
+      DEFENDER.id,
+      "hostile-outsider",
+      OTHER.clientID!,
     );
     expect(outsiderReport.confidence).toBe("shielded-coarse-estimate");
     expect(projectLiveNationalAssessments(game, OTHER.id)[0].confidence).toBe(
