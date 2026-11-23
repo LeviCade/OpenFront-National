@@ -215,7 +215,7 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
   });
 
   it("live GameRunner bot deploys; state survives snapshot, destruction and peace without unauthorized piracy", async () => {
-    const { game, a, b, c, cPort, bPort, fixedEnemyMerchant } =
+    const { game, a, b, c, cPort, bPort } =
       await fixture(true);
     const before = a.gold();
     advanceRunner(game, 10);
@@ -261,6 +261,61 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
         [{ x: 7, y: 10 }],
       ),
     ).toEqual([]);
-    expect(fixedEnemyMerchant.isActive() || !fixedEnemyMerchant.isActive()).toBe(true);
   });
+  it("identical-seed four-nation GameRunner CONTROL versus live paid neutral trade", async () => {
+    const { game, bPort, cPort } = await fixture(true);
+    const { restored: control, bytes, again } = await roundTrip(
+      game,
+      "half_land_half_ocean",
+    );
+    expect(again).toEqual(bytes);
+    const price = game.unitInfo(UnitType.Warship).cost(game, game.player(A));
+    // In both worlds the same neutral merchant pays for a real C -> B voyage.
+    // Only the new naval AI dispatch is disabled in the CONTROL world.
+    control.addExecution(new TradeShipExecution(
+      control.player(C),
+      control.player(C).units(UnitType.Port).find((u) => u.tile() === cPort.tile())!,
+      control.player(B).units(UnitType.Port).find((u) => u.tile() === bPort.tile())!,
+    ));
+    game.addExecution(new TradeShipExecution(game.player(C), cPort, bPort));
+    const unmodified = vi
+      .spyOn(NationWarshipBehavior.prototype, "dispatchNationalNavalPressure")
+      .mockReturnValue(null);
+    try {
+      advanceRunner(control, 8);
+    } finally {
+      unmodified.mockRestore();
+    }
+    advanceRunner(game, 8);
+    const deployed = game.player(A).units(UnitType.Warship);
+    expect(control.player(A).units(UnitType.Warship)).toHaveLength(0);
+    expect(deployed.length).toBeGreaterThan(0);
+    // The cost is from Player.buildUnit / WarshipExecution, not an AI ledger.
+    // Correct for any real pirate proceeds already credited to the active A.
+    const actualCost =
+      control.player(A).gold() - game.player(A).gold() +
+      game.player(A).piracyGold() - control.player(A).piracyGold();
+    expect(actualCost).toBe(price);
+
+    const firstPosition = deployed[0].tile();
+    advanceRunner(control, 95);
+    advanceRunner(game, 95);
+    expect(control.player(B).tradeGold()).toBeGreaterThan(0n);
+    expect(game.player(B).tradeGold()).toBeLessThan(control.player(B).tradeGold());
+    expect(deployed[0].tile()).not.toBe(firstPosition);
+    expect(control.player(A).piracyGold()).toBe(0n);
+    console.info("C5_NAVAL_CONTROLLED_WITNESS=" + JSON.stringify({
+      seed: "same-snapshot",
+      war: game.nationalWarAuthority()?.atWar(A, B),
+      price: price.toString(),
+      activeWarship: deployed[0].id(),
+      activeBTradeGold: game.player(B).tradeGold().toString(),
+      controlBTradeGold: control.player(B).tradeGold().toString(),
+      activeAPiracyGold: game.player(A).piracyGold().toString(),
+      controlAPiracyGold: control.player(A).piracyGold().toString(),
+      start: firstPosition,
+      end: deployed[0].tile(),
+    }));
+  });
+
 });
