@@ -89,9 +89,8 @@ function eligibleReport(
   );
   if (
     report === undefined ||
-    typeof report.confidence !== "string" ||
     (report.confidence !== "coarse-estimate" &&
-      !report.confidence.startsWith("shielded-"))
+      report.confidence !== "shielded-coarse-estimate")
   )
     return null;
   const troopLow = decimalBound(report.militaryTroopsBand?.lower);
@@ -105,6 +104,20 @@ function eligibleReport(
     goldHigh === null ||
     troopHigh <= troopLow ||
     goldHigh <= goldLow
+  )
+    return null;
+  // Validate the exact E4 DTO widths, including its Sixth-Class defensive
+  // counterassessment. Unknown confidence and arbitrarily widened hostile
+  // intervals are not proof of enemy strength.
+  const troopStep =
+    report.confidence === "shielded-coarse-estimate" ? 400_000n : 100_000n;
+  const goldStep =
+    report.confidence === "shielded-coarse-estimate" ? 10_000n : 2_500n;
+  if (
+    troopHigh - troopLow !== troopStep ||
+    goldHigh - goldLow !== goldStep ||
+    troopLow % troopStep !== 0n ||
+    goldLow % goldStep !== 0n
   )
     return null;
   return report;
@@ -195,6 +208,15 @@ export function planNationalAssessment(
   const target = enemies.find(
     (id) =>
       !memory.attempts.some((a) => a.targetId === id) &&
+      // Never buy a duplicate national report while an authorized empire
+      // ally already shares an active one. Sharing does not count as an AI
+      // paid attempt or create a bogus independent report.
+      !observation.assessments?.some(
+        (report) =>
+          report.targetId === id &&
+          report.effectiveTick <= observation.tick &&
+          observation.tick < report.expiresAtTick,
+      ) &&
       // Real sight, not a coordinate guessed from foreign Game state. No
       // regional recon is bought or credited by this separate proposal.
       observation.visibleAssets.some(
