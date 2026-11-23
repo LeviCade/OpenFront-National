@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  NATIONAL_RECON_COST,
+  NATIONAL_RECON_RADIUS,
+  NATIONAL_RECON_DURATION_TICKS,
+} from "@openfront/engine-api/game/NationalReconView";
 
 /**
  * M7 paid NATIONAL regional reconnaissance. Gold remains solely in Player;
@@ -7,9 +12,9 @@ import { z } from "zod";
  * Tick interval is half-open [effectiveTick, expiresAtTick). A replayed
  * purchase ID remains spent even after its grant expires or the Game restores.
  */
-export const REGIONAL_RECON_COST = 500n;
-export const REGIONAL_RECON_RADIUS = 90;
-export const REGIONAL_RECON_DURATION_TICKS = 600;
+export const REGIONAL_RECON_COST = NATIONAL_RECON_COST;
+export const REGIONAL_RECON_RADIUS = NATIONAL_RECON_RADIUS;
+export const REGIONAL_RECON_DURATION_TICKS = NATIONAL_RECON_DURATION_TICKS;
 const MAX_RECON_PURCHASES = 4096;
 const id = z
   .string()
