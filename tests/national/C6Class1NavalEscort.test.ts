@@ -237,6 +237,56 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
     );
   });
 
+  it("reassigns an existing legitimate patrol without a ghost purchase", async () => {
+    const { game, a, behavior, observed, raider } = await activeThreat();
+    const existing = a.buildUnit(UnitType.Warship, game.ref(8, 11), {
+      patrolTile: game.ref(8, 1),
+    });
+    game.addExecution(new WarshipExecution(existing));
+    const gold = a.gold();
+    expect(behavior.dispatchNationalNavalEscort(observed)).toBe("move");
+    run(game, 2);
+    expect(a.units(UnitType.Warship)).toHaveLength(1);
+    expect(existing.warshipState().patrolTile).toBe(raider.tile());
+    expect(a.gold()).toBe(gold);
+  });
+
+  it("fails closed for FFA and non-merchant transport sightings", async () => {
+    const { game, observed } = await activeThreat();
+    const noCommerce = {
+      ...observed,
+      visibleAssets: observed.visibleAssets.map((asset) =>
+        asset.kind === "trade-ship"
+          ? { ...asset, kind: "transport" as const }
+          : asset,
+      ),
+    };
+    expect(planObservedNationalNavalEscorts(noCommerce)).toEqual([]);
+    const free = createGame(
+      {
+        width: 8,
+        height: 8,
+        grid: Array.from({ length: 64 }, (_, i) => (i % 8 < 4 ? L : W)),
+      },
+      { nationalMode: false, instantBuild: true },
+    );
+    free.addPlayer(new PlayerInfo("FFA", PlayerType.Nation, null, A));
+    free.endSpawnPhase();
+    const owner = free.player(A);
+    const land = free.ref(3, 3);
+    owner.conquer(land);
+    owner.setSpawnTile(land);
+    const rng = new PseudoRandom(91);
+    const ffa = new NationWarshipBehavior(
+      rng,
+      free,
+      owner,
+      new NationEmojiBehavior(rng, free, owner),
+    );
+    expect(ffa.dispatchNationalNavalEscort(observed)).toBeNull();
+    expect(game.config().nationalMode()).toBe(true);
+  });
+
   it("rejects poverty, peace, lost merchant and impossible foreign water without synthetic orders", async () => {
     const { game, a, b, observed, merchant, behavior } =
       await activeThreat();
@@ -291,11 +341,11 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
       p.addGold(1_000_000n);
       p.buildUnit(UnitType.Port, tile, {});
     }
-    const ownTrader = defender.buildUnit(UnitType.TradeShip, split.ref(9, 8), {
+    const ownTrader = defender.buildUnit(UnitType.TradeShip, split.ref(15, 8), {
       targetUnit: customer.units(UnitType.Port)[0],
     });
-    const foreignRaider = hostile.buildUnit(UnitType.Warship, split.ref(30, 8), {
-      patrolTile: split.ref(30, 8),
+    const foreignRaider = hostile.buildUnit(UnitType.Warship, split.ref(25, 8), {
+      patrolTile: split.ref(25, 8),
     });
     expect(
       split.performNationalWarCommandWithOutcome(defender, {
@@ -328,13 +378,14 @@ describe("C6 Class One E6 original defensive convoy escort", () => {
           id: String(foreignRaider.id()),
           ownerId: B,
           kind: "warship" as const,
-          x: 30,
+          x: 25,
           y: 8,
           source: "coast" as const,
         },
       ],
     };
     const spent = defender.gold();
+    expect(planObservedNationalNavalEscorts(forged)).toHaveLength(1);
     expect(ai.dispatchNationalNavalEscort(forged)).toBeNull();
     expect(defender.gold()).toBe(spent);
   });

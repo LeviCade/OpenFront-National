@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: c6-e6-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   c6-class1-e6:
     runs-on: ubuntu-latest
