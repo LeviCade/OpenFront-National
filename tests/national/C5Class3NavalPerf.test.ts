@@ -86,9 +86,9 @@ describe("C5 E6 bounded naval planning on 100 independent nations", () => {
         },
       ],
     };
-    expect(
-      projectNationalObservation(unseenPortWorld, "sovereign-0"),
-    ).toEqual(projectNationalObservation(world, "sovereign-0"));
+    expect(projectNationalObservation(unseenPortWorld, "sovereign-0")).toEqual(
+      projectNationalObservation(world, "sovereign-0"),
+    );
     const ownPorts = [
       { x: 101, y: 201 },
       { x: 140, y: 240 },
