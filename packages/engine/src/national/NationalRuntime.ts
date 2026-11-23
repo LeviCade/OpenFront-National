@@ -1723,8 +1723,7 @@ export class NationalRuntime {
           (!saved.politics.empires.some(
             (e) =>
               e.id === request.empireId &&
-              e.memberIds.includes(request.memberId) &&
-              e.leaderId !== request.memberId,
+              e.memberIds.includes(request.memberId),
           ) ||
             !saved.politics.nations.some(
               (n) => n.id === request.memberId && n.alive,

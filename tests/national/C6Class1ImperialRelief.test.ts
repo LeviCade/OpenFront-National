@@ -251,6 +251,31 @@ describe("C6 C1 E2 — real imperial relief", () => {
     expect(game.player(B).gold()).toBe(initial);
     expect(() => request(game, "unfunded", "1")).toThrow();
     expect(() => request(game, "foreign", "20", C)).toThrow();
+    expect(() =>
+      game.performNationalImperialAdministration(
+        game.player(B),
+        {
+          kind: "request-relief",
+          empireId,
+          reliefId: "wrong-session-request",
+          amount: "1",
+        },
+        game.player(C).clientID(),
+      ),
+    ).toThrow("stale authenticated actor session");
+    expect(() =>
+      game.performNationalImperialAdministration(
+        game.player(A),
+        {
+          kind: "decide-relief",
+          empireId,
+          reliefId: "unfunded",
+          expectedVersion: 0,
+          decision: "reject",
+        },
+        game.player(B).clientID(),
+      ),
+    ).toThrow("stale authenticated actor session");
     expect(() => request(game, "emperor-self", "20", A)).toThrow();
     expect(() => request(game, "zero", "0")).toThrow();
     expect(() => request(game, "leading", "001")).toThrow();
@@ -291,6 +316,7 @@ describe("C6 C1 E2 — real imperial relief", () => {
     policy(game);
     workerPayout(game, game.player(B), workers, 100n);
     request(game, "crown-request", "40");
+    const beforeGrant = game.player(B).gold();
     game.performNationalCommand(game.player(A), {
       kind: "transfer-crown",
       empireId,
@@ -303,6 +329,32 @@ describe("C6 C1 E2 — real imperial relief", () => {
       game.nationalImperialAdministrationFor(game.player(B))?.reliefRequests[0]
         ?.status,
     ).toBe("pending");
+    // A pending request survives requester succession, never self approval.
+    expect(() =>
+      NationalRuntime.restore(ledger(game), [A, B, C], game.ticks()),
+    ).not.toThrow();
+    game.performNationalCommand(game.player(B), {
+      kind: "offer-empire",
+      empireId,
+      candidateId: C,
+    });
+    game.performNationalCommand(game.player(C), {
+      kind: "accept-empire",
+      empireId,
+      candidateId: C,
+    });
+    game.performNationalCommand(game.player(B), {
+      kind: "transfer-crown",
+      empireId,
+      successorId: C,
+    });
+    decide(game, "crown-request", "approve", C);
+    expect(treasury(game, C)).toBe(60n);
+    expect(game.player(B).gold() - beforeGrant).toBe(40n);
+    expect(
+      game.nationalImperialAdministrationFor(game.player(C))?.reliefRequests[0]
+        ?.status,
+    ).toBe("approved");
   });
 
   it("migrates absent old V1 ledger; rejects duplicate/tampered snapshot and cancels obligations on dissolution", async () => {
