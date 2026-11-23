@@ -10,7 +10,11 @@ import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
-import { advanceLastKnown } from "@openfront/engine/national/observation/NationalObservation";
+import {
+  advanceLastKnown,
+  projectNationalObservation,
+  type NationalWorld,
+} from "@openfront/engine/national/observation/NationalObservation";
 import {
   NationalReconnaissance,
   REGIONAL_RECON_COST,
@@ -149,7 +153,18 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
     // different actual sovereign: target-only recon MUST reject it.
     expect(unrelated.owner().id()).toBe(STRANGER.id);
     expect(visible(game, BUYER.id, unrelated.id())?.source).not.toBe("recon");
-    expect(packetHasUnit(packet(game, BUYER.clientID!), ship.id())).toBe(true);
+    const purchasedPacket = packet(game, BUYER.clientID!);
+    expect(packetHasUnit(purchasedPacket, ship.id())).toBe(true);
+    const foreignWire = unpackUnitUpdates(
+      purchasedPacket.packedUnitUpdates,
+      purchasedPacket.packedMissileTimers,
+    ).find((unit) => unit.id === ship.id());
+    // The real wire DTO may show ship identity and current location only;
+    // neither the troop count nor transport target crosses the boundary.
+    expect(foreignWire?.troops).toBe(0);
+    expect(foreignWire?.targetable).toBe(false);
+    expect(foreignWire?.reachedTarget).toBe(false);
+    expect(JSON.stringify(foreignWire)).not.toContain("targetTile");
 
     // A full structured inspection may report an observed ship ID/type but
     // must never reveal its landing target, troop count or another treasury.
@@ -422,6 +437,73 @@ describe("M7 paid regional intelligence in authoritative Game/GameRunner", () =>
       BUYER.clientID!,
     );
     expect(buyer.gold()).toBe(original - REGIONAL_RECON_COST);
+  });
+
+  it("measures 120 national observations over 2,400 masked assets and 120 private purchases", () => {
+    // Synthetic WORLD data exercises the production whitelisting projection,
+    // while other tests exercise the real GameRunner and paid Game ledger.
+    const sovereigns = 120;
+    const nations: NationalWorld["nations"] = Array.from(
+      { length: sovereigns },
+      (_, i) => ({
+        id: "nation_" + i,
+        name: "Nation " + i,
+        landPercent: 1 / sovereigns,
+        status: "independent",
+        alive: true,
+        troops: 1_000,
+        treasury: 900,
+      }),
+    );
+    const assets: NationalWorld["assets"] = Array.from(
+      { length: 2_400 },
+      (_, i) => ({
+        id: "asset_" + i,
+        ownerId: "nation_" + (i % sovereigns),
+        kind: i % 2 === 0 ? "warship" : "structure",
+        x: i % 200,
+        y: Math.floor(i / 200),
+      }),
+    );
+    const sightGrants: NationalWorld["sightGrants"] = Array.from(
+      { length: sovereigns },
+      (_, i) => ({
+        observerId: "nation_" + i,
+        assetId: "asset_" + ((i + 1) % sovereigns),
+        source: "recon",
+        observedAtTick: 5,
+        expiresAtTick: 605,
+      }),
+    );
+    const world: NationalWorld = {
+      tick: 5,
+      nations,
+      coalitions: [],
+      wars: [],
+      invitations: [],
+      assets,
+      sightGrants,
+      frontiers: [],
+      diplomaticEvents: [],
+    };
+    const start = performance.now();
+    for (let n = 0; n < sovereigns; n++) {
+      const self = "nation_" + n;
+      const target = "nation_" + ((n + 1) % sovereigns);
+      const seen = projectNationalObservation(world, self);
+      expect(seen.visibleAssets).toHaveLength(21);
+      const foreign = seen.visibleAssets.filter(
+        (asset) => asset.ownerId !== self,
+      );
+      expect(foreign).toHaveLength(1);
+      expect(foreign[0].ownerId).toBe(target);
+      expect(foreign[0].source).toBe("recon");
+      expect(foreign[0].strength).toBeUndefined();
+    }
+    console.info(
+      "[M7 120-nation projection] assets=2400 paidGrants=120 observers=120 elapsedMs=" +
+        (performance.now() - start).toFixed(3),
+    );
   });
 
   it("profiles a deterministic 120-sovereign lease lookup without a global map scan", () => {
