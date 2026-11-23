@@ -12,7 +12,11 @@ import {
 import type { GameView } from "../../../src/client/view";
 
 const mounted: HTMLElement[] = [];
-const empire = { id: "empire-a", leaderId: "nation-a", memberIds: ["nation-a"] };
+const empire = {
+  id: "empire-a",
+  leaderId: "nation-a",
+  memberIds: ["nation-a"],
+};
 const ultimatum: NationalUltimatumViewData["items"][number] = {
   id: "ultimatum-20-2-5",
   issuerId: "nation-a",
@@ -32,29 +36,43 @@ const ultimatum: NationalUltimatumViewData["items"][number] = {
   acknowledgedRequestIds: [] as string[],
 };
 
-async function mount(actorId = "nation-a", opts: {
-  replay?: boolean;
-  spectator?: boolean;
-  privateSeat?: boolean;
-  money?: bigint;
-} = {}) {
+async function mount(
+  actorId = "nation-a",
+  opts: {
+    replay?: boolean;
+    spectator?: boolean;
+    privateSeat?: boolean;
+    money?: bigint;
+  } = {},
+) {
   const state = {
     tick: 20,
     politics: { empires: [empire], warnings: [] },
     ultimatums: [] as NationalUltimatumViewData["items"][number][],
     grants: [] as {
-      requestId: string; targetId: string; centerX: number; centerY: number;
-      radius: 90; cost: "500"; effectiveTick: number; expiresAtTick: number;
+      requestId: string;
+      targetId: string;
+      centerX: number;
+      centerY: number;
+      radius: 90;
+      cost: "500";
+      effectiveTick: number;
+      expiresAtTick: number;
     }[],
   };
   const player = (id: string) => ({
     id: () => id,
-    name: () => ({ "nation-a": "Emperor", "nation-b": "B Nation", "nation-c": "C Nation" })[id] ?? id,
+    name: () =>
+      ({
+        "nation-a": "Emperor",
+        "nation-b": "B Nation",
+        "nation-c": "C Nation",
+      })[id] ?? id,
     isAlive: () => true,
     hasSpawned: () => true,
     numTilesOwned: () => 5,
     gold: () => opts.money ?? 1500n,
-    nameLocation: () => id === actorId ? { x: 10, y: 15 } : undefined,
+    nameLocation: () => (id === actorId ? { x: 10, y: 15 } : undefined),
     outgoingAttacks: () => [],
   });
   const players = [player("nation-a"), player("nation-b"), player("nation-c")];
@@ -77,17 +95,23 @@ async function mount(actorId = "nation-a", opts: {
     nationalPactReceipts: () => [],
     nationalAccessionOffers: () => null,
     nationalUltimatums: () => ({
-      version: 1, recipientId: actorId, items: state.ultimatums,
+      version: 1,
+      recipientId: actorId,
+      items: state.ultimatums,
     }),
     nationalReconnaissance: () => ({
-      version: 1, recipientId: actorId, tick: state.tick, grants: state.grants,
+      version: 1,
+      recipientId: actorId,
+      tick: state.tick,
+      grants: state.grants,
     }),
     nationalConflicts: () => null,
     nationalFoundingOutcome: () => null,
     nationalFoundingResults: () => [],
     ticks: () => state.tick,
     gameID: () => "national-sovereign-ui",
-    isValidCoord: (x: number, y: number) => x >= 0 && x < 200 && y >= 0 && y < 200,
+    isValidCoord: (x: number, y: number) =>
+      x >= 0 && x < 200 && y >= 0 && y < 200,
     isPaused: () => false,
   } as unknown as GameView;
   const bus = new EventBus();
@@ -95,18 +119,28 @@ async function mount(actorId = "nation-a", opts: {
   const purchases: SendNationalReconnaissanceIntentEvent[] = [];
   bus.on(SendNationalUltimatumIntentEvent, (e) => demands.push(e));
   bus.on(SendNationalReconnaissanceIntentEvent, (e) => purchases.push(e));
-  const element = document.createElement("national-diplomacy-panel") as NationalDiplomacyPanel;
+  const element = document.createElement(
+    "national-diplomacy-panel",
+  ) as NationalDiplomacyPanel;
   element.game = view;
   element.eventBus = bus;
   document.body.appendChild(element);
   mounted.push(element);
   await element.updateComplete;
-  element.querySelector<HTMLButtonElement>('[aria-controls="national-diplomacy-content"]')?.click();
+  element
+    .querySelector<HTMLButtonElement>(
+      '[aria-controls="national-diplomacy-content"]',
+    )
+    ?.click();
   await element.updateComplete;
   return { element, bus, state, demands, purchases, view };
 }
 
-async function submitForm(element: NationalDiplomacyPanel, selector: string, target: string) {
+async function submitForm(
+  element: NationalDiplomacyPanel,
+  selector: string,
+  target: string,
+) {
   const form = element.querySelector<HTMLFormElement>(selector)!;
   const select = form.querySelector<HTMLSelectElement>('[name="target"]')!;
   select.value = target;
@@ -124,17 +158,37 @@ afterEach(() => {
 describe("C5 Class Three E1 native sovereign journey", () => {
   it("a real emperor can issue exactly one demand and must await private Game receipt", async () => {
     const { element, demands, state } = await mount();
-    await submitForm(element, "section[data-national-ultimatums] form", "nation-b");
+    await submitForm(
+      element,
+      "section[data-national-ultimatums] form",
+      "nation-b",
+    );
     expect(demands).toHaveLength(1);
     expect(demands[0].candidate).toMatchObject({
-      type: "national_issue_ultimatum", empireId: "empire-a",
-      targetId: "nation-b", threat: "embargo", durationTicks: 300,
+      type: "national_issue_ultimatum",
+      empireId: "empire-a",
+      targetId: "nation-b",
+      threat: "embargo",
+      durationTicks: 300,
     });
-    expect(element.textContent).toContain("Pending Game-owned ultimatum acknowledgement");
+    expect(element.textContent).toContain(
+      "Pending Game-owned ultimatum acknowledgement",
+    );
     expect(element.textContent).not.toContain("Game issued ultimatum");
-    expect(element.querySelector<HTMLButtonElement>("[data-national-issue-ultimatum]")?.disabled).toBe(true);
+    expect(
+      element.querySelector<HTMLButtonElement>(
+        "[data-national-issue-ultimatum]",
+      )?.disabled,
+    ).toBe(true);
     state.tick++;
-    state.ultimatums = [{ ...ultimatum, issuedTick: 21, deadlineTick: 321, requestId: (demands[0].candidate as { requestId: string }).requestId }];
+    state.ultimatums = [
+      {
+        ...ultimatum,
+        issuedTick: 21,
+        deadlineTick: 321,
+        requestId: (demands[0].candidate as { requestId: string }).requestId,
+      },
+    ];
     element.refresh();
     await element.updateComplete;
     expect(element.textContent).toContain("Game issued ultimatum");
@@ -148,15 +202,26 @@ describe("C5 Class Three E1 native sovereign journey", () => {
     await element.updateComplete;
     expect(element.querySelector("[data-national-issue-ultimatum]")).toBeNull();
     expect(element.textContent).toContain("Demand addressed to your nation");
-    const refuse = [...element.querySelectorAll<HTMLButtonElement>("[data-national-ultimatum-id] button")]
-      .find((button) => button.textContent?.includes("Refuse"))!;
+    const refuse = [
+      ...element.querySelectorAll<HTMLButtonElement>(
+        "[data-national-ultimatum-id] button",
+      ),
+    ].find((button) => button.textContent?.includes("Refuse"))!;
     refuse.click();
     await element.updateComplete;
     expect(demands).toHaveLength(1);
     expect(element.textContent).toContain("Pending Game-owned ultimatum");
     const id = (demands[0].candidate as { requestId: string }).requestId;
     state.tick++;
-    state.ultimatums = [{ ...state.ultimatums[0], phase: "decision-required", response: "refuse", version: 2, acknowledgedRequestIds: [id] }];
+    state.ultimatums = [
+      {
+        ...state.ultimatums[0],
+        phase: "decision-required",
+        response: "refuse",
+        version: 2,
+        acknowledgedRequestIds: [id],
+      },
+    ];
     element.refresh();
     await element.updateComplete;
     expect(element.textContent).toContain("Game confirmed refuse");
@@ -167,26 +232,44 @@ describe("C5 Class Three E1 native sovereign journey", () => {
     state.ultimatums = [{ ...ultimatum, role: "recipient", requestId: null }];
     element.refresh();
     await element.updateComplete;
-    const accept = [...element.querySelectorAll<HTMLButtonElement>("[data-national-ultimatum-id] button")]
-      .find((button) => button.textContent?.includes("Accept demand"))!;
+    const accept = [
+      ...element.querySelectorAll<HTMLButtonElement>(
+        "[data-national-ultimatum-id] button",
+      ),
+    ].find((button) => button.textContent?.includes("Accept demand"))!;
     accept.click();
     await element.updateComplete;
     const id = (demands[0].candidate as { requestId: string }).requestId;
     state.tick++;
-    state.ultimatums = [{ ...state.ultimatums[0], phase: "consented", response: "accept", version: 2, acknowledgedRequestIds: [id] }];
+    state.ultimatums = [
+      {
+        ...state.ultimatums[0],
+        phase: "consented",
+        response: "accept",
+        version: 2,
+        acknowledgedRequestIds: [id],
+      },
+    ];
     element.refresh();
     await element.updateComplete;
-    expect(element.textContent).toContain("separate two-party political offer and acceptance");
+    expect(element.textContent).toContain(
+      "separate two-party political offer and acceptance",
+    );
     expect(state.politics.empires[0].memberIds).toEqual(["nation-a"]);
   });
 
   it("real map coordinates and explicit consent yield one pending recon, then verified lease and expiration", async () => {
     const { element, purchases, state } = await mount();
-    const form = element.querySelector<HTMLFormElement>("section[data-national-recon] form")!;
+    const form = element.querySelector<HTMLFormElement>(
+      "section[data-national-recon] form",
+    )!;
     const target = form.querySelector<HTMLSelectElement>('[name="target"]')!;
     target.value = "nation-b";
     target.dispatchEvent(new Event("change", { bubbles: true }));
-    for (const [name, value] of [["centerX", "10"], ["centerY", "15"]]) {
+    for (const [name, value] of [
+      ["centerX", "10"],
+      ["centerY", "15"],
+    ]) {
       const input = form.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
       input.value = value;
       input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -197,13 +280,28 @@ describe("C5 Class Three E1 native sovereign journey", () => {
     await element.updateComplete;
     expect(purchases).toHaveLength(1);
     expect(purchases[0].candidate).toMatchObject({
-      type: "national_buy_regional_recon", targetId: "nation-b", centerX: 10, centerY: 15,
+      type: "national_buy_regional_recon",
+      targetId: "nation-b",
+      centerX: 10,
+      centerY: 15,
     });
-    expect(element.textContent).toContain("awaiting the actual paid intelligence lease");
+    expect(element.textContent).toContain(
+      "awaiting the actual paid intelligence lease",
+    );
     const id = (purchases[0].candidate as { requestId: string }).requestId;
     state.tick = 21;
-    state.grants = [{ requestId: id, targetId: "nation-b", centerX: 10, centerY: 15,
-      radius: 90, cost: "500", effectiveTick: 21, expiresAtTick: 621 }];
+    state.grants = [
+      {
+        requestId: id,
+        targetId: "nation-b",
+        centerX: 10,
+        centerY: 15,
+        radius: 90,
+        cost: "500",
+        effectiveTick: 21,
+        expiresAtTick: 621,
+      },
+    ];
     element.refresh();
     await element.updateComplete;
     expect(element.textContent).toContain("Game confirmed 500-gold purchase");
@@ -217,22 +315,33 @@ describe("C5 Class Three E1 native sovereign journey", () => {
   it("forged coordinates, non-emperor powers, replay, and inactive seats do not emit", async () => {
     const { element, purchases, demands } = await mount("nation-b");
     expect(element.querySelector("[data-national-issue-ultimatum]")).toBeNull();
-    const recon = element.querySelector<HTMLFormElement>("section[data-national-recon] form")!;
-    recon.querySelector<HTMLSelectElement>('[name="target"]')!.value = "nation-a";
+    const recon = element.querySelector<HTMLFormElement>(
+      "section[data-national-recon] form",
+    )!;
+    recon.querySelector<HTMLSelectElement>('[name="target"]')!.value =
+      "nation-a";
     recon.querySelector<HTMLInputElement>('[name="confirm"]')!.checked = true;
     recon.querySelector<HTMLInputElement>('[name="centerX"]')!.value = "555";
     recon.querySelector<HTMLInputElement>('[name="centerY"]')!.value = "2";
-    recon.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    recon.dispatchEvent(
+      new Event("submit", { cancelable: true, bubbles: true }),
+    );
     await element.updateComplete;
     expect(purchases).toHaveLength(0);
     expect(demands).toHaveLength(0);
     expect(element.textContent).toContain("Invalid map center");
 
     const replay = await mount("nation-a", { replay: true });
-    expect(replay.element.querySelector("[data-national-buy-recon]")).toBeNull();
+    expect(
+      replay.element.querySelector("[data-national-buy-recon]"),
+    ).toBeNull();
     const spectator = await mount("nation-a", { spectator: true });
-    expect(spectator.element.querySelector("[data-national-issue-ultimatum]")).toBeNull();
+    expect(
+      spectator.element.querySelector("[data-national-issue-ultimatum]"),
+    ).toBeNull();
     const privateSeat = await mount("nation-a", { privateSeat: true });
-    expect(privateSeat.element.textContent).toContain("locked until the server verifies");
+    expect(privateSeat.element.textContent).toContain(
+      "locked until the server verifies",
+    );
   });
 });

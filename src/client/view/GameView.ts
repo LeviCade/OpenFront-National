@@ -19,6 +19,7 @@ import {
   SpawnPhaseEndUpdate,
   UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
+import type { NationalUltimatumViewData } from "@openfront/engine-api/game/GameUpdates";
 import {
   readNationalImperialAdministration,
   type NationalImperialAdministrationView,
@@ -27,6 +28,7 @@ import {
   readNationalPactWireDisclosure,
   type NationalPactDisclosureViewData,
 } from "@openfront/engine-api/game/NationalPactView";
+import type { NationalReconnaissanceViewData } from "@openfront/engine-api/game/NationalReconView";
 import {
   GameLike,
   ReadonlyTileSet,
@@ -70,6 +72,10 @@ import {
   retainPactReceipts,
   type PactReceipt,
 } from "../NationalPactState";
+import {
+  readNationalReconnaissanceView,
+  readNationalUltimatumView,
+} from "../NationalSovereignActions";
 import { computeAllianceClusters } from "../render/frame/derive/AllianceClusters";
 import { extractAttackRings } from "../render/frame/derive/AttackRings";
 import { extractNukeTelegraphs } from "../render/frame/derive/NukeTelegraphs";
@@ -82,12 +88,6 @@ import { TrailManager } from "../render/frame/TrailManager";
 import type { FrameData, NameEntry } from "../render/types";
 import { STRUCTURE_TYPES, TRAIL_TYPES } from "../render/types";
 import type { TrustedNationalObserverMap } from "../TrustedNationalSession";
-import type { NationalUltimatumViewData } from "@openfront/engine-api/game/GameUpdates";
-import type { NationalReconnaissanceViewData } from "@openfront/engine-api/game/NationalReconView";
-import {
-  readNationalReconnaissanceView,
-  readNationalUltimatumView,
-} from "../NationalSovereignActions";
 import { UserSettings } from "../UserSettings";
 import { resolveTeamClanTag } from "../Utils";
 import { WorkerClient } from "../WorkerClient";
@@ -826,11 +826,19 @@ export class GameView implements GameLike {
       this._nationalUltimatums =
         gu.tick < previousTick
           ? null
-          : readNationalUltimatumView(gu.nationalUltimatums, currentActorId, gu.tick);
+          : readNationalUltimatumView(
+              gu.nationalUltimatums,
+              currentActorId,
+              gu.tick,
+            );
       this._nationalReconnaissance =
         gu.tick < previousTick
           ? null
-          : readNationalReconnaissanceView(gu.nationalReconnaissance, currentActorId, gu.tick);
+          : readNationalReconnaissanceView(
+              gu.nationalReconnaissance,
+              currentActorId,
+              gu.tick,
+            );
       this._nationalImperialAdministration =
         gu.tick < previousTick
           ? null

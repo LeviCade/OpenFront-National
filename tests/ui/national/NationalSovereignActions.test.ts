@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
 import {
   NATIONAL_RECON_COST,
   NATIONAL_RECON_DURATION_TICKS,
   NATIONAL_RECON_RADIUS,
 } from "@openfront/engine-api/game/NationalReconView";
+import { describe, expect, it } from "vitest";
 import {
   REGIONAL_RECON_COST,
   REGIONAL_RECON_DURATION_TICKS,
@@ -48,7 +48,11 @@ const grant = {
 
 describe("C5 Class Three E1 canonical human commands and recipient privacy", () => {
   it("displays the exact Game-owned price, radius and lease constants", () => {
-    expect(nationalReconQuote).toEqual({ cost: 500n, radius: 90, durationTicks: 600 });
+    expect(nationalReconQuote).toEqual({
+      cost: 500n,
+      radius: 90,
+      durationTicks: 600,
+    });
     expect(NATIONAL_RECON_COST).toBe(REGIONAL_RECON_COST);
     expect(NATIONAL_RECON_RADIUS).toBe(REGIONAL_RECON_RADIUS);
     expect(NATIONAL_RECON_DURATION_TICKS).toBe(REGIONAL_RECON_DURATION_TICKS);
@@ -65,8 +69,11 @@ describe("C5 Class Three E1 canonical human commands and recipient privacy", () 
     };
     expect(parseNationalUltimatumIntent(good)).toEqual(good);
     for (const extra of [
-      { actorId: "nation-b" }, { issuerId: "nation-b" },
-      { payerId: "nation-b" }, { cost: 0 }, { clientID: "forged" },
+      { actorId: "nation-b" },
+      { issuerId: "nation-b" },
+      { payerId: "nation-b" },
+      { cost: 0 },
+      { clientID: "forged" },
       { unauthorizedDisclosure: { hidden: true } },
     ]) {
       expect(parseNationalUltimatumIntent({ ...good, ...extra })).toBeNull();
@@ -77,62 +84,148 @@ describe("C5 Class Three E1 canonical human commands and recipient privacy", () 
       { ...good, durationTicks: 0 },
       { ...good, durationTicks: 9000 },
       { ...good, threat: "instant-annexation" },
-      { type: "national_respond_ultimatum", ultimatumId: issuerRow.id, decision: "approve", requestId },
-      { type: "national_resolve_ultimatum", ultimatumId: issuerRow.id, decision: "annex", requestId },
-      null, [], "national_issue_ultimatum",
+      {
+        type: "national_respond_ultimatum",
+        ultimatumId: issuerRow.id,
+        decision: "approve",
+        requestId,
+      },
+      {
+        type: "national_resolve_ultimatum",
+        ultimatumId: issuerRow.id,
+        decision: "annex",
+        requestId,
+      },
+      null,
+      [],
+      "national_issue_ultimatum",
     ]) {
       expect(parseNationalUltimatumIntent(invalid)).toBeNull();
     }
-    expect(parseNationalUltimatumIntent({
-      type: "national_respond_ultimatum",
-      ultimatumId: issuerRow.id, decision: "refuse", requestId,
-    })).not.toBeNull();
-    expect(parseNationalUltimatumIntent({
-      type: "national_resolve_ultimatum",
-      ultimatumId: issuerRow.id, decision: "enforce", requestId,
-    })).not.toBeNull();
+    expect(
+      parseNationalUltimatumIntent({
+        type: "national_respond_ultimatum",
+        ultimatumId: issuerRow.id,
+        decision: "refuse",
+        requestId,
+      }),
+    ).not.toBeNull();
+    expect(
+      parseNationalUltimatumIntent({
+        type: "national_resolve_ultimatum",
+        ultimatumId: issuerRow.id,
+        decision: "enforce",
+        requestId,
+      }),
+    ).not.toBeNull();
   });
 
   it("only reads exact private issuer or recipient data on an authorized tick", () => {
     const packet = { version: 1, recipientId: "nation-a", items: [issuerRow] };
-    expect(readNationalUltimatumView(packet, "nation-a", 21)?.items[0].id).toBe(issuerRow.id);
+    expect(readNationalUltimatumView(packet, "nation-a", 21)?.items[0].id).toBe(
+      issuerRow.id,
+    );
     expect(readNationalUltimatumView(packet, "nation-c", 21)).toBeNull();
     expect(readNationalUltimatumView(packet, "nation-a", 19)).toBeNull();
-    expect(readNationalUltimatumView({
-      ...packet,
-      items: [{ ...issuerRow, role: "recipient" }],
-    }, "nation-a", 21)).toBeNull();
-    expect(readNationalUltimatumView({
-      ...packet,
-      items: [{ ...issuerRow, acknowledgedRequestIds: ["np_fake"] }],
-    }, "nation-a", 21)).toBeNull();
-    expect(readNationalUltimatumView({
-      ...packet,
-      items: [issuerRow, issuerRow],
-    }, "nation-a", 21)).toBeNull();
+    expect(
+      readNationalUltimatumView(
+        {
+          ...packet,
+          items: [{ ...issuerRow, role: "recipient" }],
+        },
+        "nation-a",
+        21,
+      ),
+    ).toBeNull();
+    expect(
+      readNationalUltimatumView(
+        {
+          ...packet,
+          items: [{ ...issuerRow, acknowledgedRequestIds: ["np_fake"] }],
+        },
+        "nation-a",
+        21,
+      ),
+    ).toBeNull();
+    expect(
+      readNationalUltimatumView(
+        {
+          ...packet,
+          items: [issuerRow, issuerRow],
+        },
+        "nation-a",
+        21,
+      ),
+    ).toBeNull();
     const recipient = { ...issuerRow, role: "recipient", requestId: null };
-    expect(readNationalUltimatumView({
-      version: 1, recipientId: "nation-b", items: [recipient],
-    }, "nation-b", 21)).not.toBeNull();
-    expect(readNationalUltimatumView({
-      version: 1, recipientId: "nation-b", items: [issuerRow],
-    }, "nation-b", 21)).toBeNull();
+    expect(
+      readNationalUltimatumView(
+        {
+          version: 1,
+          recipientId: "nation-b",
+          items: [recipient],
+        },
+        "nation-b",
+        21,
+      ),
+    ).not.toBeNull();
+    expect(
+      readNationalUltimatumView(
+        {
+          version: 1,
+          recipientId: "nation-b",
+          items: [issuerRow],
+        },
+        "nation-b",
+        21,
+      ),
+    ).toBeNull();
   });
 
   it("a private gold lease is a receipt only while it is active and belongs to the player", () => {
-    const view = { version: 1, recipientId: "nation-a", tick: 30, grants: [grant] };
-    expect(readNationalReconnaissanceView(view, "nation-a", 30)?.grants[0].cost).toBe("500");
+    const view = {
+      version: 1,
+      recipientId: "nation-a",
+      tick: 30,
+      grants: [grant],
+    };
+    expect(
+      readNationalReconnaissanceView(view, "nation-a", 30)?.grants[0].cost,
+    ).toBe("500");
     expect(readNationalReconnaissanceView(view, "nation-c", 30)).toBeNull();
     expect(readNationalReconnaissanceView(view, "nation-a", 29)).toBeNull();
-    expect(readNationalReconnaissanceView({ ...view, tick: 620 }, "nation-a", 620)).toBeNull();
-    expect(readNationalReconnaissanceView({
-      ...view, grants: [{ ...grant, cost: "0" }],
-    }, "nation-a", 30)).toBeNull();
-    expect(readNationalReconnaissanceView({
-      ...view, grants: [{ ...grant, expiresAtTick: 621 }],
-    }, "nation-a", 30)).toBeNull();
-    expect(readNationalReconnaissanceView({
-      ...view, grants: [grant, grant],
-    }, "nation-a", 30)).toBeNull();
+    expect(
+      readNationalReconnaissanceView({ ...view, tick: 620 }, "nation-a", 620),
+    ).toBeNull();
+    expect(
+      readNationalReconnaissanceView(
+        {
+          ...view,
+          grants: [{ ...grant, cost: "0" }],
+        },
+        "nation-a",
+        30,
+      ),
+    ).toBeNull();
+    expect(
+      readNationalReconnaissanceView(
+        {
+          ...view,
+          grants: [{ ...grant, expiresAtTick: 621 }],
+        },
+        "nation-a",
+        30,
+      ),
+    ).toBeNull();
+    expect(
+      readNationalReconnaissanceView(
+        {
+          ...view,
+          grants: [grant, grant],
+        },
+        "nation-a",
+        30,
+      ),
+    ).toBeNull();
   });
 });

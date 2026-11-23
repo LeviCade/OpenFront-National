@@ -1,9 +1,3 @@
-import {
-  NationalIssueUltimatumIntentSchema,
-  NationalRespondUltimatumIntentSchema,
-  NationalResolveUltimatumIntentSchema,
-  type Intent,
-} from "@openfront/engine-api/Schemas";
 import type { NationalUltimatumViewData } from "@openfront/engine-api/game/GameUpdates";
 import {
   NATIONAL_RECON_COST,
@@ -11,6 +5,12 @@ import {
   NATIONAL_RECON_RADIUS,
   type NationalReconnaissanceViewData,
 } from "@openfront/engine-api/game/NationalReconView";
+import {
+  NationalIssueUltimatumIntentSchema,
+  NationalRespondUltimatumIntentSchema,
+  NationalResolveUltimatumIntentSchema,
+  type Intent,
+} from "@openfront/engine-api/Schemas";
 
 const receiptId = /^np_[0-9a-f]{32}$/;
 const validId = (value: unknown): value is string =>
@@ -25,8 +25,14 @@ export const nationalReconQuote = Object.freeze({
 });
 
 /** Exact-shape client command. Zod alone strips forged extras. */
-export function parseNationalUltimatumIntent(candidate: unknown): Intent | null {
-  if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate))
+export function parseNationalUltimatumIntent(
+  candidate: unknown,
+): Intent | null {
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    Array.isArray(candidate)
+  )
     return null;
   const data = candidate as Record<string, unknown>;
   const shape =
@@ -42,10 +48,12 @@ export function parseNationalUltimatumIntent(candidate: unknown): Intent | null 
     Object.keys(data).some((key) => !shape.includes(key))
   )
     return null;
-  if (!receiptId.test(String(data.requestId)) ||
+  if (
+    !receiptId.test(String(data.requestId)) ||
     (data.type === "national_issue_ultimatum"
       ? !validId(data.empireId) || !validId(data.targetId)
-      : !validId(data.ultimatumId)))
+      : !validId(data.ultimatumId))
+  )
     return null;
   const parsed =
     data.type === "national_issue_ultimatum"
@@ -73,26 +81,49 @@ export function readNationalUltimatumView(
   )
     return null;
   const ids = new Set<string>();
-  const phases = new Set(["pending", "consented", "decision-required", "acceded", "enforced", "backed-down", "withdrawn", "expired"]);
+  const phases = new Set([
+    "pending",
+    "consented",
+    "decision-required",
+    "acceded",
+    "enforced",
+    "backed-down",
+    "withdrawn",
+    "expired",
+  ]);
   const valid = v.items.every((row) => {
-    if (!row || !validId(row.id) || ids.has(row.id) ||
-      !validId(row.issuerId) || !validId(row.targetId) || !validId(row.empireId) ||
-      (row.role === "issuer" ? row.issuerId !== actorId : row.role !== "recipient" || row.targetId !== actorId) ||
+    if (
+      !row ||
+      !validId(row.id) ||
+      ids.has(row.id) ||
+      !validId(row.issuerId) ||
+      !validId(row.targetId) ||
+      !validId(row.empireId) ||
+      (row.role === "issuer"
+        ? row.issuerId !== actorId
+        : row.role !== "recipient" || row.targetId !== actorId) ||
       (row.threat !== "embargo" && row.threat !== "imperial-war") ||
-      !natural(row.issuedTick) || !natural(row.deadlineTick) ||
-      row.issuedTick > currentTick || row.deadlineTick <= row.issuedTick ||
+      !natural(row.issuedTick) ||
+      !natural(row.deadlineTick) ||
+      row.issuedTick > currentTick ||
+      row.deadlineTick <= row.issuedTick ||
       !phases.has(row.phase) ||
       !["none", "accept", "refuse"].includes(row.response) ||
       !["pending", "kept", "broken", "void"].includes(row.credibility) ||
-      !Number.isSafeInteger(row.version) || row.version < 1 ||
+      !Number.isSafeInteger(row.version) ||
+      row.version < 1 ||
       (row.warId !== null && !validId(row.warId)) ||
       !Array.isArray(row.imposedMembers) ||
       row.imposedMembers.length > 128 ||
       row.imposedMembers.some((id: unknown) => !validId(id)) ||
-      (row.requestId !== null && (row.role !== "issuer" || !receiptId.test(row.requestId))) ||
+      (row.requestId !== null &&
+        (row.role !== "issuer" || !receiptId.test(row.requestId))) ||
       !Array.isArray(row.acknowledgedRequestIds) ||
       row.acknowledgedRequestIds.length > 64 ||
-      row.acknowledgedRequestIds.some((id: unknown) => typeof id !== "string" || !receiptId.test(id)))
+      row.acknowledgedRequestIds.some(
+        (id: unknown) => typeof id !== "string" || !receiptId.test(id),
+      )
+    )
       return false;
     ids.add(row.id);
     return true;
@@ -108,19 +139,32 @@ export function readNationalReconnaissanceView(
   if (!actorId || !natural(currentTick) || !input || typeof input !== "object")
     return null;
   const v = input as Partial<NationalReconnaissanceViewData>;
-  if (v.version !== 1 || v.recipientId !== actorId || v.tick !== currentTick ||
-      !Array.isArray(v.grants) || v.grants.length > 4096)
+  if (
+    v.version !== 1 ||
+    v.recipientId !== actorId ||
+    v.tick !== currentTick ||
+    !Array.isArray(v.grants) ||
+    v.grants.length > 4096
+  )
     return null;
   const ids = new Set<string>();
   for (const g of v.grants) {
-    if (!g || !receiptId.test(g.requestId) || ids.has(g.requestId) ||
-      !validId(g.targetId) || g.targetId === actorId ||
-      !natural(g.centerX) || !natural(g.centerY) ||
+    if (
+      !g ||
+      !receiptId.test(g.requestId) ||
+      ids.has(g.requestId) ||
+      !validId(g.targetId) ||
+      g.targetId === actorId ||
+      !natural(g.centerX) ||
+      !natural(g.centerY) ||
       g.radius !== NATIONAL_RECON_RADIUS ||
       g.cost !== NATIONAL_RECON_COST.toString() ||
-      !natural(g.effectiveTick) || !natural(g.expiresAtTick) ||
-      g.effectiveTick > currentTick || g.expiresAtTick <= currentTick ||
-      g.expiresAtTick - g.effectiveTick !== NATIONAL_RECON_DURATION_TICKS)
+      !natural(g.effectiveTick) ||
+      !natural(g.expiresAtTick) ||
+      g.effectiveTick > currentTick ||
+      g.expiresAtTick <= currentTick ||
+      g.expiresAtTick - g.effectiveTick !== NATIONAL_RECON_DURATION_TICKS
+    )
       return null;
     ids.add(g.requestId);
   }

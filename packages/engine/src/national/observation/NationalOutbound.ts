@@ -82,7 +82,9 @@ export function projectNationalUltimatums(
 export function projectNationalReconnaissance(
   game: Game,
   observerId: string | null,
-): import("@openfront/engine-api/game/NationalReconView").NationalReconnaissanceViewData | undefined {
+):
+  | import("@openfront/engine-api/game/NationalReconView").NationalReconnaissanceViewData
+  | undefined {
   if (
     !game.config().nationalMode() ||
     observerId === null ||
@@ -90,7 +92,11 @@ export function projectNationalReconnaissance(
   )
     return undefined;
   const actor = game.player(observerId);
-  if (actor.type() !== PlayerType.Human || !actor.hasSpawned() || !actor.isAlive())
+  if (
+    actor.type() !== PlayerType.Human ||
+    !actor.hasSpawned() ||
+    !actor.isAlive()
+  )
     return undefined;
   return {
     version: 1,
@@ -788,7 +794,10 @@ export class NationalOutboundFilter {
       this.observerId,
     );
     const privateUltimatums = projectNationalUltimatums(game, this.observerId);
-    const privateReconnaissance = projectNationalReconnaissance(game, this.observerId);
+    const privateReconnaissance = projectNationalReconnaissance(
+      game,
+      this.observerId,
+    );
     // This is a strict packet whitelist, not a shallow spread that could
     // accidentally copy a newly introduced sensitive packed field.
     return {
