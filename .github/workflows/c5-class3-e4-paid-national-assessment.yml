@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        gate: [typecheck, gameplay, format, lint, production-build]
+        gate: [typecheck, gameplay, format, lint, production-build, full-suite]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,6 +71,7 @@ jobs:
               ;;
             lint) npm run lint ;;
             production-build) npm run build-prod ;;
+            full-suite) npm test ;;
             *) exit 1 ;;
           esac
       - name: Print formatter patch for author reconciliation
