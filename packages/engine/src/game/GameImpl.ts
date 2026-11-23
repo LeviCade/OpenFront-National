@@ -1617,7 +1617,7 @@ export class GameImpl implements Game {
   creditNationalCommercialIncome(
     player: Player,
     gross: bigint,
-    source: "maritime" | "rail" | "piracy" | undefined,
+    source?: "maritime" | "rail" | "piracy",
     tile?: TileRef,
   ): void {
     if (this._national && this._players.get(player.id()) !== player)
