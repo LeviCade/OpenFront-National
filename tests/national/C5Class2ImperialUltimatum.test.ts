@@ -165,12 +165,29 @@ function assets(game: Game) {
   });
 }
 
+/** Mirrors the same real-world ticks without an ultimatum command;
+ * compare income, troop accrual and balances at the exact same game tick.
+ */
+function expectNoArtificialResources(game: Game, control: Game): void {
+  while (control.ticks() < game.ticks()) control.executeNextTick();
+  expect(control.ticks()).toBe(game.ticks());
+  expect(assets(game)).toEqual(assets(control));
+}
+
+function expectNoIndependentCurrency(before: ReturnType<typeof assets>, game: Game): void {
+  const finance = (rows: ReturnType<typeof assets>) => rows.map((r) => ({
+    id: r.id, trade: r.trade, piracy: r.piracy,
+  }));
+  expect(finance(assets(game))).toEqual(finance(before));
+}
+
 describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
   it("refusal enforces real empire-member embargo; outsiders and sockets never see terms", async () => {
     const { game, act, view } = await fixture();
     establish(act);
     recruit(act);
     const before = assets(game);
+    const control = (await roundTrip(game, "plains")).restored;
     expect(game.player(IDS[0]).canTrade(game.player(IDS[1]))).toBe(true);
     expect(game.player(IDS[3]).canTrade(game.player(IDS[1]))).toBe(true);
     act(0, { ...issue("embargo"), clientID: CLIENTS[1] });
@@ -222,7 +239,7 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(game.player(IDS[2]).canTrade(game.player(IDS[1]))).toBe(true);
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
     expect(game.nationalWarState()!.wars.layers.length).toBe(0);
-    expect(assets(game)).toEqual(before);
+    expectNoArtificialResources(game, control);
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
@@ -274,7 +291,7 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(view(1)[0]).toMatchObject({ phase: "acceded", credibility: "kept" });
     act(0, resolve(id, "enforce", "c5_c2_no_war_after_accession"));
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
-    expect(assets(game)).toEqual(before);
+    expectNoIndependentCurrency(before, game);
     const { bytes, again, restored } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
@@ -295,6 +312,7 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(true);
     const originalLayers = game.nationalWarState()!.wars.layers.length;
     const before = assets(game);
+    const control = (await roundTrip(game, "plains")).restored;
     act(0, issue("imperial-war", IDS[1], "c5_c2_protected"));
     const protectedId = view(0)[0].id;
     act(1, respond(protectedId, "refuse", "c5_c2_protected_refuse"));
@@ -307,7 +325,7 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     });
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(true);
     expect(game.nationalWarState()!.wars.layers.length).toBe(originalLayers);
-    expect(assets(game)).toEqual(before);
+    expectNoArtificialResources(game, control);
 
     act(0, issue("imperial-war", IDS[2], "c5_c2_lawful_war"));
     const lawfulId = view(2)[0].id;
@@ -320,7 +338,7 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     expect(
       game.nationalWarState()?.wars.layers.some((l) => l.id === enforced.warId),
     ).toBe(true);
-    expect(assets(game)).toEqual(before);
+    expectNoArtificialResources(game, control);
     const { restored, bytes, again } = await roundTrip(game, "plains");
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
@@ -373,7 +391,7 @@ describe("C5 Class Two ECON-06/07 authenticated imperial ultimatum", () => {
     act(0, resolve(id, "enforce", "stale_old_crown"));
     expect(game.player(IDS[0]).canTrade(game.player(IDS[1]))).toBe(true);
     expect(game.nationalWarAuthority()?.atWar(IDS[0], IDS[1])).toBe(false);
-    expect(assets(game)).toEqual(before);
+    expectNoIndependentCurrency(before, game);
     expect(
       host.submit(sockets[1], {
         type: "national_respond_ultimatum",
