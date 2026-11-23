@@ -114,9 +114,9 @@ jobs:
           for f in \
             tests/ui/national/C6Class1NationalAssessmentControls.test.ts \
             tests/national/C6Class1ImperialRelief.test.ts \
-            tests/national/C6Class1EmbargoSettlement.test.ts \
+            tests/national/C6Class1E3EmbargoRestitution.test.ts \
             tests/national/C6Class1CounterassessmentShield.test.ts \
-            tests/national/C6Class1AINationalAssessment.test.ts \
+            tests/national/C6Class1E5NationalAssessment.test.ts \
             tests/national/C6Class1NavalEscort.test.ts; do
               test -f "$f" || { echo "MISSING SIXTH ORIGINAL SCENARIO: $f" >&2; exit 1; }
           done
@@ -124,9 +124,9 @@ jobs:
         run: |
           npx --no-install vitest run --project node \
             tests/national/C6Class1ImperialRelief.test.ts \
-            tests/national/C6Class1EmbargoSettlement.test.ts \
+            tests/national/C6Class1E3EmbargoRestitution.test.ts \
             tests/national/C6Class1CounterassessmentShield.test.ts \
-            tests/national/C6Class1AINationalAssessment.test.ts \
+            tests/national/C6Class1E5NationalAssessment.test.ts \
             tests/national/C6Class1NavalEscort.test.ts
           npx --no-install vitest run tests/ui/national/C6Class1NationalAssessmentControls.test.ts
   hostile-snapshot-nonregression:
