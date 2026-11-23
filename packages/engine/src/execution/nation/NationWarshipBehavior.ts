@@ -300,15 +300,30 @@ export class NationWarshipBehavior {
           (ship) =>
             ship.isActive() &&
             !ship.isMarkedForDeletion() &&
-            String(ship.id()) === target.merchantId,
+            String(ship.id()) === target.merchantId &&
+            ship.targetUnit()?.type() === UnitType.Port &&
+            ship.targetUnit()?.isActive() === true &&
+            ship.targetUnit()?.isMarkedForDeletion() === false &&
+            ship.targetUnit()?.owner() !== this.player &&
+            this.player.canTrade(ship.targetUnit()!.owner()) &&
+            this.game.x(ship.tile()) === target.merchantX &&
+            this.game.y(ship.tile()) === target.merchantY,
         )
       )
         continue;
 
+      if (!this.game.isValidCoord(target.merchantX, target.merchantY))
+        continue;
       const tile = this.game.ref(target.x, target.y);
-      if (!this.game.isWater(tile)) continue;
+      const merchantTile = this.game.ref(target.merchantX, target.merchantY);
+      if (!this.game.isWater(tile) || !this.game.isWater(merchantTile))
+        continue;
       const component = this.game.getWaterComponent(tile);
-      if (component === null) continue;
+      if (
+        component === null ||
+        this.game.getWaterComponent(merchantTile) !== component
+      )
+        continue;
 
       const warships = this.player
         .units(UnitType.Warship)
