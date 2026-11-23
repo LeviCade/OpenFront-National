@@ -60,6 +60,7 @@ import {
 } from "./LobbyEvents";
 import { LocalServer } from "./LocalServer";
 import type { PactIntent } from "./NationalPactState";
+import { parseNationalReconnaissanceIntent } from "./NationalReconPurchase";
 import {
   acceptTrustedNationalPrivateCapability,
   hasTrustedNationalPrivateCapability,
@@ -125,6 +126,11 @@ export class SendNationalPactIntentEvent implements GameEvent {
 
 export class SendNationalImperialPolicyIntentEvent implements GameEvent {
   constructor(public readonly intent: Intent) {}
+}
+
+/** Ordinary authenticated NATIONAL transport for one paid recon request. */
+export class SendNationalReconnaissanceIntentEvent implements GameEvent {
+  constructor(public readonly candidate: unknown) {}
 }
 
 export class SendNationalFoundEmpireIntentEvent implements GameEvent {
@@ -420,6 +426,11 @@ export class Transport {
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
     this.subscribe(SendNationalPactIntentEvent, (e) => {
       if (this.nationalDiplomacyWireEnabled()) this.sendIntent(e.intent);
+    });
+    this.subscribe(SendNationalReconnaissanceIntentEvent, (e) => {
+      if (!this.nationalDiplomacyWireEnabled()) return;
+      const parsed = parseNationalReconnaissanceIntent(e.candidate);
+      if (parsed !== null) this.sendIntent(parsed);
     });
     this.subscribe(SendNationalImperialPolicyIntentEvent, (e) => {
       if (!this.nationalDiplomacyWireEnabled()) return;
