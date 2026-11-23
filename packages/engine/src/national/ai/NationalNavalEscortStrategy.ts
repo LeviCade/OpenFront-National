@@ -10,6 +10,8 @@ export interface ObservedNavalEscort {
   readonly merchantOwnerId: string;
   readonly raiderId: string;
   readonly raiderOwnerId: string;
+  readonly merchantX: number;
+  readonly merchantY: number;
   readonly x: number;
   readonly y: number;
   readonly threatDistance: number;
@@ -64,7 +66,7 @@ export function planObservedNationalNavalEscorts(
           : a.source !== "own") &&
         validPosition(a),
     )
-    .sort((a, b) => a.id.localeCompare(b.id))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .slice(0, 64);
   const raiders = observation.visibleAssets
     .filter(
@@ -75,7 +77,7 @@ export function planObservedNationalNavalEscorts(
         a.ownerId !== observation.observerId &&
         validPosition(a),
     )
-    .sort((a, b) => a.id.localeCompare(b.id))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .slice(0, 64);
 
   const threats: ObservedNavalEscort[] = [];
@@ -90,6 +92,8 @@ export function planObservedNationalNavalEscorts(
         merchantOwnerId: merchant.ownerId,
         raiderId: raider.id,
         raiderOwnerId: raider.ownerId,
+        merchantX: merchant.x,
+        merchantY: merchant.y,
         x: raider.x,
         y: raider.y,
         threatDistance,
@@ -99,8 +103,12 @@ export function planObservedNationalNavalEscorts(
   threats.sort(
     (a, b) =>
       a.threatDistance - b.threatDistance ||
-      a.merchantId.localeCompare(b.merchantId) ||
-      a.raiderId.localeCompare(b.raiderId),
+      (a.merchantId < b.merchantId
+        ? -1
+        : a.merchantId > b.merchantId
+          ? 1
+          : 0) ||
+      (a.raiderId < b.raiderId ? -1 : a.raiderId > b.raiderId ? 1 : 0),
   );
   return threats.slice(0, 24);
 }
