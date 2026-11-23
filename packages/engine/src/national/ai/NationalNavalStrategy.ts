@@ -1,10 +1,10 @@
+import type { NationalObservation } from "../observation/NationalObservation";
 /**
  * NATIONAL AI naval decision boundary. This module cannot access Game, Player,
  * terrain, enemy destinations, unit registries, or any non-observed vessel.
  * The caller supplies only its OWN current ports, not foreign positions.
  */
 import { deriveNationalWarSides } from "./NationalPlanner";
-import type { NationalObservation } from "../observation/NationalObservation";
 
 export interface OwnNavalPort {
   readonly x: number;
@@ -48,7 +48,8 @@ export function planObservedNationalNavalTargets(
       asset.ownerId === observation.observerId ||
       !Number.isSafeInteger(asset.x) ||
       !Number.isSafeInteger(asset.y)
-    ) continue;
+    )
+      continue;
     let nearest = Infinity;
     for (const port of ports) {
       const dx = asset.x - port.x;
