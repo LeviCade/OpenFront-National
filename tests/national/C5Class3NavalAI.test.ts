@@ -338,8 +338,16 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
     const unmodified = vi
       .spyOn(NationWarshipBehavior.prototype, "dispatchNationalNavalPressure")
       .mockReturnValue(null);
+    let controlGoldAt8 = 0n;
+    let controlPiracyAt8 = 0n;
     try {
       advanceRunner(control, 8);
+      controlGoldAt8 = control.player(A).gold();
+      controlPiracyAt8 = control.player(A).piracyGold();
+      // Keep this identical-seed CONTROL unarmed for the ENTIRE voyage.
+      // Restoring the prototype after only eight ticks accidentally let the
+      // control bot purchase its own warship, destroying the comparison.
+      advanceRunner(control, 95);
     } finally {
       unmodified.mockRestore();
     }
@@ -350,14 +358,13 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
     // The cost is from Player.buildUnit / WarshipExecution, not an AI ledger.
     // Correct for any real pirate proceeds already credited to the active A.
     const actualCost =
-      control.player(A).gold() -
+      controlGoldAt8 -
       game.player(A).gold() +
       game.player(A).piracyGold() -
-      control.player(A).piracyGold();
+      controlPiracyAt8;
     expect(actualCost).toBe(price);
 
     const firstPosition = deployed[0].tile();
-    advanceRunner(control, 95);
     advanceRunner(game, 95);
     console.info(
       "C5_NAVAL_PAID_ROUTE_DIAGNOSTIC=" +
