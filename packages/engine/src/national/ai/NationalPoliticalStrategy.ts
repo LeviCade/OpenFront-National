@@ -9,6 +9,14 @@ import type {
   NationId,
 } from "../observation/NationalObservation";
 import type { NationalPoliticalCommandResult } from "../politics/NationalGovernanceState";
+import {
+  assessImperialShelter,
+  initialNationalCoercionMemory,
+  planObservedImperialCoercion,
+  updateNationalCoercionMemory,
+  type NationalCoercionMemory,
+  type ObservedImperialUltimatum,
+} from "./NationalCoercionStrategy";
 import { deriveNationalWarSides } from "./NationalPlanner";
 
 export type AIPoliticalCommand = Exclude<
@@ -36,6 +44,7 @@ export interface AIPoliticalDecision {
 
 export interface AIPoliticalMemory {
   readonly nextPlanningTick: number;
+  readonly coercion?: NationalCoercionMemory;
   readonly lastOutcomeSequence: number;
   readonly completedCommands: readonly string[];
   readonly rejectedCommands: readonly {
@@ -158,11 +167,20 @@ export function planAIPoliticalInterest(
     readonly nationId: NationId;
     readonly credibility: number;
   }[] = [],
+  ultimatums: readonly ObservedImperialUltimatum[] = [],
 ): AIPoliticalPlan {
   if (!Number.isSafeInteger(cadenceTicks) || cadenceTicks < 1)
     throw new Error("NATIONAL political AI: invalid cadence");
+  const previousCoercion =
+    previous.coercion ?? initialNationalCoercionMemory(observation.observerId);
+  // Preserve the previous sample while evaluating the current public decline.
   const memory: AIPoliticalMemory = {
     ...previous,
+    coercion: updateNationalCoercionMemory(
+      observation,
+      ultimatums,
+      previousCoercion,
+    ),
     rejectedCommands: previous.rejectedCommands.filter(
       (item) => item.retryAfterTick > observation.tick,
     ),
@@ -226,9 +244,56 @@ export function planAIPoliticalInterest(
       (total, id) => total + (nations.get(id)?.landPercent ?? 0),
       0,
     );
-  const safeEmpire = (empire: (typeof empires)[number]): boolean =>
-    empireLand(empire.members) >= Math.max(0.25, greatestThreat * 0.7) &&
-    !empire.members.some((id) => warSides.enemies.has(id));
+  const safeEmpire = (empire: (typeof empires)[number]): boolean => {
+    const survival = assessImperialShelter(
+      observation,
+      empire,
+      previousCoercion,
+    );
+    return (
+      !survival.declining &&
+      empireLand(empire.members) >= Math.max(0.25, greatestThreat * 0.7) &&
+      !empire.members.some((id) => warSides.enemies.has(id))
+    );
+  };
+  // E3 adapter supplies only this actor's recipient/issuer projections.
+  // The consent path goes through Game-owned offer/accept, never registry edits.
+  const coercion = planObservedImperialCoercion(
+    observation,
+    ultimatums,
+    previousCoercion,
+  );
+  if (coercion?.kind === "resist") return idle("preserve-independence");
+  // A threat cannot smuggle accession past the canonical E3 response phase:
+  // dispatch the pending E3 acknowledgement separately, then re-observe the
+  // Game-owned "consented" record before proposing any political accession.
+  if (coercion?.kind === "acknowledge-consent")
+    return idle("preserve-sovereignty");
+  if (
+    coercion?.kind === "accept-consent" ||
+    coercion?.kind === "request-consent"
+  ) {
+    const command: AIPoliticalCommand =
+      coercion.kind === "accept-consent"
+        ? {
+            kind: "accept-empire",
+            empireId: coercion.empireId,
+            candidateId: self.id,
+          }
+        : {
+            kind: "offer-empire",
+            empireId: coercion.empireId,
+            candidateId: self.id,
+          };
+    if (!alreadyAttempted(command, memory))
+      return result({
+        command,
+        reason:
+          coercion.kind === "accept-consent"
+            ? "accept-safe-empire"
+            : "seek-imperial-shelter",
+      });
+  }
 
   const myEmpire = empires.find((e) => e.members.includes(self.id));
   if (myEmpire) {

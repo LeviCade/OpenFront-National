@@ -850,6 +850,28 @@ export class NationExecution implements Execution {
                         this.nationalPlannerMemory.political.rejectedCommands.map(
                           (entry) => ({ ...entry }),
                         ),
+                      ...(this.nationalPlannerMemory.political.coercion ===
+                      undefined
+                        ? {}
+                        : {
+                            coercion: {
+                              observerId:
+                                this.nationalPlannerMemory.political.coercion
+                                  .observerId,
+                              processedOutcomeIds: [
+                                ...this.nationalPlannerMemory.political.coercion
+                                  .processedOutcomeIds,
+                              ],
+                              issuerCredibility:
+                                this.nationalPlannerMemory.political.coercion.issuerCredibility.map(
+                                  (entry) => ({ ...entry }),
+                                ),
+                              publicEmpireLand:
+                                this.nationalPlannerMemory.political.coercion.publicEmpireLand.map(
+                                  (entry) => ({ ...entry }),
+                                ),
+                            },
+                          }),
                     },
                   }),
             },
@@ -1014,6 +1036,30 @@ const NationStateSchema = z.object({
               }),
             )
             .max(64),
+          coercion: z
+            .object({
+              observerId: z.string(),
+              processedOutcomeIds: z.array(z.string()).max(128),
+              issuerCredibility: z
+                .array(
+                  z.object({
+                    issuerId: z.string(),
+                    score: z.number().int().min(-6).max(6),
+                    lastObservedTick: z.number().int().nonnegative(),
+                  }),
+                )
+                .max(16),
+              publicEmpireLand: z
+                .array(
+                  z.object({
+                    empireId: z.string(),
+                    landPercent: z.number().nonnegative(),
+                    lastObservedTick: z.number().int().nonnegative(),
+                  }),
+                )
+                .max(16),
+            })
+            .optional(),
         })
         .optional(),
     })
