@@ -116,9 +116,9 @@ function advanceRunner(game: Game, turns: number) {
 
 describe("C5 Class Three E6 lawful observed naval strategy", () => {
   it("selects only current visible WAR enemy merchants; hides ports, allies and neutral vessels", async () => {
-    const { game, a, b, c, d, behavior, fixedEnemyMerchant } = await fixture();
-    const neutral = c.buildUnit(UnitType.TradeShip, game.ref(8, 12), {});
-    const ally = d.buildUnit(UnitType.TradeShip, game.ref(8, 12), {});
+    const { game, a, b, c, d, cPort, dPort, behavior, fixedEnemyMerchant } = await fixture();
+    const neutral = c.buildUnit(UnitType.TradeShip, game.ref(8, 12), { targetUnit: cPort });
+    const ally = d.buildUnit(UnitType.TradeShip, game.ref(8, 12), { targetUnit: dPort });
     const sight = collectLiveNationalObservation(game, A);
     const ports = [{ x: 7, y: 10 }];
     const targets = planObservedNationalNavalTargets(sight.observation, ports);
@@ -166,13 +166,17 @@ describe("C5 Class Three E6 lawful observed naval strategy", () => {
     expect(ship.warshipState().patrolTile).toBe(targetTile);
     expect(a.gold()).toBeLessThanOrEqual(initial - price);
     const visited = new Set<number>([ship.tile()]);
+    let closestApproach = game.manhattanDist(ship.tile(), targetTile);
     for (let i = 0; i < 35; i++) {
       game.executeNextTick();
-      if (ship.isActive()) visited.add(ship.tile());
+      if (ship.isActive()) {
+        visited.add(ship.tile());
+        closestApproach = Math.min(closestApproach, game.manhattanDist(ship.tile(), targetTile));
+      }
       if (ship.tile() === targetTile) break;
     }
     expect(visited.size).toBeGreaterThan(1);
-    expect(game.manhattanDist(ship.tile(), targetTile)).toBeLessThanOrEqual(3);
+    expect(closestApproach).toBeLessThanOrEqual(2);
     expect(behavior.dispatchNationalNavalPressure(sight.observation)).toBeNull();
     console.info("C5_NAVAL_PHYSICAL=" + JSON.stringify({
       spentAtLeast: price.toString(), warshipId: ship.id(),
