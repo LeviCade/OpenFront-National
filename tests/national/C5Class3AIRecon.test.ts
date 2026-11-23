@@ -100,26 +100,30 @@ function memoryOf(game: Game) {
   ).nationalReconMemory;
 }
 
-async function seededFourNations() {
+async function seededFourNations(humanRival = false) {
+  const rival = humanRival
+    ? new PlayerInfo("Rival", PlayerType.Human, "c5e5_rival_socket", B)
+    : infos[1];
+  const players = [infos[0], rival, infos[2], infos[3]];
   const nations = [
-    new Nation(new Cell(48, 100), infos[0]),
-    new Nation(new Cell(145, 100), infos[1]),
-    new Nation(new Cell(185, 175), infos[2]),
-    new Nation(new Cell(185, 25), infos[3]),
+    new Nation(new Cell(48, 100), players[0]),
+    new Nation(new Cell(145, 100), players[1]),
+    new Nation(new Cell(185, 175), players[2]),
+    new Nation(new Cell(185, 25), players[3]),
   ];
   const game = await setup(
     "big_plains",
     { nationalMode: true, startingGold: 3_000 },
-    [],
+    humanRival ? [rival] : [],
     undefined,
     undefined,
     false,
-    nations,
+    humanRival ? [nations[0], nations[2], nations[3]] : nations,
   );
   const bot = new NationExecution(ID, nations[0]);
   game.addExecution(
     bot,
-    ...infos.map(
+    ...players.map(
       (info, index) =>
         new SpawnExecution(
           ID,
@@ -131,7 +135,7 @@ async function seededFourNations() {
   game.executeNextTick();
   game.executeNextTick();
   game.endSpawnPhase();
-  expect(infos.every((p) => game.player(p.id).hasSpawned())).toBe(true);
+  expect(players.every((p) => game.player(p.id).hasSpawned())).toBe(true);
 
   // Four genuinely live nations, one besieged inland principal. Other nations
   // are far from A, so they cannot be selected through a hidden world scan.
@@ -208,6 +212,15 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
       centerX: 125,
       centerY: 100,
     });
+    const harmlessNeighbor = {
+      ...view,
+      nations: view.nations.map((nation) =>
+        nation.id === B ? { ...nation, landPercent: 3 } : nation,
+      ),
+    };
+    expect(
+      planNationalRecon(harmlessNeighbor, fresh).purchase,
+    ).toBeNull();
     expect(plan.holdOffenseAgainst).toBeNull();
     expect(
       planNationalRecon(
@@ -405,6 +418,55 @@ describe("C5 Class Three E5 autonomous funded recon", () => {
     activeAdd.mockRestore();
     controlAdd.mockRestore();
     debits.mockRestore();
+  }, 120_000);
+
+  it("does not attempt to purchase against an actual unfunded nation", async () => {
+    const { game } = await seededFourNations();
+    const scout = game.player(A);
+    scout.removeGold(scout.gold());
+    scout.addGold(499n);
+    const debits = vi.spyOn(scout, "removeGold");
+    const purchases = vi.spyOn(game, "performNationalReconnaissance");
+    const runner = runnerFor(game);
+    next(game, runner);
+    expect(purchases).not.toHaveBeenCalled();
+    expect(debits.mock.calls.some(([amount]) => amount === 500n)).toBe(false);
+    expect(game.nationalReconnaissanceFor(A)).toHaveLength(0);
+    expect(memoryOf(game)?.attempts ?? []).toHaveLength(0);
+    debits.mockRestore();
+    purchases.mockRestore();
+  });
+
+  it("buys exactly the same lawful intelligence from a human or an AI rival", async () => {
+    const ai = await seededFourNations();
+    const human = await seededFourNations(true);
+    const botSight = collectLiveNationalObservation(ai.game, A).observation;
+    const humanSight = collectLiveNationalObservation(human.game, A).observation;
+    expect(botSight.nations).toEqual(humanSight.nations);
+    expect(botSight.nations.find((n) => n.id === B)).not.toHaveProperty("controllerKind");
+    expect(humanSight.nations.find((n) => n.id === B)).not.toHaveProperty("controllerKind");
+    const aiProposal = planNationalRecon(botSight, initialNationalReconMemory(A)).purchase;
+    const humanProposal = planNationalRecon(humanSight, initialNationalReconMemory(A)).purchase;
+    expect(aiProposal).toEqual(humanProposal);
+    const aiDebits = vi.spyOn(ai.game.player(A), "removeGold");
+    const humanDebits = vi.spyOn(human.game.player(A), "removeGold");
+    next(ai.game, runnerFor(ai.game));
+    next(human.game, runnerFor(human.game));
+    const aiGrant = ai.game.nationalReconnaissanceFor(A);
+    const humanGrant = human.game.nationalReconnaissanceFor(A);
+    expect(aiGrant).toHaveLength(1);
+    expect(humanGrant).toHaveLength(1);
+    for (const lease of [...aiGrant, ...humanGrant]) {
+      expect(lease).toMatchObject({ payerId: A, targetId: B, cost: "500" });
+    }
+    expect(aiDebits.mock.calls.filter(([gold]) => gold === REGIONAL_RECON_COST)).toHaveLength(1);
+    expect(humanDebits.mock.calls.filter(([gold]) => gold === REGIONAL_RECON_COST)).toHaveLength(1);
+    expect(memoryOf(ai.game)?.attempts[0].outcome).toBe("accepted");
+    expect(memoryOf(human.game)?.attempts[0].outcome).toBe("accepted");
+    expect(collectLiveNationalObservation(ai.game, A).observation.visibleAssets.find((a) => a.id === String(ai.hidden.id()))?.source).toBe("recon");
+    expect(collectLiveNationalObservation(human.game, A).observation.visibleAssets.find((a) => a.id === String(human.hidden.id()))?.source).toBe("recon");
+    aiDebits.mockRestore();
+    humanDebits.mockRestore();
   }, 120_000);
 
   it("expires paid sight at tick 600 with bounded attempts and byte-identical saved memory", async () => {

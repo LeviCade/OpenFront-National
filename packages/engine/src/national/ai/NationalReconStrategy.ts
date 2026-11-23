@@ -150,6 +150,14 @@ export function planNationalRecon(
     .map((f) => {
       const nation = observation.nations.find((n) => n.id === f.targetId);
       if (!nation?.alive) return null;
+      // Peaceful, similarly sized neighbors are not a justification for
+      // spending scarce survival gold. Active WAR and publicly larger
+      // frontier rivals are credible causes to inspect a known region.
+      if (
+        !sides.enemies.has(f.targetId) &&
+        nation.landPercent < Math.max(6, self.landPercent * 2)
+      )
+        return null;
       if (memory.attempts.some((a) => a.targetId === f.targetId)) return null;
       // Scouting is worth a fee only at a known militarily relevant front
       // with a disclosed coordinate to extend sight beyond free sensors.
