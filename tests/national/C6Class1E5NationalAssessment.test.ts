@@ -276,8 +276,8 @@ describe("C6 Class One E5: DISTINCT funded national assessment policy", () => {
     const wide = {
       ...paidReport(view),
       confidence: "shielded-coarse-estimate",
-      treasuryGoldBand: { lower: "0", upperExclusive: "100000" },
-      militaryTroopsBand: { lower: "0", upperExclusive: "2000000" },
+      treasuryGoldBand: { lower: "0", upperExclusive: "10000" },
+      militaryTroopsBand: { lower: "400000", upperExclusive: "800000" },
     };
     expect(
       planNationalAssessment(
@@ -287,13 +287,37 @@ describe("C6 Class One E5: DISTINCT funded national assessment policy", () => {
     ).toBe(B);
     const weak = {
       ...wide,
-      militaryTroopsBand: { lower: "0", upperExclusive: "100000" },
+      militaryTroopsBand: { lower: "0", upperExclusive: "400000" },
     };
     expect(
       planNationalAssessment(
         { ...view, tick: view.tick + 1, assessments: [weak] },
         accepted,
       ).holdOffenseAgainst,
+    ).toBeNull();
+    const forged = {
+      ...wide,
+      militaryTroopsBand: { lower: "0", upperExclusive: "2000000" },
+    };
+    expect(
+      planNationalAssessment(
+        { ...view, tick: view.tick + 1, assessments: [forged] },
+        accepted,
+      ).holdOffenseAgainst,
+    ).toBeNull();
+    const spoofed = { ...wide, confidence: "shielded-unverified" };
+    expect(
+      planNationalAssessment(
+        { ...view, tick: view.tick + 1, assessments: [spoofed] },
+        accepted,
+      ).holdOffenseAgainst,
+    ).toBeNull();
+    const sharedReport = { ...paidReport(view), paidBy: D };
+    expect(
+      planNationalAssessment(
+        { ...view, assessments: [sharedReport] },
+        initialNationalAssessmentAIMemory(A),
+      ).purchase,
     ).toBeNull();
     const rejected = recordNationalAssessmentAttempt(
       view,
