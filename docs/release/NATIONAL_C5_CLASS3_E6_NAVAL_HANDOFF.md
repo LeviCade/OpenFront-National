@@ -27,12 +27,12 @@ At `eb5ce845e2e726a763f2e11912f4c0724644938f`, [GitHub Actions run #45102822415]
 
 The identical-seed, real-four-nation GameRunner naval comparison logged:
 
-| Effect | Observed active AI WAR | Identical-seed, naval-AI-disabled CONTROL |
-| --- | ---: | ---: |
-| Enemy B trade payout | **915 gold** | **1,830 gold** |
-| A earned lawful piracy | **311 gold** | **0 gold** |
-| A new warship | **ship #8** | **none** |
-| Actual construction cost | **250,000 gold** | **0** |
+| Effect                   | Observed active AI WAR | Identical-seed, naval-AI-disabled CONTROL |
+| ------------------------ | ---------------------: | ----------------------------------------: |
+| Enemy B trade payout     |           **915 gold** |                            **1,830 gold** |
+| A earned lawful piracy   |           **311 gold** |                                **0 gold** |
+| A new warship            |            **ship #8** |                                  **none** |
+| Actual construction cost |       **250,000 gold** |                                     **0** |
 
 Physical warship #8 moved from tile **186** to **108** after real navigation; another real, independently dispatched ship #6 traversed **20 distinct water tiles** and moved within 2 Manhattan tiles of observed target tile **200**. WAR authority was true during the dispatch. The 915-gold difference is **real paid enemy trade income** suppressed in the live voyage, not a score guessed from coordinates. Original maritime payout/neutral handling was preexisting.
 
@@ -47,6 +47,7 @@ Selection must be based solely on current authorized `collectLiveNationalObserva
 E5 merge instruction: preserve E5 reconnaissance and political memory as-is; retain this E6 call site after the observed principal is established. No E2 revenue split or E3 trade override code is replaced. The existing Game/Player payout route is the only accounting source.
 
 Exact standard checks:
+
 ```bash
 npm run typecheck
 npx --no-install vitest run --project node tests/national/C5Class3NavalAI.test.ts tests/national/C5Class3NavalPerf.test.ts tests/national/C4Class2EconomicMaritime.test.ts tests/national/NationalAIRealWar.test.ts tests/NationWarshipNukeReserve.test.ts tests/Warship.test.ts tests/national/C5CoastalVisibility.test.ts
