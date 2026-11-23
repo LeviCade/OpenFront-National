@@ -4,7 +4,7 @@
 
 **Frozen accepted checkpoint:** `eef7faf5410d1dcbbc4031e1d693db65778a023c`, merged First-Class PR #157; exact-head [11,954/11,954 successful test execution](https://github.com/LeviCade/OpenFront-National/actions/runs/45069138256) (one existing skip), independent QA [#45069138248](https://github.com/LeviCade/OpenFront-National/actions/runs/45069138248). The official 67% accounts for +8 Fourth-Conductor historical and +6 Fifth First-Class work; neither can be earned again.
 
-**Class Two integration staging:** `stage3/conductor5-class2-integration-20261122`; **not main and not public release**. All six engineer branches must start from the same explicit *post-conductor-preflight* SHA, supplied in each commission. No engineer self-merges into staging. Each engineer has exactly one full assignment/response, with no guaranteed follow-up.
+**Class Two integration staging:** `stage3/conductor5-class2-integration-20261122`; **not main and not public release**. All six engineer branches must start from the same explicit _post-conductor-preflight_ SHA, supplied in each commission. No engineer self-merges into staging. Each engineer has exactly one full assignment/response, with no guaranteed follow-up.
 
 ## Conductor's own first vertical improvement, separate from six engineer missions
 
@@ -12,14 +12,14 @@ The previously accepted commercial treasury split was engine-functional but invi
 
 ## Chosen SIX distinct technical missions and candidate scoring buckets
 
-| Engineer | Original net-new mission | Primary candidate | Owns |
-| --- | --- | --- | --- |
-| E1 | Native HUMAN-facing NATIONAL gameplay + imperial command journey; actual map/touch target, war/peace and receipt-driven controls | M9 (new working UX) | `src/client/NationalDiplomacyPanel.ts`, native map targeting, UI tests |
-| E2 | Genuine external-ready authenticated WSS Private NATIONAL game with account-bound human seat lifecycle, three-player simultaneous observation and durable restart | M0 (external hosted integration, not local identity again) | `src/server`, `src/server/national`, account/Worker integration tests |
-| E3 | Imperial coercive accession ultimatum with enforceable deadline/threat, explicit choice, economic/military consequences and journal/replay | M6 (new diplomacy coercion, NOT sanctions recredit) | New ultimatum state/execution and economic authority, targeted engine tests |
-| E4 | Real standing automatic response to an actual incoming attack on imperial member (none/defensive assistance/imperial WAR/both), resource-safe | M5/M3 (new defense trigger, NOT accession policy/pooled combat) | War/levy authoritative boundary and defensive policy; Game tests |
-| E5 | Gold-funded regional intelligence, timed/revocable human and AI observation with legitimate empire sharing and strict transport privacy | M7 (new paid observation, NOT existing 100/200 sight) | Intelligence ledger, observation/outbound, paid recon engine tests |
-| E6 | Credible, human-neutral national AI coercion and response exploiting E3 only through authenticated commands/observable reach; real many-nation simulation | M8 (new strategic choice, NOT prior sanction AI) | `NationalEconomicPlanner`, `NationalPoliticalStrategy`, `NationExecution`, adversarial AI tests |
+| Engineer | Original net-new mission                                                                                                                                          | Primary candidate                                               | Owns                                                                                            |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| E1       | Native HUMAN-facing NATIONAL gameplay + imperial command journey; actual map/touch target, war/peace and receipt-driven controls                                  | M9 (new working UX)                                             | `src/client/NationalDiplomacyPanel.ts`, native map targeting, UI tests                          |
+| E2       | Genuine external-ready authenticated WSS Private NATIONAL game with account-bound human seat lifecycle, three-player simultaneous observation and durable restart | M0 (external hosted integration, not local identity again)      | `src/server`, `src/server/national`, account/Worker integration tests                           |
+| E3       | Imperial coercive accession ultimatum with enforceable deadline/threat, explicit choice, economic/military consequences and journal/replay                        | M6 (new diplomacy coercion, NOT sanctions recredit)             | New ultimatum state/execution and economic authority, targeted engine tests                     |
+| E4       | Real standing automatic response to an actual incoming attack on imperial member (none/defensive assistance/imperial WAR/both), resource-safe                     | M5/M3 (new defense trigger, NOT accession policy/pooled combat) | War/levy authoritative boundary and defensive policy; Game tests                                |
+| E5       | Gold-funded regional intelligence, timed/revocable human and AI observation with legitimate empire sharing and strict transport privacy                           | M7 (new paid observation, NOT existing 100/200 sight)           | Intelligence ledger, observation/outbound, paid recon engine tests                              |
+| E6       | Credible, human-neutral national AI coercion and response exploiting E3 only through authenticated commands/observable reach; real many-nation simulation         | M8 (new strategic choice, NOT prior sanction AI)                | `NationalEconomicPlanner`, `NationalPoliticalStrategy`, `NationExecution`, adversarial AI tests |
 
 **Forecast:** official 67%; class target **73%** (+6 distinct certified opportunities), hard survival minimum **72%** (+5). This is a forecast, not a percentage update. The E0 conductor integration has no self-assigned credit.
 

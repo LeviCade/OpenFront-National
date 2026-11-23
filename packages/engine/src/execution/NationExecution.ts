@@ -493,8 +493,9 @@ export class NationExecution implements Execution {
             : choice.ultimatumId;
         const requestId =
           "ai-ult-" +
-          (simpleHash(player.id() + ":" + choice.kind + ":" + identity) >>> 0)
-            .toString(36) +
+          (
+            simpleHash(player.id() + ":" + choice.kind + ":" + identity) >>> 0
+          ).toString(36) +
           "-" +
           ticks.toString(36);
         const intent = proposeCanonicalImperialUltimatumIntent(

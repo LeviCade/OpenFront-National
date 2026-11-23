@@ -16,7 +16,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        gate: [typecheck, full-tests, lint, pinned-format, production-build, integrated-features]
+        gate:
+          [
+            typecheck,
+            full-tests,
+            lint,
+            pinned-format,
+            production-build,
+            integrated-features,
+          ]
     steps:
       - uses: actions/checkout@v4
         with:
