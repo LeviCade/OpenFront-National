@@ -45,6 +45,12 @@ import {
   type AIPoliticalMemory,
 } from "../national/ai/NationalPoliticalStrategy";
 import {
+  initialNationalReconMemory,
+  planNationalRecon,
+  recordNationalReconAttempt,
+  type NationalReconMemory,
+} from "../national/ai/NationalReconStrategy";
+import {
   collectLiveNationalObservation,
   liveNationalWarAuthority,
 } from "../national/observation/LiveObservation";
@@ -122,6 +128,8 @@ export class NationExecution implements Execution {
   private nationalSightMemory: NationalSightMemory | null = null;
   // Economic memory is principal-local, bounded and persisted for replay.
   private nationalEconomicMemory: NationalEconomicMemory | null = null;
+  // E5: private, bounded, actor-owned paid-recon history; never a second wallet.
+  private nationalReconMemory: NationalReconMemory | null = null;
 
   constructor(
     private gameID: GameID,
@@ -437,6 +445,53 @@ export class NationExecution implements Execution {
               };
       this.mg.addExecution(new NationalSanctionExecution(player, command));
     }
+    // E5 M8: source-only observation -> Game-owned purchase authority -> real
+    // visibility next tick. Every AI command uses the live player instance;
+    // no client session spoofing and no entitlement/treasury mutation here.
+    const reconDecision = planNationalRecon(
+      observation,
+      this.nationalReconMemory ?? initialNationalReconMemory(player.id()),
+    );
+    this.nationalReconMemory = reconDecision.memory;
+    if (reconDecision.purchase !== null) {
+      const proposal = reconDecision.purchase;
+      const requestId =
+        "ai_recon_" +
+        (simpleHash(player.id() + ":" + proposal.targetId) >>> 0).toString(36) +
+        "_" +
+        ticks.toString(36);
+      let expiresAtTick: number | null = null;
+      try {
+        const grant = this.mg.performNationalReconnaissance(
+          player,
+          proposal.targetId,
+          proposal.centerX,
+          proposal.centerY,
+          requestId,
+        );
+        expiresAtTick = grant.expiresAtTick;
+      } catch {
+        // Canonical game denial cannot become a free sight grant. Keep
+        // deterministic rejected-attempt memory rather than retry flooding.
+      }
+      this.nationalReconMemory = recordNationalReconAttempt(
+        observation,
+        reconDecision.memory,
+        proposal,
+        requestId,
+        expiresAtTick,
+      );
+      if (expiresAtTick !== null) {
+        // Reobserve through the ordinary same-principal fog projector NEXT
+        // tick, before considering the pre-purchase offensive campaign.
+        this.nationalPlannerMemory = {
+          ...(this.nationalPlannerMemory ??
+            initialNationalPlannerMemory(player.id())),
+          nextPlanningTick: ticks + 1,
+        };
+        return;
+      }
+    }
     const remembered = advanceLastKnown(
       observation,
       this.nationalSightMemory,
@@ -579,6 +634,11 @@ export class NationExecution implements Execution {
         ? defensiveFront
         : result.decision.targetId;
     if (result.decision.objective === "defend" && targetId === null) return;
+    // A newly disclosed military force makes an elective attack strategically
+    // unsound while this genuinely paid reconnaissance lease remains live.
+    // An existing defensive WAR is likewise preserved, not fabricated.
+    if (targetId !== null && reconDecision.holdOffenseAgainst === targetId)
+      return;
 
     // The planner knows only verified frontier IDs. Confirm adjacency again
     // at execution time; neither hidden armies nor off-map enemies are probed.
@@ -929,6 +989,21 @@ export class NationExecution implements Execution {
                     },
                   }),
             },
+      ...(this.nationalReconMemory === null
+        ? {}
+        : {
+            nationalReconMemory: {
+              observerId: this.nationalReconMemory.observerId,
+              nextDecisionTick: this.nationalReconMemory.nextDecisionTick,
+              attempts: this.nationalReconMemory.attempts.map((a) => ({
+                ...a,
+              })),
+              lastDiscovery:
+                this.nationalReconMemory.lastDiscovery === null
+                  ? null
+                  : { ...this.nationalReconMemory.lastDiscovery },
+            },
+          }),
       // Omit entirely for legacy games and pre-economics snapshots; an
       // optional null field would needlessly mutate old snapshot bytes.
       ...(this.nationalEconomicMemory === null
@@ -994,6 +1069,7 @@ export class NationExecution implements Execution {
     this.nationalPlannerMemory = s.nationalPlannerMemory;
     this.nationalSightMemory = s.nationalSightMemory;
     this.nationalEconomicMemory = s.nationalEconomicMemory ?? null;
+    this.nationalReconMemory = s.nationalReconMemory ?? null;
     this.behaviorsInitialized = s.behaviors !== null;
     const b = s.behaviors;
     const player = this.player;
@@ -1118,6 +1194,33 @@ const NationStateSchema = z.object({
         .optional(),
     })
     .nullable(),
+  nationalReconMemory: z
+    .object({
+      observerId: z.string(),
+      nextDecisionTick: z.number().int().nonnegative(),
+      attempts: z
+        .array(
+          z.object({
+            targetId: z.string(),
+            anchorAssetId: z.string(),
+            requestId: z.string().min(1).max(128),
+            purchasedTick: z.number().int().nonnegative(),
+            expiresAtTick: z.number().int().nonnegative(),
+            outcome: z.enum(["accepted", "rejected"]),
+          }),
+        )
+        .max(4),
+      lastDiscovery: z
+        .object({
+          targetId: z.string(),
+          assetId: z.string(),
+          kind: z.enum(["army", "warship", "transport"]),
+          observedTick: z.number().int().nonnegative(),
+          expiresAtTick: z.number().int().nonnegative(),
+        })
+        .nullable(),
+    })
+    .optional(),
   nationalEconomicMemory: z
     .object({
       observerId: z.string(),
