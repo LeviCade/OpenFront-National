@@ -152,7 +152,7 @@ export function readNationalAssessmentView(
     items.push({
       targetId: row.targetId,
       paidBy: row.paidBy,
-      confidence: "coarse-estimate",
+      confidence: row.confidence,
       effectiveTick: row.effectiveTick,
       expiresAtTick: row.expiresAtTick,
       treasuryGoldBand,
