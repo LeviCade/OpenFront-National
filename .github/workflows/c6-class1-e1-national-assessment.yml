@@ -1,0 +1,51 @@
+name: C6 E1 native national assessment exact-head gates
+
+on:
+  push:
+    branches:
+      - feature/c6-class1-e1-assessment-native-ui-20261123
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: c6-e1-assessment-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-and-authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - name: Pinned dependency installation
+        run: npm run inst
+      - name: Full workspace TypeScript
+        run: npm run typecheck
+      - name: Sixth assessment UI and inherited Fifth native UI
+        run: >
+          npx --no-install vitest run --project client
+          tests/ui/national/C6Class1NationalAssessmentControls.test.ts
+          tests/ui/national/NationalSovereignActions.test.ts
+          tests/ui/national/NationalSovereignControls.test.ts
+          tests/ui/national/NationalReconMapPick.test.ts
+          tests/ui/national/NationalDiplomacyPanel.test.ts
+          tests/ui/national/NationalReconPurchase.test.ts
+      - name: Inherited real GameRunner witness
+        run: >
+          npx --no-install vitest run --project node
+          tests/national/C5Class2FundedRecon.test.ts
+          tests/national/C5Class2ImperialUltimatum.test.ts
+      - name: Pinned formatting
+        run: npm run format:check
+      - name: Static lint
+        run: npm run lint
+      - name: Production compilation
+        run: npm run build-prod
+      - name: Full repository regression
+        run: npm test
