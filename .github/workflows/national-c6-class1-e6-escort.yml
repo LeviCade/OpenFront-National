@@ -74,33 +74,7 @@ jobs:
           set -e
           if [ "$status" -eq 0 ]; then exit 0; fi
           mapfile -t observed < <(
-            grep -E '^([A-Za-z0-9._/-]+) \([0-9]+ms\)
-      - name: Full regression
-        # Run the 12k-suite only after TypeScript, focused naval and pinned format pass.
-        if: success()
-        run: npm test
-      - name: Lint
-        if: success() || failure()
-        run: npm run lint
-      - name: Production build
-        if: success() || failure()
-        run: npm run build-prod
-      - name: Emit exact formatted source on failure
-        if: failure()
-        run: |
-          FILES=(
-            packages/engine/src/national/ai/NationalNavalEscortStrategy.ts
-            packages/engine/src/execution/nation/NationWarshipBehavior.ts
-            packages/engine/src/execution/NationExecution.ts
-            tests/national/C6Class1NavalEscort.test.ts
-          )
-          npx --no-install oxfmt --write "${FILES[@]}"
-          for file in "${FILES[@]}"; do
-            echo "C6E6_FORMAT_BEGIN:$file"
-            base64 -w76 "$file" | sed 's/^/C6E6_BASE64:/'
-            echo "C6E6_FORMAT_END:$file"
-          done
- /tmp/c6-e6-repository-format.log \
+            grep -E '^([A-Za-z0-9._/-]+) \([0-9]+ms\)$' /tmp/c6-e6-repository-format.log \
               | sed -E 's/ \([0-9]+ms\)$//' | LC_ALL=C sort
           )
           expected=(
@@ -111,7 +85,7 @@ jobs:
             echo "::error::Unexpected repository-format drift: ${observed[*]}"
             exit 1
           fi
-          echo "::warning::Precisely two out-of-lane, historical docs require formatting; never modify the C6 conductor charter or the exact Fifth handoff in E6."
+          echo "::warning::Precisely two out-of-lane, historical docs require formatting; preserve Sixth charter and Fifth handoff."
       - name: Full regression
         # Run the 12k-suite only after TypeScript, focused naval and pinned format pass.
         if: success()
