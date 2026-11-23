@@ -24,7 +24,7 @@ export const NationalAssessmentViewSchema = z
           .object({
             targetId: nation,
             paidBy: nation,
-            confidence: z.literal("coarse-estimate"),
+            confidence: z.enum(["coarse-estimate", "shielded-coarse-estimate"]),
             effectiveTick: tick,
             expiresAtTick: tick,
             treasuryGoldBand: band,
@@ -50,6 +50,9 @@ export function validateNationalAssessmentPacket(
   )
     throw new Error("NATIONAL assessment: invalid recipient");
   for (const grant of report.items) {
+    const shielded = grant.confidence === "shielded-coarse-estimate";
+    const goldStep = shielded ? 10000n : 2500n;
+    const troopStep = shielded ? 400000n : 100000n;
     if (
       grant.paidBy === grant.targetId ||
       grant.effectiveTick > packetTick ||
@@ -57,12 +60,12 @@ export function validateNationalAssessmentPacket(
       grant.expiresAtTick !== grant.effectiveTick + 900 ||
       BigInt(grant.treasuryGoldBand.upperExclusive) -
         BigInt(grant.treasuryGoldBand.lower) !==
-        2500n ||
+        goldStep ||
       BigInt(grant.militaryTroopsBand.upperExclusive) -
         BigInt(grant.militaryTroopsBand.lower) !==
-        100000n ||
-      BigInt(grant.treasuryGoldBand.lower) % 2500n !== 0n ||
-      BigInt(grant.militaryTroopsBand.lower) % 100000n !== 0n
+        troopStep ||
+      BigInt(grant.treasuryGoldBand.lower) % goldStep !== 0n ||
+      BigInt(grant.militaryTroopsBand.lower) % troopStep !== 0n
     )
       throw new Error("NATIONAL assessment: invalid coarse lease");
   }

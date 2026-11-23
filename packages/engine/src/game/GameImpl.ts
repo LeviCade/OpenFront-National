@@ -97,8 +97,10 @@ import {
   NationalAssessment,
   NationalAssessmentSnapshotSchema,
   NATIONAL_ASSESSMENT_COST,
+  NATIONAL_COUNTERASSESSMENT_COST,
   captureNationalAssessmentBands,
   type NationalAssessmentGrant,
+  type NationalAssessmentShield,
 } from "../national/observation/NationalAssessment";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import {
@@ -1748,7 +1750,44 @@ export class GameImpl implements Game {
       () => {
         actor.addGold(NATIONAL_ASSESSMENT_COST);
       },
-      () => captureNationalAssessmentBands(target.gold(), target.troops()),
+      () => {
+        const authority = this.nationalPoliticalAuthority();
+        const actorEmpire = authority?.empireOf(actor.id()) ?? null;
+        const targetEmpire = authority?.empireOf(targetId) ?? null;
+        const allies = actorEmpire !== null && actorEmpire === targetEmpire &&
+          authority?.membersOf(actorEmpire).includes(actor.id()) === true &&
+          authority?.membersOf(actorEmpire).includes(targetId) === true;
+        return captureNationalAssessmentBands(
+          target.gold(),
+          target.troops(),
+          !allies && this._nationalAssessment!.isShielded(targetId, this._ticks),
+        );
+      },
+    );
+  }
+  /** No target or duration can be chosen by an untrusted client. */
+  performNationalCounterassessment(
+    actor: Player,
+    requestId: string,
+    authenticatedClientID?: ClientID,
+  ): NationalAssessmentShield {
+    if (this._nationalAssessment === null || !this._config.nationalMode())
+      throw new Error("NATIONAL counterassessment: mode not enabled");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
+    if (this.inSpawnPhase() || !actor.hasSpawned() || !actor.isAlive())
+      throw new Error("NATIONAL counterassessment: inactive principal");
+    return this._nationalAssessment.buyShield(
+      actor.id(), this._ticks, requestId,
+      () => {
+        if (actor.gold() < NATIONAL_COUNTERASSESSMENT_COST)
+          throw new Error("NATIONAL counterassessment: insufficient gold");
+        const spent = actor.removeGold(NATIONAL_COUNTERASSESSMENT_COST);
+        if (spent !== NATIONAL_COUNTERASSESSMENT_COST) {
+          actor.addGold(spent);
+          throw new Error("NATIONAL counterassessment: non-atomic debit");
+        }
+      },
+      () => actor.addGold(NATIONAL_COUNTERASSESSMENT_COST),
     );
   }
   nationalAssessmentsFor(
@@ -3290,6 +3329,10 @@ export class GameImpl implements Game {
         s.nationalAssessment === null
           ? new NationalAssessment()
           : NationalAssessment.restore(s.nationalAssessment, this._ticks);
+      for (const shield of this._nationalAssessment.snapshot().shields ?? []) {
+        if (!this._players.has(shield.defenderId))
+          throw new Error("NATIONAL counterassessment: invalid restored defender");
+      }
       for (const grant of this._nationalAssessment.snapshot().grants) {
         if (
           !this._players.has(grant.payerId) ||

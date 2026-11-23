@@ -70,7 +70,8 @@ export type Intent =
   | NationalRespondUltimatumIntent
   | NationalResolveUltimatumIntent
   | NationalReconnaissanceIntent
-  | NationalAssessmentIntent;
+  | NationalAssessmentIntent
+  | NationalCounterassessmentIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -958,6 +959,13 @@ export type NationalAssessmentIntent = z.infer<
   typeof NationalAssessmentIntentSchema
 >;
 
+/** Defender is always the authenticated actor, never a caller-chosen nation. */
+export const NationalCounterassessmentIntentSchema = z.object({
+  type: z.literal("national_buy_counterassessment"),
+  requestId: NationalPoliticalRequestId,
+});
+export type NationalCounterassessmentIntent = z.infer<typeof NationalCounterassessmentIntentSchema>;
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -1008,6 +1016,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalResolveUltimatumIntentSchema,
   NationalReconnaissanceIntentSchema,
   NationalAssessmentIntentSchema,
+  NationalCounterassessmentIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

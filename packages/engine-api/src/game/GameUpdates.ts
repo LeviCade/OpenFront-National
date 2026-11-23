@@ -159,7 +159,7 @@ export interface NationalAssessmentViewData {
   readonly items: readonly {
     readonly targetId: PlayerID;
     readonly paidBy: PlayerID;
-    readonly confidence: "coarse-estimate";
+    readonly confidence: "coarse-estimate" | "shielded-coarse-estimate";
     readonly effectiveTick: number;
     readonly expiresAtTick: number;
     readonly treasuryGoldBand: {
