@@ -26,6 +26,8 @@ jobs:
         with:
           node-version: "24.15.0"
           cache: npm
+      - name: Install required npm 12.1 toolchain
+        run: npm install --global npm@12.1.0 && npm --version
       - name: Pinned dependency installation
         run: npm run inst
       - name: Full workspace TypeScript
