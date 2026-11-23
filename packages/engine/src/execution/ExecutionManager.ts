@@ -22,6 +22,7 @@ import { EmbargoExecution } from "./EmbargoExecution";
 import { EmojiExecution } from "./EmojiExecution";
 import { MarkDisconnectedExecution } from "./MarkDisconnectedExecution";
 import { MoveWarshipExecution } from "./MoveWarshipExecution";
+import { NationalAssessmentExecution } from "./NationalAssessmentExecution";
 import { NationalFoundEmpireExecution } from "./NationalFoundEmpireExecution";
 import { NationalReconExecution } from "./NationalReconExecution";
 import { NationalSanctionExecution } from "./NationalSanctionExecution";
@@ -223,6 +224,13 @@ export class Executor {
             enabled: intent.enabled,
           },
           intent.requestId ?? null,
+          intent.clientID,
+        );
+      case "national_buy_national_assessment":
+        return new NationalAssessmentExecution(
+          player,
+          intent.targetId,
+          intent.requestId,
           intent.clientID,
         );
       case "national_buy_regional_recon":

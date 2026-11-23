@@ -1,3 +1,7 @@
+import type {
+  AssetKind,
+  SovereignStatus,
+} from "@openfront/engine-api/game/NationalRecipientView";
 /**
  * NATIONAL observation boundary (D-002, D-017; FOG-01, FOG-02, FOG-07).
  *
@@ -7,10 +11,7 @@
  *
  * Integration awaits the conductor's M0 political/wire/snapshot contracts.
  */
-import type {
-  AssetKind,
-  SovereignStatus,
-} from "@openfront/engine-api/game/NationalRecipientView";
+import type { NationalAssessmentReport } from "./NationalAssessment";
 
 export type {
   AssetKind,
@@ -180,6 +181,7 @@ export interface NationalObservation {
   readonly wars: readonly NationalWar[];
   readonly ownResources: { readonly troops: number; readonly treasury: number };
   readonly visibleAssets: readonly VisibleAsset[];
+  readonly assessments?: readonly NationalAssessmentReport[];
   readonly frontiers: readonly {
     readonly targetId: NationId;
     readonly access: "land" | "naval";

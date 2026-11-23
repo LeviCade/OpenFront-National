@@ -1,4 +1,5 @@
 import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
+import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/NationalAssessmentView";
 import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
@@ -30,6 +31,7 @@ const allowedFields = new Set([
   "nationalAccessionOffers",
   "nationalPactDisclosure",
   "nationalImperialAdministration",
+  "nationalAssessments",
   "nationalObserverMap",
 ]);
 const permittedUpdates = new Set<number>([
@@ -218,6 +220,14 @@ export function parseTrustedNationalProjection(
   ) {
     throw new Error("NATIONAL invalid recipient projection");
   }
+  const map = record(parsed.nationalObserverMap)
+    ? parsed.nationalObserverMap
+    : null;
+  validateNationalAssessmentPacket(
+    parsed.nationalAssessments,
+    typeof map?.observerId === "string" ? map.observerId : null,
+    expectedTick,
+  );
   return parsed as TrustedNationalProjection;
 }
 
@@ -248,6 +258,7 @@ export function assertTrustedPublicProjection(
       "nationalAccessionOffers",
       "nationalPactDisclosure",
       "nationalImperialAdministration",
+      "nationalAssessments",
     ].some((key) => packet[key] !== undefined) ||
     !record(packet.updates)
   )
@@ -389,6 +400,11 @@ export function materializeTrustedNationalUpdate(
   // E3's paged current-sight map gives late joiners real visible territory.
   // All added states belong to the authenticated observer's current sight.
   const visibleTilePairs = [...tiles, ...observerMapTilePairs(observerMap)];
+  validateNationalAssessmentPacket(
+    packet.nationalAssessments,
+    observerMap?.observerId ?? null,
+    packet.tick,
+  );
   const units = decodeNationalObserverNativeUnits(packet.packedUnitUpdates);
   const players = numericArray(packet.packedPlayerUpdates, 25_000);
   if (players !== undefined && players.length % 5 !== 0)
@@ -429,6 +445,9 @@ export function materializeTrustedNationalUpdate(
     ...(packet.nationalAccessionOffers === undefined
       ? {}
       : { nationalAccessionOffers: packet.nationalAccessionOffers }),
+    ...(packet.nationalAssessments === undefined
+      ? {}
+      : { nationalAssessments: packet.nationalAssessments }),
   } as GameUpdateViewData;
 }
 

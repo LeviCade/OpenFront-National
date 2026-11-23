@@ -63,6 +63,7 @@ import type {
   NationalImperialAdministrationView,
   NationalUngovernableWarning,
 } from "../national/NationalRuntime";
+import type { NationalAssessmentGrant } from "../national/observation/NationalAssessment";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import type { RegionalReconGrant } from "../national/observation/NationalReconnaissance";
 import type {
@@ -716,6 +717,14 @@ export interface Game extends GameLike {
   ): RegionalReconGrant;
   /** Own purchases ONLY; LiveObservation performs reciprocal empire sharing. */
   nationalReconnaissanceFor(payerId: PlayerID): readonly RegionalReconGrant[];
+  performNationalAssessment(
+    actor: Player,
+    targetId: PlayerID,
+    requestId: string,
+    authenticatedClientID?: ClientID,
+  ): NationalAssessmentGrant;
+  /** Internal trusted-source records; never public wire without projection. */
+  nationalAssessmentsFor(payerId: PlayerID): readonly NationalAssessmentGrant[];
   performNationalCommand(
     actor: Player,
     command: NationalCommand,
