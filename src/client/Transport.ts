@@ -66,6 +66,7 @@ import {
   revokeTrustedNationalPrivateCapability,
   type TrustedNationalStartLike,
 } from "./NationalPrivateCapability";
+import { parseNationalAssessmentPurchaseIntent } from "./NationalAssessmentClient";
 import { parseNationalReconnaissanceIntent } from "./NationalReconPurchase";
 import { parseNationalUltimatumIntent } from "./NationalSovereignActions";
 import { describeSocketClose } from "./SocketClose";
@@ -131,6 +132,11 @@ export class SendNationalImperialPolicyIntentEvent implements GameEvent {
 
 /** Ordinary authenticated NATIONAL transport for one paid recon request. */
 export class SendNationalReconnaissanceIntentEvent implements GameEvent {
+  constructor(public readonly candidate: unknown) {}
+}
+
+/** Separate E4 Game-owned 1,200-gold assessment, not a regional recon. */
+export class SendNationalAssessmentIntentEvent implements GameEvent {
   constructor(public readonly candidate: unknown) {}
 }
 
@@ -437,6 +443,14 @@ export class Transport {
       if (!this.nationalDiplomacyWireEnabled()) return;
       const parsed = parseNationalReconnaissanceIntent(e.candidate);
       if (parsed !== null) this.sendIntent(parsed);
+    });
+    this.subscribe(SendNationalAssessmentIntentEvent, (e) => {
+      if (!this.nationalDiplomacyWireEnabled()) return;
+      const parsed = parseNationalAssessmentPurchaseIntent(e.candidate);
+      if (parsed === null) return;
+      // The E4 schema/engine owns this new intent variant. This adapter does
+      // not change IntentSchema or bypass the authenticated sendIntent gate.
+      this.sendIntent(parsed as unknown as Intent);
     });
     this.subscribe(SendNationalUltimatumIntentEvent, (e) => {
       if (!this.nationalDiplomacyWireEnabled()) return;
