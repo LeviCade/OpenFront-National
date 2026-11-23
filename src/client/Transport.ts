@@ -59,6 +59,7 @@ import {
   SendUpdateGameConfigIntentEvent,
 } from "./LobbyEvents";
 import { LocalServer } from "./LocalServer";
+import { parseNationalAssessmentPurchaseIntent } from "./NationalAssessmentClient";
 import type { PactIntent } from "./NationalPactState";
 import {
   acceptTrustedNationalPrivateCapability,
@@ -66,7 +67,6 @@ import {
   revokeTrustedNationalPrivateCapability,
   type TrustedNationalStartLike,
 } from "./NationalPrivateCapability";
-import { parseNationalAssessmentPurchaseIntent } from "./NationalAssessmentClient";
 import { parseNationalReconnaissanceIntent } from "./NationalReconPurchase";
 import { parseNationalUltimatumIntent } from "./NationalSovereignActions";
 import { describeSocketClose } from "./SocketClose";

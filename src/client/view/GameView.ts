@@ -30,10 +30,6 @@ import {
 } from "@openfront/engine-api/game/NationalPactView";
 import type { NationalReconnaissanceViewData } from "@openfront/engine-api/game/NationalReconView";
 import {
-  readNationalAssessmentView,
-  type NationalAssessmentClientView,
-} from "../NationalAssessmentClient";
-import {
   GameLike,
   ReadonlyTileSet,
   UnitPredicate,
@@ -50,6 +46,10 @@ import { TerrainMapData } from "@openfront/engine-lib/game/TerrainMapLoader";
 import { TerraNulliusImpl } from "@openfront/engine-lib/game/TerraNulliusImpl";
 import { UnitGrid } from "@openfront/engine-lib/game/UnitGrid";
 import { PlayerCosmetics, WirePlayer } from "@openfront/shared/WireSchemas";
+import {
+  readNationalAssessmentView,
+  type NationalAssessmentClientView,
+} from "../NationalAssessmentClient";
 import {
   readNationalAccessionOffers,
   readNationalConflicts,
@@ -144,7 +144,7 @@ export class GameView implements GameLike {
       this._nationalPactReceipts = [];
       this._nationalUltimatums = null;
       this._nationalReconnaissance = null;
-    this._nationalAssessments = null;
+      this._nationalAssessments = null;
     }
     this.trustedPrincipal = principal;
   }
@@ -806,7 +806,9 @@ export class GameView implements GameLike {
 
     const previousTick = this.lastUpdate?.tick ?? -1;
     // Never keep an unvalidated or revoked constitutional snapshot in the raw renderer cache.
-    const assessed = gu as GameUpdateViewData & { nationalAssessments?: unknown };
+    const assessed = gu as GameUpdateViewData & {
+      nationalAssessments?: unknown;
+    };
     this.lastUpdate =
       gu.nationalPactDisclosure === undefined &&
       gu.nationalImperialAdministration === undefined &&
@@ -815,7 +817,9 @@ export class GameView implements GameLike {
         : { ...gu };
     delete this.lastUpdate.nationalPactDisclosure;
     delete this.lastUpdate.nationalImperialAdministration;
-    delete (this.lastUpdate as GameUpdateViewData & { nationalAssessments?: unknown }).nationalAssessments;
+    delete (
+      this.lastUpdate as GameUpdateViewData & { nationalAssessments?: unknown }
+    ).nationalAssessments;
     // An FFA view or an absent report must never preserve an earlier private lease.
     this._nationalAssessments = null;
 

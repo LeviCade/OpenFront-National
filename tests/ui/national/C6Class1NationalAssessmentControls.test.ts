@@ -57,7 +57,11 @@ async function mount(
   const player = (id: string) => ({
     id: () => id,
     name: () =>
-      id === "nation-a" ? "A Republic" : id === "nation-b" ? "B Nation" : "C Nation",
+      id === "nation-a"
+        ? "A Republic"
+        : id === "nation-b"
+          ? "B Nation"
+          : "C Nation",
     isAlive: () => (id === state.actorId ? state.alive : true),
     hasSpawned: () => (id === state.actorId ? state.spawned : true),
     numTilesOwned: () => 10,
@@ -99,7 +103,9 @@ async function purchase(
   element: NationalAssessmentControls,
   targetId = "nation-b",
 ) {
-  const select = element.querySelector<HTMLSelectElement>('select[name="target"]')!;
+  const select = element.querySelector<HTMLSelectElement>(
+    'select[name="target"]',
+  )!;
   select.value = targetId;
   select.dispatchEvent(new Event("change", { bubbles: true }));
   await element.updateComplete;
@@ -156,22 +162,62 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
     expect(readNationalAssessmentView(valid, null, 21)).toBeNull();
     expect(readNationalAssessmentView(valid, "nation-a", 920)).toBeNull();
     expect(readNationalAssessmentView(valid, "nation-a", 19)).toBeNull();
-    expect(readNationalAssessmentView({ ...valid, secret: "key" }, "nation-a", 21)).toBeNull();
-    expect(readNationalAssessmentView(packet([validReport, validReport]), "nation-a", 21)).toBeNull();
     expect(
-      readNationalAssessmentView(packet([{ ...validReport, targetId: "nation-a" }]), "nation-a", 21),
+      readNationalAssessmentView({ ...valid, secret: "key" }, "nation-a", 21),
     ).toBeNull();
     expect(
-      readNationalAssessmentView(packet([{ ...validReport, troopPosition: [12, 44] } as typeof validReport]), "nation-a", 21),
+      readNationalAssessmentView(
+        packet([validReport, validReport]),
+        "nation-a",
+        21,
+      ),
     ).toBeNull();
     expect(
-      readNationalAssessmentView(packet([{ ...validReport, expiresAtTick: 921 }]), "nation-a", 21),
+      readNationalAssessmentView(
+        packet([{ ...validReport, targetId: "nation-a" }]),
+        "nation-a",
+        21,
+      ),
     ).toBeNull();
     expect(
-      readNationalAssessmentView(packet([{ ...validReport, treasuryGoldBand: { lower: "1377", upperExclusive: "3877" } }]), "nation-a", 21),
+      readNationalAssessmentView(
+        packet([
+          { ...validReport, troopPosition: [12, 44] } as typeof validReport,
+        ]),
+        "nation-a",
+        21,
+      ),
     ).toBeNull();
     expect(
-      readNationalAssessmentView(packet([{ ...validReport, militaryTroopsBand: { lower: "100000", upperExclusive: "100001" } }]), "nation-a", 21),
+      readNationalAssessmentView(
+        packet([{ ...validReport, expiresAtTick: 921 }]),
+        "nation-a",
+        21,
+      ),
+    ).toBeNull();
+    expect(
+      readNationalAssessmentView(
+        packet([
+          {
+            ...validReport,
+            treasuryGoldBand: { lower: "1377", upperExclusive: "3877" },
+          },
+        ]),
+        "nation-a",
+        21,
+      ),
+    ).toBeNull();
+    expect(
+      readNationalAssessmentView(
+        packet([
+          {
+            ...validReport,
+            militaryTroopsBand: { lower: "100000", upperExclusive: "100001" },
+          },
+        ]),
+        "nation-a",
+        21,
+      ),
     ).toBeNull();
   });
 
@@ -200,7 +246,12 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
     ).toBeNull();
     expect(
       readNationalAssessmentView(
-        packet([{ ...shielded, militaryTroopsBand: { lower: "400000", upperExclusive: "400001" } }]),
+        packet([
+          {
+            ...shielded,
+            militaryTroopsBand: { lower: "400000", upperExclusive: "400001" },
+          },
+        ]),
         "nation-a",
         21,
       ),
@@ -227,12 +278,18 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
       targetId: "nation-b",
       requestId: expect.stringMatching(/^np_[0-9a-f]{32}$/),
     });
-    expect(parseNationalAssessmentPurchaseIntent(sent[0].candidate)).not.toBeNull();
+    expect(
+      parseNationalAssessmentPurchaseIntent(sent[0].candidate),
+    ).not.toBeNull();
     expect(state.gold).toBe(2000n);
-    expect(element.querySelectorAll("[data-national-assessment-report]")).toHaveLength(0);
+    expect(
+      element.querySelectorAll("[data-national-assessment-report]"),
+    ).toHaveLength(0);
     // Even a programmatic second submit cannot replace a pending request.
     const form = element.querySelector<HTMLFormElement>("form")!;
-    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    form.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
     expect(sent).toHaveLength(1);
   });
 
@@ -241,19 +298,27 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
     await purchase(element);
     state.tick = 21;
     state.gold = 800n; // Simulate actual server/Worker player update, never client-side mutation.
-    state.reports = packet([{ ...validReport, effectiveTick: 21, expiresAtTick: 921 }]);
+    state.reports = packet([
+      { ...validReport, effectiveTick: 21, expiresAtTick: 921 },
+    ]);
     element.refresh();
     await element.updateComplete;
-    expect(element.textContent).toContain("Game-owned paid national assessment");
+    expect(element.textContent).toContain(
+      "Game-owned paid national assessment",
+    );
     expect(element.textContent).toContain("800");
-    expect(element.querySelectorAll("[data-national-assessment-report]")).toHaveLength(1);
+    expect(
+      element.querySelectorAll("[data-national-assessment-report]"),
+    ).toHaveLength(1);
     expect(element.textContent).toContain("2500");
     expect(element.textContent).toContain("200000");
     state.tick = 921;
     state.reports = null; // the authoritative Game filtered the expired grant
     element.refresh();
     await element.updateComplete;
-    expect(element.querySelectorAll("[data-national-assessment-report]")).toHaveLength(0);
+    expect(
+      element.querySelectorAll("[data-national-assessment-report]"),
+    ).toHaveLength(0);
     expect(element.textContent).not.toContain("200000");
   });
 
@@ -266,8 +331,12 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
     state.tick = 21;
     element.refresh();
     await element.updateComplete;
-    expect(element.textContent).toContain("Awaiting an actual Game-owned paid report");
-    expect(element.textContent).not.toContain("A new Game-owned paid national assessment");
+    expect(element.textContent).toContain(
+      "Awaiting an actual Game-owned paid report",
+    );
+    expect(element.textContent).not.toContain(
+      "A new Game-owned paid national assessment",
+    );
     state.tick = 220;
     element.refresh();
     await element.updateComplete;
@@ -302,7 +371,9 @@ describe("Sixth E1: strict presentation-only purchase and report boundary", () =
     state.spectator = true;
     element.refresh();
     await element.updateComplete;
-    expect(element.querySelectorAll("[data-national-assessment-report]")).toHaveLength(0);
+    expect(
+      element.querySelectorAll("[data-national-assessment-report]"),
+    ).toHaveLength(0);
     expect(element.textContent).toBe("");
   });
 });

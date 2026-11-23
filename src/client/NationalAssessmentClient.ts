@@ -46,7 +46,9 @@ function record(input: unknown): input is Record<string, unknown> {
 
 function exactKeys(input: Record<string, unknown>, names: string[]): boolean {
   const keys = Object.keys(input);
-  return keys.length === names.length && keys.every((key) => names.includes(key));
+  return (
+    keys.length === names.length && keys.every((key) => names.includes(key))
+  );
 }
 
 function safeTick(value: unknown): value is number {
@@ -143,8 +145,14 @@ export function readNationalAssessmentView(
     // E4 C6 shields truthfully widen FUTURE reports; validate the exact
     // confidence-matched coarse interval, never accept forged precision.
     const shielded = row.confidence === "shielded-coarse-estimate";
-    const treasuryGoldBand = readBand(row.treasuryGoldBand, shielded ? 10000n : 2500n);
-    const militaryTroopsBand = readBand(row.militaryTroopsBand, shielded ? 400000n : 100000n);
+    const treasuryGoldBand = readBand(
+      row.treasuryGoldBand,
+      shielded ? 10000n : 2500n,
+    );
+    const militaryTroopsBand = readBand(
+      row.militaryTroopsBand,
+      shielded ? 400000n : 100000n,
+    );
     if (!treasuryGoldBand || !militaryTroopsBand) return null;
     const key = [row.targetId, row.paidBy, row.effectiveTick].join(":");
     if (seen.has(key)) return null;
@@ -166,7 +174,10 @@ export function readNationalAssessmentView(
  * E4's current outbound DTO omits requestId (present in the internal ledger).
  */
 export function assessmentReportKey(
-  report: Pick<NationalAssessmentClientReport, "targetId" | "paidBy" | "effectiveTick">,
+  report: Pick<
+    NationalAssessmentClientReport,
+    "targetId" | "paidBy" | "effectiveTick"
+  >,
 ): string {
   return [report.targetId, report.paidBy, report.effectiveTick].join(":");
 }

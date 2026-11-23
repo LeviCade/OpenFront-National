@@ -12,6 +12,7 @@ import {
   NationalReconMapPickRequestedEvent,
   NationalReconMapPointSelectedEvent,
 } from "./controllers/NationalMapTargetController";
+import type { NationalAssessmentControls } from "./NationalAssessmentControls";
 import {
   confirmedNationalDiplomacy,
   createNationalDiplomacyRequestId,
@@ -47,9 +48,8 @@ import {
   type PactContext,
   type PactIntent,
 } from "./NationalPactState";
-import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
 import "./NationalAssessmentControls";
-import type { NationalAssessmentControls } from "./NationalAssessmentControls";
+import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
 import { nationalReconQuote } from "./NationalSovereignActions";
 import { GoToPlayerEvent } from "./TransformHandler";
 import {

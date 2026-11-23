@@ -143,7 +143,8 @@ export class NationalAssessmentControls extends LitElement {
     try {
       requestId = createNationalPoliticalRequestId();
     } catch {
-      this.status = "A secure request identifier is unavailable; no purchase sent.";
+      this.status =
+        "A secure request identifier is unavailable; no purchase sent.";
       return;
     }
     const { game, actor, bus } = context;
@@ -171,7 +172,10 @@ export class NationalAssessmentControls extends LitElement {
     }
   }
 
-  private candidates(context: { game: GameView; actor: NonNullable<ReturnType<GameView["myPlayer"]>> }) {
+  private candidates(context: {
+    game: GameView;
+    actor: NonNullable<ReturnType<GameView["myPlayer"]>>;
+  }) {
     return context.game
       .players()
       .filter(
@@ -198,14 +202,19 @@ export class NationalAssessmentControls extends LitElement {
       <h2 class="font-semibold text-amber-200">National strength assessment</h2>
       <p class="text-xs text-slate-300">
         Separate from 500-gold regional map reconnaissance. The Game charges
-        <strong>${NATIONAL_ASSESSMENT_QUOTE.cost.toString()} real gold</strong> for
-        a ${NATIONAL_ASSESSMENT_QUOTE.durationTicks}-tick estimate of one nation.
-        No map locations, hidden treaties or exact enemy resources are disclosed.
+        <strong>${NATIONAL_ASSESSMENT_QUOTE.cost.toString()} real gold</strong>
+        for a ${NATIONAL_ASSESSMENT_QUOTE.durationTicks}-tick estimate of one
+        nation. No map locations, hidden treaties or exact enemy resources are
+        disclosed.
       </p>
       <p class="text-xs" data-national-assessment-wallet>
         Game-reported available gold: ${context.actor.gold().toString()}
       </p>
-      <form class="space-y-2" data-national-assessment-form @submit=${this.submit}>
+      <form
+        class="space-y-2"
+        data-national-assessment-form
+        @submit=${this.submit}
+      >
         <label class="block" for="national-assessment-target">
           Target nation
           <select
@@ -244,29 +253,49 @@ export class NationalAssessmentControls extends LitElement {
         aria-live="polite"
         aria-busy=${String(pending)}
         class="text-xs text-amber-200"
-      >${this.status}</p>
+      >
+        ${this.status}
+      </p>
       <div class="space-y-2" data-national-assessment-reports>
         <h3 class="font-semibold">Current Game-issued reports</h3>
-        ${reports.length === 0
-          ? html`<p class="text-xs text-slate-300">No authenticated, unexpired strength reports.</p>`
-          : reports.map(
-              (report) => html`<article
-                data-national-assessment-report
-                class="rounded border border-amber-200/30 p-3 space-y-1"
-              >
-                <p class="font-semibold">
-                  Target: ${context.game.player(report.targetId)?.name() ?? report.targetId}
-                </p>
-                <p>Paid by: ${context.game.player(report.paidBy)?.name() ?? report.paidBy}</p>
-                <p>${report.confidence === "shielded-coarse-estimate" ? "Shielded gold estimate" : "Gold estimate"}: ${report.treasuryGoldBand.lower}–&lt;${report.treasuryGoldBand.upperExclusive}</p>
-                <p>${report.confidence === "shielded-coarse-estimate" ? "Shielded troop estimate" : "Troop estimate"}: ${report.militaryTroopsBand.lower}–&lt;${report.militaryTroopsBand.upperExclusive}</p>
-                <p class="text-xs text-slate-300">
-                  ${report.confidence === "shielded-coarse-estimate" ? "Counterassessment shield active: truthful broader purchase-time bands." : "Coarse purchase-time estimate."} Not live exact values.
-                  Effective tick ${report.effectiveTick}; expires at tick
-                  ${report.expiresAtTick} (${report.expiresAtTick - context.game.ticks()} ticks remaining).
-                </p>
-              </article>`,
-            )}
+        ${
+          reports.length === 0
+            ? html`<p class="text-xs text-slate-300">
+                No authenticated, unexpired strength reports.
+              </p>`
+            : reports.map(
+                (report) =>
+                  html`<article
+                    data-national-assessment-report
+                    class="rounded border border-amber-200/30 p-3 space-y-1"
+                  >
+                    <p class="font-semibold">
+                      Target:
+                      ${context.game.player(report.targetId)?.name() ?? report.targetId}
+                    </p>
+                    <p>
+                      Paid by:
+                      ${context.game.player(report.paidBy)?.name() ?? report.paidBy}
+                    </p>
+                    <p>
+                      ${report.confidence === "shielded-coarse-estimate" ? "Shielded gold estimate" : "Gold estimate"}:
+                      ${report.treasuryGoldBand.lower}–&lt;${report.treasuryGoldBand.upperExclusive}
+                    </p>
+                    <p>
+                      ${report.confidence === "shielded-coarse-estimate" ? "Shielded troop estimate" : "Troop estimate"}:
+                      ${report.militaryTroopsBand.lower}–&lt;${report.militaryTroopsBand.upperExclusive}
+                    </p>
+                    <p class="text-xs text-slate-300">
+                      ${report.confidence === "shielded-coarse-estimate" ? "Counterassessment shield active: truthful broader purchase-time bands." : "Coarse purchase-time estimate."}
+                      Not live exact values. Effective tick
+                      ${report.effectiveTick}; expires at tick
+                      ${report.expiresAtTick}
+                      (${report.expiresAtTick - context.game.ticks()} ticks
+                      remaining).
+                    </p>
+                  </article>`,
+              )
+        }
       </div>
     </section>`;
   }
