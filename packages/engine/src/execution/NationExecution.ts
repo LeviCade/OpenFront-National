@@ -364,6 +364,11 @@ export class NationExecution implements Execution {
       return;
     const verified = collectLiveNationalObservation(this.mg, player.id());
     const observation = verified.observation;
+    // E6-owned dispatch site: after the principal-filtered live observation,
+    // before any E5 recon decision. No foreign Game.units inspection or
+    // reconnaissance memory mutation. FFA remains on its original path.
+    if (!this.behaviorsInitialized) this.initializeBehaviors();
+    this.warshipBehavior.dispatchNationalNavalPressure(observation);
     // Both AI and humans have access to identical authenticated observations
     // and own trading permissions. No global foreign route or balance scan.
     const demands = NationalSanctionExecution.viewFor(this.mg, player);
