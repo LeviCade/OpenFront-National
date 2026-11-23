@@ -21,6 +21,11 @@ import { assertNever, simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
 import {
+  planObservedImperialCoercion,
+  proposeCanonicalImperialUltimatumIntent,
+  type ObservedImperialUltimatum,
+} from "../national/ai/NationalCoercionStrategy";
+import {
   initialNationalEconomicMemory,
   planNationalEconomicDecision,
   updateNationalEconomicMemory,
@@ -70,6 +75,7 @@ import { NationWarshipBehavior } from "./nation/NationWarshipBehavior";
 import { tutorialCollapse } from "./nation/TutorialCollapse";
 import { tutorialSilo, tutorialWarship } from "./nation/TutorialSilo";
 import { NationalSanctionExecution } from "./NationalSanctionExecution";
+import { NationalUltimatumExecution } from "./NationalUltimatumExecution";
 import { SpawnExecution } from "./SpawnExecution";
 
 /**
@@ -445,16 +451,63 @@ export class NationExecution implements Execution {
     // Strategy sees the same human-filtered observation; only GameImpl may
     // accept a proposed political command. Keep outcomes in THIS snapshotted
     // NationExecution, not a second global AI political ledger.
+    // A bot must consume E3's real Game-owned, actor-filtered ultimatum view,
+    // never a foreign record, guessed target, forged client packet or direct
+    // access to the global demand ledger. Extra private fields are discarded.
+    const ultimatums: ObservedImperialUltimatum[] =
+      NationalUltimatumExecution.viewFor(this.mg, player).map((row) => ({
+        id: row.id,
+        empireId: row.empireId,
+        issuerId: row.issuerId,
+        targetId: row.targetId,
+        role: row.role,
+        threat: row.threat,
+        deadlineTick: row.deadlineTick,
+        phase: row.phase,
+        response: row.response,
+      }));
     const political = planAIPoliticalInterest(
       observation,
       this.nationalPlannerMemory?.political ?? initialAIPoliticalMemory(),
       25,
       result.memory.reputation,
+      ultimatums,
     );
     this.nationalPlannerMemory = {
       ...result.memory,
       political: political.memory,
     };
+    // The E6 strategy proposes but cannot enforce. E3's existing national
+    // execution validates current principal, crown, response phase, deadline
+    // and WAR/embargo authority at the actual simulation tick.
+    if (political.planned && political.memory.coercion) {
+      const choice = planObservedImperialCoercion(
+        observation,
+        ultimatums,
+        political.memory.coercion,
+      );
+      if (choice) {
+        const identity =
+          choice.kind === "issue"
+            ? choice.empireId + ":" + choice.candidateId
+            : choice.ultimatumId;
+        const requestId =
+          "ai-ult-" +
+          (simpleHash(player.id() + ":" + choice.kind + ":" + identity) >>> 0)
+            .toString(36) +
+          "-" +
+          ticks.toString(36);
+        const intent = proposeCanonicalImperialUltimatumIntent(
+          observation,
+          ultimatums,
+          choice,
+          requestId,
+        );
+        if (intent !== null) {
+          this.mg.addExecution(new NationalUltimatumExecution(player, intent));
+        }
+      }
+    }
     if (
       political.decision?.command !== null &&
       political.decision?.command !== undefined
