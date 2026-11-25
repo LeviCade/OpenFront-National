@@ -264,7 +264,7 @@ describe("C6C2-E1 settlement view and native commands", () => {
     element.refresh();
     await element.updateComplete;
     expect(element.textContent).toContain("Game recorded a paid settlement");
-    expect(element.textContent).toContain(
+    expect(element.textContent?.replace(/\s+/g, " ")).toContain(
       "Game diplomatic trade permission: restricted",
     );
     expect(element.textContent).toContain(
