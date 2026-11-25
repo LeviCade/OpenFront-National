@@ -437,8 +437,8 @@ export class NationExecution implements Execution {
           outcome.actorId !== player.id() ||
           outcome.recipientId !== player.id() ||
           outcome.tick !== observation.tick ||
-          outcome.warId !== choice.warId ||
-          outcome.motionId !== motionId ||
+          (outcome.accepted &&
+            (outcome.warId !== choice.warId || outcome.motionId !== motionId)) ||
           outcome.commandKind !==
             (choice.kind === "propose-peace"
               ? "national_propose_peace"

@@ -8,8 +8,25 @@ permissions:
   contents: read
 jobs:
   source:
+    name: ${{ matrix.gate }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - gate: typecheck
+            command: npm run typecheck
+          - gate: focused
+            command: npx --no-install vitest run --project node tests/national/C6C2E5Peace.test.ts tests/national/RoundEightWarInFlight.test.ts tests/national/RoundElevenImperialPeaceDelegation.test.ts tests/national/NationalAIRealWar.test.ts
+          - gate: regression
+            command: npm test
+          - gate: lint
+            command: npm run lint
+          - gate: formatting
+            command: npm run format:check
+          - gate: production-build
+            command: npm run build-prod
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,15 +39,5 @@ jobs:
           node-version: "24.15.0"
       - run: npm install --global --ignore-scripts npm@12.1.0
       - run: npm run inst
-      - run: npm run typecheck
-      - name: Focused actual Game and authority controls
-        if: ${{ !cancelled() }}
-        run: npx --no-install vitest run --project node tests/national/C6C2E5Peace.test.ts tests/national/RoundEightWarInFlight.test.ts tests/national/RoundElevenImperialPeaceDelegation.test.ts tests/national/NationalAIRealWar.test.ts
-      - run: npm test
-        if: ${{ !cancelled() }}
-      - run: npm run lint
-        if: ${{ !cancelled() }}
-      - run: npm run format:check
-        if: ${{ !cancelled() }}
-      - run: npm run build-prod
-        if: ${{ !cancelled() }}
+      - name: Run gate
+        run: ${{ matrix.command }}
