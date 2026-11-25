@@ -17,6 +17,7 @@ export interface NationalPactDisclosure {
   readonly relationship: "member" | "invited";
   readonly terms: NationalPactTerms;
   readonly pendingAmendment?: {
+    readonly defenseVersion?: number;
     readonly terms: NationalPactTerms;
     readonly administratorId: string | null;
     readonly approvedBy: readonly string[];
@@ -167,7 +168,11 @@ export function readNationalPactDisclosure(
       if (
         p.relationship !== "member" ||
         !record(a) ||
-        !keys(a, ["terms", "administratorId", "approvedBy"]) ||
+        !keys(a, ["terms", "administratorId", "approvedBy", "defenseVersion"]) ||
+        (a.defenseVersion !== undefined &&
+          (typeof a.defenseVersion !== "number" ||
+            !Number.isSafeInteger(a.defenseVersion) ||
+            a.defenseVersion <= 0)) ||
         !ids(a.approvedBy) ||
         a.approvedBy.length === publicPact.memberIds.length ||
         !a.approvedBy.every((v) => publicPact.memberIds.includes(v)) ||
@@ -179,6 +184,9 @@ export function readNationalPactDisclosure(
       const next = terms(a.terms);
       if (!next) return null;
       amendment = {
+        ...(typeof a.defenseVersion === "number"
+          ? { defenseVersion: a.defenseVersion }
+          : {}),
         terms: next,
         administratorId: a.administratorId,
         approvedBy: [...a.approvedBy],

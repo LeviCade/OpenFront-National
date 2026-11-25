@@ -47,6 +47,8 @@ export interface PactInvitation {
 }
 
 export interface PactAmendment {
+  /** Globally monotonic identity for a proposal touching MDA defense terms. */
+  defenseVersion?: number;
   terms: PactTerms;
   administratorId: string | null;
   /** Each vote comes from a distinct registered Game actor. */
@@ -97,6 +99,7 @@ export interface PoliticsProjection {
   empires: PoliticsEmpire[];
   accessionOffers: EmpireAccessionOffer[];
   simulationMs: number;
+  defenseAmendmentSequence?: number;
 }
 
 export type PoliticalPrize =
@@ -143,6 +146,9 @@ function copy(world: PoliticsProjection): PoliticsProjection {
       ...(p.pendingAmendment
         ? {
             pendingAmendment: {
+              ...(p.pendingAmendment.defenseVersion === undefined
+                ? {}
+                : { defenseVersion: p.pendingAmendment.defenseVersion }),
               terms: { ...p.pendingAmendment.terms },
               administratorId: p.pendingAmendment.administratorId,
               approvedBy: [...p.pendingAmendment.approvedBy],
@@ -164,6 +170,9 @@ function copy(world: PoliticsProjection): PoliticsProjection {
     })),
     accessionOffers: world.accessionOffers.map((o) => ({ ...o })),
     simulationMs: world.simulationMs,
+    ...(world.defenseAmendmentSequence === undefined
+      ? {}
+      : { defenseAmendmentSequence: world.defenseAmendmentSequence }),
   };
 }
 
@@ -179,12 +188,23 @@ export function initialPolitics(nations: PoliticsNation[]): PoliticsProjection {
   return world;
 }
 
+function hasDefenseTerms(terms: PactTerms): boolean {
+  return terms.defenseContributionBps !== undefined ||
+    terms.defenseReserveBps !== undefined;
+}
+
 /** Validate persisted projection boundaries before executing or evaluating rules. */
 export function validatePolitics(world: PoliticsProjection): void {
   requireRule(
     Number.isSafeInteger(world.simulationMs) && world.simulationMs >= 0,
     "invalid simulation clock",
   );
+  requireRule(
+    Number.isSafeInteger(world.defenseAmendmentSequence ?? 0) &&
+      (world.defenseAmendmentSequence ?? 0) >= 0,
+    "invalid defense amendment sequence",
+  );
+  const pendingDefenseVersions = new Set<number>();
   requireRule(unique(world.nations.map((n) => n.id)), "duplicate nation");
   requireRule(unique(world.pacts.map((p) => p.id)), "duplicate pact");
   requireRule(unique(world.empires.map((e) => e.id)), "duplicate empire");
@@ -289,6 +309,20 @@ export function validatePolitics(world: PoliticsProjection): void {
     if (p.pendingAmendment !== undefined) {
       const proposed = p.pendingAmendment;
       validateTreatyDefenseTerms(p.kind, proposed.terms);
+      if (hasDefenseTerms(p.terms) || hasDefenseTerms(proposed.terms)) {
+        const version = proposed.defenseVersion;
+        requireRule(
+          version !== undefined &&
+            Number.isSafeInteger(version) &&
+            version > 0 &&
+            version <= (world.defenseAmendmentSequence ?? 0) &&
+            !pendingDefenseVersions.has(version),
+          "invalid defense amendment version",
+        );
+        pendingDefenseVersions.add(version);
+      } else {
+        requireRule(proposed.defenseVersion === undefined, "unexpected defense version");
+      }
       requireRule(
         (proposed.terms.admission === "leader" ||
           proposed.terms.admission === "unanimous") &&
@@ -607,7 +641,15 @@ export function proposePactAmendment(
   );
   const next = copy(world);
   const target = pact(next, pactId);
+  const versioned =
+    hasDefenseTerms(current.terms) || hasDefenseTerms(proposed.terms);
+  const defenseVersion = (next.defenseAmendmentSequence ?? 0) + 1;
+  if (versioned) {
+    requireRule(Number.isSafeInteger(defenseVersion), "defense version exhausted");
+    next.defenseAmendmentSequence = defenseVersion;
+  }
   target.pendingAmendment = {
+    ...(versioned ? { defenseVersion } : {}),
     terms: { ...proposed.terms },
     administratorId: proposed.administratorId,
     approvedBy: [actorId],
@@ -627,6 +669,7 @@ export function approvePactAmendment(
   world: PoliticsProjection,
   pactId: string,
   actorId: string,
+  expectedDefenseVersion?: number,
 ): PoliticsProjection {
   validatePolitics(world);
   const current = pact(world, pactId);
@@ -634,6 +677,10 @@ export function approvePactAmendment(
   requireRule(
     current.pendingAmendment !== undefined,
     "constitutional amendment not pending",
+  );
+  requireRule(
+    current.pendingAmendment.defenseVersion === expectedDefenseVersion,
+    "stale defense amendment version",
   );
   const next = copy(world);
   const target = pact(next, pactId);

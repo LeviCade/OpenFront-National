@@ -812,6 +812,7 @@ export const NationalProposePactAmendmentIntentSchema = z.object({
 export const NationalApprovePactAmendmentIntentSchema = z.object({
   type: z.literal("national_approve_pact_amendment"),
   pactId: NationalPoliticalId,
+  expectedDefenseVersion: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
   requestId: NationalPoliticalRequestId,
 });
 export const NationalExpelPactIntentSchema = z.object({

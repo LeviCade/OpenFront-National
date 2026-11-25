@@ -15,6 +15,9 @@ const SHIELDED_GOLD_STEP = 10000n;
 const SHIELDED_TROOP_STEP = 400000n;
 const MAX_ACTIVE_SHIELDS = 512;
 const MAX_JOURNAL = 4096;
+/** One hostile payer cannot fill the shared rejection journal by click spam. */
+const MAX_REJECTED_PER_PAYER = 128;
+const MAX_REJECTED_JOURNAL = MAX_JOURNAL * MAX_REJECTED_PER_PAYER;
 /** Never exceed the strict per-recipient trusted wire DTO item capacity. */
 const MAX_ACTIVE_GRANTS = 2048;
 const id = z
@@ -64,7 +67,10 @@ export type NationalAssessmentReport = Omit<
 export const NationalAssessmentSnapshotSchema = z.object({
   version: z.literal(1),
   grants: z.array(grantSchema).max(MAX_JOURNAL),
-  rejectedPurchases: z.array(NationalAssessmentRejectedReceiptSchema).max(MAX_JOURNAL).optional(),
+  rejectedPurchases: z
+    .array(NationalAssessmentRejectedReceiptSchema)
+    .max(MAX_REJECTED_JOURNAL)
+    .optional(),
   /** Optional additive migration from inherited Game v6 assessments. */
   shields: z.array(shieldSchema).max(MAX_JOURNAL).optional(),
 });
@@ -105,6 +111,7 @@ export class NationalAssessment {
   private readonly rejectedPurchases: z.infer<
     typeof NationalAssessmentRejectedReceiptSchema
   >[] = [];
+  private readonly rejectionCounts = new Map<string, number>();
   private readonly byPayer = new Map<string, NationalAssessmentGrant[]>();
   private readonly shields: NationalAssessmentShield[] = [];
   private readonly shieldIds = new Set<string>();
@@ -186,9 +193,13 @@ export class NationalAssessment {
     const key = this.key(payerId, requestId);
     // Never replace a previously accepted or rejected first-attempt outcome.
     if (this.ids.has(key)) return;
-    if (this.rejectedPurchases.length >= MAX_JOURNAL)
+    if (
+      (this.rejectionCounts.get(payerId) ?? 0) >= MAX_REJECTED_PER_PAYER ||
+      this.rejectedPurchases.length >= MAX_REJECTED_JOURNAL
+    )
       throw new Error("NATIONAL assessment: rejection journal exhausted");
     this.rejectedPurchases.push(parsed.data);
+    this.rejectionCounts.set(payerId, (this.rejectionCounts.get(payerId) ?? 0) + 1);
     this.ids.add(key);
   }
 
@@ -243,7 +254,10 @@ export class NationalAssessment {
       throw new Error("NATIONAL assessment: purchase journal exhausted");
     // At capacity fail closed before any debit. No unjournaled purchase can
     // succeed after the denial history is exhausted.
-    if (this.rejectedPurchases.length >= MAX_JOURNAL)
+    if (
+      (this.rejectionCounts.get(payerId) ?? 0) >= MAX_REJECTED_PER_PAYER ||
+      this.rejectedPurchases.length >= MAX_REJECTED_JOURNAL
+    )
       throw new Error("NATIONAL assessment: rejection journal exhausted");
     let activeCount = 0;
     for (const grant of this.grants)
@@ -345,8 +359,12 @@ export class NationalAssessment {
       const key = state.key(receipt.payerId, receipt.requestId);
       if (state.ids.has(key) || receipt.effectiveTick > now)
         throw new Error("NATIONAL assessment: invalid restored rejection");
+      const count = (state.rejectionCounts.get(receipt.payerId) ?? 0) + 1;
+      if (count > MAX_REJECTED_PER_PAYER)
+        throw new Error("NATIONAL assessment: invalid restored rejection capacity");
       state.ids.add(key);
       state.rejectedPurchases.push(receipt);
+      state.rejectionCounts.set(receipt.payerId, count);
     }
     let activeShields = 0;
     for (const shield of source.shields ?? []) {

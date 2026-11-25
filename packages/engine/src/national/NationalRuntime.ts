@@ -95,6 +95,7 @@ const politicsSchema = z.object({
       // Absent in older v1 snapshots. No authority is inferred from absence.
       pendingAmendment: z
         .object({
+          defenseVersion: counter.optional(),
           terms: pactTerms,
           administratorId: z.string().nullable(),
           approvedBy: z.array(z.string()),
@@ -127,6 +128,7 @@ const politicsSchema = z.object({
     }),
   ),
   simulationMs: counter,
+  defenseAmendmentSequence: counter.optional(),
 });
 
 // One authority record per empire, attached to the canonical NATIONAL runtime.
@@ -415,7 +417,11 @@ export type NationalCommand =
       terms: PactTerms;
       administratorId: PlayerID | null;
     }
-  | { kind: "approve-pact-amendment"; pactId: string }
+  | {
+      kind: "approve-pact-amendment";
+      pactId: string;
+      expectedDefenseVersion?: number;
+    }
   | { kind: "betray-pact"; pactId: string }
   | {
       kind: "expel-pact";
@@ -478,6 +484,7 @@ export interface NationalRecipientPactView extends NationalPublicPactView {
     readonly authorized: boolean;
   }[];
   readonly pendingAmendment: {
+    readonly defenseVersion?: number;
     readonly terms: Readonly<PactTerms>;
     readonly administratorId: PlayerID | null;
     readonly approvedBy: readonly PlayerID[];
@@ -497,6 +504,7 @@ export interface NationalPactDisclosureViewData {
     readonly relationship: "member" | "invited";
     readonly terms: Readonly<PactTerms>;
     readonly pendingAmendment?: {
+      readonly defenseVersion?: number;
       readonly terms: Readonly<PactTerms>;
       readonly administratorId: PlayerID | null;
       readonly approvedBy: readonly PlayerID[];
@@ -1613,6 +1621,9 @@ export class NationalRuntime {
           ),
           pendingAmendment: pending
             ? Object.freeze({
+                ...(pending.defenseVersion === undefined
+                  ? {}
+                  : { defenseVersion: pending.defenseVersion }),
                 terms: Object.freeze({ ...pending.terms }),
                 administratorId: pending.administratorId,
                 approvedBy: Object.freeze([...pending.approvedBy].sort()),
@@ -1655,6 +1666,9 @@ export class NationalRuntime {
             ...(p.pendingAmendment
               ? {
                   pendingAmendment: Object.freeze({
+                    ...(p.pendingAmendment.defenseVersion === undefined
+                      ? {}
+                      : { defenseVersion: p.pendingAmendment.defenseVersion }),
                     terms: p.pendingAmendment.terms,
                     administratorId: p.pendingAmendment.administratorId,
                     approvedBy: p.pendingAmendment.approvedBy,
@@ -1763,7 +1777,12 @@ export class NationalRuntime {
         break;
       case "approve-pact-amendment":
         requireCommandId(command.pactId);
-        next = approvePactAmendment(this.politics, command.pactId, actorId);
+        next = approvePactAmendment(
+          this.politics,
+          command.pactId,
+          actorId,
+          command.expectedDefenseVersion,
+        );
         break;
       case "betray-pact":
         requireCommandId(command.pactId);

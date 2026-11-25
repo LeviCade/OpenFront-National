@@ -1178,6 +1178,7 @@ export class GameImpl implements Game {
     const donorIds = [...new Set([...mda, ...imperials])]
       .filter((id) => id !== attackerId && id !== defenderId)
       .sort();
+    const activePacts = this._national.snapshot().politics.pacts;
     const eligible = alreadyProcessed
       ? []
       : donorIds.map((id) => {
@@ -1189,7 +1190,7 @@ export class GameImpl implements Game {
             source,
             troopCapacity: Math.floor(this._config.maxTroops(donor)),
             ...treatyDefensePolicy(
-              this._national!.snapshot().politics.pacts,
+              activePacts,
               defenderId,
               id,
               imperials.has(id),
@@ -1937,6 +1938,7 @@ export class GameImpl implements Game {
     observer: Player,
   ): readonly NationalAssessmentReceipt[] {
     if (
+      this._config.isReplay() ||
       this._players.get(observer.id()) !== observer ||
       observer.type() !== PlayerType.Human ||
       !observer.hasSpawned() ||

@@ -191,6 +191,7 @@ const NationalFoundEmpireStateSchema = z.object({
       z.object({
         kind: z.literal("approve-pact-amendment"),
         pactId: z.string(),
+        expectedDefenseVersion: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
       }),
       z.object({ kind: z.literal("betray-pact"), pactId: z.string() }),
       z.object({

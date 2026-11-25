@@ -108,7 +108,13 @@ export class Executor {
         return new NationalFoundEmpireExecution(
           player,
           "",
-          { kind: "approve-pact-amendment", pactId: intent.pactId },
+          {
+            kind: "approve-pact-amendment",
+            pactId: intent.pactId,
+            ...(intent.expectedDefenseVersion === undefined
+              ? {}
+              : { expectedDefenseVersion: intent.expectedDefenseVersion }),
+          },
           intent.requestId,
           intent.clientID,
         );
