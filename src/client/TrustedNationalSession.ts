@@ -267,6 +267,7 @@ export function assertTrustedPublicProjection(
       "nationalPactDisclosure",
       "nationalImperialAdministration",
       "nationalAssessments",
+      "nationalSettlements",
     ].some((key) => packet[key] !== undefined) ||
     !record(packet.updates)
   )

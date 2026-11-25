@@ -55,7 +55,7 @@ jobs:
             lint) npm run lint ;;
             format)
               npm run format:check || {
-                npx --no-install oxfmt --write src/client/NationalImperial*Controls.ts src/client/NationalAssessmentClient.ts src/client/NationalAssessmentControls.ts src/client/NationalDiplomacyPanel.ts src/client/view/GameView.ts tests/ui/national/C6C2E1*.test.ts .github/workflows/c6c2-e1-native-imperial.yml
+                npx --no-install oxfmt --write src/client/NationalImperial*Controls.ts src/client/NationalAssessmentClient.ts src/client/NationalAssessmentControls.ts src/client/NationalDiplomacyPanel.ts src/client/view/GameView.ts src/client/Transport.ts src/client/TrustedNationalSession.ts packages/engine-api/src/game/NationalSettlementView.ts packages/engine-api/src/game/GameUpdates.ts packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/national/observation/NationalOutbound.ts src/server/national/NationalRecipientWire.ts packages/shared/src/NationalObserverNativeWire.ts tests/ui/national/C6C2E1*.test.ts .github/workflows/c6c2-e1-native-imperial.yml
                 git diff
                 exit 1
               }

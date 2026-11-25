@@ -768,6 +768,7 @@ export class NationalSanctionExecution implements Execution {
         });
       }
     }
+    if (items.length === 0) return undefined;
     return {
       version: 1,
       recipientId: observer.id(),

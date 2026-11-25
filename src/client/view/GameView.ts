@@ -251,7 +251,7 @@ export class GameView implements GameLike {
     // No assessment survives revoked Private authority into a future socket.
     if (!ready) {
       this._nationalAssessments = null;
-    this._nationalSettlements = null;
+      this._nationalSettlements = null;
       this._nationalImperialAdministration = null;
       this._nationalPactReceipts = [];
     }
@@ -604,7 +604,7 @@ export class GameView implements GameLike {
     return this._nationalReconnaissance;
   }
 
-  /** Private, current, strictly validated E4 Game-funded strength reports. */
+  /** Private, current, strictly validated sanction settlement rows. */
   public nationalSettlements(): NationalSettlementView | null {
     const actor = this.myPlayer()?.id();
     const view = this._nationalSettlements;
@@ -614,6 +614,7 @@ export class GameView implements GameLike {
       : null;
   }
 
+  /** Private, current, strictly validated E4 Game-funded strength reports. */
   public nationalAssessments(): Readonly<NationalAssessmentClientView> | null {
     return this._trustedNationalProjection && !this._trustedProjectionReady
       ? null

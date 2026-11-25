@@ -14,6 +14,7 @@ import {
 } from "./controllers/NationalMapTargetController";
 import type { NationalAssessmentControls } from "./NationalAssessmentControls";
 import "./NationalImperialEconomicControls";
+import "./NationalImperialSettlementControls";
 import {
   confirmedNationalDiplomacy,
   createNationalDiplomacyRequestId,
@@ -33,6 +34,7 @@ import {
   type NationalPoliticalAction,
 } from "./NationalDiplomacyState";
 import type { NationalImperialEconomicControls } from "./NationalImperialEconomicControls";
+import type { NationalImperialSettlementControls } from "./NationalImperialSettlementControls";
 import {
   imperialConstructionCategories,
   imperialPolicyIntentAvailable,
@@ -236,6 +238,9 @@ export class NationalDiplomacyPanel extends LitElement {
     )?.refresh();
     this.querySelector<NationalImperialEconomicControls>(
       "national-imperial-economic-controls",
+    )?.refresh();
+    this.querySelector<NationalImperialSettlementControls>(
+      "national-imperial-settlement-controls",
     )?.refresh();
     const game = this.game;
     const player = game?.myPlayer();
@@ -3656,6 +3661,10 @@ export class NationalDiplomacyPanel extends LitElement {
                   .game=${game}
                   .eventBus=${this.eventBus}
                 ></national-imperial-economic-controls>
+                <national-imperial-settlement-controls
+                  .game=${game}
+                  .eventBus=${this.eventBus}
+                ></national-imperial-settlement-controls>
                 <national-assessment-controls
                   .game=${game}
                   .eventBus=${this.eventBus}
