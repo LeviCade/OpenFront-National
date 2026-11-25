@@ -120,6 +120,16 @@ describe("Sixth Conductor Second Class E6 GameRunner endgame", () => {
       victory,
     );
     expect([...restored.again]).toEqual([...restored.bytes]);
+    // Repeat the same stamped gameplay on a fresh GameRunner, including
+    // recipient registration, and compare the canonical terminal snapshot.
+    const repeated = await scenario();
+    repeated.transfer(I, B, "e6-unauthorized");
+    repeated.transfer(A, B);
+    repeated.registerRecipient(B);
+    const repeatedPacket = repeated.conquer();
+    expect(repeatedPacket.nationalPolitics?.victory).toEqual(victory);
+    const replayed = await roundTrip(repeated.game, "plains");
+    expect([...replayed.bytes]).toEqual([...restored.bytes]);
     console.info(
       "C6C2-E6-SOVEREIGN-ENDGAME",
       JSON.stringify({
@@ -138,6 +148,9 @@ describe("Sixth Conductor Second Class E6 GameRunner endgame", () => {
         })),
         snapshotSha256: createHash("sha256")
           .update(restored.bytes)
+          .digest("hex"),
+        replayedSha256: createHash("sha256")
+          .update(replayed.bytes)
           .digest("hex"),
         restoredSha256: createHash("sha256")
           .update(restored.again)
