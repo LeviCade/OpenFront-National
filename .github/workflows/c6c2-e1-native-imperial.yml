@@ -108,3 +108,37 @@ jobs:
         env:
           C6C2_E1_REQUIRE_CAUSAL: "1"
         run: npx --no-install vitest run --project node tests/ui/national/C6C2E1SettlementGame.test.ts tests/ui/national/C6C2E1PaidVoyage.test.ts
+
+  assessment-rehearsal:
+    name: Read-only E4 exact receipt integration rehearsal (not new credit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
+      - name: Verify pinned E1 and E4; merge in disposable runner only
+        env:
+          E4_SHA: 99723c2e6616df5b65b8f469b9b96904c3aa6d32
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          git cat-file -e "$E4_SHA^{commit}"
+          git -c user.name=CI -c user.email=ci@example.invalid merge --no-commit --no-ff "$E4_SHA"
+          echo "E1=${{ github.sha }} E4=$E4_SHA REHEARSAL_TREE=$(git write-tree)"
+          test -z "$(git ls-files -u)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: test "$(node --version)" = "v24.15.0" && test "$(npm --version)" = "12.1.0"
+      - run: npm run inst
+        id: install
+      - run: npm run typecheck
+      - name: Strict real E4 receipt consumer (accepted, denied, private)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          C6C2_E1_REQUIRE_E4_RECEIPTS: "1"
+        run: npx --no-install vitest run --project node tests/ui/national/C6C2E1AssessmentGame.test.ts tests/ui/national/C6C2E1AssessmentReceipt.test.ts
