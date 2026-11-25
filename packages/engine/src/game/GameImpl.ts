@@ -80,6 +80,7 @@ import type {
   TroopDebitTransactionAdapter,
   TroopSource,
 } from "../national/conflict/DefenseLevy";
+import { treatyDefensePolicy } from "../national/conflict/NationalTreatyDefensePolicy";
 import {
   NationalRuntime,
   NationalRuntimeSnapshotSchema,
@@ -1050,6 +1051,12 @@ export class GameImpl implements Game {
       }
       for (const entry of attack.eligible) {
         const id = entry.source.nationId;
+        const policy = treatyDefensePolicy(
+          political.pacts,
+          attack.defenderId,
+          id,
+          imperialDonors.includes(id),
+        );
         if (
           this.nationalLevySource(id) !== entry.source ||
           !(
@@ -1060,8 +1067,9 @@ export class GameImpl implements Game {
                 p.memberIds.includes(id),
             ) || imperialDonors.includes(id)
           ) ||
-          entry.maximumFraction !== (imperialDonors.includes(id) ? 1 : 0.1) ||
-          entry.protectedCapacityFraction !== 0.3 ||
+          entry.maximumFraction !== policy.maximumFraction ||
+          entry.protectedCapacityFraction !== policy.protectedCapacityFraction ||
+          entry.treatyMaximumFraction !== policy.treatyMaximumFraction ||
           entry.troopCapacity !==
             Math.floor(this._config.maxTroops(this.player(id)))
         ) {
@@ -1179,8 +1187,12 @@ export class GameImpl implements Game {
           return {
             source,
             troopCapacity: Math.floor(this._config.maxTroops(donor)),
-            maximumFraction: imperials.has(id) ? 1 : 0.1,
-            protectedCapacityFraction: 0.3,
+            ...treatyDefensePolicy(
+              this._national!.snapshot().politics.pacts,
+              defenderId,
+              id,
+              imperials.has(id),
+            ),
           };
         });
     const campaignId = `national:${attackerId.length}:${attackerId}:${defenderId.length}:${defenderId}`;

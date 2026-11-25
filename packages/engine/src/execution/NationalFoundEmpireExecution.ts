@@ -167,6 +167,8 @@ const NationalFoundEmpireStateSchema = z.object({
         terms: z.object({
           admission: z.enum(["leader", "unanimous"]),
           expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+          defenseContributionBps: z.number().int().min(0).max(1000).optional(),
+          defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
         }),
       }),
       z.object({
@@ -181,6 +183,8 @@ const NationalFoundEmpireStateSchema = z.object({
         terms: z.object({
           admission: z.enum(["leader", "unanimous"]),
           expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+          defenseContributionBps: z.number().int().min(0).max(1000).optional(),
+          defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
         }),
         administratorId: z.string().nullable(),
       }),

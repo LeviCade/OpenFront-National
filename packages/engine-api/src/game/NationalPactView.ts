@@ -9,6 +9,8 @@ export interface NationalPublicPactView {
 export interface NationalPactTerms {
   readonly admission: "leader" | "unanimous";
   readonly expulsion: "leader" | "unanimous" | "forbidden";
+  readonly defenseContributionBps?: number;
+  readonly defenseReserveBps?: number;
 }
 export interface NationalPactDisclosure {
   readonly pactId: string;
@@ -64,14 +66,28 @@ function ids(value: unknown): value is string[] {
 function terms(value: unknown): NationalPactTerms | null {
   if (
     !record(value) ||
-    !keys(value, ["admission", "expulsion"]) ||
+    !keys(value, ["admission", "expulsion", "defenseContributionBps", "defenseReserveBps"]) ||
     (value.admission !== "leader" && value.admission !== "unanimous") ||
     (value.expulsion !== "leader" &&
       value.expulsion !== "unanimous" &&
       value.expulsion !== "forbidden")
   )
     return null;
-  return { admission: value.admission, expulsion: value.expulsion };
+  const cap = value.defenseContributionBps;
+  const reserve = value.defenseReserveBps;
+  if (
+    (cap !== undefined &&
+      (typeof cap !== "number" || !Number.isInteger(cap) || cap < 0 || cap > 1000)) ||
+    (reserve !== undefined &&
+      (typeof reserve !== "number" || !Number.isInteger(reserve) || reserve < 3000 || reserve > 10000))
+  )
+    return null;
+  return {
+    admission: value.admission,
+    expulsion: value.expulsion,
+    ...(cap === undefined ? {} : { defenseContributionBps: cap }),
+    ...(reserve === undefined ? {} : { defenseReserveBps: reserve }),
+  };
 }
 /** Strict reader rejects nested extras. Producer separately selects public keys. */
 export function readNationalPublicPacts(

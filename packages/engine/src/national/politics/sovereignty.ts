@@ -1,3 +1,5 @@
+import { validateTreatyDefenseTerms } from "../conflict/NationalTreatyDefensePolicy";
+
 /**
  * NATIONAL political rules — isolated deterministic projection (D-003..D-013).
  *
@@ -35,6 +37,8 @@ export type ExpulsionRule = VoteRule | "forbidden";
 export interface PactTerms {
   admission: VoteRule;
   expulsion: ExpulsionRule;
+  readonly defenseContributionBps?: number;
+  readonly defenseReserveBps?: number;
 }
 
 export interface PactInvitation {
@@ -263,6 +267,7 @@ export function validatePolitics(world: PoliticsProjection): void {
       "invalid pact identifier",
     );
     requireRule(p.kind === "NAP" || p.kind === "MDA", "invalid pact type");
+    validateTreatyDefenseTerms(p.kind, p.terms);
     requireRule(
       p.terms.admission === "leader" || p.terms.admission === "unanimous",
       "invalid admission rule",
@@ -283,6 +288,7 @@ export function validatePolitics(world: PoliticsProjection): void {
     );
     if (p.pendingAmendment !== undefined) {
       const proposed = p.pendingAmendment;
+      validateTreatyDefenseTerms(p.kind, proposed.terms);
       requireRule(
         (proposed.terms.admission === "leader" ||
           proposed.terms.admission === "unanimous") &&
