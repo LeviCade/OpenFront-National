@@ -11,3 +11,11 @@ Implementation contract (issue #216; not a certification).
 - Native zbin: four v2 variants appended after existing variants; existing intent layouts and discriminant order are not edited. Founding/amendment V2 carries new optional terms; v2 expulsion requires the epoch; v2 rejection requires the proposal ID. Existing admission/accept intents carry their established epoch. The Game-owned journal maps v2 operations to their existing political command kinds and receipts. Snapshot additions are optional tagged record fields; no root registry changes.
 - Public roster is unchanged. Exact extended clauses and expiry are only in the recipient-bound private constitution view; pending expulsion ballots only members, invitation deadline only the invited candidate or members. Existing pending admission secrecy remains in force.
 - Source validation is not a release or completion claim. Run the engineer workflow and integrated regression gates on the exact submitted head.
+
+### Exact accepted-request replay
+
+Extended pacts privately retain the invitation epoch that admitted each current
+member. An exact historical accepted admission receipt remains idempotent only
+while that same admission still grants membership. Departure removes the proof;
+joining a recreated pact allocates a new epoch. Neither the proof nor the private
+request journal appears in public or recipient treaty projections.

@@ -509,20 +509,18 @@ export function readNationalPactWireDisclosure(
     imperial,
   );
   if (
-    decoded?.pacts.some(
-      (p) => {
-        const duration = p.terms.invitationDurationTicks;
-        const invalidDeadline = (deadline?: number) =>
-          deadline !== undefined &&
-          (deadline <= tick ||
-            duration === undefined ||
-            deadline - tick > duration);
-        return (
-          invalidDeadline(p.invitationExpiresAtTick) ||
-          p.invitations?.some((i) => invalidDeadline(i.expiresAtTick))
-        );
-      },
-    )
+    decoded?.pacts.some((p) => {
+      const duration = p.terms.invitationDurationTicks;
+      const invalidDeadline = (deadline?: number) =>
+        deadline !== undefined &&
+        (deadline <= tick ||
+          duration === undefined ||
+          deadline - tick > duration);
+      return (
+        invalidDeadline(p.invitationExpiresAtTick) ||
+        p.invitations?.some((i) => invalidDeadline(i.expiresAtTick))
+      );
+    })
   )
     return null;
   return decoded;

@@ -1262,7 +1262,6 @@ describe("C4 E4 native constitutional controls", () => {
   });
 });
 
-
 describe("C7C1E1 extended constitutional controls", () => {
   it("submits cap and duration, displays the approved constitution, and casts only an eligible epoch-bound vote", async () => {
     const { element, eventBus, optionsState } = await mount();
@@ -1369,14 +1368,14 @@ describe("C7C1E1 extended constitutional controls", () => {
       '[data-national-pact-action="expel"]',
     )!;
     const expelForm = expel.closest("form")!;
-    const target = expelForm.querySelector<HTMLSelectElement>(
-      '[name="member"]',
-    )!;
+    const target =
+      expelForm.querySelector<HTMLSelectElement>('[name="member"]')!;
     expect([...target.options].map((option) => option.value)).not.toContain(
       "nation-a",
     );
     target.value = "nation-c";
-    expelForm.querySelector<HTMLInputElement>('[name="confirm"]')!.checked = true;
+    expelForm.querySelector<HTMLInputElement>('[name="confirm"]')!.checked =
+      true;
     expel.click();
     await element.updateComplete;
     expect(requests).toHaveLength(2);
@@ -1387,7 +1386,9 @@ describe("C7C1E1 extended constitutional controls", () => {
       constitutionVersion: 7,
     });
     expect(element.textContent).toContain("C Nation");
-    expect(element.querySelector("[data-national-expulsion-ballot]")).not.toBeNull();
+    expect(
+      element.querySelector("[data-national-expulsion-ballot]"),
+    ).not.toBeNull();
     // No optimistic member removal: the server's recipient projection is decisive.
   });
 });

@@ -189,7 +189,7 @@ function assertNoInvite(m: Match) {
   const frame = wireFrame(m, m.d);
   expect(frame.nationalPactDisclosure?.pacts ?? []).toEqual([]);
   expect(JSON.stringify(frame.nationalPolitics)).not.toMatch(
-    /"terms"|"approvedBy"|"invitations"|"constitutionVersion"/,
+    /"terms"|"approvedBy"|"invitations"|"constitutionVersion"|"memberAdmissionEpochs"/,
   );
 }
 
@@ -609,9 +609,108 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
     ).toThrow();
   });
 
+  it("expiry retains unrelated live invitations and expulsion votes, but requires the fresh epoch", () => {
+    const ids = [A, B, C, D, "C7EXTRAE"];
+    const runtime = new NationalRuntime(ids);
+    runtime.perform(A, {
+      kind: "found-pact",
+      pactId,
+      name: "Independent ballots",
+      pactKind: "NAP",
+      terms: {
+        admission: "leader",
+        expulsion: "majority",
+        membershipCap: 5,
+        invitationDurationTicks: 10,
+      },
+    });
+    const current = () => runtime.snapshot().politics.pacts[0];
+    const sync = (tick: number) =>
+      runtime.synchronize(
+        runtime.snapshot().politics.nations.map((nation) => ({
+          id: nation.id,
+          metrics: nation.metrics,
+          alive: true,
+          spawned: true,
+        })),
+        tick,
+        true,
+      );
+    const inviteAt = (candidateId: string) => {
+      const constitutionVersion = current().constitutionVersion!;
+      runtime.perform(A, {
+        kind: "invite-pact",
+        pactId,
+        candidateId,
+        constitutionVersion,
+      });
+      return constitutionVersion;
+    };
+    for (const id of [B, C]) {
+      runtime.perform(id, {
+        kind: "accept-pact",
+        pactId,
+        constitutionVersion: inviteAt(id),
+      });
+    }
+    const epoch = inviteAt(D);
+    sync(5);
+    inviteAt(ids[4]);
+    runtime.perform(A, {
+      kind: "expel-pact",
+      pactId,
+      memberId: C,
+      constitutionVersion: epoch,
+    });
+    sync(10);
+    const fresh = current().constitutionVersion!;
+    expect(fresh).toBeGreaterThan(epoch);
+    expect(current().invitations.map((entry) => entry.targetId)).toEqual([
+      ids[4],
+    ]);
+    expect(current().expulsionBallots).toEqual([
+      { targetId: C, constitutionVersion: fresh, approvedBy: [A] },
+    ]);
+    expect(() =>
+      runtime.perform(B, {
+        kind: "expel-pact",
+        pactId,
+        memberId: C,
+        constitutionVersion: epoch,
+      }),
+    ).toThrow();
+    const pending = runtime.snapshot();
+    const restored = NationalRuntime.restore(pending, ids, 10);
+    for (const game of [runtime, restored]) {
+      game.perform(B, {
+        kind: "expel-pact",
+        pactId,
+        memberId: C,
+        constitutionVersion: fresh,
+      });
+      expect(game.snapshot().politics.pacts[0].memberIds).toEqual(
+        [A, B].sort(),
+      );
+      expect(game.snapshot().politics.pacts[0].invitations).toEqual([]);
+    }
+    expect(restored.snapshot()).toEqual(runtime.snapshot());
+  });
+
   it("recreated pact IDs never restore expired constitutional authority", async () => {
     const m = await found(3);
-    consent(m, m.b, B, invite(m, B, "old-invite"), "old-join");
+    const admissionEpoch = invite(m, B, "old-invite");
+    consent(m, m.b, B, admissionEpoch, "old-join");
+    const oldReceipt = () =>
+      m.game.performNationalPoliticalCommandWithOutcome(
+        m.game.player(B),
+        { kind: "accept-pact", pactId, constitutionVersion: admissionEpoch },
+        "old-join",
+        BCLIENT,
+      );
+    expect(oldReceipt().accepted).toBe(true);
+    expect(JSON.stringify(wireFrame(m, m.b).nationalPactDisclosure)).not.toContain(
+      "memberAdmissionEpochs",
+    );
     const old = memberView(m).constitutionVersion!;
     command(m, m.b, B, "dissolve", { type: "national_betray_pact" });
     expect(m.game.nationalPublicPoliticalView()!.pacts!).toEqual([]);
@@ -626,6 +725,7 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
     consent(m, m.b, B, old, "old-pact-consent", false);
     consent(m, m.b, B, fresh, "new-pact-consent");
     vote(m, m.a, A, B, old, "old-pact-expulsion", false);
+    expect(() => oldReceipt()).toThrow(/stale sovereign replay authority/);
     expect(memberView(m).memberIds).toEqual([A, B].sort());
   });
 
@@ -636,7 +736,9 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
     const tick = m.game.ticks();
     const privateView = m.game.nationalPactDisclosure(m.game.player(B))!;
     const frame = { ...privateView, tick };
-    expect(readNationalPactWireDisclosure(frame, B, roster, false, tick)).not.toBeNull();
+    expect(
+      readNationalPactWireDisclosure(frame, B, roster, false, tick),
+    ).not.toBeNull();
     for (const deadline of [tick, tick + 21]) {
       const forged = {
         ...frame,
@@ -652,16 +754,23 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
       pactId,
       name: "Clock witness",
       pactKind: "NAP",
-      terms: { admission: "leader", expulsion: "leader", invitationDurationTicks: 20 },
+      terms: {
+        admission: "leader",
+        expulsion: "leader",
+        invitationDurationTicks: 20,
+      },
     });
     runtime.perform(A, {
       kind: "invite-pact",
       pactId,
       candidateId: B,
-      constitutionVersion: runtime.snapshot().politics.pacts[0].constitutionVersion!,
+      constitutionVersion:
+        runtime.snapshot().politics.pacts[0].constitutionVersion!,
     });
     const snapshot = runtime.snapshot();
-    expect(NationalRuntime.restore(snapshot, [A, B], 0).snapshot()).toEqual(snapshot);
+    expect(NationalRuntime.restore(snapshot, [A, B], 0).snapshot()).toEqual(
+      snapshot,
+    );
     snapshot.politics.pacts[0].invitations[0].expiresAtMs!--;
     expect(() => NationalRuntime.restore(snapshot, [A, B], 0)).toThrow();
   });

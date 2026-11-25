@@ -113,6 +113,10 @@ const politicsSchema = z.object({
       terms: pactTerms,
       constitutionVersion: counter.optional(),
       extendedGovernance: z.literal(true).optional(),
+      memberAdmissionEpochs: z
+        .array(z.object({ memberId: z.string(), invitationVersion: counter }))
+        .max(256)
+        .optional(),
       expulsionBallots: z
         .array(
           z.object({
@@ -1766,7 +1770,17 @@ export class NationalRuntime {
     if (command.constitutionVersion === undefined)
       return !p || !usesVersionedPact(p);
     if (!p || this.authority().empireOf(actorId) !== null) return false;
-    if (command.kind === "accept-pact") return p.memberIds.includes(actorId);
+    if (command.kind === "accept-pact") {
+      if (!p.memberIds.includes(actorId)) return false;
+      return (
+        !p.extendedGovernance ||
+        p.memberAdmissionEpochs?.some(
+          (entry) =>
+            entry.memberId === actorId &&
+            entry.invitationVersion === command.constitutionVersion,
+        ) === true
+      );
+    }
     if (command.admissionAction === "withdraw")
       return (
         command.candidateId === actorId &&
@@ -1988,9 +2002,8 @@ export class NationalRuntime {
         break;
       case "expel-pact":
         requireCommandId(command.pactId);
-        // A single command cannot forge other members' unanimous consent.
-        // Separate authenticated expulsion ballots must be implemented before
-        // a unanimous-expulsion pact may be enforced through this port.
+        // A single command cannot forge another member’s consent. Extended
+        // pacts count separate authenticated ballots; legacy authority is unchanged.
         if (command.approvingIds?.some((id) => id !== actorId)) {
           throw new Error("NATIONAL: other members cannot be impersonated");
         }
