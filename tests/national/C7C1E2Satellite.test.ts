@@ -1,34 +1,57 @@
-import { PlayerInfo, PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
+import {
+  PlayerInfo,
+  PlayerType,
+  UnitType,
+} from "@openfront/engine-api/game/GameTypes";
+import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
 import {
   NATIONAL_SATELLITE_COST,
   readNationalSatelliteView,
 } from "@openfront/engine-api/game/NationalSatelliteView";
-import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
-import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
 import { unpackUnitUpdates } from "@openfront/engine-lib/game/PackedUnitUpdates";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
-import { NationalObserverMapPager } from "@openfront/engine/national/observation/NationalObserverMap";
 import { advanceLastKnown } from "@openfront/engine/national/observation/NationalObservation";
+import { NationalObserverMapPager } from "@openfront/engine/national/observation/NationalObserverMap";
 import { NationalSatelliteJournal } from "@openfront/engine/national/observation/NationalSatellite";
-import { setup } from "../util/Setup";
-import { encodeNationalRecipientProjection } from "../../src/server/national/NationalRecipientWire";
 import { parseTrustedNationalProjection } from "../../src/client/TrustedNationalSession";
+import { encodeNationalRecipientProjection } from "../../src/server/national/NationalRecipientWire";
+import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
 const match = "satellite-test";
-const buyer = new PlayerInfo("Buyer", PlayerType.Human, "buyer-session", "buyer");
-const outsider = new PlayerInfo("Outsider", PlayerType.Human, "outsider-session", "outsider");
+const buyer = new PlayerInfo(
+  "Buyer",
+  PlayerType.Human,
+  "buyer-session",
+  "buyer",
+);
+const outsider = new PlayerInfo(
+  "Outsider",
+  PlayerType.Human,
+  "outsider-session",
+  "outsider",
+);
 const ally = new PlayerInfo("Ally", PlayerType.Nation, null, "ally");
 const target = new PlayerInfo("Target", PlayerType.Nation, null, "target");
 
 async function fixture() {
-  const game = await setup("big_plains", { nationalMode: true }, [buyer, outsider, ally, target]);
+  const game = await setup("big_plains", { nationalMode: true }, [
+    buyer,
+    outsider,
+    ally,
+    target,
+  ]);
   for (const [info, x, y] of [
-    [buyer, 20, 100], [outsider, 20, 180], [ally, 20, 15], [target, 185, 175],
-  ] as const) game.addExecution(new SpawnExecution(match, info, game.ref(x, y)));
+    [buyer, 20, 100],
+    [outsider, 20, 180],
+    [ally, 20, 15],
+    [target, 185, 175],
+  ] as const)
+    game.addExecution(new SpawnExecution(match, info, game.ref(x, y)));
   game.executeNextTick();
   game.executeNextTick();
   game.endSpawnPhase();
@@ -258,19 +281,38 @@ describe("C7C1 E2 satellite gameplay", () => {
     const actor = game.player(buyer.id);
     const foreign = game.player(target.id);
     const ship = foreign.buildUnit(UnitType.TransportShip, game.ref(185, 175), {
-      troops: 987654, targetTile: game.ref(20, 100),
+      troops: 987654,
+      targetTile: game.ref(20, 100),
     });
     actor.addGold(NATIONAL_SATELLITE_COST);
-    const lease = game.performNationalSatellite(actor, "wire", admission(game, buyer.id), buyer.clientID!);
-    const packets = new Map<string, GameUpdateViewData & { nationalObserverMap?: NationalObserverMapV1 }>();
-    const runner = new GameRunner(game, new Executor(game, match, undefined), () => {}, undefined);
+    const lease = game.performNationalSatellite(
+      actor,
+      "wire",
+      admission(game, buyer.id),
+      buyer.clientID!,
+    );
+    const packets = new Map<
+      string,
+      GameUpdateViewData & { nationalObserverMap?: NationalObserverMapV1 }
+    >();
+    const runner = new GameRunner(
+      game,
+      new Executor(game, match, undefined),
+      () => {},
+      undefined,
+    );
     let connected = true;
     const register = (info: PlayerInfo, stream: string) => {
-      runner.registerTrustedNationalRecipient(info.clientID!, {
-        clientID: info.clientID!, sessionId: stream,
-        isConnected: () => info.id !== buyer.id || connected,
-        isSpectator: () => false,
-      }, (p) => packets.set(info.id, p));
+      runner.registerTrustedNationalRecipient(
+        info.clientID!,
+        {
+          clientID: info.clientID!,
+          sessionId: stream,
+          isConnected: () => info.id !== buyer.id || connected,
+          isSpectator: () => false,
+        },
+        (p) => packets.set(info.id, p),
+      );
     };
     const tick = () => {
       runner.addTurn({ turnNumber: game.ticks(), intents: [] });
@@ -283,17 +325,35 @@ describe("C7C1 E2 satellite gameplay", () => {
     const other = packets.get(outsider.id)!;
     const encoded = encodeNationalRecipientProjection(own);
     const decoded = parseTrustedNationalProjection(encoded, own.tick);
-    expect(decoded.nationalSatellite).toMatchObject({ recipientId: buyer.id, lease });
+    expect(decoded.nationalSatellite).toMatchObject({
+      recipientId: buyer.id,
+      lease,
+    });
     expect(encoded).not.toContain("987654");
     expect(encoded).not.toContain("targetTile");
-    expect(encodeNationalRecipientProjection(other)).not.toContain('"requestId":"wire"');
-    expect(() => encodeNationalRecipientProjection({ ...other, nationalSatellite: own.nationalSatellite })).toThrow();
+    expect(encodeNationalRecipientProjection(other)).not.toContain(
+      '"requestId":"wire"',
+    );
+    expect(() =>
+      encodeNationalRecipientProjection({
+        ...other,
+        nationalSatellite: own.nationalSatellite,
+      }),
+    ).toThrow();
     const map = own.nationalObserverMap!;
-    expect(map.units.find((u) => u.id === ship.id())?.tile).toBe(game.ref(185, 175));
-    expect(other.nationalObserverMap!.units.some((u) => u.id === ship.id())).toBe(false);
+    expect(map.units.find((u) => u.id === ship.id())?.tile).toBe(
+      game.ref(185, 175),
+    );
+    expect(
+      other.nationalObserverMap!.units.some((u) => u.id === ship.id()),
+    ).toBe(false);
     ship.move(game.ref(184, 174));
     tick();
-    expect(packets.get(buyer.id)!.nationalObserverMap!.units.find((u) => u.id === ship.id())?.tile).toBe(game.ref(184, 174));
+    expect(
+      packets
+        .get(buyer.id)!
+        .nationalObserverMap!.units.find((u) => u.id === ship.id())?.tile,
+    ).toBe(game.ref(184, 174));
     connected = false;
     packets.delete(buyer.id);
     tick();
@@ -302,7 +362,9 @@ describe("C7C1 E2 satellite gameplay", () => {
     connected = true;
     register(buyer, "buyer-new-stream");
     tick();
-    expect(packets.get(buyer.id)!.nationalObserverMap!.streamId).toBe("buyer-new-stream");
+    expect(packets.get(buyer.id)!.nationalObserverMap!.streamId).toBe(
+      "buyer-new-stream",
+    );
     expect(packets.get(buyer.id)!.nationalSatellite?.lease).toEqual(lease);
   });
 
@@ -318,7 +380,12 @@ describe("C7C1 E2 satellite gameplay", () => {
       }
     }
     actor.addGold(NATIONAL_SATELLITE_COST);
-    game.performNationalSatellite(actor, "scale", admission(game, buyer.id), buyer.clientID!);
+    game.performNationalSatellite(
+      actor,
+      "scale",
+      admission(game, buyer.id),
+      buyer.clientID!,
+    );
     const start = performance.now();
     const pager = new NationalObserverMapPager(game, buyer.id, "scale");
     const live = observation(game, buyer.id);
@@ -326,8 +393,13 @@ describe("C7C1 E2 satellite gameplay", () => {
     const page2 = pager.page(live);
     expect(page1.units.length).toBeLessThanOrEqual(2048);
     expect(page2.units.length).toBeLessThanOrEqual(2048);
-    expect(new Set([...page1.units, ...page2.units].map((u) => u.id)).size).toBeGreaterThanOrEqual(ids.size);
-    console.info("[C7C1 E2 satellite scale] structures=2400 pages=2 elapsedMs=" + (performance.now() - start).toFixed(3));
+    expect(
+      new Set([...page1.units, ...page2.units].map((u) => u.id)).size,
+    ).toBeGreaterThanOrEqual(ids.size);
+    console.info(
+      "[C7C1 E2 satellite scale] structures=2400 pages=2 elapsedMs=" +
+        (performance.now() - start).toFixed(3),
+    );
   });
 
   it("bounds durable identities and strictly validates receipts", () => {

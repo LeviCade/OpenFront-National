@@ -857,7 +857,7 @@ export class NationalOutboundFilter {
       satelliteActor?.type() === PlayerType.Human &&
       satelliteActor.isAlive() &&
       satelliteActor.hasSpawned()
-        ? game.nationalSatelliteFor?.(satelliteActor.id()) ?? null
+        ? (game.nationalSatelliteFor?.(satelliteActor.id()) ?? null)
         : null;
     // Absent means revoked. Preserve baseline packet shapes for non-payers.
     const privateSatellite =

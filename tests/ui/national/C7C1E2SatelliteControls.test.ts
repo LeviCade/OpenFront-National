@@ -17,10 +17,18 @@ describe("C7C1 E2 native purchase", () => {
     let receipt: NationalSatelliteView | null = null;
     const game = {
       config: () => ({
-        gameConfig: () => ({ nationalMode: true, gameType: GameType.Singleplayer }),
+        gameConfig: () => ({
+          nationalMode: true,
+          gameType: GameType.Singleplayer,
+        }),
         isReplay: () => false,
       }),
-      myPlayer: () => ({ id: () => "buyer", isAlive: () => true, hasSpawned: () => true, gold: () => gold }),
+      myPlayer: () => ({
+        id: () => "buyer",
+        isAlive: () => true,
+        hasSpawned: () => true,
+        gold: () => gold,
+      }),
       isSpectator: () => false,
       inSpawnPhase: () => false,
       nationalPoliticsTick: () => tick,
@@ -31,7 +39,9 @@ describe("C7C1 E2 native purchase", () => {
     const bus = new EventBus();
     const sent: SendNationalSatelliteIntentEvent[] = [];
     bus.on(SendNationalSatelliteIntentEvent, (e) => sent.push(e));
-    const panel = document.createElement("national-satellite-controls") as NationalSatelliteControls;
+    const panel = document.createElement(
+      "national-satellite-controls",
+    ) as NationalSatelliteControls;
     panel.game = game;
     panel.eventBus = bus;
     document.body.appendChild(panel);
@@ -42,14 +52,30 @@ describe("C7C1 E2 native purchase", () => {
     await panel.updateComplete;
     expect(sent).toHaveLength(1);
     const intent = parseNationalSatelliteIntent(sent[0].candidate)!;
-    expect(intent).toMatchObject({ type: "national_buy_satellite_recon", gameId: "satellite-ui", issuedTick: 20 });
+    expect(intent).toMatchObject({
+      type: "national_buy_satellite_recon",
+      gameId: "satellite-ui",
+      issuedTick: 20,
+    });
     expect(parseNationalSatelliteIntent({ ...intent, cost: 0 })).toBeNull();
     expect(gold).toBe(25000n);
     expect(panel.textContent).toContain("awaiting matching");
-    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    form.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
     expect(sent).toHaveLength(1);
     tick = 21;
-    receipt = { version: 1, recipientId: "buyer", tick, lease: { requestId: intent.requestId, cost: "25000", effectiveTick: tick, expiresAtTick: tick + 300 } };
+    receipt = {
+      version: 1,
+      recipientId: "buyer",
+      tick,
+      lease: {
+        requestId: intent.requestId,
+        cost: "25000",
+        effectiveTick: tick,
+        expiresAtTick: tick + 300,
+      },
+    };
     panel.refresh();
     await panel.updateComplete;
     expect(panel.textContent).toContain("300 ticks remaining");
