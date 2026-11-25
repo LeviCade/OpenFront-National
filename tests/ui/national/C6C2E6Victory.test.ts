@@ -268,9 +268,11 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
     select.value = B;
     select.dispatchEvent(new Event("change", { bubbles: true }));
     await a.modal.updateComplete;
-    a.modal.querySelector<HTMLButtonElement>(
-      '[data-national-crisis] button[type="submit"]',
-    )!.click();
+    a.modal
+      .querySelector<HTMLButtonElement>(
+        '[data-national-crisis] button[type="submit"]',
+      )!
+      .click();
     expect(a.events).toHaveLength(1);
     m.transfer(A, B, a.events[0].requestId);
     await flush();
