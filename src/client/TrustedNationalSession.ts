@@ -3,8 +3,8 @@ import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/Nat
 import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
-import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
 import { validateNationalSatellitePacket } from "@openfront/engine-api/game/NationalSatelliteView";
+import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
 import { readNationalConfirmedVictory } from "@openfront/engine-api/game/NationalVictoryView";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { simpleHash } from "@openfront/engine-lib/Util";

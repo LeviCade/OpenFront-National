@@ -13,10 +13,6 @@ import {
   NationalReconMapPointSelectedEvent,
 } from "./controllers/NationalMapTargetController";
 import type { NationalAssessmentControls } from "./NationalAssessmentControls";
-import type { NationalSatelliteControls } from "./NationalSatelliteControls";
-import "./NationalSatelliteControls";
-import "./NationalImperialEconomicControls";
-import "./NationalImperialSettlementControls";
 import {
   confirmedNationalDiplomacy,
   createNationalDiplomacyRequestId,
@@ -35,6 +31,9 @@ import {
   type NationalFoundingAttempt,
   type NationalPoliticalAction,
 } from "./NationalDiplomacyState";
+import "./NationalSatelliteControls";
+import "./NationalImperialEconomicControls";
+import "./NationalImperialSettlementControls";
 import type { NationalImperialEconomicControls } from "./NationalImperialEconomicControls";
 import type { NationalImperialSettlementControls } from "./NationalImperialSettlementControls";
 import {
@@ -54,8 +53,9 @@ import {
   type PactContext,
   type PactIntent,
 } from "./NationalPactState";
-import "./NationalAssessmentControls";
 import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
+import "./NationalAssessmentControls";
+import type { NationalSatelliteControls } from "./NationalSatelliteControls";
 import { nationalReconQuote } from "./NationalSovereignActions";
 import { GoToPlayerEvent } from "./TransformHandler";
 import {
@@ -235,7 +235,9 @@ export class NationalDiplomacyPanel extends LitElement {
     this.refreshPact();
     this.refreshImperialPolicy();
     this.refreshSovereignActions();
-    this.querySelector<NationalSatelliteControls>("national-satellite-controls")?.refresh();
+    this.querySelector<NationalSatelliteControls>(
+      "national-satellite-controls",
+    )?.refresh();
     this.querySelector<NationalAssessmentControls>(
       "national-assessment-controls",
     )?.refresh();

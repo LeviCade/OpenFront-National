@@ -29,7 +29,10 @@ import {
   type NationalPactDisclosureViewData,
 } from "@openfront/engine-api/game/NationalPactView";
 import type { NationalReconnaissanceViewData } from "@openfront/engine-api/game/NationalReconView";
-import { readNationalSatelliteView, type NationalSatelliteView } from "@openfront/engine-api/game/NationalSatelliteView";
+import {
+  readNationalSatelliteView,
+  type NationalSatelliteView,
+} from "@openfront/engine-api/game/NationalSatelliteView";
 import {
   readNationalSettlementView,
   type NationalSettlementView,

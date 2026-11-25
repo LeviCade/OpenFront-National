@@ -22,8 +22,11 @@ import {
   type NationalObserverMapV1,
   type NationalPublicConflictView,
 } from "@openfront/engine-api/game/NationalRecipientView";
+import {
+  readNationalSatelliteView,
+  validateNationalSatellitePacket,
+} from "@openfront/engine-api/game/NationalSatelliteView";
 import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
-import { readNationalSatelliteView, validateNationalSatellitePacket } from "@openfront/engine-api/game/NationalSatelliteView";
 import { validateNationalObserverNativeLanes } from "@openfront/shared/NationalObserverNativeWire";
 import { replacer } from "@openfront/shared/SharedUtil";
 
@@ -44,8 +47,16 @@ export function encodeNationalRecipientProjection(
   };
   const map = politics.nationalObserverMap;
   const conflicts = politics.nationalConflicts;
-  validateNationalSatellitePacket(filtered.nationalSatellite, map?.observerId ?? null, filtered.tick);
-  const satellite = readNationalSatelliteView(filtered.nationalSatellite, map?.observerId ?? null, filtered.tick);
+  validateNationalSatellitePacket(
+    filtered.nationalSatellite,
+    map?.observerId ?? null,
+    filtered.tick,
+  );
+  const satellite = readNationalSatelliteView(
+    filtered.nationalSatellite,
+    map?.observerId ?? null,
+    filtered.tick,
+  );
   validateNationalSettlementPacket(
     filtered.nationalSettlements,
     map?.observerId ?? null,

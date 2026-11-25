@@ -45,10 +45,13 @@ export class NationalSatelliteControls extends LitElement {
       !actor?.isAlive() ||
       !actor.hasSpawned?.() ||
       game.nationalPoliticsTick?.() !== game.ticks()
-    ) return null;
-    if (mode === GameType.Private &&
+    )
+      return null;
+    if (
+      mode === GameType.Private &&
       (!game.trustedProjectionReady?.() ||
-        !hasTrustedNationalPrivateCapability(bus, game.gameID())))
+        !hasTrustedNationalPrivateCapability(bus, game.gameID()))
+    )
       return null;
     const key = JSON.stringify([
       game.gameID(),
@@ -56,8 +59,10 @@ export class NationalSatelliteControls extends LitElement {
       game.nationalReceiptStreamId?.(),
     ]);
     const view = game.nationalSatellite?.();
-    const lease = view?.recipientId === actor.id() && view.tick === game.ticks()
-      ? view.lease : null;
+    const lease =
+      view?.recipientId === actor.id() && view.tick === game.ticks()
+        ? view.lease
+        : null;
     return { game, bus, actor, key, lease };
   }
 
@@ -65,16 +70,25 @@ export class NationalSatelliteControls extends LitElement {
     const context = this.context;
     const pending = this.pending;
     if (pending) {
-      if (!context || context.game !== pending.game ||
-        context.bus !== pending.bus || context.key !== pending.key ||
-        context.game.ticks() < pending.tick) {
+      if (
+        !context ||
+        context.game !== pending.game ||
+        context.bus !== pending.bus ||
+        context.key !== pending.key ||
+        context.game.ticks() < pending.tick
+      ) {
         this.pending = null;
         this.status = "Session changed; payment unconfirmed.";
-      } else if (context.lease?.requestId === pending.requestId &&
-        context.lease.effectiveTick >= pending.tick) {
+      } else if (
+        context.lease?.requestId === pending.requestId &&
+        context.lease.effectiveTick >= pending.tick
+      ) {
         this.pending = null;
         this.status = "";
-      } else if (context.game.ticks() - pending.tick > NATIONAL_SATELLITE_REQUEST_WINDOW + 5) {
+      } else if (
+        context.game.ticks() - pending.tick >
+        NATIONAL_SATELLITE_REQUEST_WINDOW + 5
+      ) {
         this.pending = null;
         this.status = "No matching paid lease received; purchase unconfirmed.";
       }
@@ -82,25 +96,40 @@ export class NationalSatelliteControls extends LitElement {
     this.requestUpdate();
   }
 
-  private submit(event: SubmitEvent, displayedKey: string, displayedGame: GameView, displayedBus: EventBus): void {
+  private submit(
+    event: SubmitEvent,
+    displayedKey: string,
+    displayedGame: GameView,
+    displayedBus: EventBus,
+  ): void {
     event.preventDefault();
     if (!(event.currentTarget instanceof HTMLFormElement)) return;
     const context = this.context;
-    if (!context || context.game !== displayedGame || context.bus !== displayedBus || context.key !== displayedKey || this.pending ||
-      context.lease !== null || context.actor.gold() < NATIONAL_SATELLITE_COST ||
-      new FormData(event.currentTarget).get("confirm") !== "on") return;
+    if (
+      !context ||
+      context.game !== displayedGame ||
+      context.bus !== displayedBus ||
+      context.key !== displayedKey ||
+      this.pending ||
+      context.lease !== null ||
+      context.actor.gold() < NATIONAL_SATELLITE_COST ||
+      new FormData(event.currentTarget).get("confirm") !== "on"
+    )
+      return;
     const { game, bus, key } = context;
     try {
       const requestId = createNationalPoliticalRequestId();
       const tick = game.ticks();
       this.pending = { game, bus, key, requestId, tick };
       this.status = "Submitted; awaiting matching authoritative paid lease.";
-      bus.emit(new SendNationalSatelliteIntentEvent({
-        type: "national_buy_satellite_recon",
-        gameId: game.gameID(),
-        issuedTick: tick,
-        requestId,
-      }));
+      bus.emit(
+        new SendNationalSatelliteIntentEvent({
+          type: "national_buy_satellite_recon",
+          gameId: game.gameID(),
+          issuedTick: tick,
+          requestId,
+        }),
+      );
     } catch {
       this.pending = null;
       this.status = "Transport failed; payment unconfirmed.";
@@ -111,27 +140,49 @@ export class NationalSatelliteControls extends LitElement {
     const context = this.context;
     if (!context) return nothing;
     const { lease, game, actor, key, bus } = context;
-    return html`<section class="space-y-2 border-t border-white/15 pt-3"
-      aria-label="Global satellite reconnaissance" data-national-satellite>
-      <h2 class="font-semibold text-amber-200">Global satellite intelligence</h2>
+    return html`<section
+      class="space-y-2 border-t border-white/15 pt-3"
+      aria-label="Global satellite reconnaissance"
+      data-national-satellite
+    >
+      <h2 class="font-semibold text-amber-200">
+        Global satellite intelligence
+      </h2>
       <p class="text-xs text-slate-300">
         ${NATIONAL_SATELLITE_COST.toString()} personal gold ·
-        ${NATIONAL_SATELLITE_DURATION_TICKS} ticks. Live worldwide structure and vessel
-        positions appear on the existing intelligence map; no foreign resources,
-        private terms or transport destinations. Shared with current empire members.
+        ${NATIONAL_SATELLITE_DURATION_TICKS} ticks. Live worldwide structure and
+        vessel positions appear on the existing intelligence map; no foreign
+        resources, private terms or transport destinations. Shared with current
+        empire members.
       </p>
-      <form @submit=${(event: SubmitEvent) => this.submit(event, key, game, bus)}>
-        <label class="flex gap-2"><input type="checkbox" name="confirm" required />
-          Confirm satellite purchase</label>
-        <button type="submit" data-national-buy-satellite
+      <form
+        @submit=${(event: SubmitEvent) => this.submit(event, key, game, bus)}
+      >
+        <label class="flex gap-2"
+          ><input type="checkbox" name="confirm" required /> Confirm satellite
+          purchase</label
+        >
+        <button
+          type="submit"
+          data-national-buy-satellite
           class="min-h-11 w-full rounded bg-amber-400 p-2 text-slate-950 disabled:opacity-50"
-          ?disabled=${this.pending !== null || lease !== null ||
-            actor.gold() < NATIONAL_SATELLITE_COST}>Purchase satellite reconnaissance</button>
+          ?disabled=${
+            this.pending !== null ||
+            lease !== null ||
+            actor.gold() < NATIONAL_SATELLITE_COST
+          }
+        >
+          Purchase satellite reconnaissance
+        </button>
       </form>
       <p role="status" aria-live="polite" data-national-satellite-status>
-        ${lease !== null
-          ? "Active paid satellite lease: " + (lease.expiresAtTick - game.ticks()) + " ticks remaining"
-          : this.status || "No active personal satellite lease."}
+        ${
+          lease !== null
+            ? "Active paid satellite lease: " +
+              (lease.expiresAtTick - game.ticks()) +
+              " ticks remaining"
+            : this.status || "No active personal satellite lease."
+        }
       </p>
     </section>`;
   }
