@@ -92,6 +92,7 @@ export class Executor {
           intent.requestId,
           intent.clientID,
         );
+      case "national_propose_pact_amendment_v2":
       case "national_propose_pact_amendment":
         return new NationalFoundEmpireExecution(
           player,
@@ -105,6 +106,7 @@ export class Executor {
           intent.requestId,
           intent.clientID,
         );
+      case "national_reject_pact_amendment_v2":
       case "national_approve_pact_amendment":
         return new NationalFoundEmpireExecution(
           player,
@@ -115,10 +117,12 @@ export class Executor {
             ...(intent.expectedDefenseVersion === undefined
               ? {}
               : { expectedDefenseVersion: intent.expectedDefenseVersion }),
+            ...(intent.type === "national_reject_pact_amendment_v2" ? { reject: true } : {}),
           },
           intent.requestId,
           intent.clientID,
         );
+      case "national_expel_pact_v2":
       case "national_expel_pact":
         return new NationalFoundEmpireExecution(
           player,
@@ -127,6 +131,7 @@ export class Executor {
             kind: "expel-pact",
             pactId: intent.pactId,
             memberId: intent.memberId,
+            ...(intent.type === "national_expel_pact_v2" ? { constitutionVersion: intent.constitutionVersion } : {}),
           },
           intent.requestId,
           intent.clientID,
@@ -139,6 +144,7 @@ export class Executor {
           intent.requestId,
           intent.clientID,
         );
+      case "national_found_pact_v2":
       case "national_found_pact":
         return new NationalFoundEmpireExecution(
           player,

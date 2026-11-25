@@ -74,7 +74,8 @@ export type Intent =
   | NationalReconnaissanceIntent
   | NationalAssessmentIntent
   | NationalCounterassessmentIntent
-  | NationalBlockadeIntent;
+  | NationalBlockadeIntent
+  | NationalCoalitionV2Intent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -839,6 +840,37 @@ export const NationalExpelPactIntentSchema = z.object({
   requestId: NationalPoliticalRequestId,
 });
 
+/** C7: separate versioned intent variants preserve existing positional zbin layouts. */
+const NationalCoalitionV2TermsSchema = NationalFoundPactIntentSchema.shape.terms.extend({
+  expulsion: z.enum(["leader", "unanimous", "forbidden", "selected", "majority", "supermajority"]),
+  membershipCap: zb.uint({ min: 2, max: 256 }).optional(),
+  invitationDurationTicks: zb.uint({ min: 1, max: 36000 }).optional(),
+  selectedExpellerIds: z.array(MappedID).max(256).optional(),
+});
+export const NationalFoundPactV2IntentSchema = NationalFoundPactIntentSchema.extend({
+  type: z.literal("national_found_pact_v2"),
+  terms: NationalCoalitionV2TermsSchema,
+});
+export const NationalProposePactAmendmentV2IntentSchema = NationalProposePactAmendmentIntentSchema.extend({
+  type: z.literal("national_propose_pact_amendment_v2"),
+  terms: NationalCoalitionV2TermsSchema,
+});
+export const NationalExpelPactV2IntentSchema = NationalExpelPactIntentSchema.extend({
+  type: z.literal("national_expel_pact_v2"),
+  constitutionVersion: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER - 1 }),
+});
+export const NationalRejectPactAmendmentV2IntentSchema = z.object({
+  type: z.literal("national_reject_pact_amendment_v2"),
+  pactId: NationalPoliticalId,
+  expectedDefenseVersion: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }),
+  requestId: NationalPoliticalRequestId,
+});
+export type NationalCoalitionV2Intent =
+  | z.infer<typeof NationalFoundPactV2IntentSchema>
+  | z.infer<typeof NationalProposePactAmendmentV2IntentSchema>
+  | z.infer<typeof NationalExpelPactV2IntentSchema>
+  | z.infer<typeof NationalRejectPactAmendmentV2IntentSchema>;
+
 /** Class Two M5: append only; client identity is never an action field. */
 export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
   "kind",
@@ -1137,6 +1169,10 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalAssessmentIntentSchema,
   NationalCounterassessmentIntentSchema,
   NationalBlockadeIntentSchema,
+  NationalFoundPactV2IntentSchema,
+  NationalProposePactAmendmentV2IntentSchema,
+  NationalExpelPactV2IntentSchema,
+  NationalRejectPactAmendmentV2IntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

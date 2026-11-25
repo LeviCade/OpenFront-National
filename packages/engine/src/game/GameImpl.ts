@@ -2101,6 +2101,8 @@ export class GameImpl implements Game {
     if (!authority?.alive(actorId)) return false;
     if (command.kind === "invite-pact" || command.kind === "accept-pact")
       return this._national?.mayReplayAdmission(actorId, command) === true;
+    if (command.kind === "expel-pact")
+      return this._national?.mayReplayExpulsion(actorId, command) === true;
     if (command.kind === "imperial-administration") {
       if (command.command.kind === "request-relief")
         return authority.empireOf(actorId) === command.command.empireId;

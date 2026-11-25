@@ -1,0 +1,99 @@
+name: C7 C1 E1 — Coalition Constitution
+on:
+  push:
+    branches:
+      - stage3/c7c1-e1-coalition-constitution
+      - stage3/conductor7-class1-integration-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c7-c1-e1-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    name: E1 constitutional governance — ${{ matrix.gate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        gate:
+          [
+            constitution,
+            inherited-politics,
+            typecheck,
+            lint,
+            pinned-format,
+            production-build,
+            full-tests,
+          ]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact triggering commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Execute exact-head acceptance
+        shell: bash
+        env:
+          GATE: ${{ matrix.gate }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/c7c1-e1
+          git rev-parse HEAD > /tmp/c7c1-e1/head.txt
+          case "$GATE" in
+            constitution)
+              npx --no-install vitest run --project node tests/national/C7C1E1CoalitionConstitution.test.ts
+              ;;
+            inherited-politics)
+              npx --no-install vitest run --project node \
+                tests/national/C6C2E2CoalitionVotes.test.ts \
+                tests/national/PoliticalState.test.ts \
+                tests/national/LiveSovereignty.test.ts \
+                tests/national/C4Class2IndependentPactConsent.test.ts \
+                tests/national/NationalPoliticalPackets.test.ts
+              ;;
+            typecheck) npm run typecheck ;;
+            lint) npm run lint ;;
+            pinned-format)
+              npm run format:check || {
+                npx --no-install oxfmt --write \
+                  packages/engine-api/src/Schemas.ts \
+                  packages/engine-api/src/game/NationalCoalitionConstitution.ts \
+                  packages/engine-api/src/game/NationalPactView.ts \
+                  packages/engine/src/execution/ExecutionManager.ts \
+                  packages/engine/src/execution/NationalFoundEmpireExecution.ts \
+                  packages/engine/src/game/GameImpl.ts \
+                  packages/engine/src/national/NationalRuntime.ts \
+                  packages/engine/src/national/politics/PoliticalAuthorityAdapter.ts \
+                  packages/engine/src/national/politics/sovereignty.ts \
+                  src/client/NationalDiplomacyPanel.ts \
+                  src/client/NationalPactState.ts \
+                  tests/national/C7C1E1CoalitionConstitution.test.ts \
+                  docs/release/C7C1E1_COALITION_CONSTITUTION.md \
+                  .github/workflows/c7c1-e1-coalition-constitution.yml
+                echo C7C1E1_FORMAT_PATCH_BEGIN
+                git diff --no-color --no-ext-diff
+                echo C7C1E1_FORMAT_PATCH_END
+                git diff --no-color --no-ext-diff > /tmp/c7c1-e1/format.patch
+                exit 1
+              }
+              ;;
+            production-build) npm run build-prod ;;
+            full-tests) npm test ;;
+            *) echo "unknown gate" >&2; exit 1 ;;
+          esac 2>&1 | tee /tmp/c7c1-e1/gate.log
+      - name: Preserve exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c7c1-e1-${{ matrix.gate }}-${{ github.sha }}
+          path: /tmp/c7c1-e1/
+          if-no-files-found: warn
