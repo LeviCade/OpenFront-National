@@ -1,8 +1,15 @@
 import { z } from "zod";
 
-const publicId = z.string().min(1).max(256).refine((id) =>
-  !Array.from(id).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127),
-);
+const publicId = z
+  .string()
+  .min(1)
+  .max(256)
+  .refine(
+    (id) =>
+      !Array.from(id).some(
+        (char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127,
+      ),
+  );
 const prizeSchema = z.union([
   z.strictObject({ kind: z.literal("SovereignVictor"), nationId: publicId }),
   z.strictObject({

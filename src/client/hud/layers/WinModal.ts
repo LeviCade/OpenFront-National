@@ -229,6 +229,9 @@ export class WinModal extends LitElement implements Controller {
   private nationalResolution = "";
 
   @state()
+  private nationalWarStatus = "";
+
+  @state()
   private nationalSuccessor = "";
 
   @state()
@@ -1139,6 +1142,7 @@ export class WinModal extends LitElement implements Controller {
     this.nationalLastTick = -1;
     this.nationalCrisis = null;
     this.nationalResolution = "";
+    this.nationalWarStatus = "";
     this.nationalSuccessor = "";
     this.crisisRequest = null;
     this.nationalTransferStatus = "";
@@ -1159,8 +1163,15 @@ export class WinModal extends LitElement implements Controller {
     if (
       mode === GameType.Private &&
       player.clientID() !== null &&
-      (!player.isAlive() || game.trustedProjectionReady()) &&
-      hasTrustedNationalPrivateCapability(this.eventBus, game.gameID(), player.clientID())
+      hasTrustedNationalPrivateCapability(
+        this.eventBus,
+        game.gameID(),
+        player.clientID(),
+      ) &&
+      game.isTrustedNationalProjection() &&
+      game.trustedProjectionReady() &&
+      game.nationalConflictsTick() === game.ticks() &&
+      game.nationalConflicts()?.recipientId === player.id()
     )
       return player.id();
     return null;
@@ -1262,12 +1273,14 @@ export class WinModal extends LitElement implements Controller {
               `
             : html`<p role="status">
                 ${this.nationalResolution}
+                ${this.nationalWarStatus}
                 <button
                   type="button"
                   class="ml-2 min-h-11 underline focus-visible:outline-2"
                   @click=${() => {
                     this.crisisTracker.clear();
                     this.nationalResolution = "";
+                    this.nationalWarStatus = "";
                   }}
                 >
                   Dismiss
@@ -1337,6 +1350,7 @@ export class WinModal extends LitElement implements Controller {
     if (tick < this.nationalLastTick) {
       this.nationalCrisis = null;
       this.nationalResolution = "";
+      this.nationalWarStatus = "";
       this.nationalSuccessor = "";
       this.crisisRequest = null;
       this.nationalTransferStatus = "";
@@ -1355,6 +1369,7 @@ export class WinModal extends LitElement implements Controller {
     if (victory) {
       this.nationalCrisis = null;
       this.nationalResolution = "";
+      this.nationalWarStatus = "";
       this.crisisRequest = null;
       this.crisisTracker.clear();
       const canonical = victory.prizes[0].nationId;
@@ -1419,6 +1434,25 @@ export class WinModal extends LitElement implements Controller {
       tick,
       politics,
     );
+    const conflicts = game.nationalConflicts?.();
+    this.nationalWarStatus = "";
+    if (
+      this.nationalResolution &&
+      conflicts &&
+      conflicts.recipientId === activeActor &&
+      game.nationalConflictsTick() === tick
+    ) {
+      const ongoing = conflicts.layers.filter(
+        (layer) => layer.endedTick === null,
+      );
+      const national = ongoing.filter(
+        (layer) => layer.scope === "national",
+      ).length;
+      const imperial = ongoing.filter(
+        (layer) => layer.scope === "imperial",
+      ).length;
+      this.nationalWarStatus = `Active scoped wars: ${national} national, ${imperial} imperial.`;
+    }
     const pending = this.crisisRequest;
     if (
       !this.nationalCrisis ||

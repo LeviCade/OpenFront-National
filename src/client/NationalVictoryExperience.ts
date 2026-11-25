@@ -49,7 +49,13 @@ export function nationalCrisisAt(
   actor: string | null,
   tick: number,
 ): NationalCrisis | null {
-  if (!actor || !Number.isSafeInteger(tick * 100) || tick < 0) return null;
+  if (
+    !actor ||
+    !Number.isSafeInteger(tick) ||
+    !Number.isSafeInteger(tick * 100) ||
+    tick < 0
+  )
+    return null;
   const empire = politics?.empires.find((e) => e.leaderId === actor);
   if (!empire || !politics) return null;
   const warning = politics.warnings.find((w) => w.empireId === empire.id);

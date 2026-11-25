@@ -132,9 +132,10 @@ function publicPolitics(
   if (source === null || source === undefined) return undefined;
   // The terminal marker is owned by the real Game, not by a caller-supplied
   // view object. Do not attach present truth to a stale packet.
-  const victory = packet.tick === game.ticks()
-    ? game.nationalPublicPoliticalView()?.victory ?? null
-    : null;
+  const victory =
+    packet.tick === game.ticks()
+      ? (game.nationalPublicPoliticalView()?.victory ?? null)
+      : null;
   return {
     empires: source.empires.map((empire) => ({
       id: empire.id,
