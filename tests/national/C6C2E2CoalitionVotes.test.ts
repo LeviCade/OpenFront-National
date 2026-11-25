@@ -5,6 +5,7 @@ import {
   PlayerInfo,
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
+import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
 import { readNationalPactDisclosure } from "@openfront/engine-api/game/NationalPactView";
 import type { GameConfig } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
@@ -12,9 +13,17 @@ import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { NationalRuntime } from "@openfront/engine/national/NationalRuntime";
+import {
+  decodeClientMessage,
+  decodeServerMessage,
+  encodeClientMessage,
+  encodeServerMessage,
+} from "@openfront/shared/ZbinWire";
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { pactActionAllowed } from "../../src/client/NationalPactState";
 import { Client } from "../../src/server/Client";
+import { encodeNationalRecipientProjection } from "../../src/server/national/NationalRecipientWire";
 import { TrustedNationalMatch } from "../../src/server/national/TrustedNationalMatch";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
@@ -94,7 +103,7 @@ function attach(game: Game) {
     seat(CCLIENT, "account-c"),
     seat(DCLIENT, "account-d"),
   ];
-  const received = new Map<string, unknown[]>();
+  const received = new Map<string, GameUpdateViewData[]>();
   const host = new TrustedNationalMatch(
     GAME_ID,
     runner,
@@ -217,10 +226,34 @@ function accept(version: number) {
   return { type: "national_accept_pact", constitutionVersion: version };
 }
 
+function wireFrame(m: Match, client: Client): GameUpdateViewData {
+  const packet = m.received.get(client.clientID)?.at(-1);
+  expect(packet).toBeDefined();
+  const decoded = decodeServerMessage(
+    encodeServerMessage(
+      {
+        type: "national_projection",
+        tick: packet!.tick,
+        payload: encodeNationalRecipientProjection(packet!),
+      },
+      undefined,
+    ),
+    undefined,
+  );
+  if (decoded.type !== "national_projection")
+    throw new Error("wrong native projection frame");
+  return JSON.parse(decoded.payload) as GameUpdateViewData;
+}
+
 function assertNoInvite(m: Match) {
   expect(m.game.nationalPactViewsFor(m.game.player(D))).toEqual([]);
   expect(m.game.nationalPactDisclosure(m.game.player(D))?.pacts).toEqual([]);
   expect(m.game.nationalMdaAllies(D)).toEqual([]);
+  const frame = wireFrame(m, m.d);
+  expect(frame.nationalPactDisclosure?.pacts ?? []).toEqual([]);
+  expect(JSON.stringify(frame.nationalPolitics)).not.toMatch(
+    /"terms"|"approvedBy"|"invitations"|"constitutionVersion"/,
+  );
 }
 
 describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
@@ -451,6 +484,152 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
       corrupt(bad);
       expect(() => NationalRuntime.restore(bad, [A, B, C, D], 0)).toThrow();
     }
+  });
+
+  it("native binary command, queued execution restore, wire privacy and resource conservation", async () => {
+    const m = await established("selected");
+    const epoch = memberView(m).constitutionVersion!;
+    command(m, m.a, A, "wire-propose", election(epoch, "propose"));
+    const member = wireFrame(m, m.a).nationalPactDisclosure!;
+    expect(member.recipientId).toBe(A);
+    expect(member.pacts[0].invitations?.[0]).toEqual({
+      targetId: D,
+      approvedBy: [A],
+      authorized: false,
+    });
+    assertNoInvite(m);
+    const intent = {
+      type: "national_invite_pact",
+      pactId,
+      candidateId: D,
+      requestId: "wire-vote-b",
+      admissionAction: "approve",
+      constitutionVersion: epoch,
+    } as const;
+    const decoded = decodeClientMessage(
+      encodeClientMessage({ type: "intent", intent }, undefined),
+      undefined,
+    );
+    if (decoded.type !== "intent") throw new Error("wrong native intent frame");
+    expect(decoded.intent).toEqual(intent);
+    expect(m.host.submit(m.b, decoded.intent)).toBe(true);
+    expect(m.host.tick().committedIntents).toBe(1);
+    expect(memberView(m).invitations[0].authorized).toBe(false);
+    const queued = await roundTrip(m.game, "plains");
+    expect(queued.again).toEqual(queued.bytes);
+    const replay = attach(queued.restored);
+    for (const current of [m, replay]) {
+      current.host.tick();
+      expect(political(current.game, B, intent.requestId).accepted).toBe(true);
+      const applicant = wireFrame(current, current.d).nationalPactDisclosure!;
+      expect(applicant.recipientId).toBe(D);
+      expect(applicant.pacts[0]).toMatchObject({
+        relationship: "invited",
+        constitutionVersion: epoch,
+      });
+      expect(applicant.pacts[0].invitations).toBeUndefined();
+      const roster = current.game.nationalPublicPoliticalView()!.pacts!;
+      const context = {
+        actor: D,
+        roster,
+        disclosure: applicant,
+        independentCandidates: [],
+      };
+      expect(
+        pactActionAllowed(
+          { type: "national_accept_pact", pactId, constitutionVersion: epoch },
+          context,
+        ),
+      ).toBe(true);
+      expect(
+        pactActionAllowed(
+          { type: "national_accept_pact", pactId, constitutionVersion: epoch + 1 },
+          context,
+        ),
+      ).toBe(false);
+      expect(current.game.nationalMdaAllies(D)).toEqual([]);
+      const balances = () =>
+        people.map((p) => ({
+          gold: current.game.player(p.id).gold(),
+          troops: current.game.player(p.id).troops(),
+          units: current.game.player(p.id).units().length,
+        }));
+      const before = balances();
+      const acceptance = {
+        kind: "accept-pact",
+        pactId,
+        constitutionVersion: epoch,
+      } as const;
+      expect(() =>
+        current.game.performNationalPoliticalCommandWithOutcome(
+          current.game.player(C),
+          acceptance,
+          "forged-direct-accept",
+          DCLIENT,
+        ),
+      ).toThrow();
+      expect(
+        current.game.performNationalPoliticalCommandWithOutcome(
+          current.game.player(D),
+          acceptance,
+          "direct-consent",
+          DCLIENT,
+        ).accepted,
+      ).toBe(true);
+      expect(balances()).toEqual(before);
+      expect(() =>
+        current.game.performNationalPoliticalCommandWithOutcome(
+          current.game.player(B),
+          {
+            kind: "invite-pact",
+            pactId,
+            candidateId: D,
+            admissionAction: "approve",
+            constitutionVersion: epoch,
+          },
+          intent.requestId,
+          BCLIENT,
+        ),
+      ).toThrow(/stale sovereign replay authority/);
+      expect(balances()).toEqual(before);
+    }
+    const after = await roundTrip(m.game, "plains");
+    const replayed = await roundTrip(replay.game, "plains");
+    expect(after.bytes).toEqual(replayed.bytes);
+    expect(after.again).toEqual(after.bytes);
+  });
+
+  it("enforces distinct pending-candidate bounds in commands and hostile snapshots", () => {
+    const candidates = Array.from({ length: 257 }, (_, i) => "C6CAND" + i);
+    const ids = [A, ...candidates];
+    const runtime = new NationalRuntime(ids);
+    runtime.perform(A, {
+      kind: "found-pact",
+      pactId,
+      name: "Bounded",
+      pactKind: "MDA",
+      terms: { admission: "majority", expulsion: "forbidden" },
+    });
+    const epoch = runtime.snapshot().politics.pacts[0].constitutionVersion!;
+    const propose = (id: string) =>
+      runtime.perform(A, {
+        kind: "invite-pact",
+        pactId,
+        candidateId: id,
+        admissionAction: "propose",
+        constitutionVersion: epoch,
+      });
+    for (const id of candidates.slice(0, 256)) propose(id);
+    expect(() => propose(candidates[256])).toThrow();
+    const snapshot = runtime.snapshot();
+    expect(snapshot.politics.pacts[0].invitations).toHaveLength(256);
+    snapshot.politics.pacts[0].invitations.push({
+      targetId: candidates[256],
+      approvedBy: [A],
+      proposerId: A,
+      constitutionVersion: epoch,
+    });
+    expect(() => NationalRuntime.restore(snapshot, ids, 0)).toThrow();
   });
 
   it("five-member electorate distinguishes majority from two-thirds", () => {
