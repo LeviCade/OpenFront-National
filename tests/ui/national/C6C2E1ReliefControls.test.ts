@@ -98,7 +98,8 @@ describe("C6C2-E1-NATIVE-IMPERIAL native relief controls", () => {
     const { state, sent, element } = await mount();
     const form = element.querySelector("form")!;
     form.querySelector<HTMLInputElement>('input[name="amount"]')!.value = "400";
-    form.querySelector<HTMLInputElement>('input[name="confirm"]')!.checked = true;
+    form.querySelector<HTMLInputElement>('input[name="confirm"]')!.checked =
+      true;
     form.dispatchEvent(new Event("submit", { cancelable: true }));
     form.dispatchEvent(new Event("submit", { cancelable: true }));
     expect(sent).toHaveLength(1);
@@ -119,7 +120,9 @@ describe("C6C2-E1-NATIVE-IMPERIAL native relief controls", () => {
     state.tick++;
     element.refresh();
     await element.updateComplete;
-    expect(element.textContent).toContain("Awaiting the Game-owned relief receipt");
+    expect(element.textContent).toContain(
+      "Awaiting the Game-owned relief receipt",
+    );
     state.receipts = [
       {
         type: "national_imperial_administration",
@@ -180,7 +183,9 @@ describe("C6C2-E1-NATIVE-IMPERIAL native relief controls", () => {
     ];
     element.refresh();
     await element.updateComplete;
-    expect(element.textContent).not.toContain("Game confirmed the relief decision");
+    expect(element.textContent).not.toContain(
+      "Game confirmed the relief decision",
+    );
     state.rows = [
       { ...row, status: "approved", version: 1, decidedBy: "emperor" },
     ];

@@ -16,7 +16,11 @@ import {
 import { setup } from "../../util/Setup";
 import { roundTrip } from "../../util/Snapshot";
 
-const [memberId, emperorId, outsiderId] = ["E1Member", "E1Emperor", "E1Outsider"];
+const [memberId, emperorId, outsiderId] = [
+  "E1Member",
+  "E1Emperor",
+  "E1Outsider",
+];
 const empireId = "E1Empire";
 const map = "half_land_half_ocean";
 const roster = [memberId, emperorId, outsiderId].map(
@@ -41,7 +45,9 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
       player.setSpawnTile(tile);
     });
     game.executeNextTick();
-    const workers = vi.spyOn(game.config(), "goldAdditionRate").mockReturnValue(0n);
+    const workers = vi
+      .spyOn(game.config(), "goldAdditionRate")
+      .mockReturnValue(0n);
     const emperor = game.player(emperorId);
     const member = game.player(memberId);
     const outsider = game.player(outsiderId);
@@ -110,7 +116,9 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
       decision: "approve",
     };
     submit(memberId, request, requestId);
-    expect(game.nationalImperialAdministrationFor(member)?.reliefRequests[0]?.status).toBe("pending");
+    expect(
+      game.nationalImperialAdministrationFor(member)?.reliefRequests[0]?.status,
+    ).toBe("pending");
     expect(game.nationalImperialAdministrationFor(outsider)).toBeNull();
     submit(outsiderId, decide, "np_" + "3".repeat(32));
     expect(treasury()).toBe(grant + 19n);
@@ -118,7 +126,9 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
     submit(emperorId, decide, decisionId);
     expect(treasury()).toBe(19n);
     expect(member.gold()).toBe(grant);
-    expect(game.nationalImperialAdministrationFor(member)?.reliefRequests[0]?.status).toBe("approved");
+    expect(
+      game.nationalImperialAdministrationFor(member)?.reliefRequests[0]?.status,
+    ).toBe("approved");
     submit(emperorId, decide, "np_" + "4".repeat(32));
     expect(treasury()).toBe(19n);
     expect(member.gold()).toBe(grant);
@@ -131,13 +141,16 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
     const { restored, bytes, again } = await roundTrip(game, map);
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
-    console.info("C6C2_E1_RELIEF_WITNESS=" + JSON.stringify({
-      treasuryBefore: (grant + 19n).toString(),
-      grant: grant.toString(),
-      treasuryAfter: treasury().toString(),
-      cityCost: cost.toString(),
-      walletAfterConstruction: member.gold().toString(),
-      snapshotBytes: bytes.length,
-    }));
+    console.info(
+      "C6C2_E1_RELIEF_WITNESS=" +
+        JSON.stringify({
+          treasuryBefore: (grant + 19n).toString(),
+          grant: grant.toString(),
+          treasuryAfter: treasury().toString(),
+          cityCost: cost.toString(),
+          walletAfterConstruction: member.gold().toString(),
+          snapshotBytes: bytes.length,
+        }),
+    );
   });
 });

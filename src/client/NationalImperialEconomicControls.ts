@@ -179,7 +179,8 @@ export class NationalImperialEconomicControls extends LitElement {
     const form = new FormData(event.currentTarget);
     const amount = form.get("amount");
     if (!validReliefAmount(amount) || form.get("confirm") !== "on") {
-      this.status = "Enter a positive whole gold amount and confirm the request.";
+      this.status =
+        "Enter a positive whole gold amount and confirm the request.";
       return;
     }
     this.send((requestId) => ({
@@ -215,7 +216,8 @@ export class NationalImperialEconomicControls extends LitElement {
       row.version !== displayed.version ||
       !reliefDecisionAllowed(context.view, context.actor.id(), row, decision)
     ) {
-      this.status = "Relief request or authority changed; review the current ledger.";
+      this.status =
+        "Relief request or authority changed; review the current ledger.";
       return;
     }
     this.send(() => ({
@@ -253,7 +255,8 @@ export class NationalImperialEconomicControls extends LitElement {
         type: "national_imperial_administration",
         command,
       };
-      this.status = "Awaiting the Game-owned relief receipt; no transfer confirmed.";
+      this.status =
+        "Awaiting the Game-owned relief receipt; no transfer confirmed.";
       context.bus.emit(new SendNationalImperialPolicyIntentEvent(intent));
     } catch {
       this.pending = null;
@@ -283,85 +286,117 @@ export class NationalImperialEconomicControls extends LitElement {
         <h2 class="font-semibold text-amber-200">Imperial emergency relief</h2>
         <p>Game treasury: ${view.treasury} gold</p>
         <p>Game wallet: ${actor.gold().toString()} gold</p>
-        ${view.canAmend
-          ? nothing
-          : html`
-              <form @submit=${(event: SubmitEvent) =>
-                this.submitRequest(event, displayedKey, game, bus)} class="space-y-2">
-                <label class="block">
-                  Requested gold
-                  <input
-                    name="amount"
-                    inputmode="numeric"
-                    pattern="[1-9][0-9]{0,11}"
-                    maxlength="12"
-                    required
-                    class="block w-full min-h-11 rounded bg-slate-900 p-2"
-                    .value=${this.amount}
-                    @input=${(event: Event) => {
-                      this.amount = (event.target as HTMLInputElement).value;
-                    }}
-                  />
-                </label>
-                <label class="block">
-                  <input name="confirm" type="checkbox" required />
-                  Request assistance from the current emperor.
-                </label>
-                <button type="submit" class=${button} ?disabled=${busy}>
-                  Request emergency relief
-                </button>
-              </form>
-            `}
+        ${
+          view.canAmend
+            ? nothing
+            : html`
+                <form
+                  @submit=${(event: SubmitEvent) =>
+                    this.submitRequest(event, displayedKey, game, bus)}
+                  class="space-y-2"
+                >
+                  <label class="block">
+                    Requested gold
+                    <input
+                      name="amount"
+                      inputmode="numeric"
+                      pattern="[1-9][0-9]{0,11}"
+                      maxlength="12"
+                      required
+                      class="block w-full min-h-11 rounded bg-slate-900 p-2"
+                      .value=${this.amount}
+                      @input=${(event: Event) => {
+                        this.amount = (event.target as HTMLInputElement).value;
+                      }}
+                    />
+                  </label>
+                  <label class="block">
+                    <input name="confirm" type="checkbox" required />
+                    Request assistance from the current emperor.
+                  </label>
+                  <button type="submit" class=${button} ?disabled=${busy}>
+                    Request emergency relief
+                  </button>
+                </form>
+              `
+        }
         <p role="status" aria-live="polite" aria-busy=${String(busy)}>
           ${this.status}
         </p>
-        ${rows.length === 0
-          ? html`<p>No Game-reported relief requests.</p>`
-          : rows.map(
-              (row) => html`
-                <article
-                  data-relief-id=${row.reliefId}
-                  class="space-y-2 rounded border border-white/20 p-2"
-                >
-                  <p>
-                    ${context.game.players().find((p) => p.id() === row.memberId)
-                      ?.name() ?? row.memberId}:
-                    ${row.amount} gold — ${row.status}
-                  </p>
-                  ${row.status === "approved"
-                    ? html`<p>Approved by the Game. Use normal construction controls to spend available wallet gold.</p>`
-                    : nothing}
-                  ${view.canAmend &&
-                  row.status === "pending" &&
-                  row.memberId !== actor.id()
-                    ? html`
-                        <div class="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            data-relief-approve
-                            class=${button}
-                            ?disabled=${busy ||
-                            !reliefDecisionAllowed(view, actor.id(), row, "approve")}
-                            @click=${() => this.decide(row, "approve", displayedKey, game, bus)}
-                          >
-                            Approve ${row.amount} gold
-                          </button>
-                          <button
-                            type="button"
-                            data-relief-reject
-                            class=${button}
-                            ?disabled=${busy ||
-                            !reliefDecisionAllowed(view, actor.id(), row, "reject")}
-                            @click=${() => this.decide(row, "reject", displayedKey, game, bus)}
-                          >
-                            Reject request
-                          </button>
-                        </div>
-                      `
-                    : nothing}
-                </article>
-              `,
-            )}
+        ${
+          rows.length === 0
+            ? html`<p>No Game-reported relief requests.</p>`
+            : rows.map(
+                (row) => html`
+                  <article
+                    data-relief-id=${row.reliefId}
+                    class="space-y-2 rounded border border-white/20 p-2"
+                  >
+                    <p>
+                      ${
+                        context.game
+                          .players()
+                          .find((p) => p.id() === row.memberId)
+                          ?.name() ?? row.memberId
+                      }:
+                      ${row.amount} gold — ${row.status}
+                    </p>
+                    ${
+                      row.status === "approved"
+                        ? html`<p>
+                            Approved by the Game. Use normal construction
+                            controls to spend available wallet gold.
+                          </p>`
+                        : nothing
+                    }
+                    ${
+                      view.canAmend &&
+                      row.status === "pending" &&
+                      row.memberId !== actor.id()
+                        ? html`
+                            <div class="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                data-relief-approve
+                                class=${button}
+                                ?disabled=${
+                                  busy ||
+                                  !reliefDecisionAllowed(
+                                    view,
+                                    actor.id(),
+                                    row,
+                                    "approve",
+                                  )
+                                }
+                                @click=${() => this.decide(row, "approve", displayedKey, game, bus)}
+                              >
+                                Approve ${row.amount} gold
+                              </button>
+                              <button
+                                type="button"
+                                data-relief-reject
+                                class=${button}
+                                ?disabled=${
+                                  busy ||
+                                  !reliefDecisionAllowed(
+                                    view,
+                                    actor.id(),
+                                    row,
+                                    "reject",
+                                  )
+                                }
+                                @click=${() => this.decide(row, "reject", displayedKey, game, bus)}
+                              >
+                                Reject request
+                              </button>
+                            </div>
+                          `
+                        : nothing
+                    }
+                  </article>
+                `,
+              )
+        }
       </section>
     `;
   }

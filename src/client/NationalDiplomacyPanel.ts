@@ -14,7 +14,6 @@ import {
 } from "./controllers/NationalMapTargetController";
 import type { NationalAssessmentControls } from "./NationalAssessmentControls";
 import "./NationalImperialEconomicControls";
-import type { NationalImperialEconomicControls } from "./NationalImperialEconomicControls";
 import {
   confirmedNationalDiplomacy,
   createNationalDiplomacyRequestId,
@@ -33,6 +32,7 @@ import {
   type NationalFoundingAttempt,
   type NationalPoliticalAction,
 } from "./NationalDiplomacyState";
+import type { NationalImperialEconomicControls } from "./NationalImperialEconomicControls";
 import {
   imperialConstructionCategories,
   imperialPolicyIntentAvailable,
