@@ -4,11 +4,11 @@ import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
+import { readSnapshotHeader } from "@openfront/engine/snapshot/GameSnapshot";
 import {
   decodeSnapshotValue,
   encodeSnapshotValue,
 } from "@openfront/engine/snapshot/SnapshotCodec";
-import { readSnapshotHeader } from "@openfront/engine/snapshot/GameSnapshot";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -29,7 +29,8 @@ const ids = ["C7E4NATA", "C7E4NATB", "C7E4NATC", "C7E4NATD"];
 const [A, B, C, D] = ids;
 const sha256 = (bytes: Uint8Array) =>
   createHash("sha256").update(bytes).digest("hex");
-const gitHead = () => execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+const gitHead = () =>
+  execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 const mapDigests = () =>
   Object.fromEntries(
     ["manifest.json", "map.bin", "map4x.bin"].map((name) => [
@@ -81,7 +82,9 @@ function state(game: Game) {
         id,
         alive: p.isAlive(),
         tiles: p.numTilesOwned(),
-        tileDigest: sha256(Buffer.from(JSON.stringify([...p.tiles()].sort((a, b) => a - b)))),
+        tileDigest: sha256(
+          Buffer.from(JSON.stringify([...p.tiles()].sort((a, b) => a - b))),
+        ),
         troops: p.troops(),
         gold: String(p.gold()),
       };
@@ -90,7 +93,9 @@ function state(game: Game) {
 }
 
 async function produce() {
-  const people = ids.map((id, i) => new PlayerInfo(id, PlayerType.Human, "C7E4SEAT" + i, id));
+  const people = ids.map(
+    (id, i) => new PlayerInfo(id, PlayerType.Human, "C7E4SEAT" + i, id),
+  );
   const game = await setup("plains", { nationalMode: true }, people);
   const m = attach(game);
   m.runner.init();
@@ -101,23 +106,53 @@ async function produce() {
     [75, 75],
   ];
   for (let i = 0; i < people.length; i++) {
-    game.addExecution(new SpawnExecution(gameId, people[i], game.ref(points[i][0], points[i][1])));
+    game.addExecution(
+      new SpawnExecution(
+        gameId,
+        people[i],
+        game.ref(points[i][0], points[i][1]),
+      ),
+    );
   }
   for (let i = 0; i < 3; i++) m.tick();
   for (const id of ids) expect(game.player(id).hasSpawned()).toBe(true);
   // Old writers predate several native pact intents. Exercise their real
   // Game-owned authority API, never synthesize or edit snapshot records.
-  game.performNationalCommand(game.player(A), { kind: "found-empire", empireId: empire });
-  game.performNationalCommand(game.player(A), { kind: "offer-empire", empireId: empire, candidateId: D });
-  game.performNationalCommand(game.player(D), { kind: "accept-empire", empireId: empire, candidateId: D });
-  game.performNationalCommand(game.player(B), {
-    kind: "found-pact", pactId: pact, name: "Historical defense",
-    pactKind: "MDA", terms: { admission: "leader", expulsion: "forbidden" },
+  game.performNationalCommand(game.player(A), {
+    kind: "found-empire",
+    empireId: empire,
   });
-  game.performNationalCommand(game.player(B), { kind: "invite-pact", pactId: pact, candidateId: C });
-  game.performNationalCommand(game.player(C), { kind: "accept-pact", pactId: pact });
+  game.performNationalCommand(game.player(A), {
+    kind: "offer-empire",
+    empireId: empire,
+    candidateId: D,
+  });
+  game.performNationalCommand(game.player(D), {
+    kind: "accept-empire",
+    empireId: empire,
+    candidateId: D,
+  });
+  game.performNationalCommand(game.player(B), {
+    kind: "found-pact",
+    pactId: pact,
+    name: "Historical defense",
+    pactKind: "MDA",
+    terms: { admission: "leader", expulsion: "forbidden" },
+  });
+  game.performNationalCommand(game.player(B), {
+    kind: "invite-pact",
+    pactId: pact,
+    candidateId: C,
+  });
+  game.performNationalCommand(game.player(C), {
+    kind: "accept-pact",
+    pactId: pact,
+  });
   game.performNationalWarCommand(game.player(A), {
-    kind: "declare-national", warId: war, aggressorId: A, targetId: B,
+    kind: "declare-national",
+    warId: war,
+    aggressorId: A,
+    targetId: B,
   });
   for (let i = 0; i < 5; i++) m.tick();
   const evidence = state(game);
@@ -127,7 +162,11 @@ async function produce() {
   expect(evidence.protected).toBe(true);
   expect(evidence.atWar).toBe(true);
   expect(evidence.peaceful).toBe(true);
-  expect(evidence.layers).toContainEqual({ id: war, scope: "national", endedTick: null });
+  expect(evidence.layers).toContainEqual({
+    id: war,
+    scope: "national",
+    endedTick: null,
+  });
   for (const p of evidence.players) {
     expect(p.alive).toBe(true);
     expect(p.tiles).toBeGreaterThan(0);
@@ -140,22 +179,6 @@ function continueGame(m: ReturnType<typeof attach>) {
   const before = state(m.game);
   const actor = m.game.player(A);
   const target = m.game.player(C);
-  // Real stamped intent through GameRunner/Executor, on restored actor.
-  m.tick({
-    type: "national_declare_war",
-    scope: "national",
-    nationId: A,
-    targetId: target.id(),
-    targetKind: "nation",
-    requestId: "c7e4-new-war",
-    clientID: actor.clientID(),
-  });
-  for (let i = 0; i < 4; i++) m.tick();
-  expect(m.game.nationalWarAuthority()?.atWar(A, C)).toBe(true);
-  expect(m.game.nationalWarAuthority()?.atWar(A, B)).toBe(true);
-  expect(m.game.ticks()).toBe(before.tick + 5);
-  expect(m.game.nationalPoliticalAuthority()?.emperorOf(empire)).toBe(A);
-  expect(m.game.nationalMdaAllies(B)).toContain(C);
   const defender = m.game.player(B);
   expect(actor.sharesBorderWith(defender)).toBe(true);
   m.tick({
@@ -170,8 +193,26 @@ function continueGame(m: ReturnType<typeof attach>) {
   expect(result.attackTroopsBefore).toBe(5000);
   expect(result.intercepted).toBeGreaterThan(0);
   expect(result.intercepted + result.remainingAttackingTroops).toBe(5000);
-  expect(result.contributions.reduce((n, c) => n + c.troopsDebited, 0)).toBe(result.intercepted);
+  expect(result.contributions.reduce((n, c) => n + c.troopsDebited, 0)).toBe(
+    result.intercepted,
+  );
   expect(result.contributions.some((c) => c.nationId === C)).toBe(true);
+  // Real stamped intent through GameRunner/Executor, on restored actor.
+  m.tick({
+    type: "national_declare_war",
+    scope: "national",
+    nationId: A,
+    targetId: target.id(),
+    targetKind: "nation",
+    requestId: "c7e4-new-war",
+    clientID: actor.clientID(),
+  });
+  for (let i = 0; i < 4; i++) m.tick();
+  expect(m.game.nationalWarAuthority()?.atWar(A, C)).toBe(true);
+  expect(m.game.nationalWarAuthority()?.atWar(A, B)).toBe(true);
+  expect(m.game.ticks()).toBe(before.tick + 7);
+  expect(m.game.nationalPoliticalAuthority()?.emperorOf(empire)).toBe(A);
+  expect(m.game.nationalMdaAllies(B)).toContain(C);
   return { ...state(m.game), interception: result };
 }
 
@@ -195,10 +236,14 @@ function verify(bytes: Uint8Array, manifest: Manifest, writer: string) {
   expect(manifest.writer).toBe(writer);
   expect(manifest.driverSource).toMatch(/^[a-f0-9]{40}$/);
   expect(manifest.driverSource).toBe(process.env.CURRENT_SHA);
-  expect(manifest.driverDigest).toBe(sha256(readFileSync("tests/national/C7C1E4CrossBuild.test.ts")));
+  expect(manifest.driverDigest).toBe(
+    sha256(readFileSync("tests/national/C7C1E4CrossBuild.test.ts")),
+  );
   const root = decodeSnapshotValue(bytes) as { game: { v: number } };
   expect(root.game.v).toBe(manifest.gameRecordVersion);
-  expect(root.game.v).toBe(writers.indexOf(writer as typeof writers[number]) + 4);
+  expect(root.game.v).toBe(
+    writers.indexOf(writer as (typeof writers)[number]) + 4,
+  );
   expect(manifest.node).toBe("v24.15.0");
   expect(manifest.npm).toBe("12.1.0");
   expect(manifest.run).toBe(process.env.GITHUB_RUN_ID);
@@ -213,6 +258,36 @@ function verify(bytes: Uint8Array, manifest: Manifest, writer: string) {
   expect(header.tick).toBe(manifest.before.tick);
 }
 
+// Only called by the current reader. Mutations are adversarial inputs, not
+// historical fixture generation.
+async function rejectForgedReceipts(bytes: Uint8Array) {
+  for (const change of [
+    { recipientId: B },
+    { actorId: "unknown-principal", recipientId: "unknown-principal" },
+    { commandFingerprint: undefined },
+  ]) {
+    const root = decodeSnapshotValue(bytes) as {
+      game: {
+        d: {
+          nationalGovernance: {
+            receipts: Record<string, unknown>[];
+            results: Record<string, unknown>[];
+          };
+        };
+      };
+    };
+    const journal = root.game.d.nationalGovernance;
+    for (const records of [journal.receipts, journal.results]) {
+      const receipt = records.find((r) => r.requestId === "c7e4-new-war");
+      expect(receipt?.accepted).toBe(true);
+      Object.assign(receipt!, change);
+    }
+    await expect(
+      restoreTestGame(encodeSnapshotValue(root), "plains"),
+    ).rejects.toThrow(/NATIONAL journal/);
+  }
+}
+
 const mode = process.env.C7E4_MODE ?? "same-build";
 test("C7 E4 pinned historical writer / independent consumer / same-build continuation", async () => {
   if (mode === "writer") {
@@ -224,13 +299,18 @@ test("C7 E4 pinned historical writer / independent consumer / same-build continu
     const manifest: Manifest = {
       writer,
       driverSource: process.env.CURRENT_SHA!,
-      driverDigest: sha256(readFileSync("tests/national/C7C1E4CrossBuild.test.ts")),
-      gameRecordVersion: (decodeSnapshotValue(bytes) as { game: { v: number } }).game.v,
+      driverDigest: sha256(
+        readFileSync("tests/national/C7C1E4CrossBuild.test.ts"),
+      ),
+      gameRecordVersion: (decodeSnapshotValue(bytes) as { game: { v: number } })
+        .game.v,
       node: process.version,
       npm: execFileSync("npm", ["--version"], { encoding: "utf8" }).trim(),
       run: process.env.GITHUB_RUN_ID!,
       attempt: process.env.GITHUB_RUN_ATTEMPT!,
-      map: mapDigests(), digest: sha256(bytes), length: bytes.length,
+      map: mapDigests(),
+      digest: sha256(bytes),
+      length: bytes.length,
       before: state(m.game),
     };
     expect(manifest.run).toMatch(/^\d+$/);
@@ -243,7 +323,10 @@ test("C7 E4 pinned historical writer / independent consumer / same-build continu
     const dir = process.env.C7E4_ARTIFACT_DIR!;
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "snapshot.bin"), bytes);
-    writeFileSync(join(dir, "manifest.json"), JSON.stringify(manifest, null, 2));
+    writeFileSync(
+      join(dir, "manifest.json"),
+      JSON.stringify(manifest, null, 2),
+    );
     console.info("C7E4_WRITER", JSON.stringify(manifest));
     return;
   }
@@ -251,7 +334,9 @@ test("C7 E4 pinned historical writer / independent consumer / same-build continu
     for (const writer of writers) {
       const dir = join(process.env.C7E4_ARTIFACT_DIR!, writer);
       const bytes = new Uint8Array(readFileSync(join(dir, "snapshot.bin")));
-      const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8")) as Manifest;
+      const manifest = JSON.parse(
+        readFileSync(join(dir, "manifest.json"), "utf8"),
+      ) as Manifest;
       verify(bytes, manifest, writer);
       const m = attach(await restoreTestGame(bytes, "plains"));
       expect(state(m.game)).toEqual(manifest.before);
@@ -260,19 +345,43 @@ test("C7 E4 pinned historical writer / independent consumer / same-build continu
       expect(continueGame(duplicate)).toEqual(after);
       const current = gitHead();
       expect(current).toBe(manifest.driverSource);
-      expect(m.runner.snapshot(current)).toEqual(duplicate.runner.snapshot(current));
-      expect(() => verify(bytes, { ...manifest, writer: "" }, writer)).toThrow();
+      expect(m.runner.snapshot(current)).toEqual(
+        duplicate.runner.snapshot(current),
+      );
+      expect(() =>
+        verify(bytes, { ...manifest, writer: "" }, writer),
+      ).toThrow();
       const corrupt = bytes.slice();
       corrupt[corrupt.length - 1] ^= 1;
       expect(() => verify(corrupt, manifest, writer)).toThrow();
-      await expect(restoreTestGame(bytes.slice(0, -1), "plains")).rejects.toThrow();
+      await expect(
+        restoreTestGame(bytes.slice(0, -1), "plains"),
+      ).rejects.toThrow();
       await expect(restoreTestGame(bytes, "world")).rejects.toThrow();
       const root = decodeSnapshotValue(bytes) as Record<string, unknown>;
-      await expect(restoreTestGame(encodeSnapshotValue({ ...root, format: 999 }), "plains")).rejects.toThrow();
-      console.info("C7E4_CONSUMER", JSON.stringify({
-        writer, current, digest: manifest.digest, before: manifest.before, after,
-        currentDigest: sha256(m.runner.snapshot(current)),
-      }));
+      for (const format of [-1, 0, 999]) {
+        await expect(
+          restoreTestGame(encodeSnapshotValue({ ...root, format }), "plains"),
+        ).rejects.toThrow();
+      }
+      await expect(
+        restoreTestGame(
+          encodeSnapshotValue({ ...root, tick: manifest.before.tick + 1 }),
+          "plains",
+        ),
+      ).rejects.toThrow(/header tick/);
+      await rejectForgedReceipts(m.runner.snapshot(current));
+      console.info(
+        "C7E4_CONSUMER",
+        JSON.stringify({
+          writer,
+          current,
+          digest: manifest.digest,
+          before: manifest.before,
+          after,
+          currentDigest: sha256(m.runner.snapshot(current)),
+        }),
+      );
     }
     return;
   }

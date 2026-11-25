@@ -62,11 +62,11 @@ const ExecRecordSchema = z.object({
 
 const RootSchema = z.object({
   magic: z.literal(SNAPSHOT_MAGIC),
-  format: z.number().int(),
+  format: z.number().int().positive(),
   /** Build that wrote the snapshot. Informational: any build can read it. */
   gitCommit: z.string(),
   gameID: z.string().nullable(),
-  tick: z.number().int(),
+  tick: z.number().int().nonnegative(),
   gameConfig: z.unknown(),
   game: VersionedSchema,
   map: VersionedSchema,
@@ -242,7 +242,10 @@ function decodeRoot(bytes: Uint8Array): Root {
  */
 export function readSnapshotHeader(bytes: Uint8Array): SnapshotHeader {
   const root = decodeRoot(bytes);
-  const humans = readVersioned(GameSnapshot, root.game).humans.flatMap((h) =>
+  const state = readVersioned(GameSnapshot, root.game);
+  if (state.ticks !== root.tick)
+    throw new SnapshotError("snapshot header tick disagrees with game state");
+  const humans = state.humans.flatMap((h) =>
     h.clientID === null ? [] : [{ clientID: h.clientID, name: h.name }],
   );
   return {
@@ -273,6 +276,8 @@ export function restoreGame(bytes: Uint8Array, deps: RestoreDeps): Game {
   const config = deps.config(gameConfig);
 
   const state = readVersioned(GameSnapshot, root.game);
+  if (state.ticks !== root.tick)
+    throw new SnapshotError("snapshot header tick disagrees with game state");
   (deps.gameMap as GameMapImpl).restoreSnapshot(
     readVersioned(GameMapSnapshot, root.map),
   );
