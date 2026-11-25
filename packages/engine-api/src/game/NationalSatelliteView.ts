@@ -29,7 +29,7 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 function exact(value: Record<string, unknown>, keys: readonly string[]): boolean {
   return Object.keys(value).length === keys.length &&
-    keys.every((key) => Object.hasOwn(value, key));
+    keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
 }
 function tick(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
