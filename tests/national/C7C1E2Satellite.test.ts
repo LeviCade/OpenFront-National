@@ -402,6 +402,90 @@ describe("C7C1 E2 satellite gameplay", () => {
     );
   });
 
+  it("rejects stale empire admission, supports AI-funded sight and revokes a collapsed payer", async () => {
+    const game = await fixture();
+    const human = game.player(buyer.id);
+    const ai = game.player(ally.id);
+    const city = game
+      .player(target.id)
+      .buildUnit(UnitType.City, game.ref(185, 175), {});
+    const preEmpire = admission(game, ally.id);
+    game.performNationalCommand(human, {
+      kind: "found-empire",
+      empireId: "ai-satellite",
+    });
+    game.performNationalCommand(human, {
+      kind: "offer-empire",
+      empireId: "ai-satellite",
+      candidateId: ally.id,
+    });
+    game.performNationalCommand(ai, {
+      kind: "accept-empire",
+      empireId: "ai-satellite",
+    });
+    ai.addGold(NATIONAL_SATELLITE_COST);
+    const before = ai.gold();
+    expect(() =>
+      game.performNationalSatellite(ai, "old-epoch", preEmpire),
+    ).toThrow(/stale or invalid imperial policy epoch/);
+    expect(ai.gold()).toBe(before);
+    expect(seen(game, buyer.id, city.id())).toBeUndefined();
+    game.performNationalSatellite(
+      ai,
+      "ai-funded",
+      admission(game, ally.id),
+    );
+    expect(ai.gold()).toBe(before - NATIONAL_SATELLITE_COST);
+    expect(seen(game, ally.id, city.id())?.source).toBe("satellite");
+    expect(seen(game, buyer.id, city.id())?.sourceNationId).toBe(ally.id);
+    expect(seen(game, outsider.id, city.id())).toBeUndefined();
+    for (const tile of [...ai.tiles()]) ai.relinquish(tile);
+    expect(ai.isAlive()).toBe(false);
+    expect(game.nationalSatelliteFor(ally.id)).toBeNull();
+    expect(seen(game, buyer.id, city.id())).toBeUndefined();
+  });
+
+  it("keeps queued purchases deterministic across snapshot restore", async () => {
+    const game = await fixture();
+    const actor = game.player(buyer.id);
+    actor.addGold(NATIONAL_SATELLITE_COST);
+    const executor = new Executor(game, match, buyer.clientID!);
+    game.addExecution(
+      executor.createExec({
+        type: "national_buy_satellite_recon",
+        gameId: "wrong-match",
+        issuedTick: game.ticks(),
+        requestId: "wrong-game",
+        clientID: buyer.clientID!,
+      }),
+    );
+    game.executeNextTick();
+    game.executeNextTick();
+    expect(game.nationalSatelliteFor(buyer.id)).toBeNull();
+    game.addExecution(
+      executor.createExec({
+        type: "national_buy_satellite_recon",
+        gameId: match,
+        issuedTick: game.ticks(),
+        requestId: "snapshot-pending",
+        clientID: buyer.clientID!,
+      }),
+    );
+    const { restored, bytes, again } = await roundTrip(game, "big_plains");
+    expect(again).toEqual(bytes);
+    for (let i = 0; i < 2; i++) {
+      game.executeNextTick();
+      restored.executeNextTick();
+    }
+    expect(restored.nationalSatelliteFor(buyer.id)).toEqual(
+      game.nationalSatelliteFor(buyer.id),
+    );
+    expect(restored.nationalSatelliteFor(buyer.id)?.requestId).toBe(
+      "snapshot-pending",
+    );
+    expect(restored.player(buyer.id).gold()).toBe(actor.gold());
+  });
+
   it("bounds durable identities and strictly validates receipts", () => {
     const ledger = new NationalSatelliteJournal();
     let spent = 0n;
