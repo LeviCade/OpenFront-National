@@ -190,7 +190,6 @@ function assertNoInvite(m: Match) {
   );
 }
 
-
 async function found(cap: number, duration = 200) {
   const m = await match();
   const intent = {
@@ -199,9 +198,17 @@ async function found(cap: number, duration = 200) {
     requestId: "found-constitution",
     name: "Constitution witness",
     pactKind: "MDA",
-    terms: { admission: "leader", expulsion: "majority", membershipCap: cap, invitationDurationTicks: duration },
+    terms: {
+      admission: "leader",
+      expulsion: "majority",
+      membershipCap: cap,
+      invitationDurationTicks: duration,
+    },
   } as const;
-  const decoded = decodeClientMessage(encodeClientMessage({ type: "intent", intent }, undefined), undefined);
+  const decoded = decodeClientMessage(
+    encodeClientMessage({ type: "intent", intent }, undefined),
+    undefined,
+  );
   if (decoded.type !== "intent") throw new Error("native intent expected");
   expect(decoded.intent).toEqual(intent);
   issue(m, m.a, decoded.intent);
@@ -213,17 +220,51 @@ async function found(cap: number, duration = 200) {
 function invite(m: Match, id: string, requestId: string) {
   const version = memberView(m).constitutionVersion!;
   command(m, m.a, A, requestId, {
-    type: "national_invite_pact", candidateId: id, admissionAction: "propose", constitutionVersion: version,
+    type: "national_invite_pact",
+    candidateId: id,
+    admissionAction: "propose",
+    constitutionVersion: version,
   });
   return version;
 }
-function consent(m: Match, client: Client, actor: string, version: number, requestId: string, accepted = true) {
-  command(m, client, actor, requestId, { type: "national_accept_pact", constitutionVersion: version }, accepted);
+function consent(
+  m: Match,
+  client: Client,
+  actor: string,
+  version: number,
+  requestId: string,
+  accepted = true,
+) {
+  command(
+    m,
+    client,
+    actor,
+    requestId,
+    { type: "national_accept_pact", constitutionVersion: version },
+    accepted,
+  );
 }
-function vote(m: Match, client: Client, actor: string, targetId: string, version: number, requestId: string, accepted = true) {
-  command(m, client, actor, requestId, {
-    type: "national_expel_pact_v2", memberId: targetId, constitutionVersion: version,
-  }, accepted);
+function vote(
+  m: Match,
+  client: Client,
+  actor: string,
+  targetId: string,
+  version: number,
+  requestId: string,
+  accepted = true,
+) {
+  command(
+    m,
+    client,
+    actor,
+    requestId,
+    {
+      type: "national_expel_pact_v2",
+      memberId: targetId,
+      constitutionVersion: version,
+    },
+    accepted,
+  );
 }
 
 describe("C7C1E1 authenticated extended coalition constitution", () => {
@@ -233,12 +274,36 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
     expect(invite(m, C, "invite-c")).toBe(version);
     assertNoInvite(m);
     const b = wireFrame(m, m.b).nationalPactDisclosure!;
-    expect(b.pacts[0]).toMatchObject({ relationship: "invited", terms: { membershipCap: 2 } });
+    expect(b.pacts[0]).toMatchObject({
+      relationship: "invited",
+      terms: { membershipCap: 2 },
+    });
     expect(b.pacts[0].invitations).toBeUndefined();
     expect(b.pacts[0].expulsionBallots).toBeUndefined();
-    expect(readNationalPactDisclosure(b, D, m.game.nationalPublicPoliticalView()!.pacts!, false)).toBeNull();
-    expect(m.host.submit(m.b, { type: "national_accept_pact", pactId, requestId: "final-slot-b", constitutionVersion: version })).toBe(true);
-    expect(m.host.submit(m.c, { type: "national_accept_pact", pactId, requestId: "final-slot-c", constitutionVersion: version })).toBe(true);
+    expect(
+      readNationalPactDisclosure(
+        b,
+        D,
+        m.game.nationalPublicPoliticalView()!.pacts!,
+        false,
+      ),
+    ).toBeNull();
+    expect(
+      m.host.submit(m.b, {
+        type: "national_accept_pact",
+        pactId,
+        requestId: "final-slot-b",
+        constitutionVersion: version,
+      }),
+    ).toBe(true);
+    expect(
+      m.host.submit(m.c, {
+        type: "national_accept_pact",
+        pactId,
+        requestId: "final-slot-c",
+        constitutionVersion: version,
+      }),
+    ).toBe(true);
     expect(m.host.tick().committedIntents).toBe(2);
     const queued = await roundTrip(m.game, "plains");
     const replay = attach(queued.restored);
@@ -257,8 +322,22 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
     const restored = await roundTrip(replay.game, "plains");
     expect(restored.bytes).toEqual(final.bytes);
     expect(gameHash(replay.game)).toBe(gameHash(m.game));
-    command(m, m.a, A, "full-pact", { type: "national_invite_pact", candidateId: D, admissionAction: "propose", constitutionVersion: memberView(m).constitutionVersion }, false);
-    console.info("C7C1E1_FINAL_SLOT=2 competing consents, 1 accepted, 2/2 members");
+    command(
+      m,
+      m.a,
+      A,
+      "full-pact",
+      {
+        type: "national_invite_pact",
+        candidateId: D,
+        admissionAction: "propose",
+        constitutionVersion: memberView(m).constitutionVersion,
+      },
+      false,
+    );
+    console.info(
+      "C7C1E1_FINAL_SLOT=2 competing consents, 1 accepted, 2/2 members",
+    );
   });
 
   it("expires at the authoritative tick boundary and a renewed invitation rejects the stale epoch", async () => {
@@ -267,7 +346,10 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
     const deadline = memberView(m).invitations[0].expiresAtTick!;
     expect(deadline).toBeGreaterThan(m.game.ticks());
     while (m.game.ticks() < deadline - 1) m.host.tick();
-    expect(m.game.nationalPactDisclosure(m.game.player(D))?.pacts[0].invitationExpiresAtTick).toBe(deadline);
+    expect(
+      m.game.nationalPactDisclosure(m.game.player(D))?.pacts[0]
+        .invitationExpiresAtTick,
+    ).toBe(deadline);
     m.host.tick();
     expect(m.game.ticks()).toBe(deadline);
     assertNoInvite(m);
@@ -287,15 +369,29 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
     const version = memberView(m).constitutionVersion!;
     vote(m, m.a, A, C, version, "vote-a");
     expect(memberView(m).memberIds).toHaveLength(3);
-    expect(memberView(m).expulsionBallots).toEqual([{ targetId: C, approvedBy: [A] }]);
+    expect(memberView(m).expulsionBallots).toEqual([
+      { targetId: C, approvedBy: [A] },
+    ]);
     vote(m, m.a, A, C, version, "duplicate", false);
     vote(m, m.c, C, C, version, "target-vote", false);
     vote(m, m.d, D, C, version, "outsider-vote", false);
     assertNoInvite(m);
     const frame = wireFrame(m, m.b).nationalPactDisclosure!;
-    expect(frame.pacts[0].expulsionBallots).toEqual([{ targetId: C, approvedBy: [A] }]);
+    expect(frame.pacts[0].expulsionBallots).toEqual([
+      { targetId: C, approvedBy: [A] },
+    ]);
     const roster = m.game.nationalPublicPoliticalView()!.pacts!;
-    expect(pactActionAllowed({ type: "national_expel_pact_v2", pactId, memberId: C, constitutionVersion: version }, { actor: B, roster, disclosure: frame, independentCandidates: [] })).toBe(true);
+    expect(
+      pactActionAllowed(
+        {
+          type: "national_expel_pact_v2",
+          pactId,
+          memberId: C,
+          constitutionVersion: version,
+        },
+        { actor: B, roster, disclosure: frame, independentCandidates: [] },
+      ),
+    ).toBe(true);
     const pending = await roundTrip(m.game, "plains");
     expect(pending.again).toEqual(pending.bytes);
     const replay = attach(pending.restored);
@@ -305,12 +401,16 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
       expect(memberView(current).expulsionBallots).toEqual([]);
       expect(current.game.nationalMdaAllies(C)).toEqual([]);
       vote(current, current.b, B, A, version, "stale-expulsion", false);
-      command(current, current.b, B, "immediate-betray", { type: "national_betray_pact" });
+      command(current, current.b, B, "immediate-betray", {
+        type: "national_betray_pact",
+      });
       expect(current.game.nationalMdaAllies(A)).toEqual([]);
     }
     const final = await roundTrip(m.game, "plains");
     expect((await roundTrip(replay.game, "plains")).bytes).toEqual(final.bytes);
-    console.info("C7C1E1_EXPULSION=2/2 eligible votes, target/outsider/duplicate rejected; Betray immediate");
+    console.info(
+      "C7C1E1_EXPULSION=2/2 eligible votes, target/outsider/duplicate rejected; Betray immediate",
+    );
   });
 
   it("rejects a cap below current membership, invalidates rejected proposals, and requires all members for amendment", async () => {
@@ -318,27 +418,58 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
     consent(m, m.b, B, invite(m, B, "join-b"), "b-accept");
     consent(m, m.c, C, invite(m, C, "join-c"), "c-accept");
     const amend = (cap: number) => ({
-      type: "national_propose_pact_amendment_v2", administratorId: A,
-      terms: { admission: "leader", expulsion: "forbidden", membershipCap: cap },
+      type: "national_propose_pact_amendment_v2",
+      administratorId: A,
+      terms: {
+        admission: "leader",
+        expulsion: "forbidden",
+        membershipCap: cap,
+      },
     });
     command(m, m.a, A, "bad-cap", amend(2), false);
     expect(memberView(m).terms.membershipCap).toBe(4);
     command(m, m.a, A, "cap-3", amend(3));
     const oldVersion = memberView(m).pendingAmendment!.defenseVersion!;
-    command(m, m.c, C, "reject-proposal", { type: "national_reject_pact_amendment_v2", expectedDefenseVersion: oldVersion });
+    command(m, m.c, C, "reject-proposal", {
+      type: "national_reject_pact_amendment_v2",
+      expectedDefenseVersion: oldVersion,
+    });
     expect(memberView(m).pendingAmendment).toBeNull();
     expect(memberView(m).terms.membershipCap).toBe(4);
     command(m, m.a, A, "cap-3-again", amend(3));
     const freshVersion = memberView(m).pendingAmendment!.defenseVersion!;
     expect(freshVersion).toBeGreaterThan(oldVersion);
-    command(m, m.b, B, "stale-amendment", { type: "national_approve_pact_amendment", expectedDefenseVersion: oldVersion }, false);
-    command(m, m.b, B, "b-amendment", { type: "national_approve_pact_amendment", expectedDefenseVersion: freshVersion });
+    command(
+      m,
+      m.b,
+      B,
+      "stale-amendment",
+      {
+        type: "national_approve_pact_amendment",
+        expectedDefenseVersion: oldVersion,
+      },
+      false,
+    );
+    command(m, m.b, B, "b-amendment", {
+      type: "national_approve_pact_amendment",
+      expectedDefenseVersion: freshVersion,
+    });
     expect(memberView(m).terms.membershipCap).toBe(4);
-    command(m, m.c, C, "c-amendment", { type: "national_approve_pact_amendment", expectedDefenseVersion: freshVersion });
+    command(m, m.c, C, "c-amendment", {
+      type: "national_approve_pact_amendment",
+      expectedDefenseVersion: freshVersion,
+    });
     expect(memberView(m).terms.membershipCap).toBe(3);
     expect(memberView(m).memberIds).toHaveLength(3);
     const before = m.game.player(C).troops();
-    expect(m.game.performNationalPoliticalCommandWithOutcome(m.game.player(C), { kind: "betray-pact", pactId }, "no-levy-betray", CCLIENT).accepted).toBe(true);
+    expect(
+      m.game.performNationalPoliticalCommandWithOutcome(
+        m.game.player(C),
+        { kind: "betray-pact", pactId },
+        "no-levy-betray",
+        CCLIENT,
+      ).accepted,
+    ).toBe(true);
     expect(m.game.player(C).troops()).toBe(before);
     expect(m.game.nationalMdaAllies(C)).toEqual([]);
   });
@@ -347,16 +478,38 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
     const ids = [A, B, C, D, "C7EXTRAE", "C7EXTRAF"];
     for (const rule of ["majority", "supermajority"] as const) {
       const runtime = new NationalRuntime(ids);
-      runtime.perform(A, { kind: "found-pact", pactId, name: "Six signatories", pactKind: "NAP", terms: { admission: "leader", expulsion: rule, membershipCap: 6 } });
+      runtime.perform(A, {
+        kind: "found-pact",
+        pactId,
+        name: "Six signatories",
+        pactKind: "NAP",
+        terms: { admission: "leader", expulsion: rule, membershipCap: 6 },
+      });
       const current = () => runtime.snapshot().politics.pacts[0];
       for (const id of ids.slice(1)) {
         const version = current().constitutionVersion!;
-        runtime.perform(A, { kind: "invite-pact", pactId, candidateId: id, constitutionVersion: version, admissionAction: "propose" });
-        runtime.perform(id, { kind: "accept-pact", pactId, constitutionVersion: version });
+        runtime.perform(A, {
+          kind: "invite-pact",
+          pactId,
+          candidateId: id,
+          constitutionVersion: version,
+          admissionAction: "propose",
+        });
+        runtime.perform(id, {
+          kind: "accept-pact",
+          pactId,
+          constitutionVersion: version,
+        });
       }
       const version = current().constitutionVersion!;
       const target = ids[5];
-      const ballot = (id: string) => runtime.perform(id, { kind: "expel-pact", pactId, memberId: target, constitutionVersion: version });
+      const ballot = (id: string) =>
+        runtime.perform(id, {
+          kind: "expel-pact",
+          pactId,
+          memberId: target,
+          constitutionVersion: version,
+        });
       expect(() => ballot(target)).toThrow();
       ballot(A);
       ballot(B);
@@ -365,7 +518,9 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
       if (rule === "supermajority") {
         expect(current().memberIds).toHaveLength(6);
         const pending = runtime.snapshot();
-        expect(NationalRuntime.restore(pending, ids, 0).snapshot()).toEqual(pending);
+        expect(NationalRuntime.restore(pending, ids, 0).snapshot()).toEqual(
+          pending,
+        );
         const corrupt = structuredClone(pending);
         corrupt.politics.pacts[0].expulsionBallots![0].approvedBy.push(target);
         expect(() => NationalRuntime.restore(corrupt, ids, 0)).toThrow();
@@ -379,34 +534,96 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
 
   it("selected expellers are independent of admission approvers and empire entry revokes pending ballots", () => {
     const runtime = new NationalRuntime([A, B, C, D]);
-    runtime.perform(A, { kind: "found-pact", pactId, name: "Separate powers", pactKind: "NAP", terms: { admission: "leader", expulsion: "forbidden" } });
+    runtime.perform(A, {
+      kind: "found-pact",
+      pactId,
+      name: "Separate powers",
+      pactKind: "NAP",
+      terms: { admission: "leader", expulsion: "forbidden" },
+    });
     for (const id of [B, C]) {
       runtime.perform(A, { kind: "invite-pact", pactId, candidateId: id });
       runtime.perform(id, { kind: "accept-pact", pactId });
     }
-    runtime.perform(A, { kind: "propose-pact-amendment", pactId, administratorId: A, terms: {
-      admission: "selected", selectedApproverIds: [A], expulsion: "selected", selectedExpellerIds: [B, C],
-    } });
-    const amendVersion = runtime.snapshot().politics.pacts[0].pendingAmendment!.defenseVersion!;
-    for (const id of [B, C]) runtime.perform(id, { kind: "approve-pact-amendment", pactId, expectedDefenseVersion: amendVersion });
+    runtime.perform(A, {
+      kind: "propose-pact-amendment",
+      pactId,
+      administratorId: A,
+      terms: {
+        admission: "selected",
+        selectedApproverIds: [A],
+        expulsion: "selected",
+        selectedExpellerIds: [B, C],
+      },
+    });
+    const amendVersion =
+      runtime.snapshot().politics.pacts[0].pendingAmendment!.defenseVersion!;
+    for (const id of [B, C])
+      runtime.perform(id, {
+        kind: "approve-pact-amendment",
+        pactId,
+        expectedDefenseVersion: amendVersion,
+      });
     const version = runtime.snapshot().politics.pacts[0].constitutionVersion!;
-    expect(() => runtime.perform(A, { kind: "expel-pact", pactId, memberId: C, constitutionVersion: version })).toThrow();
-    expect(() => runtime.perform(B, { kind: "invite-pact", pactId, candidateId: D, constitutionVersion: version, admissionAction: "propose" })).toThrow();
-    runtime.perform(B, { kind: "expel-pact", pactId, memberId: A, constitutionVersion: version });
-    expect(runtime.snapshot().politics.pacts[0].expulsionBallots?.[0].approvedBy).toEqual([B]);
+    expect(() =>
+      runtime.perform(A, {
+        kind: "expel-pact",
+        pactId,
+        memberId: C,
+        constitutionVersion: version,
+      }),
+    ).toThrow();
+    expect(() =>
+      runtime.perform(B, {
+        kind: "invite-pact",
+        pactId,
+        candidateId: D,
+        constitutionVersion: version,
+        admissionAction: "propose",
+      }),
+    ).toThrow();
+    runtime.perform(B, {
+      kind: "expel-pact",
+      pactId,
+      memberId: A,
+      constitutionVersion: version,
+    });
+    expect(
+      runtime.snapshot().politics.pacts[0].expulsionBallots?.[0].approvedBy,
+    ).toEqual([B]);
     runtime.perform(C, { kind: "found-empire", empireId: "c7_empire" });
     const updated = runtime.snapshot().politics.pacts[0];
     expect(updated.memberIds).toEqual([A, B].sort());
     expect(updated.expulsionBallots).toBeUndefined();
     expect(updated.terms.selectedExpellerIds).toEqual([B]);
-    expect(() => runtime.perform(B, { kind: "expel-pact", pactId, memberId: A, constitutionVersion: version })).toThrow();
+    expect(() =>
+      runtime.perform(B, {
+        kind: "expel-pact",
+        pactId,
+        memberId: A,
+        constitutionVersion: version,
+      }),
+    ).toThrow();
   });
 
   it("does not enable any constitutional command in legacy FFA", async () => {
-    const game = await setup("plains", { gameType: GameType.Private, gameMode: GameMode.FFA, nationalMode: false }, people);
-    expect(() => game.performNationalCommand(game.player(A), {
-      kind: "found-pact", pactId, name: "illegal", pactKind: "NAP",
-      terms: { admission: "leader", expulsion: "majority", membershipCap: 3 },
-    })).toThrow(/NATIONAL/);
+    const game = await setup(
+      "plains",
+      {
+        gameType: GameType.Private,
+        gameMode: GameMode.FFA,
+        nationalMode: false,
+      },
+      people,
+    );
+    expect(() =>
+      game.performNationalCommand(game.player(A), {
+        kind: "found-pact",
+        pactId,
+        name: "illegal",
+        pactKind: "NAP",
+        terms: { admission: "leader", expulsion: "majority", membershipCap: 3 },
+      }),
+    ).toThrow(/NATIONAL/);
   });
 });

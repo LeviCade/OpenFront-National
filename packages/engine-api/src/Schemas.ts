@@ -841,24 +841,35 @@ export const NationalExpelPactIntentSchema = z.object({
 });
 
 /** C7: separate versioned intent variants preserve existing positional zbin layouts. */
-const NationalCoalitionV2TermsSchema = NationalFoundPactIntentSchema.shape.terms.extend({
-  expulsion: z.enum(["leader", "unanimous", "forbidden", "selected", "majority", "supermajority"]),
-  membershipCap: zb.uint({ min: 2, max: 256 }).optional(),
-  invitationDurationTicks: zb.uint({ min: 1, max: 36000 }).optional(),
-  selectedExpellerIds: z.array(MappedID).max(256).optional(),
-});
-export const NationalFoundPactV2IntentSchema = NationalFoundPactIntentSchema.extend({
-  type: z.literal("national_found_pact_v2"),
-  terms: NationalCoalitionV2TermsSchema,
-});
-export const NationalProposePactAmendmentV2IntentSchema = NationalProposePactAmendmentIntentSchema.extend({
-  type: z.literal("national_propose_pact_amendment_v2"),
-  terms: NationalCoalitionV2TermsSchema,
-});
-export const NationalExpelPactV2IntentSchema = NationalExpelPactIntentSchema.extend({
-  type: z.literal("national_expel_pact_v2"),
-  constitutionVersion: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER - 1 }),
-});
+const NationalCoalitionV2TermsSchema =
+  NationalFoundPactIntentSchema.shape.terms.extend({
+    expulsion: z.enum([
+      "leader",
+      "unanimous",
+      "forbidden",
+      "selected",
+      "majority",
+      "supermajority",
+    ]),
+    membershipCap: zb.uint({ min: 2, max: 256 }).optional(),
+    invitationDurationTicks: zb.uint({ min: 1, max: 36000 }).optional(),
+    selectedExpellerIds: z.array(MappedID).max(256).optional(),
+  });
+export const NationalFoundPactV2IntentSchema =
+  NationalFoundPactIntentSchema.extend({
+    type: z.literal("national_found_pact_v2"),
+    terms: NationalCoalitionV2TermsSchema,
+  });
+export const NationalProposePactAmendmentV2IntentSchema =
+  NationalProposePactAmendmentIntentSchema.extend({
+    type: z.literal("national_propose_pact_amendment_v2"),
+    terms: NationalCoalitionV2TermsSchema,
+  });
+export const NationalExpelPactV2IntentSchema =
+  NationalExpelPactIntentSchema.extend({
+    type: z.literal("national_expel_pact_v2"),
+    constitutionVersion: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER - 1 }),
+  });
 export const NationalRejectPactAmendmentV2IntentSchema = z.object({
   type: z.literal("national_reject_pact_amendment_v2"),
   pactId: NationalPoliticalId,

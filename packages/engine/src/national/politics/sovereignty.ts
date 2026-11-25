@@ -32,7 +32,12 @@ export interface PoliticsNation {
 
 export type PactKind = "NAP" | "MDA";
 export type VoteRule = "leader" | "unanimous";
-export type ExpulsionRule = VoteRule | "forbidden" | "selected" | "majority" | "supermajority";
+export type ExpulsionRule =
+  | VoteRule
+  | "forbidden"
+  | "selected"
+  | "majority"
+  | "supermajority";
 export type AdmissionRule =
   | VoteRule
   | "selected"
@@ -163,15 +168,19 @@ export function usesAdmissionElection(rule: AdmissionRule): boolean {
 }
 
 export function hasExtendedPactTerms(terms: PactTerms): boolean {
-  return terms.membershipCap !== undefined ||
+  return (
+    terms.membershipCap !== undefined ||
     terms.invitationDurationTicks !== undefined ||
     terms.expulsion === "selected" ||
     terms.expulsion === "majority" ||
-    terms.expulsion === "supermajority";
+    terms.expulsion === "supermajority"
+  );
 }
 
 export function usesVersionedPact(p: PoliticsPact): boolean {
-  return p.extendedGovernance === true || usesAdmissionElection(p.terms.admission);
+  return (
+    p.extendedGovernance === true || usesAdmissionElection(p.terms.admission)
+  );
 }
 
 export function clonePactTerms(terms: PactTerms): PactTerms {
@@ -207,7 +216,14 @@ function validatePactTerms(
     "invalid admission rule",
   );
   requireRule(
-    ["leader", "unanimous", "forbidden", "selected", "majority", "supermajority"].includes(terms.expulsion),
+    [
+      "leader",
+      "unanimous",
+      "forbidden",
+      "selected",
+      "majority",
+      "supermajority",
+    ].includes(terms.expulsion),
     "invalid expulsion rule",
   );
   requireRule(
@@ -228,10 +244,10 @@ function validatePactTerms(
   requireRule(
     terms.expulsion === "selected"
       ? Array.isArray(expellers) &&
-        expellers.length <= MAX_ADMISSION_VOTERS &&
-        (!requireSelected || expellers.length > 0) &&
-        unique(expellers) &&
-        expellers.every((id) => members.includes(id))
+          expellers.length <= MAX_ADMISSION_VOTERS &&
+          (!requireSelected || expellers.length > 0) &&
+          unique(expellers) &&
+          expellers.every((id) => members.includes(id))
       : expellers === undefined,
     "invalid selected expulsion approvers",
   );
@@ -263,8 +279,11 @@ export function pactAdmissionAuthorized(
   p: PoliticsPact,
   approvedBy: readonly string[],
 ): boolean {
-  if (p.terms.membershipCap !== undefined &&
-      p.memberIds.length >= p.terms.membershipCap) return false;
+  if (
+    p.terms.membershipCap !== undefined &&
+    p.memberIds.length >= p.terms.membershipCap
+  )
+    return false;
   const eligible = eligibleAdmissionVoters(p);
   if (eligible.length === 0) return false;
   const votes = eligible.filter((id) => approvedBy.includes(id)).length;
@@ -281,20 +300,31 @@ export function pactAdmissionAuthorized(
  * Strict majority = floor(n/2)+1; supermajority = ceil(2n/3).
  * Selected and unanimous require every eligible voter; empty electorates deny.
  */
-export function eligibleExpulsionVoters(p: PoliticsPact, targetId: string): string[] {
+export function eligibleExpulsionVoters(
+  p: PoliticsPact,
+  targetId: string,
+): string[] {
   if (p.terms.expulsion === "forbidden") return [];
-  const voters = p.terms.expulsion === "leader"
-    ? (p.administratorId === null ? [] : [p.administratorId])
-    : p.terms.expulsion === "selected"
-      ? (p.terms.selectedExpellerIds ?? [])
-      : p.memberIds;
+  const voters =
+    p.terms.expulsion === "leader"
+      ? p.administratorId === null
+        ? []
+        : [p.administratorId]
+      : p.terms.expulsion === "selected"
+        ? (p.terms.selectedExpellerIds ?? [])
+        : p.memberIds;
   return voters.filter((id) => id !== targetId && p.memberIds.includes(id));
 }
 
-export function expulsionThreshold(p: PoliticsPact, eligibleCount: number): number {
+export function expulsionThreshold(
+  p: PoliticsPact,
+  eligibleCount: number,
+): number {
   if (eligibleCount === 0) return 1;
-  if (p.terms.expulsion === "majority") return Math.floor(eligibleCount / 2) + 1;
-  if (p.terms.expulsion === "supermajority") return Math.ceil(2 * eligibleCount / 3);
+  if (p.terms.expulsion === "majority")
+    return Math.floor(eligibleCount / 2) + 1;
+  if (p.terms.expulsion === "supermajority")
+    return Math.ceil((2 * eligibleCount) / 3);
   return eligibleCount;
 }
 
@@ -313,16 +343,16 @@ function revokeAdmissionElections(
   world.admissionEpoch = epoch;
   p.constitutionVersion = epoch;
   const preserve = excludedCandidateId !== undefined || preserveExisting;
-  p.invitations =
-    !preserve
-      ? []
-      : p.invitations
-          .filter((i) => i.targetId !== excludedCandidateId)
-          .map((i) => ({ ...i, constitutionVersion: epoch }));
+  p.invitations = !preserve
+    ? []
+    : p.invitations
+        .filter((i) => i.targetId !== excludedCandidateId)
+        .map((i) => ({ ...i, constitutionVersion: epoch }));
   if (!preserve) delete p.expulsionBallots;
   else if (p.expulsionBallots)
     p.expulsionBallots = p.expulsionBallots.map((b) => ({
-      ...b, constitutionVersion: epoch,
+      ...b,
+      constitutionVersion: epoch,
     }));
 }
 
@@ -348,8 +378,7 @@ function updateAdmissionAfterDeparture(
     p.terms.selectedExpellerIds = (p.terms.selectedExpellerIds ?? []).filter(
       (member) => member !== id,
     );
-  if (usesVersionedPact(p))
-    revokeAdmissionElections(world, p);
+  if (usesVersionedPact(p)) revokeAdmissionElections(world, p);
 }
 
 function installPactTerms(
@@ -359,7 +388,8 @@ function installPactTerms(
 ): void {
   validatePactTerms(terms, p.memberIds, true);
   if (hasExtendedPactTerms(terms)) p.extendedGovernance = true;
-  const governed = usesVersionedPact(p) || usesAdmissionElection(terms.admission);
+  const governed =
+    usesVersionedPact(p) || usesAdmissionElection(terms.admission);
   p.terms = clonePactTerms(terms);
   if (governed) revokeAdmissionElections(world, p);
 }
@@ -382,11 +412,14 @@ function copy(world: PoliticsProjection): PoliticsProjection {
         ...i,
         approvedBy: [...i.approvedBy],
       })),
-      ...(p.expulsionBallots === undefined ? {} : {
-        expulsionBallots: p.expulsionBallots.map((b) => ({
-          ...b, approvedBy: [...b.approvedBy],
-        })),
-      }),
+      ...(p.expulsionBallots === undefined
+        ? {}
+        : {
+            expulsionBallots: p.expulsionBallots.map((b) => ({
+              ...b,
+              approvedBy: [...b.approvedBy],
+            })),
+          }),
       ...(p.pendingAmendment
         ? {
             pendingAmendment: {
@@ -576,8 +609,12 @@ export function validatePolitics(world: PoliticsProjection): void {
     if (p.pendingAmendment !== undefined) {
       const proposed = p.pendingAmendment;
       validateTreatyDefenseTerms(p.kind, proposed.terms);
-      if (hasDefenseTerms(p.terms) || hasDefenseTerms(proposed.terms) ||
-          p.extendedGovernance || hasExtendedPactTerms(proposed.terms)) {
+      if (
+        hasDefenseTerms(p.terms) ||
+        hasDefenseTerms(proposed.terms) ||
+        p.extendedGovernance ||
+        hasExtendedPactTerms(proposed.terms)
+      ) {
         const version = proposed.defenseVersion;
         requireRule(
           version !== undefined &&
@@ -641,7 +678,8 @@ export function validatePolitics(world: PoliticsProjection): void {
     }
     requireRule(
       p.terms.membershipCap === undefined ||
-        p.memberIds.length < p.terms.membershipCap || p.invitations.length === 0,
+        p.memberIds.length < p.terms.membershipCap ||
+        p.invitations.length === 0,
       "full pact has pending invitations",
     );
     for (const invitation of p.invitations) {
@@ -649,9 +687,10 @@ export function validatePolitics(world: PoliticsProjection): void {
         p.terms.invitationDurationTicks === undefined
           ? invitation.expiresAtMs === undefined
           : invitation.expiresAtMs !== undefined &&
-            Number.isSafeInteger(invitation.expiresAtMs) &&
-            invitation.expiresAtMs > world.simulationMs &&
-            invitation.expiresAtMs <= world.simulationMs + p.terms.invitationDurationTicks * 100,
+              Number.isSafeInteger(invitation.expiresAtMs) &&
+              invitation.expiresAtMs > world.simulationMs &&
+              invitation.expiresAtMs <=
+                world.simulationMs + p.terms.invitationDurationTicks * 100,
         "invalid or expired invitation deadline",
       );
       requireRule(
@@ -743,10 +782,7 @@ function independent(world: PoliticsProjection, id: string): void {
 function removePactMember(world: PoliticsProjection, id: string): void {
   world.pacts = world.pacts.flatMap((p) => {
     if (!p.memberIds.includes(id)) {
-      if (
-        usesVersionedPact(p) &&
-        p.invitations.some((i) => i.targetId === id)
-      )
+      if (usesVersionedPact(p) && p.invitations.some((i) => i.targetId === id))
         revokeAdmissionElections(world, p, id);
       else p.invitations = p.invitations.filter((i) => i.targetId !== id);
       return [p];
@@ -771,8 +807,8 @@ function advance(world: PoliticsProjection, simulationMs: number): void {
   );
   world.simulationMs = simulationMs;
   for (const p of world.pacts) {
-    const active = p.invitations.filter((i) =>
-      i.expiresAtMs === undefined || i.expiresAtMs > simulationMs,
+    const active = p.invitations.filter(
+      (i) => i.expiresAtMs === undefined || i.expiresAtMs > simulationMs,
     );
     if (active.length !== p.invitations.length) {
       p.invitations = active;
@@ -842,7 +878,9 @@ export function foundPact(
     administratorId: input.founderId,
     terms: clonePactTerms(input.terms),
     invitations: [],
-    ...(hasExtendedPactTerms(input.terms) ? { extendedGovernance: true as const } : {}),
+    ...(hasExtendedPactTerms(input.terms)
+      ? { extendedGovernance: true as const }
+      : {}),
   });
   if (usesVersionedPact(pact(next, input.id)))
     revokeAdmissionElections(next, pact(next, input.id));
@@ -863,7 +901,8 @@ export function inviteToPact(
   checkElectionVersion(p, constitutionVersion);
   requireRule(p.memberIds.includes(proposerId), "not a pact member");
   requireRule(
-    p.terms.membershipCap === undefined || p.memberIds.length < p.terms.membershipCap,
+    p.terms.membershipCap === undefined ||
+      p.memberIds.length < p.terms.membershipCap,
     "membership cap reached",
   );
   const election = usesVersionedPact(p);
@@ -886,9 +925,12 @@ export function inviteToPact(
     targetId: candidateId,
     approvedBy: [proposerId],
     ...(election ? { constitutionVersion, proposerId } : {}),
-    ...(p.terms.invitationDurationTicks === undefined ? {} : {
-      expiresAtMs: world.simulationMs + p.terms.invitationDurationTicks * 100,
-    }),
+    ...(p.terms.invitationDurationTicks === undefined
+      ? {}
+      : {
+          expiresAtMs:
+            world.simulationMs + p.terms.invitationDurationTicks * 100,
+        }),
   });
   validatePolitics(next);
   return next;
@@ -966,11 +1008,13 @@ export function acceptPactInvitation(
   const invitation = p.invitations.find((i) => i.targetId === candidateId);
   requireRule(invitation !== undefined, "no invitation to accept");
   requireRule(
-    p.terms.membershipCap === undefined || p.memberIds.length < p.terms.membershipCap,
+    p.terms.membershipCap === undefined ||
+      p.memberIds.length < p.terms.membershipCap,
     "membership cap reached",
   );
   requireRule(
-    invitation.expiresAtMs === undefined || world.simulationMs < invitation.expiresAtMs,
+    invitation.expiresAtMs === undefined ||
+      world.simulationMs < invitation.expiresAtMs,
     "invitation expired",
   );
   requireRule(
@@ -984,8 +1028,7 @@ export function acceptPactInvitation(
   target.invitations = target.invitations.filter(
     (i) => i.targetId !== candidateId,
   );
-  if (usesVersionedPact(target))
-    revokeAdmissionElections(next, target);
+  if (usesVersionedPact(target)) revokeAdmissionElections(next, target);
   validatePolitics(next);
   return next;
 }
@@ -1043,8 +1086,10 @@ export function proposePactAmendment(
   const next = copy(world);
   const target = pact(next, pactId);
   const versioned =
-    hasDefenseTerms(current.terms) || hasDefenseTerms(proposed.terms) ||
-    current.extendedGovernance === true || hasExtendedPactTerms(proposed.terms);
+    hasDefenseTerms(current.terms) ||
+    hasDefenseTerms(proposed.terms) ||
+    current.extendedGovernance === true ||
+    hasExtendedPactTerms(proposed.terms);
   const defenseVersion = (next.defenseAmendmentSequence ?? 0) + 1;
   if (versioned) {
     requireRule(
@@ -1092,7 +1137,10 @@ export function approvePactAmendment(
   const target = pact(next, pactId);
   const pending = target.pendingAmendment!;
   if (reject) {
-    requireRule(expectedDefenseVersion !== undefined, "versioned amendment rejection required");
+    requireRule(
+      expectedDefenseVersion !== undefined,
+      "versioned amendment rejection required",
+    );
     delete target.pendingAmendment;
     validatePolitics(next);
     return next;
@@ -1157,7 +1205,10 @@ export function votePactExpulsion(
   const eligible = eligibleExpulsionVoters(p, targetId);
   requireRule(eligible.includes(actorId), "ineligible expulsion voter");
   const existing = p.expulsionBallots?.find((b) => b.targetId === targetId);
-  requireRule(!existing?.approvedBy.includes(actorId), "duplicate expulsion vote");
+  requireRule(
+    !existing?.approvedBy.includes(actorId),
+    "duplicate expulsion vote",
+  );
   const next = copy(world);
   const target = pact(next, pactId);
   const approvedBy = sorted([...(existing?.approvedBy ?? []), actorId]);
@@ -1165,11 +1216,16 @@ export function votePactExpulsion(
     removeMemberFromOnePact(next, pactId, targetId);
   } else {
     const ballots = target.expulsionBallots ?? [];
-    requireRule(existing !== undefined || ballots.length < MAX_ADMISSION_RECORDS, "too many expulsion ballots");
+    requireRule(
+      existing !== undefined || ballots.length < MAX_ADMISSION_RECORDS,
+      "too many expulsion ballots",
+    );
     target.expulsionBallots = [
       ...ballots.filter((b) => b.targetId !== targetId),
       { targetId, constitutionVersion, approvedBy },
-    ].sort((a, b) => a.targetId < b.targetId ? -1 : a.targetId > b.targetId ? 1 : 0);
+    ].sort((a, b) =>
+      a.targetId < b.targetId ? -1 : a.targetId > b.targetId ? 1 : 0,
+    );
   }
   validatePolitics(next);
   return next;
@@ -1638,9 +1694,7 @@ export function viewPact(
   validatePolitics(world);
   const p = pact(world, pactId);
   const invited = p.invitations.some(
-    (i) =>
-      i.targetId === viewerId &&
-      pactAdmissionAuthorized(p, i.approvedBy),
+    (i) => i.targetId === viewerId && pactAdmissionAuthorized(p, i.approvedBy),
   );
   const privileged =
     viewerId !== null && (p.memberIds.includes(viewerId) || invited);

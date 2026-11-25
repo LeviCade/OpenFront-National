@@ -1,7 +1,10 @@
 import { GameType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import type { NationalUltimatumViewData } from "@openfront/engine-api/game/GameUpdates";
+import {
+  coalitionEligibleExpellers,
+  coalitionExpulsionThreshold,
+} from "@openfront/engine-api/game/NationalCoalitionConstitution";
 import type { NationalImperialAdministrationView } from "@openfront/engine-api/game/NationalImperialView";
-import { coalitionEligibleExpellers, coalitionExpulsionThreshold } from "@openfront/engine-api/game/NationalCoalitionConstitution";
 import type { NationalPactTerms } from "@openfront/engine-api/game/NationalPactView";
 import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing, type PropertyValues } from "lit";
@@ -1387,9 +1390,18 @@ export class NationalDiplomacyPanel extends LitElement {
           <option value="unanimous" ?selected=${t.expulsion === "unanimous"}>
             Unanimous (extended pacts: all remaining members)
           </option>
-          <option value="selected" ?selected=${t.expulsion === "selected"}>Selected expulsion approvers</option>
-          <option value="majority" ?selected=${t.expulsion === "majority"}>Strict simple majority</option>
-          <option value="supermajority" ?selected=${t.expulsion === "supermajority"}>Two-thirds supermajority</option>
+          <option value="selected" ?selected=${t.expulsion === "selected"}>
+            Selected expulsion approvers
+          </option>
+          <option value="majority" ?selected=${t.expulsion === "majority"}>
+            Strict simple majority
+          </option>
+          <option
+            value="supermajority"
+            ?selected=${t.expulsion === "supermajority"}
+          >
+            Two-thirds supermajority
+          </option>
           <option value="forbidden" ?selected=${t.expulsion === "forbidden"}>
             Forbidden
           </option>
@@ -1399,11 +1411,30 @@ export class NationalDiplomacyPanel extends LitElement {
         <legend>Selected expulsion approvers (independent of admission)</legend>
         ${members.map((id) => html`<label><input type="checkbox" name="expeller" value=${id} .checked=${t.selectedExpellerIds?.includes(id) ?? false} />${this.playerName(id)}</label>`)}
       </fieldset>
-      <label>Maximum membership (blank = unlimited)
-        <input type="number" class="bg-slate-800" name="membership-cap" min="2" max="256" step="1" .value=${t.membershipCap === undefined ? "" : String(t.membershipCap)} />
+      <label
+        >Maximum membership (blank = unlimited)
+        <input
+          type="number"
+          class="bg-slate-800"
+          name="membership-cap"
+          min="2"
+          max="256"
+          step="1"
+          .value=${t.membershipCap === undefined ? "" : String(t.membershipCap)}
+        />
       </label>
-      <label>Invitation lifetime in simulation ticks (10 ticks = 1 second; blank = no deadline)
-        <input type="number" class="bg-slate-800" name="invitation-duration" min="1" max="36000" step="1" .value=${t.invitationDurationTicks === undefined ? "" : String(t.invitationDurationTicks)} />
+      <label
+        >Invitation lifetime in simulation ticks (10 ticks = 1 second; blank =
+        no deadline)
+        <input
+          type="number"
+          class="bg-slate-800"
+          name="invitation-duration"
+          min="1"
+          max="36000"
+          step="1"
+          .value=${t.invitationDurationTicks === undefined ? "" : String(t.invitationDurationTicks)}
+        />
       </label>
       ${
         defense
@@ -1479,15 +1510,28 @@ export class NationalDiplomacyPanel extends LitElement {
       if (r !== 3000 || defense.defenseReserveBps !== undefined)
         Object.assign(policy, { defenseReserveBps: r });
     }
-    const extended: Pick<NationalPactTerms, "membershipCap" | "invitationDurationTicks" | "selectedExpellerIds"> = {};
+    const extended: Pick<
+      NationalPactTerms,
+      "membershipCap" | "invitationDurationTicks" | "selectedExpellerIds"
+    > = {};
     const membership = String(data.get("membership-cap") ?? "");
     const duration = String(data.get("invitation-duration") ?? "");
     if (membership !== "") {
-      if (!/^\d+$/.test(membership) || Number(membership) < 2 || Number(membership) > 256) return null;
+      if (
+        !/^\d+$/.test(membership) ||
+        Number(membership) < 2 ||
+        Number(membership) > 256
+      )
+        return null;
       Object.assign(extended, { membershipCap: Number(membership) });
     }
     if (duration !== "") {
-      if (!/^\d+$/.test(duration) || Number(duration) < 1 || Number(duration) > 36000) return null;
+      if (
+        !/^\d+$/.test(duration) ||
+        Number(duration) < 1 ||
+        Number(duration) > 36000
+      )
+        return null;
       Object.assign(extended, { invitationDurationTicks: Number(duration) });
     }
     if (expulsion === "selected") {
@@ -1498,7 +1542,13 @@ export class NationalDiplomacyPanel extends LitElement {
     if (admission === "selected") {
       const selectedApproverIds = data.getAll("approver").map(String).sort();
       if (!selectedApproverIds.length) return null;
-      return { admission, expulsion, selectedApproverIds, ...policy, ...extended };
+      return {
+        admission,
+        expulsion,
+        selectedApproverIds,
+        ...policy,
+        ...extended,
+      };
     }
     return { admission, expulsion, ...policy, ...extended };
   }
@@ -2217,16 +2267,27 @@ export class NationalDiplomacyPanel extends LitElement {
                                       >
                                         Approve displayed amendment
                                       </button>
-                                      ${pending.defenseVersion === undefined ? nothing : html`
-                                        <button class=${button} type="button"
-                                          data-national-pact-action="reject-amendment"
-                                          ?disabled=${!enabled}
-                                          @click=${() => send({
-                                            type: "national_reject_pact_amendment_v2",
-                                            pactId: p.id,
-                                            expectedDefenseVersion: pending.defenseVersion!,
-                                          })}>Reject amendment</button>
-                                      `}
+                                      ${
+                                        pending.defenseVersion === undefined
+                                          ? nothing
+                                          : html`
+                                              <button
+                                                class=${button}
+                                                type="button"
+                                                data-national-pact-action="reject-amendment"
+                                                ?disabled=${!enabled}
+                                                @click=${() =>
+                                                  send({
+                                                    type: "national_reject_pact_amendment_v2",
+                                                    pactId: p.id,
+                                                    expectedDefenseVersion:
+                                                      pending.defenseVersion!,
+                                                  })}
+                                              >
+                                                Reject amendment
+                                              </button>
+                                            `
+                                      }
                                     </div>`
                                   : html`<form
                                       class=${formClass}
@@ -2242,10 +2303,25 @@ export class NationalDiplomacyPanel extends LitElement {
                                             data.get("administrator") ?? "",
                                           );
                                           if (terms) {
-                                            const legacy = legacyPactTerms(terms);
-                                            send(legacy && !d.extendedGovernance
-                                              ? { type: "national_propose_pact_amendment", pactId: p.id, terms: legacy, administratorId: admin || null }
-                                              : { type: "national_propose_pact_amendment_v2", pactId: p.id, terms, administratorId: admin || null });
+                                            const legacy =
+                                              legacyPactTerms(terms);
+                                            send(
+                                              legacy && !d.extendedGovernance
+                                                ? {
+                                                    type: "national_propose_pact_amendment",
+                                                    pactId: p.id,
+                                                    terms: legacy,
+                                                    administratorId:
+                                                      admin || null,
+                                                  }
+                                                : {
+                                                    type: "national_propose_pact_amendment_v2",
+                                                    pactId: p.id,
+                                                    terms,
+                                                    administratorId:
+                                                      admin || null,
+                                                  },
+                                            );
                                           }
                                         })}
                                     >
@@ -2275,29 +2351,60 @@ export class NationalDiplomacyPanel extends LitElement {
                                       </button>
                                     </form>`
                               }
-                              ${d.expulsionBallots?.map((b) => html`<p data-national-expulsion-ballot>
-                                Expulsion of ${this.playerName(b.targetId)}:
-                                ${b.approvedBy.length}/${coalitionExpulsionThreshold(d.terms, coalitionEligibleExpellers(d.terms, p, b.targetId).length)} required approvals.
-                              </p>`)}
+                              ${d.expulsionBallots?.map(
+                                (b) =>
+                                  html`<p data-national-expulsion-ballot>
+                                    Expulsion of ${this.playerName(b.targetId)}:
+                                    ${b.approvedBy.length}/${coalitionExpulsionThreshold(d.terms, coalitionEligibleExpellers(d.terms, p, b.targetId).length)}
+                                    required approvals.
+                                  </p>`,
+                              )}
                               ${
-                                (d.extendedGovernance
-                                  ? p.memberIds.some((id) => c !== null &&
-                                    coalitionEligibleExpellers(d.terms, p, id).includes(c.actor) &&
-                                    !d.expulsionBallots?.find((b) => b.targetId === id)?.approvedBy.includes(c.actor))
-                                  : (d.terms.expulsion === "leader" &&
-                                  p.administratorId === c?.actor) ||
-                                (d.terms.expulsion === "unanimous" &&
-                                  p.memberIds.length === 2))
+                                (
+                                  d.extendedGovernance
+                                    ? p.memberIds.some(
+                                        (id) =>
+                                          c !== null &&
+                                          coalitionEligibleExpellers(
+                                            d.terms,
+                                            p,
+                                            id,
+                                          ).includes(c.actor) &&
+                                          !d.expulsionBallots
+                                            ?.find((b) => b.targetId === id)
+                                            ?.approvedBy.includes(c.actor),
+                                      )
+                                    : (d.terms.expulsion === "leader" &&
+                                        p.administratorId === c?.actor) ||
+                                      (d.terms.expulsion === "unanimous" &&
+                                        p.memberIds.length === 2)
+                                )
                                   ? html`<form
                                       class=${formClass}
                                       @submit=${(e: SubmitEvent) =>
                                         submit(e, (data) => {
                                           if (data.get("confirm") === "on") {
-                                            const memberId = String(data.get("member"));
-                                            if (d.extendedGovernance && d.constitutionVersion !== undefined)
-                                              send({ type: "national_expel_pact_v2", pactId: p.id, memberId, constitutionVersion: d.constitutionVersion });
+                                            const memberId = String(
+                                              data.get("member"),
+                                            );
+                                            if (
+                                              d.extendedGovernance &&
+                                              d.constitutionVersion !==
+                                                undefined
+                                            )
+                                              send({
+                                                type: "national_expel_pact_v2",
+                                                pactId: p.id,
+                                                memberId,
+                                                constitutionVersion:
+                                                  d.constitutionVersion,
+                                              });
                                             else if (!d.extendedGovernance)
-                                              send({ type: "national_expel_pact", pactId: p.id, memberId });
+                                              send({
+                                                type: "national_expel_pact",
+                                                pactId: p.id,
+                                                memberId,
+                                              });
                                           }
                                         })}
                                     >
@@ -2358,8 +2465,20 @@ export class NationalDiplomacyPanel extends LitElement {
                     const name = String(data.get("name") ?? "").trim();
                     this.sendPact(
                       legacy
-                        ? { type: "national_found_pact", pactId, name, pactKind: kind, terms: legacy }
-                        : { type: "national_found_pact_v2", pactId, name, pactKind: kind, terms },
+                        ? {
+                            type: "national_found_pact",
+                            pactId,
+                            name,
+                            pactKind: kind,
+                            terms: legacy,
+                          }
+                        : {
+                            type: "national_found_pact_v2",
+                            pactId,
+                            name,
+                            pactKind: kind,
+                            terms,
+                          },
                       pactConsentKey(c, pactId),
                     );
                   }

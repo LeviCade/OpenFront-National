@@ -11,7 +11,10 @@ import type {
   NationalPublicPolitics,
 } from "../../../src/client/NationalDiplomacyState";
 import { imperialPolicyIntentAvailable } from "../../../src/client/NationalImperialState";
-import type { PactReceipt } from "../../../src/client/NationalPactState";
+import {
+  pactReceiptType,
+  type PactReceipt,
+} from "../../../src/client/NationalPactState";
 import {
   SendNationalPactIntentEvent,
   SendNationalImperialPolicyIntentEvent,
@@ -803,7 +806,7 @@ describe("C4 E4 native constitutional controls", () => {
       optionsState.tick++;
       optionsState.pactReceipts = [
         {
-          type: intent.type,
+          type: pactReceiptType(intent.type),
           requestId: intent.requestId,
           actorId: "nation-a",
           recipientId: "nation-a",

@@ -81,7 +81,14 @@ const pactTerms = z.object({
     "supermajority",
   ]),
   selectedApproverIds: z.array(z.string().min(1).max(256)).max(256).optional(),
-  expulsion: z.enum(["leader", "unanimous", "forbidden", "selected", "majority", "supermajority"]),
+  expulsion: z.enum([
+    "leader",
+    "unanimous",
+    "forbidden",
+    "selected",
+    "majority",
+    "supermajority",
+  ]),
   membershipCap: z.number().int().min(2).max(256).optional(),
   invitationDurationTicks: z.number().int().min(1).max(36000).optional(),
   selectedExpellerIds: z.array(z.string().min(1).max(256)).max(256).optional(),
@@ -106,11 +113,16 @@ const politicsSchema = z.object({
       terms: pactTerms,
       constitutionVersion: counter.optional(),
       extendedGovernance: z.literal(true).optional(),
-      expulsionBallots: z.array(z.object({
-        targetId: z.string(),
-        constitutionVersion: counter,
-        approvedBy: z.array(z.string()),
-      })).max(256).optional(),
+      expulsionBallots: z
+        .array(
+          z.object({
+            targetId: z.string(),
+            constitutionVersion: counter,
+            approvedBy: z.array(z.string()),
+          }),
+        )
+        .max(256)
+        .optional(),
       invitations: z.array(
         z.object({
           targetId: z.string(),
@@ -1658,7 +1670,9 @@ export class NationalRuntime {
         );
       if (!member && !invited) continue;
       const pending = member ? p.pendingAmendment : undefined;
-      const expiry = invited ? p.invitations.find((i) => i.targetId === recipientId)?.expiresAtMs : undefined;
+      const expiry = invited
+        ? p.invitations.find((i) => i.targetId === recipientId)?.expiresAtMs
+        : undefined;
       views.push(
         Object.freeze({
           ...publicById.get(p.id)!,
@@ -1667,13 +1681,24 @@ export class NationalRuntime {
           ...(usesVersionedPact(p)
             ? { constitutionVersion: p.constitutionVersion }
             : {}),
-          ...(p.extendedGovernance ? { extendedGovernance: true as const } : {}),
-          ...(expiry === undefined ? {} : { invitationExpiresAtTick: expiry / 100 }),
-          ...(member && p.extendedGovernance ? {
-            expulsionBallots: Object.freeze((p.expulsionBallots ?? []).map((b) =>
-              Object.freeze({ targetId: b.targetId, approvedBy: Object.freeze([...b.approvedBy]) }),
-            )),
-          } : {}),
+          ...(p.extendedGovernance
+            ? { extendedGovernance: true as const }
+            : {}),
+          ...(expiry === undefined
+            ? {}
+            : { invitationExpiresAtTick: expiry / 100 }),
+          ...(member && p.extendedGovernance
+            ? {
+                expulsionBallots: Object.freeze(
+                  (p.expulsionBallots ?? []).map((b) =>
+                    Object.freeze({
+                      targetId: b.targetId,
+                      approvedBy: Object.freeze([...b.approvedBy]),
+                    }),
+                  ),
+                ),
+              }
+            : {}),
           invitations: Object.freeze(
             member
               ? p.invitations.map((i) =>
@@ -1681,7 +1706,9 @@ export class NationalRuntime {
                     targetId: i.targetId,
                     approvedBy: Object.freeze([...i.approvedBy].sort()),
                     authorized: authorized(i.approvedBy),
-                    ...(i.expiresAtMs === undefined ? {} : { expiresAtTick: i.expiresAtMs / 100 }),
+                    ...(i.expiresAtMs === undefined
+                      ? {}
+                      : { expiresAtTick: i.expiresAtMs / 100 }),
                   }),
                 )
               : [],
@@ -1705,14 +1732,22 @@ export class NationalRuntime {
           // unanimous pact has only one remaining voter, the requesting member.
           expellableMemberIds: Object.freeze(
             member && p.extendedGovernance
-              ? p.memberIds.filter((id) => eligibleExpulsionVoters(p, id).includes(recipientId) &&
-                  !p.expulsionBallots?.find((b) => b.targetId === id)?.approvedBy.includes(recipientId)).sort()
+              ? p.memberIds
+                  .filter(
+                    (id) =>
+                      eligibleExpulsionVoters(p, id).includes(recipientId) &&
+                      !p.expulsionBallots
+                        ?.find((b) => b.targetId === id)
+                        ?.approvedBy.includes(recipientId),
+                  )
+                  .sort()
               : member &&
-              ((p.terms.expulsion === "leader" &&
-                p.administratorId === recipientId) ||
-                (p.terms.expulsion === "unanimous" && p.memberIds.length === 2))
-              ? p.memberIds.filter((id) => id !== recipientId).sort()
-              : [],
+                  ((p.terms.expulsion === "leader" &&
+                    p.administratorId === recipientId) ||
+                    (p.terms.expulsion === "unanimous" &&
+                      p.memberIds.length === 2))
+                ? p.memberIds.filter((id) => id !== recipientId).sort()
+                : [],
           ),
         }),
       );
@@ -1747,12 +1782,21 @@ export class NationalRuntime {
     );
   }
 
-  mayReplayExpulsion(actorId: PlayerID, command: Extract<NationalCommand, { kind: "expel-pact" }>): boolean {
+  mayReplayExpulsion(
+    actorId: PlayerID,
+    command: Extract<NationalCommand, { kind: "expel-pact" }>,
+  ): boolean {
     const p = this.politics.pacts.find((entry) => entry.id === command.pactId);
-    if (command.constitutionVersion === undefined) return !p || !p.extendedGovernance;
-    return p?.extendedGovernance === true &&
+    if (command.constitutionVersion === undefined)
+      return !p || !p.extendedGovernance;
+    return (
+      p?.extendedGovernance === true &&
       p.constitutionVersion === command.constitutionVersion &&
-      p.expulsionBallots?.some((b) => b.targetId === command.memberId && b.approvedBy.includes(actorId)) === true;
+      p.expulsionBallots?.some(
+        (b) =>
+          b.targetId === command.memberId && b.approvedBy.includes(actorId),
+      ) === true
+    );
   }
 
   /** Minimal canonical disclosure contract consumed by E4's strict encoder. */
@@ -1766,9 +1810,15 @@ export class NationalRuntime {
             pactId: p.id,
             relationship: p.role,
             terms: p.terms,
-            ...(p.extendedGovernance ? { extendedGovernance: true as const } : {}),
-            ...(p.invitationExpiresAtTick === undefined ? {} : { invitationExpiresAtTick: p.invitationExpiresAtTick }),
-            ...(p.expulsionBallots === undefined ? {} : { expulsionBallots: p.expulsionBallots }),
+            ...(p.extendedGovernance
+              ? { extendedGovernance: true as const }
+              : {}),
+            ...(p.invitationExpiresAtTick === undefined
+              ? {}
+              : { invitationExpiresAtTick: p.invitationExpiresAtTick }),
+            ...(p.expulsionBallots === undefined
+              ? {}
+              : { expulsionBallots: p.expulsionBallots }),
             ...(p.constitutionVersion === undefined
               ? {}
               : {
@@ -1944,15 +1994,22 @@ export class NationalRuntime {
         if (command.approvingIds?.some((id) => id !== actorId)) {
           throw new Error("NATIONAL: other members cannot be impersonated");
         }
-        next = command.constitutionVersion === undefined
-          ? expelPactMember(
-              this.politics, command.pactId, actorId, command.memberId,
-              command.approvingIds ?? [actorId],
-            )
-          : votePactExpulsion(
-              this.politics, command.pactId, actorId, command.memberId,
-              command.constitutionVersion,
-            );
+        next =
+          command.constitutionVersion === undefined
+            ? expelPactMember(
+                this.politics,
+                command.pactId,
+                actorId,
+                command.memberId,
+                command.approvingIds ?? [actorId],
+              )
+            : votePactExpulsion(
+                this.politics,
+                command.pactId,
+                actorId,
+                command.memberId,
+                command.constitutionVersion,
+              );
         break;
       default:
         throw new Error("NATIONAL: unsupported political command");

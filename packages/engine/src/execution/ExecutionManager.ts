@@ -117,7 +117,9 @@ export class Executor {
             ...(intent.expectedDefenseVersion === undefined
               ? {}
               : { expectedDefenseVersion: intent.expectedDefenseVersion }),
-            ...(intent.type === "national_reject_pact_amendment_v2" ? { reject: true } : {}),
+            ...(intent.type === "national_reject_pact_amendment_v2"
+              ? { reject: true }
+              : {}),
           },
           intent.requestId,
           intent.clientID,
@@ -131,7 +133,9 @@ export class Executor {
             kind: "expel-pact",
             pactId: intent.pactId,
             memberId: intent.memberId,
-            ...(intent.type === "national_expel_pact_v2" ? { constitutionVersion: intent.constitutionVersion } : {}),
+            ...(intent.type === "national_expel_pact_v2"
+              ? { constitutionVersion: intent.constitutionVersion }
+              : {}),
           },
           intent.requestId,
           intent.clientID,

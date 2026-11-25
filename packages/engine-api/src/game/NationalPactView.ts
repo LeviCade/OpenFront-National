@@ -1,4 +1,9 @@
-import { coalitionEligibleExpellers, coalitionExpulsionThreshold, extendedCoalitionTerms, boundedCoalitionInteger } from "./NationalCoalitionConstitution";
+import {
+  coalitionEligibleExpellers,
+  coalitionExpulsionThreshold,
+  extendedCoalitionTerms,
+  boundedCoalitionInteger,
+} from "./NationalCoalitionConstitution";
 import { readNationalConfirmedVictory } from "./NationalVictoryView";
 
 /** Detached wire contract. No engine state or client-derived political authority. */
@@ -17,7 +22,13 @@ export interface NationalPactTerms {
     | "majority"
     | "supermajority";
   readonly selectedApproverIds?: string[];
-  readonly expulsion: "leader" | "unanimous" | "forbidden" | "selected" | "majority" | "supermajority";
+  readonly expulsion:
+    | "leader"
+    | "unanimous"
+    | "forbidden"
+    | "selected"
+    | "majority"
+    | "supermajority";
   readonly membershipCap?: number;
   readonly invitationDurationTicks?: number;
   readonly selectedExpellerIds?: string[];
@@ -118,10 +129,13 @@ function terms(value: unknown): NationalPactTerms | null {
       value.expulsion !== "majority" &&
       value.expulsion !== "supermajority") ||
     (value.expulsion === "selected"
-      ? !ids(value.selectedExpellerIds) || value.selectedExpellerIds.length > 256
+      ? !ids(value.selectedExpellerIds) ||
+        value.selectedExpellerIds.length > 256
       : value.selectedExpellerIds !== undefined) ||
-    (value.membershipCap !== undefined && !boundedCoalitionInteger(value.membershipCap, 2, 256)) ||
-    (value.invitationDurationTicks !== undefined && !boundedCoalitionInteger(value.invitationDurationTicks, 1, 36000))
+    (value.membershipCap !== undefined &&
+      !boundedCoalitionInteger(value.membershipCap, 2, 256)) ||
+    (value.invitationDurationTicks !== undefined &&
+      !boundedCoalitionInteger(value.invitationDurationTicks, 1, 36000))
   )
     return null;
   const cap = value.defenseContributionBps;
@@ -145,9 +159,15 @@ function terms(value: unknown): NationalPactTerms | null {
     ...(ids(value.selectedApproverIds)
       ? { selectedApproverIds: [...value.selectedApproverIds] }
       : {}),
-    ...(ids(value.selectedExpellerIds) ? { selectedExpellerIds: [...value.selectedExpellerIds] } : {}),
-    ...(typeof value.membershipCap === "number" ? { membershipCap: value.membershipCap } : {}),
-    ...(typeof value.invitationDurationTicks === "number" ? { invitationDurationTicks: value.invitationDurationTicks } : {}),
+    ...(ids(value.selectedExpellerIds)
+      ? { selectedExpellerIds: [...value.selectedExpellerIds] }
+      : {}),
+    ...(typeof value.membershipCap === "number"
+      ? { membershipCap: value.membershipCap }
+      : {}),
+    ...(typeof value.invitationDurationTicks === "number"
+      ? { invitationDurationTicks: value.invitationDurationTicks }
+      : {}),
     ...(cap === undefined ? {} : { defenseContributionBps: cap }),
     ...(reserve === undefined ? {} : { defenseReserveBps: reserve }),
   };
@@ -244,13 +264,23 @@ export function readNationalPactDisclosure(
     if (
       (p.extendedGovernance !== undefined && p.extendedGovernance !== true) ||
       (extendedCoalitionTerms(currentTerms) && p.extendedGovernance !== true) ||
-      (currentTerms.membershipCap !== undefined && currentTerms.membershipCap < publicPact.memberIds.length) ||
-      (p.relationship === "invited" && currentTerms.membershipCap === publicPact.memberIds.length) ||
-      (currentTerms.selectedExpellerIds ?? []).some((v) => !publicPact.memberIds.includes(v)) ||
-      (p.relationship === "invited" && currentTerms.invitationDurationTicks !== undefined
-        ? !boundedCoalitionInteger(p.invitationExpiresAtTick, 1, Number.MAX_SAFE_INTEGER)
+      (currentTerms.membershipCap !== undefined &&
+        currentTerms.membershipCap < publicPact.memberIds.length) ||
+      (p.relationship === "invited" &&
+        currentTerms.membershipCap === publicPact.memberIds.length) ||
+      (currentTerms.selectedExpellerIds ?? []).some(
+        (v) => !publicPact.memberIds.includes(v),
+      ) ||
+      (p.relationship === "invited" &&
+      currentTerms.invitationDurationTicks !== undefined
+        ? !boundedCoalitionInteger(
+            p.invitationExpiresAtTick,
+            1,
+            Number.MAX_SAFE_INTEGER,
+          )
         : p.invitationExpiresAtTick !== undefined)
-    ) return null;
+    )
+      return null;
     const election =
       p.extendedGovernance === true ||
       currentTerms.admission === "selected" ||
@@ -285,7 +315,9 @@ export function readNationalPactDisclosure(
         currentTerms.admission === "selected"
           ? (currentTerms.selectedApproverIds ?? [])
           : currentTerms.admission === "leader"
-            ? (publicPact.administratorId === null ? [] : [publicPact.administratorId])
+            ? publicPact.administratorId === null
+              ? []
+              : [publicPact.administratorId]
             : publicPact.memberIds;
       const required =
         currentTerms.admission === "majority"
@@ -299,7 +331,11 @@ export function readNationalPactDisclosure(
           !keys(i, ["targetId", "approvedBy", "authorized", "expiresAtTick"]) ||
           (currentTerms.invitationDurationTicks === undefined
             ? i.expiresAtTick !== undefined
-            : !boundedCoalitionInteger(i.expiresAtTick, 1, Number.MAX_SAFE_INTEGER)) ||
+            : !boundedCoalitionInteger(
+                i.expiresAtTick,
+                1,
+                Number.MAX_SAFE_INTEGER,
+              )) ||
           !id(i.targetId) ||
           publicPact.memberIds.includes(i.targetId) ||
           candidates.has(i.targetId) ||
@@ -317,28 +353,53 @@ export function readNationalPactDisclosure(
           targetId: i.targetId,
           approvedBy: [...i.approvedBy],
           authorized: i.authorized,
-          ...(typeof i.expiresAtTick === "number" ? { expiresAtTick: i.expiresAtTick } : {}),
+          ...(typeof i.expiresAtTick === "number"
+            ? { expiresAtTick: i.expiresAtTick }
+            : {}),
         });
       }
       invitations = records;
     } else if (election && p.relationship === "member") return null;
-    if (currentTerms.membershipCap === publicPact.memberIds.length && invitations?.length)
+    if (
+      currentTerms.membershipCap === publicPact.memberIds.length &&
+      invitations?.length
+    )
       return null;
     let expulsionBallots: NationalPactDisclosure["expulsionBallots"];
     if (p.extendedGovernance === true && p.relationship === "member") {
-      if (!Array.isArray(p.expulsionBallots) || p.expulsionBallots.length > 256) return null;
+      if (!Array.isArray(p.expulsionBallots) || p.expulsionBallots.length > 256)
+        return null;
       const seenTargets = new Set<string>();
-      const ballots: NonNullable<NationalPactDisclosure["expulsionBallots"]>[number][] = [];
+      const ballots: NonNullable<
+        NationalPactDisclosure["expulsionBallots"]
+      >[number][] = [];
       for (const ballot of p.expulsionBallots) {
-        if (!record(ballot) || !keys(ballot, ["targetId", "approvedBy"]) ||
-            !id(ballot.targetId) || !publicPact.memberIds.includes(ballot.targetId) ||
-            seenTargets.has(ballot.targetId) || !ids(ballot.approvedBy)) return null;
-        const eligible = coalitionEligibleExpellers(currentTerms, publicPact, ballot.targetId);
-        if (ballot.approvedBy.length === 0 ||
-            ballot.approvedBy.length >= coalitionExpulsionThreshold(currentTerms, eligible.length) ||
-            !ballot.approvedBy.every((v) => eligible.includes(v))) return null;
+        if (
+          !record(ballot) ||
+          !keys(ballot, ["targetId", "approvedBy"]) ||
+          !id(ballot.targetId) ||
+          !publicPact.memberIds.includes(ballot.targetId) ||
+          seenTargets.has(ballot.targetId) ||
+          !ids(ballot.approvedBy)
+        )
+          return null;
+        const eligible = coalitionEligibleExpellers(
+          currentTerms,
+          publicPact,
+          ballot.targetId,
+        );
+        if (
+          ballot.approvedBy.length === 0 ||
+          ballot.approvedBy.length >=
+            coalitionExpulsionThreshold(currentTerms, eligible.length) ||
+          !ballot.approvedBy.every((v) => eligible.includes(v))
+        )
+          return null;
         seenTargets.add(ballot.targetId);
-        ballots.push({ targetId: ballot.targetId, approvedBy: [...ballot.approvedBy] });
+        ballots.push({
+          targetId: ballot.targetId,
+          approvedBy: [...ballot.approvedBy],
+        });
       }
       expulsionBallots = ballots;
     } else if (p.expulsionBallots !== undefined) return null;
@@ -370,13 +431,18 @@ export function readNationalPactDisclosure(
       if (
         !next ||
         (publicPact.kind !== "MDA" && hasDefenseTerms(next)) ||
-        (hasDefenseTerms(currentTerms) || hasDefenseTerms(next) ||
-          p.extendedGovernance === true || extendedCoalitionTerms(next)) !==
+        (hasDefenseTerms(currentTerms) ||
+          hasDefenseTerms(next) ||
+          p.extendedGovernance === true ||
+          extendedCoalitionTerms(next)) !==
           (a.defenseVersion !== undefined) ||
         (next.admission === "selected" && !next.selectedApproverIds?.length) ||
         (next.expulsion === "selected" && !next.selectedExpellerIds?.length) ||
-        (next.selectedExpellerIds ?? []).some((v) => !publicPact.memberIds.includes(v)) ||
-        (next.membershipCap !== undefined && next.membershipCap < publicPact.memberIds.length) ||
+        (next.selectedExpellerIds ?? []).some(
+          (v) => !publicPact.memberIds.includes(v),
+        ) ||
+        (next.membershipCap !== undefined &&
+          next.membershipCap < publicPact.memberIds.length) ||
         (next.selectedApproverIds ?? []).some(
           (v) => !publicPact.memberIds.includes(v),
         )
@@ -396,8 +462,12 @@ export function readNationalPactDisclosure(
       pactId: p.pactId,
       relationship: p.relationship,
       terms: currentTerms,
-      ...(p.extendedGovernance === true ? { extendedGovernance: true as const } : {}),
-      ...(typeof p.invitationExpiresAtTick === "number" ? { invitationExpiresAtTick: p.invitationExpiresAtTick } : {}),
+      ...(p.extendedGovernance === true
+        ? { extendedGovernance: true as const }
+        : {}),
+      ...(typeof p.invitationExpiresAtTick === "number"
+        ? { invitationExpiresAtTick: p.invitationExpiresAtTick }
+        : {}),
       ...(expulsionBallots === undefined ? {} : { expulsionBallots }),
       ...(typeof p.constitutionVersion === "number"
         ? { constitutionVersion: p.constitutionVersion }
@@ -437,10 +507,17 @@ export function readNationalPactWireDisclosure(
     roster,
     imperial,
   );
-  if (decoded?.pacts.some((p) =>
-    (p.invitationExpiresAtTick !== undefined && p.invitationExpiresAtTick <= tick) ||
-    p.invitations?.some((i) => i.expiresAtTick !== undefined && i.expiresAtTick <= tick)
-  )) return null;
+  if (
+    decoded?.pacts.some(
+      (p) =>
+        (p.invitationExpiresAtTick !== undefined &&
+          p.invitationExpiresAtTick <= tick) ||
+        p.invitations?.some(
+          (i) => i.expiresAtTick !== undefined && i.expiresAtTick <= tick,
+        ),
+    )
+  )
+    return null;
   return decoded;
 }
 

@@ -29,21 +29,35 @@ export type PactAction = PactIntent extends infer T
     : never
   : never;
 type LegacyPactIntentType = Exclude<PactIntent["type"], `${string}_v2`>;
-export function pactReceiptType(type: PactIntent["type"]): LegacyPactIntentType {
+export function pactReceiptType(
+  type: PactIntent["type"],
+): LegacyPactIntentType {
   switch (type) {
-    case "national_found_pact_v2": return "national_found_pact";
-    case "national_propose_pact_amendment_v2": return "national_propose_pact_amendment";
-    case "national_expel_pact_v2": return "national_expel_pact";
-    case "national_reject_pact_amendment_v2": return "national_approve_pact_amendment";
-    default: return type;
+    case "national_found_pact_v2":
+      return "national_found_pact";
+    case "national_propose_pact_amendment_v2":
+      return "national_propose_pact_amendment";
+    case "national_expel_pact_v2":
+      return "national_expel_pact";
+    case "national_reject_pact_amendment_v2":
+      return "national_approve_pact_amendment";
+    default:
+      return type;
   }
 }
 
 /** Keep old native payloads byte-compatible when no extended clause was selected. */
-export function legacyPactTerms(terms: NationalPactTerms): Extract<Intent, {type: "national_found_pact"}>["terms"] | null {
-  if (terms.membershipCap !== undefined || terms.invitationDurationTicks !== undefined ||
-      terms.selectedExpellerIds !== undefined ||
-      (terms.expulsion !== "leader" && terms.expulsion !== "unanimous" && terms.expulsion !== "forbidden"))
+export function legacyPactTerms(
+  terms: NationalPactTerms,
+): Extract<Intent, { type: "national_found_pact" }>["terms"] | null {
+  if (
+    terms.membershipCap !== undefined ||
+    terms.invitationDurationTicks !== undefined ||
+    terms.selectedExpellerIds !== undefined ||
+    (terms.expulsion !== "leader" &&
+      terms.expulsion !== "unanimous" &&
+      terms.expulsion !== "forbidden")
+  )
     return null;
   return { ...terms, expulsion: terms.expulsion };
 }
@@ -143,7 +157,10 @@ export function pactActionAllowed(
     return false;
   const pact = roster.find((p) => p.id === action.pactId);
   const privateView = disclosure.pacts.find((p) => p.pactId === action.pactId);
-  if (action.type === "national_found_pact" || action.type === "national_found_pact_v2")
+  if (
+    action.type === "national_found_pact" ||
+    action.type === "national_found_pact_v2"
+  )
     return !pact && action.name.trim().length > 0 && action.name.length <= 64;
   if (!pact || !privateView) return false;
   if (action.type === "national_accept_pact")
@@ -169,7 +186,8 @@ export function pactActionAllowed(
       if (
         !independentCandidates.includes(action.candidateId) ||
         pact.memberIds.includes(action.candidateId) ||
-        (privateView.terms.membershipCap !== undefined && pact.memberIds.length >= privateView.terms.membershipCap)
+        (privateView.terms.membershipCap !== undefined &&
+          pact.memberIds.length >= privateView.terms.membershipCap)
       )
         return false;
       if (privateView.constitutionVersion === undefined)
@@ -183,7 +201,8 @@ export function pactActionAllowed(
         action.constitutionVersion !== privateView.constitutionVersion ||
         (privateView.terms.admission === "selected" &&
           !privateView.terms.selectedApproverIds?.includes(actor)) ||
-        (privateView.terms.admission === "leader" && pact.administratorId !== actor)
+        (privateView.terms.admission === "leader" &&
+          pact.administratorId !== actor)
       )
         return false;
       const ballot = privateView.invitations?.find(
@@ -199,7 +218,9 @@ export function pactActionAllowed(
     case "national_propose_pact_amendment":
       return (
         !privateView.pendingAmendment &&
-        (!("membershipCap" in action.terms) || action.terms.membershipCap === undefined || Number(action.terms.membershipCap) >= pact.memberIds.length) &&
+        (!("membershipCap" in action.terms) ||
+          action.terms.membershipCap === undefined ||
+          Number(action.terms.membershipCap) >= pact.memberIds.length) &&
         (action.administratorId === null ||
           pact.memberIds.includes(action.administratorId))
       );
@@ -211,13 +232,25 @@ export function pactActionAllowed(
         !privateView.pendingAmendment.approvedBy.includes(actor)
       );
     case "national_reject_pact_amendment_v2":
-      return !!privateView.pendingAmendment && action.expectedDefenseVersion === privateView.pendingAmendment.defenseVersion;
+      return (
+        !!privateView.pendingAmendment &&
+        action.expectedDefenseVersion ===
+          privateView.pendingAmendment.defenseVersion
+      );
     case "national_expel_pact_v2":
-      return privateView.extendedGovernance === true &&
+      return (
+        privateView.extendedGovernance === true &&
         action.constitutionVersion === privateView.constitutionVersion &&
         pact.memberIds.includes(action.memberId) &&
-        coalitionEligibleExpellers(privateView.terms, pact, action.memberId).includes(actor) &&
-        !privateView.expulsionBallots?.find((b) => b.targetId === action.memberId)?.approvedBy.includes(actor);
+        coalitionEligibleExpellers(
+          privateView.terms,
+          pact,
+          action.memberId,
+        ).includes(actor) &&
+        !privateView.expulsionBallots
+          ?.find((b) => b.targetId === action.memberId)
+          ?.approvedBy.includes(actor)
+      );
     case "national_expel_pact":
       return (
         !privateView.extendedGovernance &&

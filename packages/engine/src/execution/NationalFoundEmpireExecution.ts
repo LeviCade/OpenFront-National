@@ -173,11 +173,23 @@ const NationalFoundEmpireStateSchema = z.object({
             "supermajority",
           ]),
           selectedApproverIds: z.array(z.string()).max(256).optional(),
-          expulsion: z.enum(["leader", "unanimous", "forbidden", "selected", "majority", "supermajority"]),
+          expulsion: z.enum([
+            "leader",
+            "unanimous",
+            "forbidden",
+            "selected",
+            "majority",
+            "supermajority",
+          ]),
           defenseContributionBps: z.number().int().min(0).max(1000).optional(),
           defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
           membershipCap: z.number().int().min(2).max(256).optional(),
-          invitationDurationTicks: z.number().int().min(1).max(36000).optional(),
+          invitationDurationTicks: z
+            .number()
+            .int()
+            .min(1)
+            .max(36000)
+            .optional(),
           selectedExpellerIds: z.array(z.string()).max(256).optional(),
         }),
       }),
@@ -205,11 +217,23 @@ const NationalFoundEmpireStateSchema = z.object({
             "supermajority",
           ]),
           selectedApproverIds: z.array(z.string()).max(256).optional(),
-          expulsion: z.enum(["leader", "unanimous", "forbidden", "selected", "majority", "supermajority"]),
+          expulsion: z.enum([
+            "leader",
+            "unanimous",
+            "forbidden",
+            "selected",
+            "majority",
+            "supermajority",
+          ]),
           defenseContributionBps: z.number().int().min(0).max(1000).optional(),
           defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
           membershipCap: z.number().int().min(2).max(256).optional(),
-          invitationDurationTicks: z.number().int().min(1).max(36000).optional(),
+          invitationDurationTicks: z
+            .number()
+            .int()
+            .min(1)
+            .max(36000)
+            .optional(),
           selectedExpellerIds: z.array(z.string()).max(256).optional(),
         }),
         administratorId: z.string().nullable(),
