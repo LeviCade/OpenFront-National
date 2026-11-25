@@ -39,7 +39,7 @@ export async function nativeFill(profile, selector, value) {
   await profile.send("Input.insertText", { text: value });
   assert.equal(
     await profile.evaluate(
-      "document.querySelector(" + JSON.stringify(selector) + ")?.value",
+      `(() => { const roots = [document]; for (const root of roots) { for (const el of root.querySelectorAll("*")) if (el.shadowRoot) roots.push(el.shadowRoot); const input = root.querySelector(${JSON.stringify(selector)}); if (input) return input.value; } })()`,
     ),
     value,
   );

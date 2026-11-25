@@ -49,7 +49,11 @@ jobs:
             regression) npm test ;;
             typecheck) npm run typecheck ;;
             lint) npm run lint ;;
-            formatting) npm run format:check ;;
+            formatting) npm run format:check || {
+                npx --no-install oxfmt --write scripts/national-qa/c7c1e6-private-gameplay.mjs scripts/national-qa/c7c1e6-private-gameplay.test.mjs scripts/national-qa/private-staging-browser.mjs src/client/render/gl/initGL.ts tests/client/C7C1E6SoftwareDiagnostic.test.ts
+                git diff --no-ext-diff
+                exit 1
+              } ;;
             production) npm run build-prod ;;
           esac
   private-native-software:

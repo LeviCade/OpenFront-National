@@ -705,7 +705,7 @@ function createWebGLView(
   }
   // Fingerprint-capped context (#4357): the game runs, but the map may render
   // with black areas. Warn with fix instructions; the player can continue.
-  if (view.glSoftwareDiagnostic !== null) {
+  if (view.glSoftwareDiagnostic) {
     glCanvas.dataset.nationalE6SoftwareDiagnostic = "true";
     trackGLInit("software", view.glSoftwareDiagnostic);
   } else if (view.glLimited) {

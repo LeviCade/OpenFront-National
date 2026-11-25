@@ -39,7 +39,7 @@ function victorySamples() {
   }));
 }
 
-test("pact witness rejects outsider private canary, public terms, wrong recipient", () => {
+await test("pact witness rejects outsider private canary, public terms, wrong recipient", () => {
   verifyPrivatePactViews(pactSamples(), pact, actors.slice(0, 2));
   const leak = pactSamples();
   leak[2].disclosure.pacts = leak[0].disclosure.pacts;
@@ -52,7 +52,7 @@ test("pact witness rejects outsider private canary, public terms, wrong recipien
   assert.throws(() => verifyPrivatePactViews(wrong, pact, actors.slice(0, 2)));
 });
 
-test("victory witness rejects unresolved, two sovereigns, false crown and future ticks", () => {
+await test("victory witness rejects unresolved, two sovereigns, false crown and future ticks", () => {
   assert.equal(verifyImperialVictory(victorySamples(), empire, actors), 100);
   for (const mutate of [
     (v) => { v.resolved = false; },

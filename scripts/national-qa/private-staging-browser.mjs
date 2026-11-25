@@ -591,10 +591,13 @@ try {
       stage,
     );
     if (functionalSoftware) {
-      stage = "native compact Onion map configuration";
+      stage = "native Onion map search";
       await nativeFill(a, 'input[placeholder="Search maps..."]', "Onion");
+      stage = "native Onion map selection";
       await nativeClick(a, '[role="button"][aria-label="Onion"]');
+      stage = "native compact map selection";
       await nativeClick(a, "button", "Compact Map");
+      stage = "authoritative compact Onion configuration";
       await until(
         () => a.observed.lobby?.lobby?.gameConfig?.gameMap === GameMapType.Onion &&
           a.observed.lobby?.lobby?.gameConfig?.gameMapSize === GameMapSize.Compact,
