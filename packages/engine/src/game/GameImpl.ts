@@ -69,17 +69,17 @@ import { z } from "zod";
 import { EngineConfig } from "../configuration/EngineConfig";
 import { AttackExecution } from "../execution/AttackExecution";
 import { ConstructionExecution } from "../execution/ConstructionExecution";
+import { MoveWarshipExecution } from "../execution/MoveWarshipExecution";
 import {
   SharedWaterCache,
   SharedWaterCacheSnapshot,
 } from "../execution/nation/SharedWaterCache";
-import { MoveWarshipExecution } from "../execution/MoveWarshipExecution";
 import { NationalBlockadeExecution } from "../execution/NationalBlockadeExecution";
-import { TransportShipExecution } from "../execution/TransportShipExecution";
 import { NationalSanctionExecution } from "../execution/NationalSanctionExecution";
 import { NationalUltimatumExecution } from "../execution/NationalUltimatumExecution";
 import { NationExecution } from "../execution/NationExecution";
 import { SpawnTimerExecution } from "../execution/SpawnTimerExecution";
+import { TransportShipExecution } from "../execution/TransportShipExecution";
 import { TribeExecution } from "../execution/TribeExecution";
 import type {
   DefenseResult,
@@ -1655,7 +1655,8 @@ export class GameImpl implements Game {
           authenticatedClientID === undefined ||
           actor.isDisconnected() ||
           !Number.isSafeInteger(command.expectedVersion) ||
-          authority.warPolicyVersionFor(actor.id()) !== command.expectedVersion ||
+          authority.warPolicyVersionFor(actor.id()) !==
+            command.expectedVersion ||
           this._national.imperialAdministrationFor(actor.id())?.armyMode !==
             "centralized" ||
           !member ||
@@ -1663,7 +1664,9 @@ export class GameImpl implements Game {
           !member.isAlive() ||
           authority.empireOf(member.id()) !== command.empireId
         )
-          throw new Error("NATIONAL: stale or unauthorized imperial naval order");
+          throw new Error(
+            "NATIONAL: stale or unauthorized imperial naval order",
+          );
         if (command.kind === "imperial-move-warship") {
           MoveWarshipExecution.moveImperialHull(
             this,
@@ -1690,7 +1693,9 @@ export class GameImpl implements Game {
           !Number.isSafeInteger(command.amount) ||
           command.amount <= 0
         )
-          throw new Error("NATIONAL: imperial transport requires a lawful WAR target");
+          throw new Error(
+            "NATIONAL: imperial transport requires a lawful WAR target",
+          );
         TransportShipExecution.launchImperial(
           this,
           member,

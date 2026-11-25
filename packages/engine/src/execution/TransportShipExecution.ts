@@ -93,11 +93,7 @@ export class TransportShipExecution implements Execution {
     // Do not allow a subordinate to bypass central military control by sea.
     // Boats that already launched keep their existing, paid in-flight state.
     const military = mg.nationalImperialAdministrationFor(this.attacker);
-    if (
-      !fund &&
-      military?.armyMode === "centralized" &&
-      !military.canAmend
-    ) {
+    if (!fund && military?.armyMode === "centralized" && !military.canAmend) {
       this.active = false;
       return;
     }
@@ -222,8 +218,8 @@ export class TransportShipExecution implements Execution {
       targetTile: this.dst,
     });
 
-    const fullPath =
-      preflightPath ?? this.pathFinder.findPath(this.src, this.dst) ?? [this.src];
+    const fullPath = preflightPath ??
+      this.pathFinder.findPath(this.src, this.dst) ?? [this.src];
     if (fullPath.length === 0 || fullPath[0] !== this.src) {
       fullPath.unshift(this.src);
     }

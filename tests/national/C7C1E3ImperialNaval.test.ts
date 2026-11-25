@@ -200,7 +200,12 @@ describe("C7C1E3 A: real constituent hull authority", () => {
     });
     const run = runner(game);
     submit(game, run, [
-      { type: "move_warship", clientID: B, unitIds: [ship.id()], tile: destination },
+      {
+        type: "move_warship",
+        clientID: B,
+        unitIds: [ship.id()],
+        tile: destination,
+      },
       { ...move(game, ship.id(), destination, "member"), clientID: B },
       { ...move(game, ship.id(), destination, "outsider"), clientID: C },
       move(game, foreign.id(), destination, "forged-hull"),
@@ -212,9 +217,11 @@ describe("C7C1E3 A: real constituent hull authority", () => {
     expect(ship.owner()).toBe(b);
     expect(a.units(UnitType.Warship)).toHaveLength(0);
     expect(b.units(UnitType.Warship)).toHaveLength(1);
-    expect(game.nationalPoliticalCommandResults(a).filter(
-      (row) => row.requestId === "crown-move" && row.accepted,
-    )).toHaveLength(1);
+    expect(
+      game
+        .nationalPoliticalCommandResults(a)
+        .filter((row) => row.requestId === "crown-move" && row.accepted),
+    ).toHaveLength(1);
     const visited = new Set([ship.tile()]);
     for (let i = 0; i < 20; i++) {
       step(game, run);
@@ -231,7 +238,12 @@ describe("C7C1E3 A: real constituent hull authority", () => {
     submit(game, run, [{ ...current, clientID: B }]);
     expect(ship.warshipState().patrolTile).toBe(start);
     expect(ship.owner()).toBe(b);
-    console.info("C7C1E3_HULL_WITNESS", { hull: ship.id(), visited: [...visited], oldEpoch, currentEpoch: epoch(game, B) });
+    console.info("C7C1E3_HULL_WITNESS", {
+      hull: ship.id(),
+      visited: [...visited],
+      oldEpoch,
+      currentEpoch: epoch(game, B),
+    });
   });
 
   it("uses the existing hull's real combat path only during lawful WAR", async () => {
@@ -248,9 +260,7 @@ describe("C7C1E3 A: real constituent hull authority", () => {
     for (let i = 0; i < 8; i++) step(game, run);
     expect(enemy.isActive()).toBe(true);
     declare(game);
-    submit(game, run, [
-      move(game, ship.id(), enemy.tile(), "war-patrol"),
-    ]);
+    submit(game, run, [move(game, ship.id(), enemy.tile(), "war-patrol")]);
     until(game, run, () => !enemy.isActive());
     expect(ship.owner()).toBe(b);
     expect(b.units(UnitType.Warship)).toHaveLength(1);
@@ -280,7 +290,12 @@ describe("C7C1E3 B: pooled amphibious expedition", () => {
     expect(boats).toHaveLength(1);
     expect(boats[0].troops()).toBe(200);
     expect(account(game, A)).toBe(1300n);
-    console.info("C7C1E3_EMBARK_WITNESS", { before: 1300, pool: 1100, aboard: boats[0].troops(), personal: b.troops() });
+    console.info("C7C1E3_EMBARK_WITNESS", {
+      before: 1300,
+      pool: 1100,
+      aboard: boats[0].troops(),
+      personal: b.troops(),
+    });
     until(game, run, () => !boats[0].isActive());
     expect(c.numTilesOwned()).toBeLessThan(targetTiles);
     expect(b.units(UnitType.TransportShip)).toHaveLength(0);
@@ -304,15 +319,21 @@ describe("C7C1E3 B: pooled amphibious expedition", () => {
       submit(current, currentRun, [stale]);
       expect(current.player(B).units(UnitType.TransportShip)).toHaveLength(1);
       peace(current, B);
-      until(current, currentRun, () =>
-        current.player(B).units(UnitType.TransportShip).length === 0,
+      until(
+        current,
+        currentRun,
+        () => current.player(B).units(UnitType.TransportShip).length === 0,
       );
       expect(account(current, B)).toBe(1300n);
     }
     const original = await roundTrip(game, MAP);
     const replay = await roundTrip(active.restored, MAP);
     expect(original.bytes).toEqual(replay.bytes);
-    console.info("C7C1E3_PEACE_WITNESS", { before: 1300, pool: pool(game, B).toString(), total: account(game, B).toString() });
+    console.info("C7C1E3_PEACE_WITNESS", {
+      before: 1300,
+      pool: pool(game, B).toString(),
+      total: account(game, B).toString(),
+    });
   });
 
   it("does not duplicate an active expedition when the empire dissolves", async () => {
@@ -334,66 +355,84 @@ describe("C7C1E3 B: pooled amphibious expedition", () => {
 
 describe("C7C1E3 existing blockade debt: hostile negative regressions", () => {
   for (const hidden of [true, false]) {
-    it(hidden ? "rejects a real hidden port even in the same sea" : "rejects a visible port in disconnected water", () => {
-      const width = hidden ? 520 : 40;
-      const height = 18;
-      const game = createGame(
-        {
-          width,
-          height,
-          grid: Array.from({ length: width * height }, (_, i) => {
-            const x = i % width;
-            return x < 4 ||
-              x >= width - 4 ||
-              (!hidden && x >= 18 && x <= 23)
-              ? L
-              : W;
+    it(
+      hidden
+        ? "rejects a real hidden port even in the same sea"
+        : "rejects a visible port in disconnected water",
+      () => {
+        const width = hidden ? 520 : 40;
+        const height = 18;
+        const game = createGame(
+          {
+            width,
+            height,
+            grid: Array.from({ length: width * height }, (_, i) => {
+              const x = i % width;
+              return x < 4 || x >= width - 4 || (!hidden && x >= 18 && x <= 23)
+                ? L
+                : W;
+            }),
+          },
+          { nationalMode: true, instantBuild: true },
+        );
+        for (const id of [A, C])
+          game.addPlayer(new PlayerInfo(id, PlayerType.Human, id, id));
+        game.endSpawnPhase();
+        const a = game.player(A);
+        const c = game.player(C);
+        const left = game.ref(3, 8);
+        const right = game.ref(width - 4, 8);
+        for (const [player, tile] of [
+          [a, left],
+          [c, right],
+        ] as const) {
+          player.conquer(tile);
+          player.setSpawnTile(tile);
+          player.addGold(1_000_000_000n);
+        }
+        a.buildUnit(UnitType.Port, left, {});
+        const port = c.buildUnit(UnitType.Port, right, {});
+        const start = game.ref(4, 8);
+        const ship = a.buildUnit(UnitType.Warship, start, {
+          patrolTile: start,
+        });
+        game.performNationalWarCommand(a, {
+          kind: "declare-national",
+          warId: WAR,
+          aggressorId: A,
+          targetId: C,
+        });
+        expect(
+          collectLiveNationalObservation(
+            game,
+            A,
+          ).observation.visibleAssets.some(
+            (asset) => asset.id === String(port.id()),
+          ),
+        ).toBe(!hidden);
+        expect(
+          game.hasWaterComponent(port.tile(), game.getWaterComponent(start)!),
+        ).toBe(hidden);
+        const run = runner(game);
+        step(game, run, [
+          {
+            type: "national_blockade",
+            clientID: A,
+            warId: WAR,
+            shipId: ship.id(),
+            portId: port.id(),
+            portTile: port.tile(),
+            requestId: "hostile-negative",
+          },
+        ]);
+        expect(NationalBlockadeExecution.viewFor(game, a)).toContainEqual(
+          expect.objectContaining({
+            requestId: "hostile-negative",
+            phase: "rejected",
           }),
-        },
-        { nationalMode: true, instantBuild: true },
-      );
-      for (const id of [A, C])
-        game.addPlayer(new PlayerInfo(id, PlayerType.Human, id, id));
-      game.endSpawnPhase();
-      const a = game.player(A);
-      const c = game.player(C);
-      const left = game.ref(3, 8);
-      const right = game.ref(width - 4, 8);
-      for (const [player, tile] of [[a, left], [c, right]] as const) {
-        player.conquer(tile);
-        player.setSpawnTile(tile);
-        player.addGold(1_000_000_000n);
-      }
-      a.buildUnit(UnitType.Port, left, {});
-      const port = c.buildUnit(UnitType.Port, right, {});
-      const start = game.ref(4, 8);
-      const ship = a.buildUnit(UnitType.Warship, start, { patrolTile: start });
-      game.performNationalWarCommand(a, {
-        kind: "declare-national",
-        warId: WAR,
-        aggressorId: A,
-        targetId: C,
-      });
-      expect(
-        collectLiveNationalObservation(game, A).observation.visibleAssets.some(
-          (asset) => asset.id === String(port.id()),
-        ),
-      ).toBe(!hidden);
-      expect(game.hasWaterComponent(port.tile(), game.getWaterComponent(start)!)).toBe(hidden);
-      const run = runner(game);
-      step(game, run, [{
-        type: "national_blockade",
-        clientID: A,
-        warId: WAR,
-        shipId: ship.id(),
-        portId: port.id(),
-        portTile: port.tile(),
-        requestId: "hostile-negative",
-      }]);
-      expect(NationalBlockadeExecution.viewFor(game, a)).toContainEqual(
-        expect.objectContaining({ requestId: "hostile-negative", phase: "rejected" }),
-      );
-      expect(ship.warshipState().patrolTile).toBe(start);
-    });
+        );
+        expect(ship.warshipState().patrolTile).toBe(start);
+      },
+    );
   }
 });
