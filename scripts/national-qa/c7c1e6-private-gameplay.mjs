@@ -35,13 +35,40 @@ export async function nativeClick(profile, selector, text = null) {
 }
 
 export async function nativeFill(profile, selector, value) {
-  await nativeClick(profile, selector);
+  // Focus and type by real mouse/keyboard events; a coordinate hit alone is
+  // not evidence of a focused control in a scrolling lobby.
+  const focused = () =>
+    profile.evaluate(`(() => {
+      let el = document.activeElement;
+      while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
+      return el?.matches(${JSON.stringify(selector)}) === true;
+    })()`);
+  await until(async () => {
+    await profile.click(selector);
+    return focused();
+  }, "native input focus", 30_000);
+  await profile.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "a",
+    code: "KeyA",
+    modifiers: 2,
+  });
+  await profile.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "a",
+    code: "KeyA",
+    modifiers: 2,
+  });
   await profile.send("Input.insertText", { text: value });
-  assert.equal(
-    await profile.evaluate(
-      `(() => { const roots = [document]; for (const root of roots) { for (const el of root.querySelectorAll("*")) if (el.shadowRoot) roots.push(el.shadowRoot); const input = root.querySelector(${JSON.stringify(selector)}); if (input) return input.value; } })()`,
-    ),
-    value,
+  await until(() =>
+    profile.evaluate(`(() => {
+      let el = document.activeElement;
+      while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
+      return el?.matches(${JSON.stringify(selector)}) === true &&
+        el.value === ${JSON.stringify(value)};
+    })()`),
+    "native input value committed",
+    15_000,
   );
 }
 
@@ -55,17 +82,20 @@ async function key(profile, value) {
 }
 
 async function nativeSelect(profile, selector, value) {
-  const expression =
-    "document.querySelector(" + JSON.stringify(selector) + ")";
+  const expression = "document.querySelector(" + JSON.stringify(selector) + ")";
   let options;
-  await until(async () => {
-    options = await profile.evaluate(
-      "(() => {const e=" +
-        expression +
-        ";return e&&!e.disabled?[...e.options].map(o=>({v:o.value,d:o.disabled})):[]})()",
-    );
-    return options.some((o) => o.v === value && !o.d);
-  }, "eligible native select", 30_000);
+  await until(
+    async () => {
+      options = await profile.evaluate(
+        "(() => {const e=" +
+          expression +
+          ";return e&&!e.disabled?[...e.options].map(o=>({v:o.value,d:o.disabled})):[]})()",
+      );
+      return options.some((o) => o.v === value && !o.d);
+    },
+    "eligible native select",
+    30_000,
+  );
   if ((await profile.evaluate(expression + "?.value")) === value) return;
   await nativeClick(profile, selector);
   await key(profile, "Home");
@@ -85,12 +115,16 @@ async function panel(profile, expanded) {
         ")?.getAttribute('aria-expanded')",
     );
   await until(async () => ["true", "false"].includes(await read()), "panel");
-  if ((await read()) !== String(expanded)) await nativeClick(profile, panelToggle);
+  if ((await read()) !== String(expanded))
+    await nativeClick(profile, panelToggle);
   await until(async () => (await read()) === String(expanded), "panel state");
 }
 
 async function hit(profile, point, button = "left") {
-  await profile.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
+  await profile.send("Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    ...point,
+  });
   for (const type of ["mousePressed", "mouseReleased"]) {
     await profile.send("Input.dispatchMouseEvent", {
       type,
@@ -144,15 +178,24 @@ export function verifyImperialVictory(samples, empire, actors) {
     nationId,
     empireId: empire,
   }));
-  const sort = (rows) => [...rows].sort((a, b) => a.nationId.localeCompare(b.nationId));
+  const sort = (rows) =>
+    [...rows].sort((a, b) => a.nationId.localeCompare(b.nationId));
   for (const sample of samples) {
     const v = sample.politics?.victory;
     assert.equal(v?.resolved, true);
     assert.equal(v.sovereignPowerCount, 1);
-    assert(Number.isSafeInteger(v.confirmedTick) && v.confirmedTick <= sample.tick);
+    assert(
+      Number.isSafeInteger(v.confirmedTick) && v.confirmedTick <= sample.tick,
+    );
     assert.deepEqual(sort(v.prizes), sort(expected));
   }
-  assert(samples.every((s) => s.politics.victory.confirmedTick === samples[0].politics.victory.confirmedTick));
+  assert(
+    samples.every(
+      (s) =>
+        s.politics.victory.confirmedTick ===
+        samples[0].politics.victory.confirmedTick,
+    ),
+  );
   return samples[0].politics.victory.confirmedTick;
 }
 
@@ -165,15 +208,20 @@ export async function runPrivateNativeGameplay({
   software,
 }) {
   const [a, b, c] = profiles;
-  const sample = () => Promise.all(profiles.map((p) => p.evaluate(observation)));
+  const sample = () =>
+    Promise.all(profiles.map((p) => p.evaluate(observation)));
   let current;
   const evidence = {};
   async function wait(label, predicate, ms = 60_000) {
     stage(label);
-    await until(async () => {
-      current = await sample();
-      return current.every((s) => s?.match === match) && predicate(current);
-    }, label, ms);
+    await until(
+      async () => {
+        current = await sample();
+        return current.every((s) => s?.match === match) && predicate(current);
+      },
+      label,
+      ms,
+    );
     return current;
   }
   const mark = (name, facts = {}) => {
@@ -189,50 +237,74 @@ export async function runPrivateNativeGameplay({
   // Different starting points, same real compact map. Success is established
   // only from each authenticated GameView's own player and nonzero land.
   const fractions = soloSpawnFractions();
-  await Promise.all(profiles.map(async (p, i) => {
-    await panel(p, false);
-    const order = [...fractions.slice(i), ...fractions.slice(0, i)];
-    for (const fraction of order) {
-      const prior = await p.evaluate(observation);
-      if (prior?.spawned && prior.tiles > 0) return;
-      assert(prior?.inSpawn, "spawn phase ended before native spawn");
-      const point = await mapPoint(p, [fraction]);
-      if (!point) continue;
-      await hit(p, point);
-      for (let j = 0; j < 8; j++) {
-        await delay(150);
-        const now = await p.evaluate(observation);
-        if (now?.spawned && now.tiles > 0) return;
+  await Promise.all(
+    profiles.map(async (p, i) => {
+      await panel(p, false);
+      const order = [...fractions.slice(i), ...fractions.slice(0, i)];
+      for (const fraction of order) {
+        const prior = await p.evaluate(observation);
+        if (prior?.spawned && prior.tiles > 0) return;
+        assert(prior?.inSpawn, "spawn phase ended before native spawn");
+        const point = await mapPoint(p, [fraction]);
+        if (!point) continue;
+        await hit(p, point);
+        for (let j = 0; j < 8; j++) {
+          await delay(150);
+          const now = await p.evaluate(observation);
+          if (now?.spawned && now.tiles > 0) return;
+        }
       }
-    }
-    throw new Error("native map spawn not confirmed");
-  }));
-  await wait("three spawned seats and authoritative phase end", (ss) =>
-    ss.every((s, i) =>
-      s.actor === actors[i] && s.spawned && s.alive && s.tiles > 0 &&
-      !s.inSpawn && s.ready && s.tick <= hostTick() && s.stream
-    ) && new Set(ss.map((s) => s.stream)).size === 3,
+      throw new Error("native map spawn not confirmed");
+    }),
+  );
+  await wait(
+    "three spawned seats and authoritative phase end",
+    (ss) =>
+      ss.every(
+        (s, i) =>
+          s.actor === actors[i] &&
+          s.spawned &&
+          s.alive &&
+          s.tiles > 0 &&
+          !s.inSpawn &&
+          s.ready &&
+          s.tick <= hostTick() &&
+          s.stream,
+      ) && new Set(ss.map((s) => s.stream)).size === 3,
     120_000,
   );
-  mark("native-spawn", { tiles: current.map((s) => s.tiles), tick: Math.min(...current.map((s) => s.tick)) });
+  mark("native-spawn", {
+    tiles: current.map((s) => s.tiles),
+    tick: Math.min(...current.map((s) => s.tick)),
+  });
   await Promise.all(profiles.map((p) => panel(p, true)));
   const pact = "c7-e6-private-nap";
   const empire = "c7-e6-private-empire";
   const pactRow = '[data-national-pact-id="' + pact + '"]';
   stage("native pact founding");
   await nativeFill(a, '[data-national-pact-found] input[name="id"]', pact);
-  await nativeFill(a, '[data-national-pact-found] input[name="name"]', "E6 Private Pact");
+  await nativeFill(
+    a,
+    '[data-national-pact-found] input[name="name"]',
+    "E6 Private Pact",
+  );
   await nativeClick(a, '[data-national-pact-action="found"]');
   await wait("canonical pact founded", (ss) =>
-    ss.every((s) => s.politics?.pacts?.some((p) => p.id === pact && p.memberIds.includes(actors[0]))),
+    ss.every((s) =>
+      s.politics?.pacts?.some(
+        (p) => p.id === pact && p.memberIds.includes(actors[0]),
+      ),
+    ),
   );
   stage("native pact invite");
   await nativeSelect(a, pactRow + ' select[name="candidate"]', actors[1]);
   await nativeClick(a, pactRow + ' [data-national-pact-action="invite"]');
-  await wait("private invite and outsider exclusion", (ss) =>
-    ownDisclosure(ss[1], pact)?.relationship === "invited" &&
-    ss[2].disclosure?.recipientId === actors[2] &&
-    ownDisclosure(ss[2], pact) === null,
+  await wait(
+    "private invite and outsider exclusion",
+    (ss) =>
+      ownDisclosure(ss[1], pact)?.relationship === "invited" &&
+      ss[2].disclosure?.recipientId === actors[2] &&
+      ownDisclosure(ss[2], pact) === null,
   );
   assert.equal(ownDisclosure(current[1], pact).terms.expulsion, "forbidden");
 
@@ -241,7 +313,11 @@ export async function runPrivateNativeGameplay({
   stage("same-match unauthorized outsider and forged sovereign claim");
   const denied = async (intent) => {
     await c.sendNegative(intent);
-    await until(() => c.observed.receipts.has(intent.requestId), "canonical negative receipt", 30_000);
+    await until(
+      () => c.observed.receipts.has(intent.requestId),
+      "canonical negative receipt",
+      30_000,
+    );
     const receipt = c.observed.receipts.get(intent.requestId);
     assert.equal(receipt.actorId, actors[2]);
     assert.equal(receipt.recipientId, actors[2]);
@@ -249,7 +325,11 @@ export async function runPrivateNativeGameplay({
     assert(!a.observed.receipts.has(intent.requestId));
     assert(!b.observed.receipts.has(intent.requestId));
   };
-  await denied({ type: "national_accept_pact", pactId: pact, requestId: "c7-e6-outsider-denied" });
+  await denied({
+    type: "national_accept_pact",
+    pactId: pact,
+    requestId: "c7-e6-outsider-denied",
+  });
   await denied({
     type: "national_declare_war",
     scope: "national",
@@ -259,28 +339,57 @@ export async function runPrivateNativeGameplay({
     requestId: "c7-e6-forged-actor-denied",
   });
   await wait("negative actions leave pact and war state unchanged", (ss) =>
-    ss.every(s => s.politics?.pacts?.some(p => p.id === pact && p.memberIds.length === 1 && p.memberIds[0] === actors[0]) &&
-      !s.conflicts?.layers?.some(l => l.endedTick === null))
+    ss.every(
+      (s) =>
+        s.politics?.pacts?.some(
+          (p) =>
+            p.id === pact &&
+            p.memberIds.length === 1 &&
+            p.memberIds[0] === actors[0],
+        ) && !s.conflicts?.layers?.some((l) => l.endedTick === null),
+    ),
   );
-  mark("same-match-denials", { outsider: true, forgedSovereign: true, foreignReceiptLeak: false });
+  mark("same-match-denials", {
+    outsider: true,
+    forgedSovereign: true,
+    foreignReceiptLeak: false,
+  });
 
   stage("same-match duplicate request and foreign replay");
-  const original = [...a.observed.politicalIntents.values()].find(i => i.type === "national_found_pact" && i.pactId === pact);
+  const original = [...a.observed.politicalIntents.values()].find(
+    (i) => i.type === "national_found_pact" && i.pactId === pact,
+  );
   assert(original?.requestId);
-  await until(() => a.observed.receipts.get(original.requestId)?.accepted === true, "original native founding receipt");
+  await until(
+    () => a.observed.receipts.get(original.requestId)?.accepted === true,
+    "original native founding receipt",
+  );
   const canonical = a.observed.receipts.get(original.requestId);
-  const replayStart = current.map(s => s.tick);
+  const replayStart = current.map((s) => s.tick);
   await a.sendNegative(original);
   await c.sendNegative(original);
-  await wait("ticks advance after replay probes", ss => ss.every((s,i) => s.tick > replayStart[i] + 3));
-  assert.equal(a.observed.receipts.get(original.requestId).tick, canonical.tick);
-  assert.equal(a.observed.receipts.get(original.requestId).sequence, canonical.sequence);
+  await wait("ticks advance after replay probes", (ss) =>
+    ss.every((s, i) => s.tick > replayStart[i] + 3),
+  );
+  assert.equal(
+    a.observed.receipts.get(original.requestId).tick,
+    canonical.tick,
+  );
+  assert.equal(
+    a.observed.receipts.get(original.requestId).sequence,
+    canonical.sequence,
+  );
   assert(!c.observed.receipts.has(original.requestId));
   mark("same-match-replay-denied", { sameActor: true, crossActor: true });
   await nativeClick(b, pactRow + ' [data-national-pact-action="accept"]');
-  await wait("canonical pact consent", (ss) =>
-    ss.every((s) => s.politics?.pacts?.some((p) => p.id === pact && p.memberIds.length === 2)) &&
-    ownDisclosure(ss[1], pact)?.relationship === "member",
+  await wait(
+    "canonical pact consent",
+    (ss) =>
+      ss.every((s) =>
+        s.politics?.pacts?.some(
+          (p) => p.id === pact && p.memberIds.length === 2,
+        ),
+      ) && ownDisclosure(ss[1], pact)?.relationship === "member",
   );
   verifyPrivatePactViews(current, pact, actors.slice(0, 2));
   mark("pact-consent-recipient-secrecy", { members: 2, outsiders: 1 });
@@ -289,12 +398,19 @@ export async function runPrivateNativeGameplay({
   await nativeFill(a, "#national-empire-id", empire);
   await nativeClick(a, 'form button[type="submit"]', "Found Empire");
   await wait("canonical empire founded", (ss) =>
-    ss.every((s) => s.politics?.empires?.some((e) => e.id === empire && e.leaderId === actors[0])),
+    ss.every((s) =>
+      s.politics?.empires?.some(
+        (e) => e.id === empire && e.leaderId === actors[0],
+      ),
+    ),
   );
   const membership = (s, ids) => {
     const e = s.politics?.empires?.find((e) => e.id === empire);
-    return e?.leaderId === actors[0] && e.memberIds.length === ids.length &&
-      ids.every((id) => e.memberIds.includes(id));
+    return (
+      e?.leaderId === actors[0] &&
+      e.memberIds.length === ids.length &&
+      ids.every((id) => e.memberIds.includes(id))
+    );
   };
   async function accession(p, index) {
     await panel(a, true);
@@ -302,12 +418,22 @@ export async function runPrivateNativeGameplay({
     stage("native accession offer");
     await nativeSelect(a, "#national-accession-candidate", actors[index]);
     await nativeClick(a, "#national-offer-accession");
-    await wait("recipient-only accession invitation", (ss) =>
-      ss[index].offers?.offers?.some((o) => o.empireId === empire && o.candidateId === actors[index]) &&
-      ss[3 - index].offers?.recipientId === actors[3 - index] &&
-      !ss[3 - index].offers.offers.some((o) => o.empireId === empire && o.candidateId === actors[index]),
+    await wait(
+      "recipient-only accession invitation",
+      (ss) =>
+        ss[index].offers?.offers?.some(
+          (o) => o.empireId === empire && o.candidateId === actors[index],
+        ) &&
+        ss[3 - index].offers?.recipientId === actors[3 - index] &&
+        !ss[3 - index].offers.offers.some(
+          (o) => o.empireId === empire && o.candidateId === actors[index],
+        ),
     );
-    await nativeSelect(p, "#national-invitation-empire", empire + ":" + actors[index]);
+    await nativeSelect(
+      p,
+      "#national-invitation-empire",
+      empire + ":" + actors[index],
+    );
     await nativeClick(p, "#national-accept-accession");
   }
   await accession(b, 1);
@@ -320,11 +446,14 @@ export async function runPrivateNativeGameplay({
   stage("native formal WAR");
   await nativeSelect(a, "#national-war-target", actors[2]);
   await nativeClick(a, "#national-declare-war");
-  const active = (s) => s.conflicts?.layers?.find((l) =>
-    l.scope === "national" && l.endedTick === null &&
-    [l.first.id, l.second.id].includes(actors[0]) &&
-    [l.first.id, l.second.id].includes(actors[2]),
-  );
+  const active = (s) =>
+    s.conflicts?.layers?.find(
+      (l) =>
+        l.scope === "national" &&
+        l.endedTick === null &&
+        [l.first.id, l.second.id].includes(actors[0]) &&
+        [l.first.id, l.second.id].includes(actors[2]),
+    );
   await wait("canonical declared WAR", (ss) => ss.every((s) => active(s)));
   const war = active(current[0]).id;
   mark("formal-war", { scope: "national", tick: current[0].tick });
@@ -334,69 +463,118 @@ export async function runPrivateNativeGameplay({
   const attackBefore = current[0].outgoing.length;
   await panel(a, false);
   let point;
-  await until(async () => {
-    point = await a.evaluate(
-      "(() => {const e=[...document.querySelectorAll('[data-national-map-target-id]')].find(n=>n.getAttribute('data-national-map-target-id')===" +
-      JSON.stringify(actors[2]) +
-      ");if(!e)return null;const r=e.getBoundingClientRect();const x=r.x+r.width/2,y=r.y+r.height/2;const top=document.elementFromPoint(x,y);return r.width&&r.height&&top?.tagName==='CANVAS'?{x,y}:null;})()",
-    );
-    return Boolean(point);
-  }, "real visible enemy land", 60_000);
+  await until(
+    async () => {
+      point = await a.evaluate(
+        "(() => {const e=[...document.querySelectorAll('[data-national-map-target-id]')].find(n=>n.getAttribute('data-national-map-target-id')===" +
+          JSON.stringify(actors[2]) +
+          ");if(!e)return null;const r=e.getBoundingClientRect();const x=r.x+r.width/2,y=r.y+r.height/2;const top=document.elementFromPoint(x,y);return r.width&&r.height&&top?.tagName==='CANVAS'?{x,y}:null;})()",
+      );
+      return Boolean(point);
+    },
+    "real visible enemy land",
+    60_000,
+  );
   await hit(a, point, "right");
   let radial;
-  await until(async () => {
-    radial = await a.evaluate(
-      "(() => {const m=document.querySelector('.radial-menu-container');const e=m?.querySelector('.center-button-hitbox');if(!e||m.getAttribute('data-target-player-id')!==" +
-      JSON.stringify(actors[2]) +
-      "||getComputedStyle(e).cursor!=='pointer')return null;const r=e.getBoundingClientRect();return r.width&&r.height?{x:r.x+r.width/2,y:r.y+r.height/2}:null;})()",
-    );
-    return Boolean(radial);
-  }, "native enabled attack", 30_000);
+  await until(
+    async () => {
+      radial = await a.evaluate(
+        "(() => {const m=document.querySelector('.radial-menu-container');const e=m?.querySelector('.center-button-hitbox');if(!e||m.getAttribute('data-target-player-id')!==" +
+          JSON.stringify(actors[2]) +
+          "||getComputedStyle(e).cursor!=='pointer')return null;const r=e.getBoundingClientRect();return r.width&&r.height?{x:r.x+r.width/2,y:r.y+r.height/2}:null;})()",
+      );
+      return Boolean(radial);
+    },
+    "native enabled attack",
+    30_000,
+  );
   await hit(a, radial);
-  await wait("authoritative outgoing military attack", (ss) =>
-    ss[0].outgoing.length > attackBefore &&
-    ss[0].outgoing.some((x) => x.target === ss[2].smallId && x.troops > 0 && !x.retreating),
+  await wait(
+    "authoritative outgoing military attack",
+    (ss) =>
+      ss[0].outgoing.length > attackBefore &&
+      ss[0].outgoing.some(
+        (x) => x.target === ss[2].smallId && x.troops > 0 && !x.retreating,
+      ),
   );
-  await wait("actual opponent combat losses", (ss) =>
-    ss[2].alive && (ss[2].tiles < before.tiles || ss[2].troops < before.troops),
+  await wait(
+    "actual opponent combat losses",
+    (ss) =>
+      ss[2].alive &&
+      (ss[2].tiles < before.tiles || ss[2].troops < before.troops),
   );
-  mark("combat", { targetTilesBefore: before.tiles, targetTilesAfter: current[2].tiles, targetTroopsBefore: before.troops, targetTroopsAfter: current[2].troops });
+  mark("combat", {
+    targetTilesBefore: before.tiles,
+    targetTilesAfter: current[2].tiles,
+    targetTroopsBefore: before.troops,
+    targetTroopsAfter: current[2].troops,
+  });
 
   stage("native peace proposal");
   await panel(a, true);
   await nativeSelect(a, "#national-peace-war-id", war);
   await nativeClick(a, "#national-propose-peace");
   await wait("recipient peace motion", (ss) =>
-    ss[2].conflicts?.motions?.some((m) => m.layerId === war && m.acceptedTick === null),
+    ss[2].conflicts?.motions?.some(
+      (m) => m.layerId === war && m.acceptedTick === null,
+    ),
   );
-  const motion = current[2].conflicts.motions.find((m) => m.layerId === war && m.acceptedTick === null).id;
+  const motion = current[2].conflicts.motions.find(
+    (m) => m.layerId === war && m.acceptedTick === null,
+  ).id;
 
   stage("durable same-match restart before settlement");
-  const previous = current.map((s) => ({ actor: s.actor, stream: s.stream, tick: s.tick }));
+  const previous = current.map((s) => ({
+    actor: s.actor,
+    stream: s.stream,
+    tick: s.tick,
+  }));
   const recovered = await recover(previous);
-  await wait("three original principals with fresh recovery streams", (ss) =>
-    ss.every((s, i) =>
-      s.actor === previous[i].actor && s.stream && s.stream !== previous[i].stream &&
-      s.tick > previous[i].tick && s.tick <= hostTick() && s.ready && membership(s, actors.slice(0, 2))
-    ) && new Set(ss.map((s) => s.stream)).size === 3 &&
-    ss[2].conflicts?.motions?.some((m) => m.id === motion && m.acceptedTick === null),
+  await wait(
+    "three original principals with fresh recovery streams",
+    (ss) =>
+      ss.every(
+        (s, i) =>
+          s.actor === previous[i].actor &&
+          s.stream &&
+          s.stream !== previous[i].stream &&
+          s.tick > previous[i].tick &&
+          s.tick <= hostTick() &&
+          s.ready &&
+          membership(s, actors.slice(0, 2)),
+      ) &&
+      new Set(ss.map((s) => s.stream)).size === 3 &&
+      ss[2].conflicts?.motions?.some(
+        (m) => m.id === motion && m.acceptedTick === null,
+      ),
     120_000,
   );
   mark("durable-recovery", recovered);
   stage("same-match old command replay on recovered lease");
-  const afterRecovery = current.map(s => s.tick);
+  const afterRecovery = current.map((s) => s.tick);
   await a.sendNegative(original);
   await c.sendNegative(original);
-  await wait("recovered authority advances after stale request", ss => ss.every((s,i) => s.tick > afterRecovery[i] + 3));
-  assert.equal(a.observed.receipts.get(original.requestId).tick, canonical.tick);
-  assert.equal(a.observed.receipts.get(original.requestId).sequence, canonical.sequence);
+  await wait("recovered authority advances after stale request", (ss) =>
+    ss.every((s, i) => s.tick > afterRecovery[i] + 3),
+  );
+  assert.equal(
+    a.observed.receipts.get(original.requestId).tick,
+    canonical.tick,
+  );
+  assert.equal(
+    a.observed.receipts.get(original.requestId).sequence,
+    canonical.sequence,
+  );
   assert(!c.observed.receipts.has(original.requestId));
   mark("post-recovery-replay-denied", { durableRequestOwnership: true });
   await panel(c, true);
   await nativeSelect(c, "#national-peace-motion-id", motion);
   await nativeClick(c, "#national-accept-peace");
   await wait("canonical peace accepted after restore", (ss) =>
-    ss.every((s) => s.conflicts?.layers?.some((l) => l.id === war && l.endedTick !== null)),
+    ss.every((s) =>
+      s.conflicts?.layers?.some((l) => l.id === war && l.endedTick !== null),
+    ),
   );
   mark("peace", { tick: current[0].tick });
 
@@ -404,10 +582,17 @@ export async function runPrivateNativeGameplay({
   // actual engine, not the harness, must set and publish last-sovereign victory.
   await accession(c, 2);
   await wait("canonical last-sovereign victory", (ss) =>
-    ss.every((s) => membership(s, actors) && s.politics?.victory?.resolved === true),
+    ss.every(
+      (s) => membership(s, actors) && s.politics?.victory?.resolved === true,
+    ),
   );
   const victoryTick = verifyImperialVictory(current, empire, actors);
   assert(victoryTick <= hostTick());
-  mark("canonical-victory", { victoryTick, sovereignPowers: 1, imperialVictors: 1, empireVictors: 2 });
+  mark("canonical-victory", {
+    victoryTick,
+    sovereignPowers: 1,
+    imperialVictors: 1,
+    empireVictors: 2,
+  });
   return { match, participants: 3, software, evidence };
 }

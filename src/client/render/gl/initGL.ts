@@ -15,7 +15,11 @@ import { readRenderer } from "./utils/GlUtils";
 
 export type GLResult =
   | { gl: WebGL2RenderingContext; status: "ok" }
-  | { gl: WebGL2RenderingContext; status: "software-diagnostic"; renderer: string }
+  | {
+      gl: WebGL2RenderingContext;
+      status: "software-diagnostic";
+      renderer: string;
+    }
   | {
       gl: WebGL2RenderingContext;
       status: "limited";
@@ -71,8 +75,7 @@ export function initGL(
       ...attrs,
       failIfMajorPerformanceCaveat: false,
     });
-    if (!diagnostic)
-      return { gl: null, status: "unsupported", renderer: "" };
+    if (!diagnostic) return { gl: null, status: "unsupported", renderer: "" };
     const renderer = readRenderer(diagnostic);
     const maxTextureSize = Number(
       diagnostic.getParameter(diagnostic.MAX_TEXTURE_SIZE),

@@ -4,9 +4,9 @@ import { e6SoftwareDiagnosticAllowed } from "../../src/client/render/gl/initGL";
 
 describe("C7C1E6 software diagnostic is not a release or remote bypass", () => {
   it("requires explicit opt-in, dev compilation and exact localhost origin", () => {
-    expect(e6SoftwareDiagnosticAllowed(true, "1", "http://localhost:9000")).toBe(
-      true,
-    );
+    expect(
+      e6SoftwareDiagnosticAllowed(true, "1", "http://localhost:9000"),
+    ).toBe(true);
     for (const origin of [
       "https://localhost:9000",
       "http://localhost:9001",
@@ -16,12 +16,12 @@ describe("C7C1E6 software diagnostic is not a release or remote bypass", () => {
     ]) {
       expect(e6SoftwareDiagnosticAllowed(true, "1", origin)).toBe(false);
     }
-    expect(e6SoftwareDiagnosticAllowed(false, "1", "http://localhost:9000")).toBe(
-      false,
-    );
-    expect(e6SoftwareDiagnosticAllowed(true, "0", "http://localhost:9000")).toBe(
-      false,
-    );
+    expect(
+      e6SoftwareDiagnosticAllowed(false, "1", "http://localhost:9000"),
+    ).toBe(false);
+    expect(
+      e6SoftwareDiagnosticAllowed(true, "0", "http://localhost:9000"),
+    ).toBe(false);
     expect(
       e6SoftwareDiagnosticAllowed(true, undefined, "http://localhost:9000"),
     ).toBe(false);
