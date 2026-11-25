@@ -3,9 +3,6 @@ on:
   push:
     branches:
       - feature/conductor6-class2-e4-treaty-defense-20261123
-  pull_request:
-    branches:
-      - stage3/conductor6-class2-integration-20261123
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,51 +11,55 @@ concurrency:
   cancel-in-progress: true
 jobs:
   source:
-    name: E4 exact-source ${{ matrix.gate }}
+    name: E4 exact-source acceptance
     runs-on: ubuntu-latest
     timeout-minutes: 50
-    strategy:
-      fail-fast: false
-      matrix:
-        gate: [typecheck, gameplay, format, lint, production-build, full-suite]
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
           submodules: false
       - name: Verify exact source SHA
-        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
       - uses: actions/setup-node@v4
         with:
           node-version: "24.15.0"
       - run: npm install --global --ignore-scripts npm@12.1.0
-      - run: npm run inst
-      - name: Run exact-source gate
-        shell: bash
-        env:
-          GATE: ${{ matrix.gate }}
+      - name: Install pinned dependencies
+        id: install
         run: |
-          set -euo pipefail
-          case "$GATE" in
-            typecheck) npm run typecheck ;;
-            gameplay)
-              npx --no-install vitest run --project node \
-                tests/national/C6Class2E4TreatyDefenseReceipts.test.ts \
-                tests/national/DefenseLevyAtomic.test.ts \
-                tests/national/LiveLevyCombatRound5.test.ts \
-                tests/national/RoundEightLevyOverlap.test.ts \
-                tests/national/C5Class3PaidNationalAssessment.test.ts \
-                tests/national/C5Class3AssessmentWire.test.ts
-              ;;
-            format) npm run format:check ;;
-            lint) npm run lint ;;
-            production-build) npm run build-prod ;;
-            full-suite) npm test ;;
-            *) exit 1 ;;
-          esac
+          node --version
+          npm --version
+          npm run inst
+      - name: Full typecheck
+        if: always() && steps.install.outcome == 'success'
+        run: npm run typecheck
+      - name: Focused actual gameplay
+        if: always() && steps.install.outcome == 'success'
+        run: |
+          npx --no-install vitest run --project node \
+            tests/national/C6Class2E4TreatyDefenseReceipts.test.ts \
+            tests/national/DefenseLevyAtomic.test.ts \
+            tests/national/LiveLevyCombatRound5.test.ts \
+            tests/national/RoundEightLevyOverlap.test.ts \
+            tests/national/C5Class3PaidNationalAssessment.test.ts \
+            tests/national/C5Class3AssessmentWire.test.ts
+      - name: Pinned formatter
+        id: format
+        if: always() && steps.install.outcome == 'success'
+        run: npm run format:check
+      - name: Lint
+        if: always() && steps.install.outcome == 'success'
+        run: npm run lint
+      - name: Production build
+        if: always() && steps.install.outcome == 'success'
+        run: npm run build-prod
+      - name: Full regression
+        if: always() && steps.install.outcome == 'success'
+        run: npm test
       - name: Print pinned formatter patch
-        if: failure() && matrix.gate == 'format'
+        if: always() && steps.format.outcome == 'failure'
         run: |
           npx --no-install oxfmt --write \
             packages/engine-api/src/Schemas.ts \

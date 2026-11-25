@@ -4,6 +4,7 @@ import {
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import { NationalAssessmentViewSchema } from "@openfront/engine-api/game/NationalAssessmentView";
 import {
   NationalAssessmentIntentSchema,
   type GameConfig,
@@ -495,7 +496,8 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
         }),
       ],
     });
-    expect(browserDecoded.nationalAssessments?.receipts).toEqual([
+    const decodedAssessment = NationalAssessmentViewSchema.parse(browserDecoded.nationalAssessments);
+    expect(decodedAssessment.receipts).toEqual([
       expect.objectContaining({
         requestId: "private-canonical",
         payerId: BUYER.id,
@@ -504,8 +506,8 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
         cost: "1200",
       }),
     ]);
-    expect(browserDecoded.nationalAssessments?.items[0]).not.toHaveProperty("requestId");
-    expect(browserDecoded.nationalAssessments?.items[0]).not.toHaveProperty("cost");
+    expect(decodedAssessment.items[0]).not.toHaveProperty("requestId");
+    expect(decodedAssessment.items[0]).not.toHaveProperty("cost");
     const foreign = new NationalServerRecipientSession(game, {
       ...liveLink,
       clientID: OTHER.clientID!,
