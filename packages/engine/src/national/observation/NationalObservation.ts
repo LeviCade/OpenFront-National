@@ -167,6 +167,14 @@ export interface VisibleAsset {
   readonly strength?: number;
 }
 
+/** Current, principal-authorized peace capability; never a public WAR field. */
+export interface ObservedPeaceNegotiation {
+  readonly warId: string;
+  readonly side: 0 | 1;
+  readonly incomingMotionIds: readonly string[];
+  readonly outgoingPending: boolean;
+}
+
 export interface NationalObservation {
   readonly observerId: NationId;
   readonly tick: number;
@@ -179,6 +187,7 @@ export interface NationalObservation {
     readonly recipientId: NationId;
   }[];
   readonly wars: readonly NationalWar[];
+  readonly peaceNegotiations?: readonly ObservedPeaceNegotiation[];
   readonly ownResources: { readonly troops: number; readonly treasury: number };
   readonly visibleAssets: readonly VisibleAsset[];
   readonly assessments?: readonly NationalAssessmentReport[];

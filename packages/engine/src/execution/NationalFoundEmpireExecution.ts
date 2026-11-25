@@ -174,6 +174,8 @@ const NationalFoundEmpireStateSchema = z.object({
           ]),
           selectedApproverIds: z.array(z.string()).max(256).optional(),
           expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+          defenseContributionBps: z.number().int().min(0).max(1000).optional(),
+          defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
         }),
       }),
       z.object({
@@ -201,12 +203,20 @@ const NationalFoundEmpireStateSchema = z.object({
           ]),
           selectedApproverIds: z.array(z.string()).max(256).optional(),
           expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+          defenseContributionBps: z.number().int().min(0).max(1000).optional(),
+          defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
         }),
         administratorId: z.string().nullable(),
       }),
       z.object({
         kind: z.literal("approve-pact-amendment"),
         pactId: z.string(),
+        expectedDefenseVersion: z
+          .number()
+          .int()
+          .positive()
+          .max(Number.MAX_SAFE_INTEGER)
+          .optional(),
       }),
       z.object({ kind: z.literal("betray-pact"), pactId: z.string() }),
       z.object({

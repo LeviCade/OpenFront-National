@@ -1,0 +1,48 @@
+name: C6C2 E5 — negotiated peace exact-head source
+on:
+  push:
+    branches:
+      - feature/conductor6-class2-e5-negotiated-peace-ai-20261123
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    name: ${{ matrix.gate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - gate: typecheck
+            command: npm run typecheck
+          - gate: focused
+            command: npx --no-install vitest run --project node tests/national/C6C2E5Peace.test.ts tests/national/RoundEightWarInFlight.test.ts tests/national/RoundElevenImperialPeaceDelegation.test.ts tests/national/NationalAIRealWar.test.ts tests/national/NationalLiveObservation.test.ts
+          - gate: regression
+            command: npm test
+          - gate: lint
+            command: npm run lint
+          - gate: formatting
+            command: npm run format:check
+          - gate: production-build
+            command: npm run build-prod
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact revision
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Run gate
+        run: ${{ matrix.command }}
+      - name: Report exact formatter patch on failure
+        if: failure() && matrix.gate == 'formatting'
+        run: |
+          npx --no-install oxfmt --write packages/engine/src/national/ai/NationalPeaceStrategy.ts packages/engine/src/execution/NationExecution.ts packages/engine/src/national/observation/NationalObservation.ts packages/engine/src/national/observation/LiveObservation.ts tests/national/C6C2E5Peace.test.ts
+          git diff --no-ext-diff

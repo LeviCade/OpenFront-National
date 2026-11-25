@@ -45,6 +45,8 @@ export interface NationalPoliticsViewData {
   readonly victory: {
     readonly sovereignPowerCount: number;
     readonly resolved: boolean;
+    /** Present only after the canonical Game WIN decision. */
+    readonly confirmedTick?: number;
     readonly prizes: readonly (
       | { readonly kind: "SovereignVictor"; readonly nationId: PlayerID }
       | {
@@ -160,6 +162,8 @@ export interface NationalUltimatumViewData {
 export interface NationalAssessmentViewData {
   readonly version: 1;
   readonly recipientId: PlayerID;
+  /** Game-owned exact click outcomes; never shared with empire members. */
+  readonly receipts?: readonly import("./NationalAssessmentView").NationalAssessmentReceipt[];
   readonly items: readonly {
     readonly targetId: PlayerID;
     readonly paidBy: PlayerID;
@@ -191,6 +195,7 @@ export interface GameUpdateViewData {
   nationalReconnaissance?: import("./NationalReconView").NationalReconnaissanceViewData;
   nationalPactDisclosure?: NationalPactDisclosureWireData;
   nationalImperialAdministration?: NationalImperialAdministrationWire;
+  nationalSettlements?: import("./NationalSettlementView").NationalSettlementView;
   /**
    * Outcomes scoped to the authenticated recipient of THIS view only.
    * E3 must filter before serialization; never broadcast the E1 journal.

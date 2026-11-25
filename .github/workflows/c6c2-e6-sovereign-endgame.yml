@@ -1,0 +1,49 @@
+name: C6 Class 2 E6 sovereign endgame
+on:
+  push:
+    branches:
+      - feature/conductor6-class2-e6-sovereign-endgame-20261123
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [focused, typecheck, regression, lint, formatting, production]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install -g --ignore-scripts npm@12.1.0
+      - run: |
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(node -v)" = v24.15.0
+          test "$(npm -v)" = 12.1.0
+          node -v
+          npm -v
+          npm run inst
+      - name: Exact-head acceptance
+        shell: bash
+        run: |
+          case "${{ matrix.gate }}" in
+            focused) npx --no-install vitest run tests/national/C6C2E6GameRunner.test.ts tests/national/NationalReceiptCorrelation.test.ts tests/national/NationalStrategicSimulationR8.test.ts tests/ui/national/C6C2E6Victory.test.ts tests/client/graphics/layers/WinModalTick.test.ts tests/client/graphics/layers/WinModalXp.test.ts tests/ui/national/C4NativeObserverRevocation.test.ts ;;
+            typecheck) npm run typecheck ;;
+            regression) npm test ;;
+            lint) npm run lint ;;
+            formatting)
+              npm run format:check || {
+                npx --no-install oxfmt --write $(git diff --name-only e9eb83cd9a18663d6e40d2b2e88219bed7fccb57 HEAD -- '*.ts' '*.yml')
+                git diff
+                exit 1
+              } ;;
+            production) npm run build-prod ;;
+          esac

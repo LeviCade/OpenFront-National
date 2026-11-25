@@ -1,3 +1,5 @@
+import { readNationalConfirmedVictory } from "./NationalVictoryView";
+
 /** Detached wire contract. No engine state or client-derived political authority. */
 export interface NationalPublicPactView {
   readonly id: string;
@@ -15,6 +17,8 @@ export interface NationalPactTerms {
     | "supermajority";
   readonly selectedApproverIds?: string[];
   readonly expulsion: "leader" | "unanimous" | "forbidden";
+  readonly defenseContributionBps?: number;
+  readonly defenseReserveBps?: number;
 }
 export interface NationalPactDisclosure {
   readonly pactId: string;
@@ -27,6 +31,7 @@ export interface NationalPactDisclosure {
     readonly authorized: boolean;
   }[];
   readonly pendingAmendment?: {
+    readonly defenseVersion?: number;
     readonly terms: NationalPactTerms;
     readonly administratorId: string | null;
     readonly approvedBy: readonly string[];
@@ -76,7 +81,7 @@ function ids(value: unknown): value is string[] {
 function terms(value: unknown): NationalPactTerms | null {
   if (
     !record(value) ||
-    !keys(value, ["admission", "expulsion", "selectedApproverIds"]) ||
+    !keys(value, ["admission", "expulsion", "selectedApproverIds", "defenseContributionBps", "defenseReserveBps"]) ||
     (value.admission !== "leader" &&
       value.admission !== "unanimous" &&
       value.admission !== "selected" &&
@@ -91,13 +96,36 @@ function terms(value: unknown): NationalPactTerms | null {
       value.expulsion !== "forbidden")
   )
     return null;
+  const cap = value.defenseContributionBps;
+  const reserve = value.defenseReserveBps;
+  if (
+    (cap !== undefined &&
+      (typeof cap !== "number" ||
+        !Number.isInteger(cap) ||
+        cap < 0 ||
+        cap > 1000)) ||
+    (reserve !== undefined &&
+      (typeof reserve !== "number" ||
+        !Number.isInteger(reserve) ||
+        reserve < 3000 ||
+        reserve > 10000))
+  )
+    return null;
   return {
     admission: value.admission,
     expulsion: value.expulsion,
     ...(ids(value.selectedApproverIds)
       ? { selectedApproverIds: [...value.selectedApproverIds] }
       : {}),
+    ...(cap === undefined ? {} : { defenseContributionBps: cap }),
+    ...(reserve === undefined ? {} : { defenseReserveBps: reserve }),
   };
+}
+function hasDefenseTerms(terms: NationalPactTerms): boolean {
+  return (
+    terms.defenseContributionBps !== undefined ||
+    terms.defenseReserveBps !== undefined
+  );
 }
 /** Strict reader rejects nested extras. Producer separately selects public keys. */
 export function readNationalPublicPacts(
@@ -175,6 +203,7 @@ export function readNationalPactDisclosure(
     if (
       !publicPact ||
       !currentTerms ||
+      (publicPact.kind !== "MDA" && hasDefenseTerms(currentTerms)) ||
       publicPact.memberIds.includes(actor) !== (p.relationship === "member")
     )
       return null;
@@ -248,7 +277,16 @@ export function readNationalPactDisclosure(
       if (
         p.relationship !== "member" ||
         !record(a) ||
-        !keys(a, ["terms", "administratorId", "approvedBy"]) ||
+        !keys(a, [
+          "terms",
+          "administratorId",
+          "approvedBy",
+          "defenseVersion",
+        ]) ||
+        (a.defenseVersion !== undefined &&
+          (typeof a.defenseVersion !== "number" ||
+            !Number.isSafeInteger(a.defenseVersion) ||
+            a.defenseVersion <= 0)) ||
         !ids(a.approvedBy) ||
         a.approvedBy.length === publicPact.memberIds.length ||
         !a.approvedBy.every((v) => publicPact.memberIds.includes(v)) ||
@@ -260,6 +298,9 @@ export function readNationalPactDisclosure(
       const next = terms(a.terms);
       if (
         !next ||
+        (publicPact.kind !== "MDA" && hasDefenseTerms(next)) ||
+        (hasDefenseTerms(currentTerms) || hasDefenseTerms(next)) !==
+          (a.defenseVersion !== undefined) ||
         (next.admission === "selected" && !next.selectedApproverIds?.length) ||
         (next.selectedApproverIds ?? []).some(
           (v) => !publicPact.memberIds.includes(v),
@@ -267,6 +308,9 @@ export function readNationalPactDisclosure(
       )
         return null;
       amendment = {
+        ...(typeof a.defenseVersion === "number"
+          ? { defenseVersion: a.defenseVersion }
+          : {}),
         terms: next,
         administratorId: a.administratorId,
         approvedBy: [...a.approvedBy],
@@ -365,8 +409,11 @@ export function validateNationalPactPacket(
           !keys(politics.victory, [
             "sovereignPowerCount",
             "resolved",
+            "confirmedTick",
             "prizes",
           ]) ||
+          (politics.victory.confirmedTick !== undefined &&
+            readNationalConfirmedVictory(politics.victory, tick) === null) ||
           !Number.isSafeInteger(politics.victory.sovereignPowerCount) ||
           typeof politics.victory.resolved !== "boolean" ||
           !Array.isArray(politics.victory.prizes) ||

@@ -38,6 +38,13 @@ import {
   type NationalEconomicMemory,
 } from "../national/ai/NationalEconomicPlanner";
 import {
+  holdsNationalPeace,
+  NationalPeaceMemorySchema,
+  planNationalPeace,
+  recordNationalPeaceOutcome,
+  type NationalPeaceMemory,
+} from "../national/ai/NationalPeaceStrategy";
+import {
   deriveNationalWarSides,
   initialNationalPlannerMemory,
   planNationalInterest,
@@ -138,6 +145,7 @@ export class NationExecution implements Execution {
   private nationalReconMemory: NationalReconMemory | null = null;
   // C6 E5: separate bounded 1,200-gold assessment purchase receipts.
   private nationalAssessmentMemory: NationalAssessmentAIMemory | null = null;
+  private nationalPeaceMemory: NationalPeaceMemory | null = null;
 
   constructor(
     private gameID: GameID,
@@ -380,6 +388,79 @@ export class NationExecution implements Execution {
       return;
     const verified = collectLiveNationalObservation(this.mg, player.id());
     const observation = verified.observation;
+    if (
+      player.type() === PlayerType.Nation &&
+      (observation.wars.length > 0 || this.nationalPeaceMemory !== null)
+    ) {
+      const peace = planNationalPeace(observation, this.nationalPeaceMemory);
+      this.nationalPeaceMemory = peace.memory;
+      if (peace.choice !== null) {
+        const choice = peace.choice;
+        const politics = this.mg.nationalPoliticalAuthority();
+        if (politics === null) return;
+        // This is the same authenticated Game command/journal used by the
+        // human Executor. The registered Nation Player is the principal.
+        // A human can preclaim a predictable request token. Let the canonical
+        // journal allocate a collision-safe auto receipt; motion identity is
+        // separately engine-owned and never accepted from the wire.
+        const motionId =
+          choice.kind === "propose-peace"
+            ? `ai-peace-${player.smallID()}-${ticks}`
+            : choice.motionId;
+        const command =
+          choice.kind === "propose-peace"
+            ? { kind: choice.kind, warId: choice.warId, motionId }
+            : { kind: choice.kind, motionId };
+        let outcome: ReturnType<Game["performNationalWarCommandWithOutcome"]>;
+        try {
+          outcome = this.mg.performNationalWarCommandWithOutcome(player, {
+            ...command,
+            admissionEmpireId: politics.empireOf(player.id()),
+            policyVersion: politics.warPolicyVersionFor(player.id()),
+          });
+        } catch (error) {
+          if (
+            !(error instanceof Error) ||
+            ![
+              "NATIONAL command journal: lifetime request cap reached",
+              "NATIONAL command journal: sequence exhausted",
+            ].includes(error.message)
+          )
+            throw error;
+          // No receipt exists: back off without manufacturing a rejection.
+          this.nationalPeaceMemory = recordNationalPeaceOutcome(
+            peace.memory,
+            choice,
+            ticks,
+            null,
+          );
+          return;
+        }
+        if (
+          outcome.actorId !== player.id() ||
+          outcome.recipientId !== player.id() ||
+          outcome.tick !== observation.tick ||
+          (outcome.accepted &&
+            (outcome.warId !== choice.warId ||
+              outcome.motionId !== motionId)) ||
+          outcome.commandKind !==
+            (choice.kind === "propose-peace"
+              ? "national_propose_peace"
+              : "national_accept_peace") ||
+          outcome.commandTargetId !==
+            (choice.kind === "propose-peace" ? choice.warId : choice.motionId)
+        )
+          throw new Error("NATIONAL peace: invalid canonical outcome");
+        this.nationalPeaceMemory = recordNationalPeaceOutcome(
+          peace.memory,
+          choice,
+          ticks,
+          outcome.accepted,
+        );
+        // Never execute an attack against a stale, pre-settlement projection.
+        if (outcome.accepted && choice.kind === "accept-peace") return;
+      }
+    }
     // Authorized live observer: E6 defensive escort first, offensive naval
     // pressure only if no escort action; E5 intelligence executes afterward.
     if (!this.behaviorsInitialized) this.initializeBehaviors();
@@ -782,6 +863,7 @@ export class NationExecution implements Execution {
 
     if (sides.allies.has(targetId)) return;
     if (!sides.enemies.has(targetId)) {
+      if (holdsNationalPeace(this.nationalPeaceMemory, targetId, ticks)) return;
       // The live Game authority returns a principal-bound accepted/rejected
       // receipt. Dispatch is NOT acceptance. Only E1's Game-owned journal
       // decides WAR legality; the E3 planner consumes that exact result.
@@ -1078,6 +1160,9 @@ export class NationExecution implements Execution {
                     },
                   }),
             },
+      ...(this.nationalPeaceMemory === null
+        ? {}
+        : { nationalPeaceMemory: this.nationalPeaceMemory }),
       ...(this.nationalReconMemory === null
         ? {}
         : {
@@ -1171,6 +1256,7 @@ export class NationExecution implements Execution {
     this.nationalEconomicMemory = s.nationalEconomicMemory ?? null;
     this.nationalReconMemory = s.nationalReconMemory ?? null;
     this.nationalAssessmentMemory = s.nationalAssessmentMemory ?? null;
+    this.nationalPeaceMemory = s.nationalPeaceMemory ?? null;
     this.behaviorsInitialized = s.behaviors !== null;
     const b = s.behaviors;
     const player = this.player;
@@ -1295,6 +1381,7 @@ const NationStateSchema = z.object({
         .optional(),
     })
     .nullable(),
+  nationalPeaceMemory: NationalPeaceMemorySchema.optional(),
   nationalReconMemory: z
     .object({
       observerId: z.string(),

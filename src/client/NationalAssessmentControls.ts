@@ -2,7 +2,9 @@ import { GameType } from "@openfront/engine-api/game/GameTypes";
 import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { keyed } from "lit/directives/keyed.js";
 import {
+  assessmentPurchaseOutcome,
   assessmentReportKey,
   NATIONAL_ASSESSMENT_QUOTE,
   type NationalAssessmentClientReport,
@@ -13,7 +15,10 @@ import { SendNationalAssessmentIntentEvent } from "./Transport";
 import type { GameView } from "./view";
 
 interface PendingPurchase {
+  readonly game: GameView;
+  readonly bus: EventBus;
   readonly gameId: string;
+  readonly streamId: string | null | undefined;
   readonly actorId: string;
   readonly targetId: string;
   readonly requestId: string;
@@ -35,6 +40,7 @@ export class NationalAssessmentControls extends LitElement {
   @state() private selectedTarget = "";
   @state() private status = "";
   private pending: PendingPurchase | null = null;
+  private session: { game: GameView; bus: EventBus; key: string } | null = null;
 
   override createRenderRoot() {
     return this;
@@ -78,20 +84,41 @@ export class NationalAssessmentControls extends LitElement {
   /** The parent calls this on each actual GameView/Worker frame. */
   public refresh(): void {
     const context = this.activeContext;
+    const key = context
+      ? JSON.stringify([
+          context.game.gameID(),
+          context.actor.id(),
+          context.game.nationalReceiptStreamId?.(),
+        ])
+      : "";
+    if (
+      !context ||
+      this.session?.game !== context.game ||
+      this.session?.bus !== context.bus ||
+      this.session?.key !== key
+    ) {
+      const hadPending = this.pending !== null;
+      this.pending = null;
+      this.selectedTarget = "";
+      this.status = hadPending
+        ? "Game or principal changed; purchase unconfirmed."
+        : "";
+      this.session = context
+        ? { game: context.game, bus: context.bus, key }
+        : null;
+    }
     const pending = this.pending;
     if (!context) {
-      if (pending) {
-        this.pending = null;
-        this.status =
-          "Session authority changed; purchase outcome is unknown. No report is retained.";
-      }
       this.requestUpdate();
       return;
     }
     if (pending) {
       const tick = context.game.ticks();
       if (
+        context.game !== pending.game ||
+        context.bus !== pending.bus ||
         context.game.gameID() !== pending.gameId ||
+        context.game.nationalReceiptStreamId?.() !== pending.streamId ||
         context.actor.id() !== pending.actorId ||
         tick < pending.tick
       ) {
@@ -105,24 +132,50 @@ export class NationalAssessmentControls extends LitElement {
             report.effectiveTick >= pending.tick &&
             !pending.previousReports.has(assessmentReportKey(report)),
         );
-        if (newReport) {
+        const receipt = assessmentPurchaseOutcome(
+          context.game.nationalAssessments?.() ?? null,
+          pending,
+          context.game.gameID(),
+          context.actor.id(),
+          tick,
+        );
+        if (receipt) {
           this.pending = null;
-          // E4 does not publish requestId in the projection. This validates a
-          // NEW Game-paid lease, not exact-click ID correlation.
           this.status =
-            "A new Game-owned paid national assessment arrived. An exact request-ID receipt is not exposed by the present server contract.";
+            receipt.outcome === "accepted"
+              ? "Game confirmed this exact assessment request: 1,200 gold paid. Inspect the current Game-issued reports below."
+              : "Game rejected this exact assessment request: no debit.";
         } else if (tick - pending.tick >= 200) {
           this.pending = null;
           this.status =
-            "No new Game-owned report arrived within 200 ticks. The purchase result is unknown; review your actual gold and reports before retrying.";
+            "No exact Game-owned receipt arrived within 200 ticks. The purchase result is unknown; review your actual gold and reports before retrying.";
+        } else if (newReport) {
+          this.status =
+            "A new Game-owned paid national assessment arrived, but the exact request-ID receipt is still unconfirmed.";
         }
       }
     }
     this.requestUpdate();
   }
 
-  private submit(event: SubmitEvent): void {
+  override disconnectedCallback(): void {
+    this.pending = null;
+    this.session = null;
+    this.selectedTarget = "";
+    this.status = "";
+    super.disconnectedCallback();
+  }
+
+  private submit(
+    event: SubmitEvent,
+    displayedGame: GameView,
+    displayedBus: EventBus,
+    displayedActor: string,
+    displayedGameId: string,
+    displayedStream: string | null | undefined,
+  ): void {
     event.preventDefault();
+    this.refresh();
     if (!(event.currentTarget instanceof HTMLFormElement)) return;
     // Do not replace the one outstanding receipt when a second click arrives.
     if (this.pending) return;
@@ -131,6 +184,11 @@ export class NationalAssessmentControls extends LitElement {
     const targetId = form.get("target");
     if (
       !context ||
+      context.game !== displayedGame ||
+      context.bus !== displayedBus ||
+      context.actor.id() !== displayedActor ||
+      context.game.gameID() !== displayedGameId ||
+      context.game.nationalReceiptStreamId?.() !== displayedStream ||
       !this.candidates(context).some((player) => player.id() === targetId) ||
       form.get("confirm") !== "on" ||
       context.actor.gold() < NATIONAL_ASSESSMENT_QUOTE.cost
@@ -149,7 +207,10 @@ export class NationalAssessmentControls extends LitElement {
     }
     const { game, actor, bus } = context;
     this.pending = {
+      game,
+      bus,
       gameId: game.gameID(),
+      streamId: game.nationalReceiptStreamId?.(),
       actorId: actor.id(),
       targetId: targetId as string,
       requestId,
@@ -191,6 +252,9 @@ export class NationalAssessmentControls extends LitElement {
     const context = this.activeContext;
     if (!context) return nothing;
     const candidates = this.candidates(context);
+    const displayedActor = context.actor.id();
+    const displayedGameId = context.game.gameID();
+    const displayedStream = context.game.nationalReceiptStreamId?.();
     const reports = this.currentReports;
     const pending = this.pending !== null;
     const canAfford = context.actor.gold() >= NATIONAL_ASSESSMENT_QUOTE.cost;
@@ -210,43 +274,47 @@ export class NationalAssessmentControls extends LitElement {
       <p class="text-xs" data-national-assessment-wallet>
         Game-reported available gold: ${context.actor.gold().toString()}
       </p>
-      <form
-        class="space-y-2"
-        data-national-assessment-form
-        @submit=${this.submit}
-      >
-        <label class="block" for="national-assessment-target">
-          Target nation
-          <select
-            id="national-assessment-target"
-            name="target"
-            required
-            class="w-full min-h-11 rounded bg-slate-900 text-white p-2"
-            .value=${this.selectedTarget}
-            @change=${(e: Event) => {
-              this.selectedTarget = (e.target as HTMLSelectElement).value;
-            }}
-          >
-            <option value="">Select a living nation</option>
-            ${candidates.map(
-              (player) =>
-                html`<option value=${player.id()}>${player.name()}</option>`,
-            )}
-          </select>
-        </label>
-        <label class="flex items-start gap-2 text-sm">
-          <input type="checkbox" name="confirm" required class="mt-1" />
-          I authorize one Game-owned debit of 1,200 gold for the chosen target.
-        </label>
-        <button
-          type="submit"
-          data-national-assessment-buy
-          class="min-h-11 w-full rounded bg-amber-400 p-2 font-semibold text-slate-950 disabled:opacity-50"
-          ?disabled=${pending || !canAfford || candidates.length === 0}
+      ${keyed(
+        JSON.stringify([displayedGameId, displayedActor, displayedStream]),
+        html`<form
+          class="space-y-2"
+          data-national-assessment-form
+          @submit=${(event: SubmitEvent) => this.submit(event, context.game, context.bus, displayedActor, displayedGameId, displayedStream)}
         >
-          Purchase national assessment
-        </button>
-      </form>
+          <label class="block" for="national-assessment-target">
+            Target nation
+            <select
+              id="national-assessment-target"
+              name="target"
+              required
+              class="w-full min-h-11 rounded bg-slate-900 text-white p-2"
+              .value=${this.selectedTarget}
+              @change=${(e: Event) => {
+                this.selectedTarget = (e.target as HTMLSelectElement).value;
+              }}
+            >
+              <option value="">Select a living nation</option>
+              ${candidates.map(
+                (player) =>
+                  html`<option value=${player.id()}>${player.name()}</option>`,
+              )}
+            </select>
+          </label>
+          <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="confirm" required class="mt-1" />
+            I authorize one Game-owned debit of 1,200 gold for the chosen
+            target.
+          </label>
+          <button
+            type="submit"
+            data-national-assessment-buy
+            class="min-h-11 w-full rounded bg-amber-400 p-2 font-semibold text-slate-950 disabled:opacity-50"
+            ?disabled=${pending || !canAfford || candidates.length === 0}
+          >
+            Purchase national assessment
+          </button>
+        </form>`,
+      )}
       <p
         data-national-assessment-status
         role="status"

@@ -1,3 +1,5 @@
+import { validateTreatyDefenseTerms } from "../conflict/NationalTreatyDefensePolicy";
+
 /**
  * NATIONAL political rules — isolated deterministic projection (D-003..D-013).
  *
@@ -45,6 +47,8 @@ export interface PactTerms {
   expulsion: ExpulsionRule;
   /** All explicitly named current approvers must consent; no implicit delegation. */
   selectedApproverIds?: string[];
+  readonly defenseContributionBps?: number;
+  readonly defenseReserveBps?: number;
 }
 
 export interface PactInvitation {
@@ -56,6 +60,8 @@ export interface PactInvitation {
 }
 
 export interface PactAmendment {
+  /** Globally monotonic identity for a proposal touching MDA defense terms. */
+  defenseVersion?: number;
   terms: PactTerms;
   administratorId: string | null;
   /** Each vote comes from a distinct registered Game actor. */
@@ -110,6 +116,7 @@ export interface PoliticsProjection {
   simulationMs: number;
   /** Optional for original v1 snapshots. Monotonic across pact lifetimes. */
   admissionEpoch?: number;
+  defenseAmendmentSequence?: number;
 }
 
 export type PoliticalPrize =
@@ -289,6 +296,9 @@ function copy(world: PoliticsProjection): PoliticsProjection {
       ...(p.pendingAmendment
         ? {
             pendingAmendment: {
+              ...(p.pendingAmendment.defenseVersion === undefined
+                ? {}
+                : { defenseVersion: p.pendingAmendment.defenseVersion }),
               terms: clonePactTerms(p.pendingAmendment.terms),
               administratorId: p.pendingAmendment.administratorId,
               approvedBy: [...p.pendingAmendment.approvedBy],
@@ -313,6 +323,9 @@ function copy(world: PoliticsProjection): PoliticsProjection {
     ...(world.admissionEpoch === undefined
       ? {}
       : { admissionEpoch: world.admissionEpoch }),
+    ...(world.defenseAmendmentSequence === undefined
+      ? {}
+      : { defenseAmendmentSequence: world.defenseAmendmentSequence }),
   };
 }
 
@@ -328,6 +341,13 @@ export function initialPolitics(nations: PoliticsNation[]): PoliticsProjection {
   return world;
 }
 
+function hasDefenseTerms(terms: PactTerms): boolean {
+  return (
+    terms.defenseContributionBps !== undefined ||
+    terms.defenseReserveBps !== undefined
+  );
+}
+
 /** Validate persisted projection boundaries before executing or evaluating rules. */
 export function validatePolitics(world: PoliticsProjection): void {
   requireRule(
@@ -339,6 +359,12 @@ export function validatePolitics(world: PoliticsProjection): void {
     "invalid global admission epoch",
   );
   const pactEpochs = new Set<number>();
+  requireRule(
+    Number.isSafeInteger(world.defenseAmendmentSequence ?? 0) &&
+      (world.defenseAmendmentSequence ?? 0) >= 0,
+    "invalid defense amendment sequence",
+  );
+  const pendingDefenseVersions = new Set<number>();
   requireRule(unique(world.nations.map((n) => n.id)), "duplicate nation");
   requireRule(unique(world.pacts.map((p) => p.id)), "duplicate pact");
   requireRule(unique(world.empires.map((e) => e.id)), "duplicate empire");
@@ -421,6 +447,7 @@ export function validatePolitics(world: PoliticsProjection): void {
       "invalid pact identifier",
     );
     requireRule(p.kind === "NAP" || p.kind === "MDA", "invalid pact type");
+    validateTreatyDefenseTerms(p.kind, p.terms);
     validatePactTerms(p.terms, p.memberIds, false);
     const election = usesAdmissionElection(p.terms.admission);
     if (p.constitutionVersion !== undefined) {
@@ -449,6 +476,24 @@ export function validatePolitics(world: PoliticsProjection): void {
     );
     if (p.pendingAmendment !== undefined) {
       const proposed = p.pendingAmendment;
+      validateTreatyDefenseTerms(p.kind, proposed.terms);
+      if (hasDefenseTerms(p.terms) || hasDefenseTerms(proposed.terms)) {
+        const version = proposed.defenseVersion;
+        requireRule(
+          version !== undefined &&
+            Number.isSafeInteger(version) &&
+            version > 0 &&
+            version <= (world.defenseAmendmentSequence ?? 0) &&
+            !pendingDefenseVersions.has(version),
+          "invalid defense amendment version",
+        );
+        pendingDefenseVersions.add(version);
+      } else {
+        requireRule(
+          proposed.defenseVersion === undefined,
+          "unexpected defense version",
+        );
+      }
       validatePactTerms(proposed.terms, p.memberIds, true);
       requireRule(
         proposed.administratorId === null ||
@@ -837,7 +882,18 @@ export function proposePactAmendment(
   );
   const next = copy(world);
   const target = pact(next, pactId);
+  const versioned =
+    hasDefenseTerms(current.terms) || hasDefenseTerms(proposed.terms);
+  const defenseVersion = (next.defenseAmendmentSequence ?? 0) + 1;
+  if (versioned) {
+    requireRule(
+      Number.isSafeInteger(defenseVersion),
+      "defense version exhausted",
+    );
+    next.defenseAmendmentSequence = defenseVersion;
+  }
   target.pendingAmendment = {
+    ...(versioned ? { defenseVersion } : {}),
     terms: clonePactTerms(proposed.terms),
     administratorId: proposed.administratorId,
     approvedBy: [actorId],
@@ -857,6 +913,7 @@ export function approvePactAmendment(
   world: PoliticsProjection,
   pactId: string,
   actorId: string,
+  expectedDefenseVersion?: number,
 ): PoliticsProjection {
   validatePolitics(world);
   const current = pact(world, pactId);
@@ -864,6 +921,10 @@ export function approvePactAmendment(
   requireRule(
     current.pendingAmendment !== undefined,
     "constitutional amendment not pending",
+  );
+  requireRule(
+    current.pendingAmendment.defenseVersion === expectedDefenseVersion,
+    "stale defense amendment version",
   );
   const next = copy(world);
   const target = pact(next, pactId);

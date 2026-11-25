@@ -80,6 +80,8 @@ const pactTerms = z.object({
   ]),
   selectedApproverIds: z.array(z.string().min(1).max(256)).max(256).optional(),
   expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+  defenseContributionBps: z.number().int().min(0).max(1000).optional(),
+  defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
 });
 const politicsSchema = z.object({
   nations: z.array(
@@ -109,6 +111,7 @@ const politicsSchema = z.object({
       // Absent in older v1 snapshots. No authority is inferred from absence.
       pendingAmendment: z
         .object({
+          defenseVersion: counter.optional(),
           terms: pactTerms,
           administratorId: z.string().nullable(),
           approvedBy: z.array(z.string()),
@@ -142,6 +145,7 @@ const politicsSchema = z.object({
   ),
   simulationMs: counter,
   admissionEpoch: counter.optional(),
+  defenseAmendmentSequence: counter.optional(),
 });
 
 // One authority record per empire, attached to the canonical NATIONAL runtime.
@@ -436,7 +440,11 @@ export type NationalCommand =
       terms: PactTerms;
       administratorId: PlayerID | null;
     }
-  | { kind: "approve-pact-amendment"; pactId: string }
+  | {
+      kind: "approve-pact-amendment";
+      pactId: string;
+      expectedDefenseVersion?: number;
+    }
   | { kind: "betray-pact"; pactId: string }
   | {
       kind: "expel-pact";
@@ -500,6 +508,7 @@ export interface NationalRecipientPactView extends NationalPublicPactView {
     readonly authorized: boolean;
   }[];
   readonly pendingAmendment: {
+    readonly defenseVersion?: number;
     readonly terms: Readonly<PactTerms>;
     readonly administratorId: PlayerID | null;
     readonly approvedBy: readonly PlayerID[];
@@ -525,6 +534,7 @@ export interface NationalPactDisclosureViewData {
     }[];
     readonly terms: Readonly<PactTerms>;
     readonly pendingAmendment?: {
+      readonly defenseVersion?: number;
       readonly terms: Readonly<PactTerms>;
       readonly administratorId: PlayerID | null;
       readonly approvedBy: readonly PlayerID[];
@@ -540,7 +550,7 @@ export interface NationalPublicPoliticalView {
     readonly memberIds: readonly PlayerID[];
   }[];
   readonly warnings: readonly NationalUngovernableWarning[];
-  readonly victory: LastSovereignResult | null;
+  readonly victory: (LastSovereignResult & { confirmedTick?: number }) | null;
 }
 
 function requireCommandId(id: string): void {
@@ -1642,6 +1652,9 @@ export class NationalRuntime {
           ),
           pendingAmendment: pending
             ? Object.freeze({
+                ...(pending.defenseVersion === undefined
+                  ? {}
+                  : { defenseVersion: pending.defenseVersion }),
                 terms: Object.freeze(clonePactTerms(pending.terms)),
                 administratorId: pending.administratorId,
                 approvedBy: Object.freeze([...pending.approvedBy].sort()),
@@ -1717,6 +1730,9 @@ export class NationalRuntime {
             ...(p.pendingAmendment
               ? {
                   pendingAmendment: Object.freeze({
+                    ...(p.pendingAmendment.defenseVersion === undefined
+                      ? {}
+                      : { defenseVersion: p.pendingAmendment.defenseVersion }),
                     terms: p.pendingAmendment.terms,
                     administratorId: p.pendingAmendment.administratorId,
                     approvedBy: p.pendingAmendment.approvedBy,
@@ -1858,7 +1874,12 @@ export class NationalRuntime {
         break;
       case "approve-pact-amendment":
         requireCommandId(command.pactId);
-        next = approvePactAmendment(this.politics, command.pactId, actorId);
+        next = approvePactAmendment(
+          this.politics,
+          command.pactId,
+          actorId,
+          command.expectedDefenseVersion,
+        );
         break;
       case "betray-pact":
         requireCommandId(command.pactId);

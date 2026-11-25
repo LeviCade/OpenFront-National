@@ -1,0 +1,45 @@
+name: C6 Class 2 E6 hosted software browser diagnostic
+on:
+  push:
+    branches:
+      - feature/conductor6-class2-e6-sovereign-endgame-20261123
+    paths:
+      - .github/workflows/c6c2-e6-software-browser.yml
+permissions:
+  contents: read
+jobs:
+  software-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NATIONAL_REQUIRE_HARDWARE_GPU: "0"
+      NATIONAL_QA_SOFTWARE_CDP: "1"
+      NATIONAL_GPU_CANDIDATE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Install and confirm software-only environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          npm install -g --ignore-scripts npm@12.1.0
+          npm run inst
+          echo "CHROME_BIN=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          echo "SOFTWARE DIAGNOSTIC ONLY — NOT PHYSICAL GPU OR RELEASE"
+      - name: Four-mode diagnostic (no hardware admission)
+        run: bash scripts/national-gpu-ci/run-four-modes.sh diagnostic
+      - name: Upload sanitized diagnostic only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c6c2-e6-software-only-${{ github.run_id }}
+          path: national-qa-artifacts/gpu/public/diagnostic/
+          if-no-files-found: warn
+          retention-days: 7

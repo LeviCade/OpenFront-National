@@ -15,7 +15,7 @@ import {
 } from "../InputHandler";
 import { MapRenderer } from "../render/gl";
 import { TransformHandler } from "../TransformHandler";
-import { MoveWarshipIntentEvent } from "../Transport";
+import { MoveWarshipIntentEvent, NationalBlockadeIntentEvent } from "../Transport";
 import { GameView, UnitView } from "../view";
 
 const WARSHIP_SELECTION_RADIUS = 10;
@@ -177,6 +177,7 @@ export class WarshipSelectionController implements Controller {
       if (!this.game.isValidCoord(cell.x, cell.y)) return;
       clickRef = this.game.ref(cell.x, cell.y);
     }
+    if (this.tryBlockade(clickRef)) return;
     if (!this.game.isWater(clickRef)) return;
 
     if (this.multiSelectedWarships.length > 0) {
@@ -206,6 +207,48 @@ export class WarshipSelectionController implements Controller {
     }
   }
 
+  /** Selecting a single owned hull, then a visible hostile port, orders a blockade. */
+  private tryBlockade(tile: TileRef): boolean {
+    const ship = this.selectedUnit;
+    if (!ship || !this.game.config?.().gameConfig?.()?.nationalMode) return false;
+    const actor = this.game.myPlayer();
+    if (!actor || ship.owner() !== actor || !ship.isActive()) return false;
+    const port = this.game
+      .units(UnitType.Port)
+      .find((u) => u.isActive() && u.owner() !== actor && u.tile() === tile);
+    if (!port) return false;
+    const politics = this.game.nationalPolitics();
+    const conflicts = this.game.nationalConflicts();
+    if (!politics || !conflicts || conflicts.recipientId !== actor.id())
+      return false;
+    const empireOf = (id: string) =>
+      politics.empires.find((empire) => empire.memberIds.includes(id))?.id;
+    const contains = (side: { kind: "nation" | "empire"; id: string }, id: string) =>
+      side.kind === "nation" ? side.id === id : side.id === empireOf(id);
+    const war = conflicts.layers
+      .filter(
+        (layer) =>
+          layer.endedTick === null &&
+          ((contains(layer.first, actor.id()) &&
+            contains(layer.second, port.owner().id())) ||
+            (contains(layer.second, actor.id()) &&
+              contains(layer.first, port.owner().id()))),
+      )
+      .sort((a, b) => a.id.localeCompare(b.id))[0];
+    if (!war) return false;
+    this.eventBus.emit(
+      new NationalBlockadeIntentEvent(
+        ship.id(),
+        port.id(),
+        tile,
+        war.id,
+        crypto.randomUUID(),
+      ),
+    );
+    this.eventBus.emit(new UnitSelectionEvent(ship, false));
+    return true;
+  }
+
   /**
    * Touch handler mirroring mouse-up. On dry land with no selection, falls
    * back to opening the radial menu.
@@ -229,6 +272,7 @@ export class WarshipSelectionController implements Controller {
       }
       return;
     }
+    if (this.tryBlockade(clickRef)) return;
     if (!this.game.isWater(clickRef)) {
       this.eventBus.emit(new ContextMenuEvent(event.x, event.y));
       return;

@@ -73,7 +73,8 @@ export type Intent =
   | NationalResolveUltimatumIntent
   | NationalReconnaissanceIntent
   | NationalAssessmentIntent
-  | NationalCounterassessmentIntent;
+  | NationalCounterassessmentIntent
+  | NationalBlockadeIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -786,6 +787,8 @@ export const NationalFoundPactIntentSchema = z.object({
     ]),
     selectedApproverIds: z.array(MappedID).max(256).optional(),
     expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+    defenseContributionBps: zb.uint({ min: 0, max: 1000 }).optional(),
+    defenseReserveBps: zb.uint({ min: 3000, max: 10000 }).optional(),
   }),
   requestId: NationalPoliticalRequestId,
 });
@@ -824,6 +827,9 @@ export const NationalProposePactAmendmentIntentSchema = z.object({
 export const NationalApprovePactAmendmentIntentSchema = z.object({
   type: z.literal("national_approve_pact_amendment"),
   pactId: NationalPoliticalId,
+  expectedDefenseVersion: zb
+    .uint({ min: 1, max: Number.MAX_SAFE_INTEGER })
+    .optional(),
   requestId: NationalPoliticalRequestId,
 });
 export const NationalExpelPactIntentSchema = z.object({
@@ -1064,6 +1070,17 @@ export type NationalCounterassessmentIntent = z.infer<
   typeof NationalCounterassessmentIntentSchema
 >;
 
+// Append-only NATIONAL command; the stamped client is the sole principal.
+export const NationalBlockadeIntentSchema = z.object({
+  type: z.literal("national_blockade"),
+  warId: NationalWarId,
+  shipId: zb.uint(),
+  portId: zb.uint(),
+  portTile: zb.uint(),
+  requestId: NationalPoliticalRequestId,
+});
+export type NationalBlockadeIntent = z.infer<typeof NationalBlockadeIntentSchema>;
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -1117,6 +1134,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalDecideSanctionSettlementIntentSchema,
   NationalAssessmentIntentSchema,
   NationalCounterassessmentIntentSchema,
+  NationalBlockadeIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)
