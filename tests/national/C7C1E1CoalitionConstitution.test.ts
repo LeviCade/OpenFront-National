@@ -422,6 +422,7 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
     consent(m, m.c, C, invite(m, C, "join-c"), "c-accept");
     const amend = (cap: number) => ({
       type: "national_propose_pact_amendment_v2",
+      constitutionVersion: memberView(m).constitutionVersion,
       administratorId: A,
       terms: {
         admission: "leader",
@@ -569,10 +570,10 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
         kind: "propose-pact-amendment",
         pactId,
         administratorId: A,
+        constitutionVersion: current().constitutionVersion,
         terms: { admission, expulsion: "forbidden", membershipCap: 6 },
       });
-      const expectedDefenseVersion =
-        current().pendingAmendment!.defenseVersion;
+      const expectedDefenseVersion = current().pendingAmendment!.defenseVersion;
       for (const id of ids.slice(1, 5)) {
         runtime.perform(id, {
           kind: "approve-pact-amendment",
@@ -805,6 +806,32 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
     consent(m, m.b, B, old, "old-pact-consent", false);
     consent(m, m.b, B, fresh, "new-pact-consent");
     vote(m, m.a, A, B, old, "old-pact-expulsion", false);
+    command(
+      m,
+      m.a,
+      A,
+      "old-pact-proposal",
+      {
+        type: "national_propose_pact_amendment_v2",
+        administratorId: A,
+        constitutionVersion: old,
+        terms: { admission: "leader", expulsion: "forbidden", membershipCap: 3 },
+      },
+      false,
+    );
+    command(
+      m,
+      m.a,
+      A,
+      "legacy-pact-proposal",
+      {
+        type: "national_propose_pact_amendment",
+        administratorId: A,
+        terms: { admission: "leader", expulsion: "forbidden" },
+      },
+      false,
+    );
+    expect(memberView(m).pendingAmendment).toBeNull();
     expect(() => oldReceipt()).toThrow(/stale sovereign replay authority/);
     expect(memberView(m).memberIds).toEqual([A, B].sort());
   });
@@ -909,17 +936,21 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
       invite(founded, B, "queued-invite"),
       "queued-join",
     );
-    command(founded, founded.a, A, "queued-proposal", {
+    const proposed = await queue(founded, founded.a, {
       type: "national_propose_pact_amendment_v2",
+      pactId,
+      requestId: "queued-proposal",
       administratorId: A,
+      constitutionVersion: memberView(founded).constitutionVersion,
       terms: { admission: "leader", expulsion: "majority", membershipCap: 3 },
     });
-    const rejected = await queue(founded, founded.b, {
+    expect(political(proposed.game, A, "queued-proposal").accepted).toBe(true);
+    const rejected = await queue(proposed, proposed.b, {
       type: "national_reject_pact_amendment_v2",
       pactId,
       requestId: "queued-rejection",
       expectedDefenseVersion:
-        memberView(founded).pendingAmendment!.defenseVersion,
+        memberView(proposed).pendingAmendment!.defenseVersion,
     });
     expect(political(rejected.game, B, "queued-rejection").accepted).toBe(true);
     expect(memberView(rejected).pendingAmendment).toBeNull();

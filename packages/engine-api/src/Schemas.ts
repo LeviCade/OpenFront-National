@@ -864,6 +864,9 @@ export const NationalProposePactAmendmentV2IntentSchema =
   NationalProposePactAmendmentIntentSchema.extend({
     type: z.literal("national_propose_pact_amendment_v2"),
     terms: NationalCoalitionV2TermsSchema,
+    constitutionVersion: zb
+      .uint({ min: 1, max: Number.MAX_SAFE_INTEGER - 1 })
+      .optional(),
   });
 export const NationalExpelPactV2IntentSchema =
   NationalExpelPactIntentSchema.extend({

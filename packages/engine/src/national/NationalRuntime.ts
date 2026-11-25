@@ -31,6 +31,7 @@ import {
   clonePactTerms,
   pactAdmissionAuthorized,
   usesVersionedPact,
+  hasExtendedPactTerms,
   eligibleExpulsionVoters,
   votePactExpulsion,
   withdrawPactInvitation,
@@ -467,6 +468,7 @@ export type NationalCommand =
       pactId: string;
       terms: PactTerms;
       administratorId: PlayerID | null;
+      constitutionVersion?: number;
     }
   | {
       kind: "approve-pact-amendment";
@@ -1796,6 +1798,34 @@ export class NationalRuntime {
     );
   }
 
+  mayReplayAmendment(
+    actorId: PlayerID,
+    command: Extract<
+      NationalCommand,
+      { kind: "propose-pact-amendment" | "approve-pact-amendment" }
+    >,
+  ): boolean {
+    const p = this.politics.pacts.find((entry) => entry.id === command.pactId);
+    if (command.kind === "propose-pact-amendment") {
+      // A proposal receipt does not identify its resulting proposal generation.
+      // Fail closed for extended proposals rather than revive an old receipt.
+      return (
+        command.constitutionVersion === undefined &&
+        !hasExtendedPactTerms(command.terms) &&
+        !p?.extendedGovernance
+      );
+    }
+    if (command.expectedDefenseVersion === undefined)
+      return !p?.extendedGovernance && command.reject !== true;
+    return (
+      command.reject !== true &&
+      p !== undefined &&
+      p.memberIds.includes(actorId) &&
+      p.pendingAmendment?.defenseVersion === command.expectedDefenseVersion &&
+      p.pendingAmendment.approvedBy.includes(actorId)
+    );
+  }
+
   mayReplayExpulsion(
     actorId: PlayerID,
     command: Extract<NationalCommand, { kind: "expel-pact" }>,
@@ -1981,10 +2011,16 @@ export class NationalRuntime {
         break;
       case "propose-pact-amendment":
         requireCommandId(command.pactId);
-        next = proposePactAmendment(this.politics, command.pactId, actorId, {
-          terms: command.terms,
-          administratorId: command.administratorId,
-        });
+        next = proposePactAmendment(
+          this.politics,
+          command.pactId,
+          actorId,
+          {
+            terms: command.terms,
+            administratorId: command.administratorId,
+          },
+          command.constitutionVersion,
+        );
         break;
       case "approve-pact-amendment":
         requireCommandId(command.pactId);

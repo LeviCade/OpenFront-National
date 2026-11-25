@@ -26,3 +26,5 @@ The existing 4,096-character private command fingerprint ceiling remains in
 force. Extremely large combined selected admission/expulsion lists remain
 subject to that independent request bound; the new member cap does not waive
 it. The five-voter scenario is a threshold witness, not a 256-seat load test.
+
+Extended amendment proposals carry the current constitutional epoch. An upgrade of an already-versioned pact likewise requires its current epoch. Legacy unversioned proposals remain supported for unextended pacts. Extended proposal receipts fail closed on replay; versioned approval receipts remain replayable only while the same pending proposal and approval survive. Rejection receipts cannot restore a discarded proposal.

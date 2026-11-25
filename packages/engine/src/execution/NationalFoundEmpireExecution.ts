@@ -237,6 +237,7 @@ const NationalFoundEmpireStateSchema = z.object({
           selectedExpellerIds: z.array(z.string()).max(256).optional(),
         }),
         administratorId: z.string().nullable(),
+        constitutionVersion: z.number().int().positive().optional(),
       }),
       z.object({
         kind: z.literal("approve-pact-amendment"),

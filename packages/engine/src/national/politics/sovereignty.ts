@@ -1099,10 +1099,17 @@ export function proposePactAmendment(
   pactId: string,
   actorId: string,
   proposed: { terms: PactTerms; administratorId: string | null },
+  constitutionVersion?: number,
 ): PoliticsProjection {
   validatePolitics(world);
   const current = pact(world, pactId);
   requireRule(current.memberIds.includes(actorId), "amendment requires member");
+  if (
+    current.extendedGovernance ||
+    hasExtendedPactTerms(proposed.terms) ||
+    constitutionVersion !== undefined
+  )
+    checkElectionVersion(current, constitutionVersion);
   requireRule(
     current.pendingAmendment === undefined,
     "constitutional amendment already pending",

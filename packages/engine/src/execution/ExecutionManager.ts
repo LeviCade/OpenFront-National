@@ -102,6 +102,10 @@ export class Executor {
             pactId: intent.pactId,
             terms: intent.terms,
             administratorId: intent.administratorId,
+            ...(intent.type === "national_propose_pact_amendment_v2" &&
+            intent.constitutionVersion !== undefined
+              ? { constitutionVersion: intent.constitutionVersion }
+              : {}),
           },
           intent.requestId,
           intent.clientID,

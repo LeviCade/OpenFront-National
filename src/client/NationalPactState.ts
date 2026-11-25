@@ -217,6 +217,9 @@ export function pactActionAllowed(
     case "national_propose_pact_amendment_v2":
     case "national_propose_pact_amendment":
       return (
+        (action.type === "national_propose_pact_amendment_v2"
+          ? action.constitutionVersion === privateView.constitutionVersion
+          : !privateView.extendedGovernance) &&
         !privateView.pendingAmendment &&
         (!("membershipCap" in action.terms) ||
           action.terms.membershipCap === undefined ||

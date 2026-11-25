@@ -2322,6 +2322,9 @@ export class NationalDiplomacyPanel extends LitElement {
                                                     terms,
                                                     administratorId:
                                                       admin || null,
+                                                    ...(d.constitutionVersion === undefined
+                                                      ? {}
+                                                      : { constitutionVersion: d.constitutionVersion }),
                                                   },
                                             );
                                           }

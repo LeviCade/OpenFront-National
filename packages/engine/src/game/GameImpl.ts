@@ -2103,6 +2103,11 @@ export class GameImpl implements Game {
       return this._national?.mayReplayAdmission(actorId, command) === true;
     if (command.kind === "expel-pact")
       return this._national?.mayReplayExpulsion(actorId, command) === true;
+    if (
+      command.kind === "propose-pact-amendment" ||
+      command.kind === "approve-pact-amendment"
+    )
+      return this._national?.mayReplayAmendment(actorId, command) === true;
     if (command.kind === "imperial-administration") {
       if (command.command.kind === "request-relief")
         return authority.empireOf(actorId) === command.command.empireId;
