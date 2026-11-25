@@ -29,10 +29,24 @@ export interface NationalAssessmentClientReport {
   readonly militaryTroopsBand: NationalAssessmentBand;
 }
 
+/** Exact E4 Game-owned transaction DTO, independently validated on the client.
+ * The enclosing authenticated GameView binds the game and current session.
+ */
+export type NationalAssessmentClientReceipt = {
+  readonly requestId: string;
+  readonly payerId: string;
+  readonly targetId: string;
+  readonly effectiveTick: number;
+} & (
+  | { readonly outcome: "accepted"; readonly cost: "1200" }
+  | { readonly outcome: "rejected"; readonly cost: "0" }
+);
+
 export interface NationalAssessmentClientView {
   readonly version: 1;
   readonly recipientId: string;
   readonly items: readonly NationalAssessmentClientReport[];
+  readonly receipts?: readonly NationalAssessmentClientReceipt[];
 }
 
 const nationalId = /^[A-Za-z0-9_-]{1,256}$/;
@@ -107,7 +121,12 @@ export function readNationalAssessmentView(
     !actorId ||
     !safeTick(tick) ||
     !record(input) ||
-    !exactKeys(input, ["version", "recipientId", "items"]) ||
+    !exactKeys(input, [
+      "version",
+      "recipientId",
+      "items",
+      ...("receipts" in input ? ["receipts"] : []),
+    ]) ||
     input.version !== 1 ||
     input.recipientId !== actorId ||
     !Array.isArray(input.items) ||
@@ -166,11 +185,62 @@ export function readNationalAssessmentView(
       militaryTroopsBand,
     });
   }
-  return { version: 1, recipientId: actorId, items };
+  const receipts: NationalAssessmentClientReceipt[] = [];
+  if ("receipts" in input) {
+    if (!Array.isArray(input.receipts) || input.receipts.length > 8192)
+      return null;
+    const seen = new Set<string>();
+    for (const receipt of input.receipts as unknown[]) {
+      if (
+        !record(receipt) ||
+        !exactKeys(receipt, [
+          "requestId",
+          "payerId",
+          "targetId",
+          "effectiveTick",
+          "outcome",
+          "cost",
+        ]) ||
+        typeof receipt.requestId !== "string" ||
+        !requestId.test(receipt.requestId) ||
+        receipt.payerId !== actorId ||
+        typeof receipt.targetId !== "string" ||
+        !nationalId.test(receipt.targetId) ||
+        !safeTick(receipt.effectiveTick) ||
+        receipt.effectiveTick > tick ||
+        tick - receipt.effectiveTick >= 900 ||
+        seen.has(receipt.requestId)
+      )
+        return null;
+      const identity = {
+        requestId: receipt.requestId,
+        payerId: actorId,
+        targetId: receipt.targetId,
+        effectiveTick: receipt.effectiveTick,
+      };
+      if (
+        receipt.outcome === "accepted" &&
+        receipt.cost === "1200" &&
+        receipt.targetId !== actorId
+      ) {
+        receipts.push({ ...identity, outcome: "accepted", cost: "1200" });
+      } else if (receipt.outcome === "rejected" && receipt.cost === "0") {
+        receipts.push({ ...identity, outcome: "rejected", cost: "0" });
+      } else {
+        return null;
+      }
+      seen.add(receipt.requestId);
+    }
+  }
+  return {
+    version: 1,
+    recipientId: actorId,
+    items,
+    ...("receipts" in input ? { receipts } : {}),
+  };
 }
 
 /** A report's existence is Game-owned; it is NOT an exact click receipt.
- * E4's current outbound DTO omits requestId (present in the internal ledger).
  */
 export function assessmentReportKey(
   report: Pick<
@@ -179,4 +249,42 @@ export function assessmentReportKey(
   >,
 ): string {
   return [report.targetId, report.paidBy, report.effectiveTick].join(":");
+}
+
+/** A purchase is one exact Game-owned debit, not a payer/target report match. */
+export function assessmentPurchaseOutcome(
+  view: NationalAssessmentClientView | null,
+  attempt: {
+    readonly gameId: string;
+    readonly actorId: string;
+    readonly targetId: string;
+    readonly requestId: string;
+    readonly tick: number;
+  },
+  gameId: string,
+  actorId: string,
+  tick: number,
+): NationalAssessmentClientReceipt | null {
+  if (
+    !view ||
+    gameId !== attempt.gameId ||
+    actorId !== attempt.actorId ||
+    view.recipientId !== actorId ||
+    tick < attempt.tick
+  )
+    return null;
+  const matches = (view.receipts ?? []).filter(
+    (receipt) => receipt.requestId === attempt.requestId,
+  );
+  if (matches.length !== 1) return null;
+  const receipt = matches[0];
+  return receipt.payerId === actorId &&
+    receipt.targetId === attempt.targetId &&
+    receipt.effectiveTick >= attempt.tick &&
+    receipt.effectiveTick <= tick &&
+    tick - receipt.effectiveTick < 900 &&
+    ((receipt.outcome === "accepted" && receipt.cost === "1200") ||
+      (receipt.outcome === "rejected" && receipt.cost === "0"))
+    ? receipt
+    : null;
 }

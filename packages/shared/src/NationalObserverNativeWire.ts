@@ -11,6 +11,7 @@ import {
   NATIONAL_OBSERVER_MAX_UNITS,
   type NationalObserverMapV1,
 } from "@openfront/engine-api/game/NationalRecipientView";
+import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
 import {
   OFFSET_HEALTH,
   OFFSET_ID,
@@ -137,6 +138,7 @@ interface NativeLanes {
   readonly nationalPolitics?: unknown;
   readonly nationalPactDisclosure?: unknown;
   readonly nationalImperialAdministration?: unknown;
+  readonly nationalSettlements?: unknown;
   readonly nationalConflicts?: unknown;
   readonly nationalAccessionOffers?: unknown;
   readonly nationalCommandResults?: unknown;
@@ -171,6 +173,12 @@ export function validateNationalObserverNativeLanes(
   validateNationalPactPacket(
     packet.nationalPolitics,
     packet.nationalPactDisclosure,
+    page.observerId,
+    page.tick,
+    page.streamId,
+  );
+  validateNationalSettlementPacket(
+    packet.nationalSettlements,
     page.observerId,
     page.tick,
     page.streamId,

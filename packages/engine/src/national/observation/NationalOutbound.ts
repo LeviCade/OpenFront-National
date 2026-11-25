@@ -28,6 +28,7 @@ import {
   packUnitUpdates,
   unpackUnitUpdates,
 } from "@openfront/engine-lib/game/PackedUnitUpdates";
+import { NationalSanctionExecution } from "../../execution/NationalSanctionExecution";
 import { NationalUltimatumExecution } from "../../execution/NationalUltimatumExecution";
 import type { Game } from "../../game/Game";
 import type { NationalPublicPoliticalView } from "../NationalRuntime";
@@ -123,12 +124,21 @@ export type { NationalPublicConflictView } from "@openfront/engine-api/game/Nati
  * sight history through the worker. Clone nested arrays before delivery.
  */
 function publicPolitics(
+  game: Game,
   packet: GameUpdateViewData,
 ): GameUpdateViewData["nationalPolitics"] {
   const source = (
     "nationalPolitics" in packet ? packet.nationalPolitics : undefined
   ) as NationalPublicPoliticalView | null | undefined;
   if (source === null || source === undefined) return undefined;
+  // The terminal marker is owned by the real Game, not by a caller-supplied
+  // view object. Do not attach present truth to a stale packet.
+  // Preserve the historical, whitelisted candidate DTO. Clients must only
+  // present an award when the Game has supplied its committed WIN marker.
+  const victory =
+    packet.tick === game.ticks()
+      ? (game.nationalPublicPoliticalView()?.victory ?? null)
+      : null;
   return {
     empires: source.empires.map((empire) => ({
       id: empire.id,
@@ -142,12 +152,15 @@ function publicPolitics(
       blockedByAssetDisposition: warning.blockedByAssetDisposition,
     })),
     victory:
-      source.victory === null
+      victory === null
         ? null
         : {
-            sovereignPowerCount: source.victory.sovereignPowerCount,
-            resolved: source.victory.resolved,
-            prizes: source.victory.prizes.map((prize) =>
+            sovereignPowerCount: victory.sovereignPowerCount,
+            resolved: victory.resolved,
+            ...(victory.confirmedTick === undefined
+              ? {}
+              : { confirmedTick: victory.confirmedTick }),
+            prizes: victory.prizes.map((prize) =>
               prize.kind === "SovereignVictor"
                 ? { kind: prize.kind, nationId: prize.nationId }
                 : {
@@ -762,7 +775,7 @@ export class NationalOutboundFilter {
                   : { commandTargetId: item.commandTargetId }),
             }));
 
-    const publicPoliticalView = publicPolitics(data);
+    const publicPoliticalView = publicPolitics(game, data);
     const publicPacts = projectNationalPublicPacts(game);
     const privatePacts =
       publicPoliticalView && verified
@@ -795,6 +808,13 @@ export class NationalOutboundFilter {
     );
     const privateUltimatums = projectNationalUltimatums(game, this.observerId);
     // Same post-entitlement Game projection for human and AI; no raw state.
+    const receipts =
+      verified !== null &&
+      this.observerId !== null &&
+      game.hasPlayer(this.observerId)
+        ? (game.nationalAssessmentReceiptsFor?.(game.player(this.observerId)) ??
+          [])
+        : [];
     const privateAssessments =
       verified !== null &&
       this.observerId !== null &&
@@ -804,6 +824,7 @@ export class NationalOutboundFilter {
         ? {
             version: 1 as const,
             recipientId: this.observerId,
+            ...(receipts.length === 0 ? {} : { receipts }),
             items: (verified.observation.assessments ?? []).map((report) => ({
               targetId: report.targetId,
               paidBy: report.paidBy,
@@ -814,6 +835,17 @@ export class NationalOutboundFilter {
               militaryTroopsBand: { ...report.militaryTroopsBand },
             })),
           }
+        : undefined;
+    const privateSettlements =
+      verified !== null &&
+      this.observerId !== null &&
+      game.hasPlayer(this.observerId)
+        ? NationalSanctionExecution.settlementViewFor(
+            game,
+            game.player(this.observerId),
+            data.tick,
+            page?.streamId,
+          )
         : undefined;
     const privateReconnaissance = projectNationalReconnaissance(
       game,
@@ -854,6 +886,9 @@ export class NationalOutboundFilter {
       ...(privateAssessments === undefined
         ? {}
         : { nationalAssessments: privateAssessments }),
+      ...(privateSettlements === undefined
+        ? {}
+        : { nationalSettlements: privateSettlements }),
       ...(privateReconnaissance === undefined
         ? {}
         : { nationalReconnaissance: privateReconnaissance }),

@@ -13,6 +13,8 @@ import {
   NationalReconMapPointSelectedEvent,
 } from "./controllers/NationalMapTargetController";
 import type { NationalAssessmentControls } from "./NationalAssessmentControls";
+import "./NationalImperialEconomicControls";
+import "./NationalImperialSettlementControls";
 import {
   confirmedNationalDiplomacy,
   createNationalDiplomacyRequestId,
@@ -31,6 +33,8 @@ import {
   type NationalFoundingAttempt,
   type NationalPoliticalAction,
 } from "./NationalDiplomacyState";
+import type { NationalImperialEconomicControls } from "./NationalImperialEconomicControls";
+import type { NationalImperialSettlementControls } from "./NationalImperialSettlementControls";
 import {
   imperialConstructionCategories,
   imperialPolicyIntentAvailable,
@@ -231,6 +235,12 @@ export class NationalDiplomacyPanel extends LitElement {
     this.refreshSovereignActions();
     this.querySelector<NationalAssessmentControls>(
       "national-assessment-controls",
+    )?.refresh();
+    this.querySelector<NationalImperialEconomicControls>(
+      "national-imperial-economic-controls",
+    )?.refresh();
+    this.querySelector<NationalImperialSettlementControls>(
+      "national-imperial-settlement-controls",
     )?.refresh();
     const game = this.game;
     const player = game?.myPlayer();
@@ -1323,7 +1333,11 @@ export class NationalDiplomacyPanel extends LitElement {
       this.pactStatus = "Command transport failed; outcome unconfirmed.";
     }
   }
-  private pactTermsControls(t: NationalPactTerms) {
+  private pactTermsControls(
+    t: NationalPactTerms,
+    members: readonly string[],
+    defense = false,
+  ) {
     return html`<label
         >Admission
         <select class="bg-slate-800" name="admission">
@@ -1333,8 +1347,35 @@ export class NationalDiplomacyPanel extends LitElement {
           <option value="unanimous" ?selected=${t.admission === "unanimous"}>
             Unanimous
           </option>
+          <option value="selected" ?selected=${t.admission === "selected"}>
+            Selected approvers
+          </option>
+          <option value="majority" ?selected=${t.admission === "majority"}>
+            Strict simple majority
+          </option>
+          <option
+            value="supermajority"
+            ?selected=${t.admission === "supermajority"}
+          >
+            Two-thirds supermajority
+          </option>
         </select></label
       >
+      <fieldset>
+        <legend>Selected approvers (only used for selected policy)</legend>
+        ${members.map(
+          (id) =>
+            html`<label>
+              <input
+                type="checkbox"
+                name="approver"
+                value=${id}
+                .checked=${t.selectedApproverIds?.includes(id) ?? false}
+              />
+              ${this.playerName(id)}
+            </label>`,
+        )}
+      </fieldset>
       <label
         >Expulsion
         <select class="bg-slate-800" name="expulsion">
@@ -1348,17 +1389,84 @@ export class NationalDiplomacyPanel extends LitElement {
             Forbidden
           </option>
         </select></label
-      >`;
+      >
+      ${
+        defense
+          ? html`<fieldset>
+              <legend>Mutual defense contribution policy (basis points)</legend>
+              <label
+                >Maximum contribution (0–1000 bps)
+                <input
+                  type="number"
+                  name="defense-cap"
+                  min="0"
+                  max="1000"
+                  step="1"
+                  required
+                  .value=${String(t.defenseContributionBps ?? 1000)}
+                />
+              </label>
+              <label
+                >Protected home reserve (3000–10000 bps)
+                <input
+                  type="number"
+                  name="defense-reserve"
+                  min="3000"
+                  max="10000"
+                  step="1"
+                  required
+                  .value=${String(t.defenseReserveBps ?? 3000)}
+                />
+              </label>
+            </fieldset>`
+          : nothing
+      }`;
   }
-  private readPactTerms(data: FormData): NationalPactTerms | null {
+  private readPactTerms(
+    data: FormData,
+    defense?: NationalPactTerms,
+  ): NationalPactTerms | null {
     const admission = data.get("admission"),
       expulsion = data.get("expulsion");
-    return (admission === "leader" || admission === "unanimous") &&
-      (expulsion === "leader" ||
-        expulsion === "unanimous" ||
-        expulsion === "forbidden")
-      ? { admission, expulsion }
-      : null;
+    if (
+      (admission !== "leader" &&
+        admission !== "unanimous" &&
+        admission !== "selected" &&
+        admission !== "majority" &&
+        admission !== "supermajority") ||
+      (expulsion !== "leader" &&
+        expulsion !== "unanimous" &&
+        expulsion !== "forbidden")
+    )
+      return null;
+    const policy: Pick<
+      NationalPactTerms,
+      "defenseContributionBps" | "defenseReserveBps"
+    > = {};
+    if (defense) {
+      const cap = data.get("defense-cap");
+      const reserve = data.get("defense-reserve");
+      if (
+        typeof cap !== "string" ||
+        !/^\d+$/.test(cap) ||
+        typeof reserve !== "string" ||
+        !/^\d+$/.test(reserve)
+      )
+        return null;
+      const c = Number(cap),
+        r = Number(reserve);
+      if (c < 0 || c > 1000 || r < 3000 || r > 10000) return null;
+      if (c !== 1000 || defense.defenseContributionBps !== undefined)
+        Object.assign(policy, { defenseContributionBps: c });
+      if (r !== 3000 || defense.defenseReserveBps !== undefined)
+        Object.assign(policy, { defenseReserveBps: r });
+    }
+    if (admission === "selected") {
+      const selectedApproverIds = data.getAll("approver").map(String).sort();
+      if (!selectedApproverIds.length) return null;
+      return { admission, expulsion, selectedApproverIds, ...policy };
+    }
+    return { admission, expulsion, ...policy };
   }
   @state() private imperialStatus = "";
   private imperialAttempt: {
@@ -1887,7 +1995,35 @@ export class NationalDiplomacyPanel extends LitElement {
                   const accept = {
                     type: "national_accept_pact",
                     pactId: p.id,
+                    ...(d?.constitutionVersion === undefined
+                      ? {}
+                      : { constitutionVersion: d.constitutionVersion }),
                   } as const;
+                  const invite = (candidateId: string): PactAction => ({
+                    type: "national_invite_pact",
+                    pactId: p.id,
+                    candidateId,
+                    ...(d?.constitutionVersion === undefined
+                      ? {}
+                      : {
+                          constitutionVersion: d.constitutionVersion,
+                          admissionAction: d.invitations?.some(
+                            (record) => record.targetId === candidateId,
+                          )
+                            ? "approve"
+                            : "propose",
+                        }),
+                  });
+                  const decline =
+                    d?.constitutionVersion === undefined || !c
+                      ? null
+                      : ({
+                          type: "national_invite_pact",
+                          pactId: p.id,
+                          candidateId: c.actor,
+                          admissionAction: "withdraw",
+                          constitutionVersion: d.constitutionVersion,
+                        } as const);
                   const betray = {
                     type: "national_betray_pact",
                     pactId: p.id,
@@ -1895,6 +2031,9 @@ export class NationalDiplomacyPanel extends LitElement {
                   const approve = {
                     type: "national_approve_pact_amendment",
                     pactId: p.id,
+                    ...(pending?.defenseVersion === undefined
+                      ? {}
+                      : { expectedDefenseVersion: pending.defenseVersion }),
                   } as const;
                   return keyed(
                     key,
@@ -1913,7 +2052,7 @@ export class NationalDiplomacyPanel extends LitElement {
                         Members:
                         ${p.memberIds.map((id) => this.playerName(id)).join(", ")}
                       </p>
-                      ${d ? html`<p data-national-pact-terms>Constitution: admission ${d.terms.admission}; expulsion ${d.terms.expulsion}.</p>` : nothing}
+                      ${d ? html`<p data-national-pact-terms>Constitution: admission ${d.terms.admission}; expulsion ${d.terms.expulsion}.${d.terms.selectedApproverIds === undefined ? nothing : html` Selected approvers: ${d.terms.selectedApproverIds.map((id) => this.playerName(id)).join(", ") || "none"}.`}${p.kind === "MDA" ? html` Defense contribution max ${(d.terms.defenseContributionBps ?? 1000) / 100}%; protected reserve ${(d.terms.defenseReserveBps ?? 3000) / 100}%.` : nothing}</p>` : nothing}
                       ${
                         d?.relationship === "invited"
                           ? html`<p>
@@ -1929,7 +2068,19 @@ export class NationalDiplomacyPanel extends LitElement {
                                 @click=${() => send(accept)}
                               >
                                 Accept displayed constitution
-                              </button>`
+                              </button>
+                              ${
+                                decline === null
+                                  ? nothing
+                                  : html` <button
+                                      class=${button}
+                                      type="button"
+                                      ?disabled=${!allowed(decline)}
+                                      @click=${() => send(decline)}
+                                    >
+                                      Decline invitation
+                                    </button>`
+                              }`
                           : nothing
                       }
                       ${
@@ -1937,7 +2088,7 @@ export class NationalDiplomacyPanel extends LitElement {
                           ? html`
                               <form
                                 class=${formClass}
-                                @submit=${(e: SubmitEvent) => submit(e, (data) => send({ type: "national_invite_pact", pactId: p.id, candidateId: String(data.get("candidate")) }))}
+                                @submit=${(e: SubmitEvent) => submit(e, (data) => send(invite(String(data.get("candidate")))))}
                               >
                                 <label
                                   >Invite independent nation
@@ -1953,12 +2104,28 @@ export class NationalDiplomacyPanel extends LitElement {
                                 <button
                                   class=${button}
                                   data-national-pact-action="invite"
-                                  ?disabled=${!enabled || !candidates.some((candidateId) => allowed({ type: "national_invite_pact", pactId: p.id, candidateId }))}
+                                  ?disabled=${!enabled || !candidates.some((candidateId) => allowed(invite(candidateId)))}
                                 >
-                                  ${d.terms.admission === "unanimous" && p.memberIds.length > 1 ? "Record initial admission vote" : "Submit invitation"}
+                                  ${d.constitutionVersion !== undefined ? "Propose or approve admission" : d.terms.admission === "unanimous" && p.memberIds.length > 1 ? "Record initial admission vote" : "Submit invitation"}
                                 </button>
                                 ${d.terms.admission === "unanimous" ? html`<p>Unanimous admission requires all members’ consent. With multiple members, this records the first vote, not an authorized invitation; additional admission ballot controls are not available.</p>` : nothing}
                               </form>
+                              ${d.invitations?.map(
+                                (record) =>
+                                  html` <p data-national-admission-ballot>
+                                    ${this.playerName(record.targetId)}:
+                                    ${record.approvedBy.length} approval(s) —
+                                    ${record.authorized ? "awaiting applicant consent" : "pending votes"}.
+                                    <button
+                                      class=${button}
+                                      type="button"
+                                      ?disabled=${!allowed(invite(record.targetId))}
+                                      @click=${() => send(invite(record.targetId))}
+                                    >
+                                      Approve candidate
+                                    </button>
+                                  </p>`,
+                              )}
                               <form
                                 class=${formClass}
                                 @submit=${(e: SubmitEvent) =>
@@ -1997,6 +2164,7 @@ export class NationalDiplomacyPanel extends LitElement {
                                         ${pending.terms.expulsion};
                                         administrator
                                         ${pending.administratorId ? this.playerName(pending.administratorId) : "None"}.
+                                        ${p.kind === "MDA" ? html` Defense contribution max ${(pending.terms.defenseContributionBps ?? 1000) / 100}%; protected reserve ${(pending.terms.defenseReserveBps ?? 3000) / 100}%.` : nothing}
                                       </p>
                                       <p>
                                         Approved: ${pending.approvedBy.length}
@@ -2017,8 +2185,12 @@ export class NationalDiplomacyPanel extends LitElement {
                                       class=${formClass}
                                       @submit=${(e: SubmitEvent) =>
                                         submit(e, (data) => {
-                                          const terms =
-                                            this.readPactTerms(data);
+                                          const terms = this.readPactTerms(
+                                            data,
+                                            p.kind === "MDA"
+                                              ? d.terms
+                                              : undefined,
+                                          );
                                           const admin = String(
                                             data.get("administrator") ?? "",
                                           );
@@ -2032,7 +2204,7 @@ export class NationalDiplomacyPanel extends LitElement {
                                         })}
                                     >
                                       <h4>Propose constitutional amendment</h4>
-                                      ${this.pactTermsControls(d.terms)}
+                                      ${this.pactTermsControls(d.terms, p.memberIds, p.kind === "MDA")}
                                       <label
                                         >Administrator
                                         <select
@@ -2162,7 +2334,7 @@ export class NationalDiplomacyPanel extends LitElement {
                   <option value="MDA">Mutual defense alliance</option>
                 </select></label
               >
-              ${this.pactTermsControls({ admission: "leader", expulsion: "forbidden" })}
+              ${this.pactTermsControls({ admission: "leader", expulsion: "forbidden" }, [c.actor])}
               <button
                 class=${button}
                 data-national-pact-action="found"
@@ -3647,6 +3819,14 @@ export class NationalDiplomacyPanel extends LitElement {
                   )}
                 </div>
                 ${this.renderSovereignActions()}
+                <national-imperial-economic-controls
+                  .game=${game}
+                  .eventBus=${this.eventBus}
+                ></national-imperial-economic-controls>
+                <national-imperial-settlement-controls
+                  .game=${game}
+                  .eventBus=${this.eventBus}
+                ></national-imperial-settlement-controls>
                 <national-assessment-controls
                   .game=${game}
                   .eventBus=${this.eventBus}

@@ -4,6 +4,7 @@ import {
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import { NationalAssessmentViewSchema } from "@openfront/engine-api/game/NationalAssessmentView";
 import {
   NationalAssessmentIntentSchema,
   type GameConfig,
@@ -231,6 +232,15 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
       ),
     ).toThrow(/invalid target/);
     expect(buyer.gold()).toBe(before);
+    expect(game.nationalAssessmentReceiptsFor!(buyer)).toEqual([
+      expect.objectContaining({
+        requestId: "self-target",
+        targetId: BUYER.id,
+        outcome: "rejected",
+        cost: "0",
+      }),
+    ]);
+    expect(game.nationalAssessmentReceiptsFor!(other)).toEqual([]);
     const original = game.performNationalAssessment(
       buyer,
       TARGET.id,
@@ -296,6 +306,8 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
       BUYER.id,
     );
     expect(projectLiveNationalAssessments(game, STRANGER.id)).toEqual([]);
+    expect(game.nationalAssessmentReceiptsFor!(buyer)).toHaveLength(1);
+    expect(game.nationalAssessmentReceiptsFor!(ally)).toEqual([]);
     const authority = game.nationalPoliticalAuthority()!;
     const spy = vi
       .spyOn(game, "nationalPoliticalAuthority")
@@ -319,6 +331,7 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
     expect(projectLiveNationalAssessments(game, BUYER.id)).toHaveLength(1);
     while (game.ticks() < report.expiresAtTick) game.executeNextTick();
     expect(projectLiveNationalAssessments(game, BUYER.id)).toEqual([]);
+    expect(game.nationalAssessmentReceiptsFor!(buyer)).toEqual([]);
     const { restored, bytes, again } = await roundTrip(game, "big_plains");
     expect(again).toEqual(bytes);
     expect(restored.nationalAssessmentsFor(BUYER.id)).toEqual([]);
@@ -495,8 +508,20 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
         }),
       ],
     });
-    expect(hostEncoded).not.toContain('"requestId":"private-canonical"');
-    expect(hostEncoded).not.toContain('"cost":"1200"');
+    const decodedAssessment = NationalAssessmentViewSchema.parse(
+      browserDecoded.nationalAssessments,
+    );
+    expect(decodedAssessment.receipts).toEqual([
+      expect.objectContaining({
+        requestId: "private-canonical",
+        payerId: BUYER.id,
+        targetId: TARGET.id,
+        outcome: "accepted",
+        cost: "1200",
+      }),
+    ]);
+    expect(decodedAssessment.items[0]).not.toHaveProperty("requestId");
+    expect(decodedAssessment.items[0]).not.toHaveProperty("cost");
     const foreign = new NationalServerRecipientSession(game, {
       ...liveLink,
       clientID: OTHER.clientID!,
@@ -506,6 +531,10 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
       packet(game, OTHER.clientID!),
     );
     expect(foreignFiltered?.nationalAssessments?.items).toEqual([]);
+    expect(foreignFiltered?.nationalAssessments?.receipts ?? []).toEqual([]);
+    expect(encodeNationalRecipientProjection(foreignFiltered!)).not.toContain(
+      "private-canonical",
+    );
     expect(
       parseTrustedNationalProjection(
         encodeNationalRecipientProjection(foreignFiltered!),

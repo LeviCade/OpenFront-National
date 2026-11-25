@@ -126,6 +126,10 @@ export class SendNationalPactIntentEvent implements GameEvent {
   constructor(public readonly intent: PactIntent) {}
 }
 
+export class SendNationalSettlementIntentEvent implements GameEvent {
+  constructor(public readonly intent: Intent) {}
+}
+
 export class SendNationalImperialPolicyIntentEvent implements GameEvent {
   constructor(public readonly intent: Intent) {}
 }
@@ -335,6 +339,16 @@ export class NewLobbyEvent implements GameEvent {
   constructor(public readonly gameID: string) {}
 }
 
+export class NationalBlockadeIntentEvent implements GameEvent {
+  constructor(
+    public readonly shipId: number,
+    public readonly portId: number,
+    public readonly portTile: number,
+    public readonly warId: string,
+    public readonly requestId: string,
+  ) {}
+}
+
 export class MoveWarshipIntentEvent implements GameEvent {
   constructor(
     public readonly unitIds: number[],
@@ -457,6 +471,16 @@ export class Transport {
       const parsed = parseNationalUltimatumIntent(e.candidate);
       if (parsed !== null) this.sendIntent(parsed);
     });
+    this.subscribe(SendNationalSettlementIntentEvent, (e) => {
+      if (!this.nationalDiplomacyWireEnabled()) return;
+      const parsed = IntentSchema.safeParse(e.intent);
+      if (
+        parsed.success &&
+        (parsed.data.type === "national_offer_sanction_settlement" ||
+          parsed.data.type === "national_decide_sanction_settlement")
+      )
+        this.sendIntent(parsed.data);
+    });
     this.subscribe(SendNationalImperialPolicyIntentEvent, (e) => {
       if (!this.nationalDiplomacyWireEnabled()) return;
       const parsed = IntentSchema.safeParse(e.intent);
@@ -525,6 +549,18 @@ export class Transport {
       this.onCancelBoatIntentEvent(e),
     );
 
+    this.subscribe(NationalBlockadeIntentEvent, (e) => {
+      if (!this.nationalDiplomacyWireEnabled()) return;
+      const parsed = IntentSchema.safeParse({
+        type: "national_blockade",
+        shipId: e.shipId,
+        portId: e.portId,
+        portTile: e.portTile,
+        warId: e.warId,
+        requestId: e.requestId,
+      });
+      if (parsed.success) this.sendIntent(parsed.data);
+    });
     this.subscribe(MoveWarshipIntentEvent, (e) => {
       this.onMoveWarshipEvent(e);
     });

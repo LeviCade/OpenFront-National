@@ -30,6 +30,10 @@ import {
 } from "@openfront/engine-api/game/NationalPactView";
 import type { NationalReconnaissanceViewData } from "@openfront/engine-api/game/NationalReconView";
 import {
+  readNationalSettlementView,
+  type NationalSettlementView,
+} from "@openfront/engine-api/game/NationalSettlementView";
+import {
   GameLike,
   ReadonlyTileSet,
   UnitPredicate,
@@ -133,6 +137,7 @@ export class GameView implements GameLike {
   private _nationalUltimatums: NationalUltimatumViewData | null = null;
   private _nationalReconnaissance: NationalReconnaissanceViewData | null = null;
   private _nationalAssessments: NationalAssessmentClientView | null = null;
+  private _nationalSettlements: NationalSettlementView | null = null;
   private _trustedProjectionReady = false;
   private trustedPrincipal: string | null = null;
   private trustedSight: NationalObserverMapContinuity | null = null;
@@ -145,6 +150,10 @@ export class GameView implements GameLike {
       this._nationalUltimatums = null;
       this._nationalReconnaissance = null;
       this._nationalAssessments = null;
+      this._nationalSettlements = null;
+      this._nationalPolitics = null;
+      this._nationalPoliticsTick = null;
+      this._nationalConflicts = null;
     }
     this.trustedPrincipal = principal;
   }
@@ -242,8 +251,16 @@ export class GameView implements GameLike {
   public setTrustedProjectionReady(ready: boolean): void {
     if (!this._trustedNationalProjection) return;
     this._trustedProjectionReady = ready;
-    // No assessment survives revoked Private authority into a future socket.
-    if (!ready) this._nationalAssessments = null;
+    // No private authority survives revoked Private capability into a future socket.
+    if (!ready) {
+      this._nationalPolitics = null;
+      this._nationalPoliticsTick = null;
+      this._nationalConflicts = null;
+      this._nationalAssessments = null;
+      this._nationalSettlements = null;
+      this._nationalImperialAdministration = null;
+      this._nationalPactReceipts = [];
+    }
   }
 
   /**
@@ -259,6 +276,7 @@ export class GameView implements GameLike {
     this._nationalUltimatums = null;
     this._nationalReconnaissance = null;
     this._nationalAssessments = null;
+    this._nationalSettlements = null;
     this._trustedProjectionReady = false;
     this._trustedSpawnReady = false;
     this.trustedPendingTiles = [];
@@ -522,6 +540,12 @@ export class GameView implements GameLike {
   }
 
   public nationalImperialAdministration(): NationalImperialAdministrationView | null {
+    if (
+      this._trustedNationalProjection &&
+      (!this._trustedProjectionReady ||
+        this.trustedPrincipal !== this.myPlayer()?.id())
+    )
+      return null;
     return this._nationalImperialAdministration;
   }
 
@@ -542,6 +566,12 @@ export class GameView implements GameLike {
       this._nationalPolitics?.pacts?.map((p) => [p.id, p.memberIds]),
       this._nationalConflicts?.layers.filter((l) => l.endedTick === null),
     ]);
+  }
+
+  public trustedNationalPrincipal(): string | null {
+    return this._trustedNationalProjection && this._trustedProjectionReady
+      ? this.trustedPrincipal
+      : null;
   }
 
   public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
@@ -586,6 +616,25 @@ export class GameView implements GameLike {
     return this._nationalReconnaissance;
   }
 
+  /** A receipt is only meaningful in the same authenticated observer stream. */
+  public nationalReceiptStreamId(): string | null | undefined {
+    return this._trustedNationalProjection
+      ? (this.trustedSight?.lastAcceptedStreamId ?? null)
+      : undefined;
+  }
+
+  /** Private, current, strictly validated sanction settlement rows. */
+  public nationalSettlements(): NationalSettlementView | null {
+    const actor = this.myPlayer()?.id();
+    const view = this._nationalSettlements;
+    return view &&
+      view.recipientId === actor &&
+      view.tick === this.ticks() &&
+      (!this._trustedNationalProjection || this._trustedProjectionReady)
+      ? view
+      : null;
+  }
+
   /** Private, current, strictly validated E4 Game-funded strength reports. */
   public nationalAssessments(): Readonly<NationalAssessmentClientView> | null {
     return this._trustedNationalProjection && !this._trustedProjectionReady
@@ -619,6 +668,7 @@ export class GameView implements GameLike {
     this._nationalUltimatums = null;
     this._nationalReconnaissance = null;
     this._nationalAssessments = null;
+    this._nationalSettlements = null;
   }
   private startTick: Tick | null = null;
   private smallIDToID = new Map<number, PlayerID>();
@@ -816,16 +866,19 @@ export class GameView implements GameLike {
     this.lastUpdate =
       gu.nationalPactDisclosure === undefined &&
       gu.nationalImperialAdministration === undefined &&
-      assessed.nationalAssessments === undefined
+      assessed.nationalAssessments === undefined &&
+      gu.nationalSettlements === undefined
         ? gu
         : { ...gu };
     delete this.lastUpdate.nationalPactDisclosure;
     delete this.lastUpdate.nationalImperialAdministration;
+    delete this.lastUpdate.nationalSettlements;
     delete (
       this.lastUpdate as GameUpdateViewData & { nationalAssessments?: unknown }
     ).nationalAssessments;
     // An FFA view or an absent report must never preserve an earlier private lease.
     this._nationalAssessments = null;
+    this._nationalSettlements = null;
 
     // Legacy/replay test adapters can provide a partial Config without
     // gameConfig(). Keep ordinary FFA view updates entirely unchanged.
@@ -875,6 +928,17 @@ export class GameView implements GameLike {
               assessed.nationalAssessments,
               currentActorId,
               gu.tick,
+            );
+      this._nationalSettlements =
+        gu.tick < previousTick || this._config.isReplay?.() === true
+          ? null
+          : readNationalSettlementView(
+              gu.nationalSettlements,
+              currentActorId,
+              gu.tick,
+              this._trustedNationalProjection
+                ? (this.trustedSight?.lastAcceptedStreamId ?? null)
+                : undefined,
             );
       this._nationalImperialAdministration =
         gu.tick < previousTick
@@ -1034,7 +1098,11 @@ export class GameView implements GameLike {
     if (spawnPhaseEndUpdate) {
       this.startTick = spawnPhaseEndUpdate.startTick;
     }
-    if (gu.updates[GameUpdateType.Win].length > 0) {
+    if (
+      gu.updates[GameUpdateType.Win].length > 0 ||
+      (this._nationalPoliticsTick === gu.tick &&
+        this._nationalPolitics?.victory !== undefined)
+    ) {
       this._gameOver = true;
     }
 

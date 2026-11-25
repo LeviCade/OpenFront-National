@@ -1,0 +1,56 @@
+name: Sixth Conductor Second Class - Combined Exact Source
+
+on:
+  push:
+    branches:
+      - stage3/conductor6-class2-integration-20261123
+      - stage3/integration-20261115
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [typecheck, focused, full, lint, format, production]
+    env:
+      C6C2_E1_REQUIRE_CAUSAL: "1"
+      C6C2_E1_REQUIRE_E4_RECEIPTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Verify immutable source identity
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}" && git rev-parse HEAD
+      - name: Execute required gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.gate }}" in
+            typecheck) npm run typecheck ;;
+            focused) npx --no-install vitest run --project node tests/ui/national/C6C2E1*.test.ts tests/national/C6C2E2CoalitionVotes.test.ts tests/national/C6C2E3Blockade.test.ts tests/national/C6Class2E4TreatyDefenseReceipts.test.ts tests/national/C6C2E5Peace.test.ts tests/national/C6C2E6GameRunner.test.ts tests/ui/national/C6C2E6Victory.test.ts tests/national/C6Class1E3EmbargoRestitution.test.ts tests/national/C6Class1E3SettlementIngress.test.ts tests/national/C6Class1CounterassessmentShield.test.ts tests/national/C6Class1ImperialRelief.test.ts tests/national/C6Class1E5NationalAssessment.test.ts tests/national/C6Class1NavalEscort.test.ts tests/national/C5Class3PaidNationalAssessment.test.ts ;;
+            full) npm test ;;
+            lint) npm run lint ;;
+            production) npm run build-prod ;;
+            format)
+              npm run format:check || {
+                npx --no-install oxfmt --write
+                echo C6C2_FORMAT_DIFF_BEGIN
+                git -c color.ui=false diff
+                echo C6C2_FORMAT_DIFF_END
+                exit 1
+              }
+              ;;
+          esac

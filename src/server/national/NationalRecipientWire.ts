@@ -22,6 +22,7 @@ import {
   type NationalObserverMapV1,
   type NationalPublicConflictView,
 } from "@openfront/engine-api/game/NationalRecipientView";
+import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
 import { validateNationalObserverNativeLanes } from "@openfront/shared/NationalObserverNativeWire";
 import { replacer } from "@openfront/shared/SharedUtil";
 
@@ -42,6 +43,12 @@ export function encodeNationalRecipientProjection(
   };
   const map = politics.nationalObserverMap;
   const conflicts = politics.nationalConflicts;
+  validateNationalSettlementPacket(
+    filtered.nationalSettlements,
+    map?.observerId ?? null,
+    filtered.tick,
+    map?.streamId,
+  );
   validateNationalAssessmentPacket(
     filtered.nationalAssessments,
     map?.observerId ?? null,
@@ -164,12 +171,24 @@ export function encodeNationalRecipientProjection(
     ...(filtered.nationalAccessionOffers === undefined
       ? {}
       : { nationalAccessionOffers: filtered.nationalAccessionOffers }),
+    ...(filtered.nationalSettlements === undefined
+      ? {}
+      : { nationalSettlements: filtered.nationalSettlements }),
     ...(filtered.nationalAssessments === undefined
       ? {}
       : {
           nationalAssessments: {
             version: 1 as const,
             recipientId: filtered.nationalAssessments.recipientId,
+            ...(filtered.nationalAssessments.receipts === undefined
+              ? {}
+              : {
+                  receipts: filtered.nationalAssessments.receipts.map(
+                    (receipt) => ({
+                      ...receipt,
+                    }),
+                  ),
+                }),
             items: filtered.nationalAssessments.items.map((r) => ({
               targetId: r.targetId,
               paidBy: r.paidBy,

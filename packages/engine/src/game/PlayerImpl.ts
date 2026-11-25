@@ -1259,8 +1259,20 @@ export class PlayerImpl implements Player {
     return [...this.embargoes.values()];
   }
 
-  addEmbargo(other: Player, isTemporary: boolean): void {
+  addEmbargo(other: Player, isTemporary: boolean, reason = "manual"): void {
     const embargo = this.embargoes.get(other.id());
+    if (this.mg.nationalWarAuthority() !== null && !isTemporary) {
+      if (embargo && !embargo.isTemporary) {
+        const reasons = embargo.reasons ?? ["legacy-ambiguous"];
+        if (!reasons.includes(reason)) {
+          this.embargoes.set(other.id(), {
+            ...embargo,
+            reasons: [...reasons, reason].sort(),
+          });
+        }
+        return;
+      }
+    }
     if (embargo !== undefined && !embargo.isTemporary) return;
 
     this.mg.addUpdate({
@@ -1274,10 +1286,28 @@ export class PlayerImpl implements Player {
       createdAt: this.mg.ticks(),
       isTemporary: isTemporary,
       target: other,
+      ...(this.mg.nationalWarAuthority() !== null && !isTemporary
+        ? { reasons: [reason] }
+        : {}),
     });
   }
 
-  stopEmbargo(other: Player): void {
+  stopEmbargo(other: Player, reason = "manual"): void {
+    const embargo = this.embargoes.get(other.id());
+    if (this.mg.nationalWarAuthority() !== null) {
+      if (!embargo) return;
+      if (!embargo.isTemporary) {
+        const reasons = embargo.reasons ?? ["legacy-ambiguous"];
+        if (reason === "legacy-ambiguous" || !reasons.includes(reason)) return;
+        const remaining = reasons.filter((item) => item !== reason);
+        if (remaining.length > 0) {
+          this.embargoes.set(other.id(), { ...embargo, reasons: remaining });
+          return;
+        }
+      } else if (reason !== "manual") {
+        return;
+      }
+    }
     this.embargoes.delete(other.id());
     this.mg.addUpdate({
       type: GameUpdateType.EmbargoEvent,
@@ -2053,7 +2083,13 @@ export class PlayerImpl implements Player {
   }
 
   hash(): number {
+    const causes = [...this.embargoes.values()]
+      .filter((entry) => entry.reasons !== undefined)
+      .map((entry) => [entry.target.id(), entry.reasons]);
+    const causeHash =
+      causes.length === 0 ? 0 : simpleHash(JSON.stringify(causes));
     return (
+      causeHash +
       simpleHash(this.id()) * (this.troops() + this.numTilesOwned()) +
       this._units.reduce((acc, unit) => acc + unit.hash(), 0)
     );
@@ -2191,6 +2227,7 @@ export class PlayerImpl implements Player {
         target: w.player(e.target),
         createdAt: e.createdAt,
         isTemporary: e.isTemporary,
+        ...(e.reasons === undefined ? {} : { reasons: [...e.reasons] }),
       })),
       tiles: w.tiles(this._tiles),
       borderTiles: w.tiles(this._borderTiles),
@@ -2265,6 +2302,7 @@ export class PlayerImpl implements Player {
         target: r.player(e.target),
         createdAt: e.createdAt,
         isTemporary: e.isTemporary,
+        ...(e.reasons === undefined ? {} : { reasons: [...e.reasons] }),
       });
     }
     this._tiles = new TileSet(s.tiles);
@@ -2339,6 +2377,7 @@ export const PlayerSnapshot = snapshotType({
         target: zPlayerRef(),
         createdAt: zInt(),
         isTemporary: z.boolean(),
+        reasons: z.array(z.string().min(1)).nonempty().optional(),
       }),
     ),
     tiles: zTiles(),

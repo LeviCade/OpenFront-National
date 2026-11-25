@@ -353,6 +353,7 @@ export class TradeShipExecution implements Execution {
           this.mg,
           this.srcPort.owner(),
           this._dstPort.owner(),
+          gold,
         );
       // Record stats
       this.mg

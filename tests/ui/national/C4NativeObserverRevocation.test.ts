@@ -191,6 +191,7 @@ describe("C4 E4: native recipient view revocation", () => {
         victory: {
           resolved: true,
           sovereignPowerCount: 1,
+          confirmedTick: packet.tick,
           prizes: [{ kind: "SovereignVictor", nationId: self }],
         },
       },

@@ -1,0 +1,63 @@
+name: Sixth Conductor Second Class - Exact Combined WSS Master-Worker Recovery
+on:
+  push:
+    branches:
+      - stage3/conductor6-class2-integration-20261123
+      - stage3/integration-20261115
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c6c2-wss-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  origin-authorization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Verify source, strict real socket authority and typed host
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          npx --no-install vitest run --project node \
+            tests/server/NationalSocketOrigin.test.ts \
+            tests/server/NationalAccountGate.test.ts \
+            tests/server/NationalAccountLease.test.ts \
+            tests/server/TrustedNationalRealWebSocket.test.ts
+  master-worker-wss:
+    name: Real authenticated WSS Original Game and recovery - durable ${{ matrix.durable }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        durable: ["0", "1"]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Real TLS WSS, accounts, Master Worker, WAR, snapshot restart
+        shell: bash
+        env:
+          NATIONAL_TEST_DURABLE_RECOVERY: ${{ matrix.durable }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          printf "C6_WSS_EXACT_SOURCE=%s DURABLE=%s\n" "${{ github.sha }}" "$NATIONAL_TEST_DURABLE_RECOVERY"
+          node --import tsx scripts/national-staging/worker-journey.mjs

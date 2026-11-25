@@ -1,0 +1,160 @@
+name: E1 native imperial economics acceptance
+on:
+  push:
+    branches:
+      - feature/conductor6-class2-e1-native-imperial-20261123
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c6c2-e1-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  exact-head:
+    name: E1 exact-head pinned source gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact triggering commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: test "$(node --version)" = "v24.15.0" && test "$(npm --version)" = "12.1.0"
+      - name: Install pinned dependencies
+        id: install
+        run: npm run inst
+      - name: Typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run typecheck
+      - name: Focused native economics
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npx --no-install vitest run --project node tests/ui/national/C6C2E1*.test.ts
+      - name: Inherited authority
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npx --no-install vitest run --project node tests/national/C6Class1ImperialRelief.test.ts tests/national/C6Class1E3EmbargoRestitution.test.ts tests/national/C6Class1E3SettlementIngress.test.ts tests/ui/national/C6Class1NationalAssessmentControls.test.ts
+      - name: Lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run lint
+      - name: Production build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run build-prod
+  complete-regression:
+    name: E1 exact-head complete regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact triggering commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: test "$(node --version)" = "v24.15.0" && test "$(npm --version)" = "12.1.0"
+      - run: npm run inst
+      - name: Complete regression
+        run: npm test
+  format:
+    name: Exact-head pinned format (independent diagnostic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact triggering commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: test "$(node --version)" = "v24.15.0" && test "$(npm --version)" = "12.1.0"
+      - name: Install pinned dependencies
+        id: install
+        run: npm run inst
+      - name: Pinned formatting
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          npm run format:check || {
+            npx --no-install oxfmt --write src/client/NationalImperial*Controls.ts src/client/NationalAssessmentClient.ts src/client/NationalAssessmentControls.ts src/client/NationalDiplomacyPanel.ts src/client/view/GameView.ts src/client/replay/codec/FrameNormalizer.ts src/client/Transport.ts src/client/TrustedNationalSession.ts packages/engine-api/src/game/NationalSettlementView.ts packages/engine-api/src/game/GameUpdates.ts packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/execution/TradeShipExecution.ts packages/engine/src/national/observation/NationalOutbound.ts src/server/national/NationalRecipientWire.ts packages/shared/src/NationalObserverNativeWire.ts tests/ui/national/C6C2E1*.test.ts .github/workflows/c6c2-e1-native-imperial.yml
+            git diff
+            git restore --worktree .
+            exit 1
+          }
+  causal-rehearsal:
+    name: Read-only E3 causal integration rehearsal (not standalone certification)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
+      - name: Verify pinned E1 and E3; merge in disposable runner only
+        env:
+          E3_SHA: f8fa780db3dfc037fe60f84c1f09d7a9d483e763
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          git cat-file -e "$E3_SHA^{commit}"
+          git -c user.name=CI -c user.email=ci@example.invalid merge --no-commit --no-ff "$E3_SHA"
+          echo "E1=${{ github.sha }} E3=$E3_SHA REHEARSAL_TREE=$(git write-tree)"
+          test -z "$(git ls-files -u)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: test "$(node --version)" = "v24.15.0" && test "$(npm --version)" = "12.1.0"
+      - run: npm run inst
+        id: install
+      - run: npm run typecheck
+      - name: Strict real native settlement and paid commerce
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          C6C2_E1_REQUIRE_CAUSAL: "1"
+        run: npx --no-install vitest run --project node tests/ui/national/C6C2E1SettlementGame.test.ts tests/ui/national/C6C2E1PaidVoyage.test.ts
+
+  assessment-rehearsal:
+    name: Read-only E4 exact receipt integration rehearsal (not new credit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
+      - name: Verify pinned E1 and E4; merge in disposable runner only
+        env:
+          E4_SHA: 99723c2e6616df5b65b8f469b9b96904c3aa6d32
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          git cat-file -e "$E4_SHA^{commit}"
+          git -c user.name=CI -c user.email=ci@example.invalid merge --no-commit --no-ff "$E4_SHA"
+          echo "E1=${{ github.sha }} E4=$E4_SHA REHEARSAL_TREE=$(git write-tree)"
+          test -z "$(git ls-files -u)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: test "$(node --version)" = "v24.15.0" && test "$(npm --version)" = "12.1.0"
+      - run: npm run inst
+        id: install
+      - run: npm run typecheck
+      - name: Strict real E4 receipt consumer (accepted, denied, private)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          C6C2_E1_REQUIRE_E4_RECEIPTS: "1"
+        run: npx --no-install vitest run --project node tests/ui/national/C6C2E1AssessmentGame.test.ts tests/ui/national/C6C2E1AssessmentReceipt.test.ts

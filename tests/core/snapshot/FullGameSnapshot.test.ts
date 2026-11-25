@@ -218,7 +218,12 @@ describe.each(VARIANTS)("full game snapshots: %s", (_, overrides) => {
         // Counterassessment is also authenticated NATIONAL-only, and is
         // independently snapshotted by C6Class1CounterassessmentShield.test.ts.
         "NationalCounterassessment",
+        // Physical blockade is NATIONAL-only. C6C2E3Blockade.test.ts
+        // explicitly observes this registered type in a running mission's
+        // snapshot, then restores and replays a real neutral return.
+        "NationalBlockade",
       ]);
+      expect(reference.execTypes.has("NationalBlockade")).toBe(false);
       const missing = EXECUTION_SNAPSHOT_TYPES.map((t) => t.name).filter(
         (name) => !reference.execTypes.has(name) && !neverStored.has(name),
       );

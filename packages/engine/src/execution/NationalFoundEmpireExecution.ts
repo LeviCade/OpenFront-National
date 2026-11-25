@@ -165,28 +165,58 @@ const NationalFoundEmpireStateSchema = z.object({
         name: z.string(),
         pactKind: z.enum(["NAP", "MDA"]),
         terms: z.object({
-          admission: z.enum(["leader", "unanimous"]),
+          admission: z.enum([
+            "leader",
+            "unanimous",
+            "selected",
+            "majority",
+            "supermajority",
+          ]),
+          selectedApproverIds: z.array(z.string()).max(256).optional(),
           expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+          defenseContributionBps: z.number().int().min(0).max(1000).optional(),
+          defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
         }),
       }),
       z.object({
         kind: z.literal("invite-pact"),
         pactId: z.string(),
         candidateId: z.string(),
+        admissionAction: z.enum(["propose", "approve", "withdraw"]).optional(),
+        constitutionVersion: z.number().int().positive().optional(),
       }),
-      z.object({ kind: z.literal("accept-pact"), pactId: z.string() }),
+      z.object({
+        kind: z.literal("accept-pact"),
+        pactId: z.string(),
+        constitutionVersion: z.number().int().positive().optional(),
+      }),
       z.object({
         kind: z.literal("propose-pact-amendment"),
         pactId: z.string(),
         terms: z.object({
-          admission: z.enum(["leader", "unanimous"]),
+          admission: z.enum([
+            "leader",
+            "unanimous",
+            "selected",
+            "majority",
+            "supermajority",
+          ]),
+          selectedApproverIds: z.array(z.string()).max(256).optional(),
           expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+          defenseContributionBps: z.number().int().min(0).max(1000).optional(),
+          defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
         }),
         administratorId: z.string().nullable(),
       }),
       z.object({
         kind: z.literal("approve-pact-amendment"),
         pactId: z.string(),
+        expectedDefenseVersion: z
+          .number()
+          .int()
+          .positive()
+          .max(Number.MAX_SAFE_INTEGER)
+          .optional(),
       }),
       z.object({ kind: z.literal("betray-pact"), pactId: z.string() }),
       z.object({

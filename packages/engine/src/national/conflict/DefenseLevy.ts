@@ -57,6 +57,8 @@ export interface LevyEligibility {
   /** Limits per campaign; initial illustrated policy 10% / 30% reserve. */
   readonly maximumFraction: number;
   readonly protectedCapacityFraction: number;
+  /** Explicit constitutional cap; omitted for inherited default behavior. */
+  readonly treatyMaximumFraction?: number;
 }
 
 export interface IncomingDefense {
@@ -337,6 +339,11 @@ export class DefenseLevyLedger {
         assertNonnegative(e.troopCapacity, "troop capacity");
         fraction(e.maximumFraction);
         fraction(e.protectedCapacityFraction);
+        if (e.treatyMaximumFraction !== undefined) {
+          fraction(e.treatyMaximumFraction);
+          if (e.treatyMaximumFraction !== e.maximumFraction)
+            throw new Error("inconsistent constitutional cap");
+        }
       }
     }
 
@@ -461,6 +468,15 @@ export class DefenseLevyLedger {
           source: e.source,
           troopCapacity: e.troopCapacity,
           maximumFraction: Math.min(prior.maximumFraction, e.maximumFraction),
+          ...(prior.treatyMaximumFraction !== undefined ||
+          e.treatyMaximumFraction !== undefined
+            ? {
+                treatyMaximumFraction: Math.min(
+                  prior.maximumFraction,
+                  e.maximumFraction,
+                ),
+              }
+            : {}),
           protectedCapacityFraction: Math.max(
             prior.protectedCapacityFraction,
             e.protectedCapacityFraction,
@@ -494,9 +510,24 @@ export class DefenseLevyLedger {
         limit: cap,
         spent: 0,
       };
+      // A constitutional reduction can only tighten a previously funded
+      // campaign. Prior spending is never reset, even after later relaxation.
+      // For legacy rows use the conservative live balance plus prior spending.
+      if (existing && e.treatyMaximumFraction !== undefined) {
+        const currentLimit = Math.floor(
+          (current + allowance.spent) * e.treatyMaximumFraction,
+        );
+        allowance.limit = Math.max(
+          allowance.spent,
+          Math.min(allowance.limit, currentLimit),
+        );
+      }
       allocations.push({
         id,
-        cap: Math.max(0, Math.min(cap - allowance.spent, current - reserve)),
+        cap: Math.max(
+          0,
+          Math.min(allowance.limit - allowance.spent, current - reserve),
+        ),
         weight: current,
         key,
         allowance,

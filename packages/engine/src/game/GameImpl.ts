@@ -28,6 +28,11 @@ import {
   GameUpdate,
   GameUpdateType,
 } from "@openfront/engine-api/game/GameUpdates";
+import type { NationalAssessmentReceipt } from "@openfront/engine-api/game/NationalAssessmentView";
+import {
+  NationalConfirmedVictorySchema,
+  type NationalConfirmedVictory,
+} from "@openfront/engine-api/game/NationalVictoryView";
 import {
   ReadonlyTileSet,
   UnitPredicate,
@@ -68,6 +73,7 @@ import {
   SharedWaterCache,
   SharedWaterCacheSnapshot,
 } from "../execution/nation/SharedWaterCache";
+import { NationalBlockadeExecution } from "../execution/NationalBlockadeExecution";
 import { NationalSanctionExecution } from "../execution/NationalSanctionExecution";
 import { NationalUltimatumExecution } from "../execution/NationalUltimatumExecution";
 import { NationExecution } from "../execution/NationExecution";
@@ -80,6 +86,7 @@ import type {
   TroopDebitTransactionAdapter,
   TroopSource,
 } from "../national/conflict/DefenseLevy";
+import { treatyDefensePolicy } from "../national/conflict/NationalTreatyDefensePolicy";
 import {
   NationalRuntime,
   NationalRuntimeSnapshotSchema,
@@ -235,6 +242,7 @@ export class GameImpl implements Game {
 
   private _isPaused: boolean = false;
   private _winner: Player | Team | null = null;
+  private _nationalConfirmedVictory: NationalConfirmedVictory | null = null;
   private _national: NationalRuntime | null = null;
   private _nationalRecon: NationalReconnaissance | null = null;
   private _nationalAssessment: NationalAssessment | null = null;
@@ -1050,6 +1058,12 @@ export class GameImpl implements Game {
       }
       for (const entry of attack.eligible) {
         const id = entry.source.nationId;
+        const policy = treatyDefensePolicy(
+          political.pacts,
+          attack.defenderId,
+          id,
+          imperialDonors.includes(id),
+        );
         if (
           this.nationalLevySource(id) !== entry.source ||
           !(
@@ -1060,8 +1074,10 @@ export class GameImpl implements Game {
                 p.memberIds.includes(id),
             ) || imperialDonors.includes(id)
           ) ||
-          entry.maximumFraction !== (imperialDonors.includes(id) ? 1 : 0.1) ||
-          entry.protectedCapacityFraction !== 0.3 ||
+          entry.maximumFraction !== policy.maximumFraction ||
+          entry.protectedCapacityFraction !==
+            policy.protectedCapacityFraction ||
+          entry.treatyMaximumFraction !== policy.treatyMaximumFraction ||
           entry.troopCapacity !==
             Math.floor(this._config.maxTroops(this.player(id)))
         ) {
@@ -1169,6 +1185,7 @@ export class GameImpl implements Game {
     const donorIds = [...new Set([...mda, ...imperials])]
       .filter((id) => id !== attackerId && id !== defenderId)
       .sort();
+    const activePacts = this._national.snapshot().politics.pacts;
     const eligible = alreadyProcessed
       ? []
       : donorIds.map((id) => {
@@ -1179,8 +1196,12 @@ export class GameImpl implements Game {
           return {
             source,
             troopCapacity: Math.floor(this._config.maxTroops(donor)),
-            maximumFraction: imperials.has(id) ? 1 : 0.1,
-            protectedCapacityFraction: 0.3,
+            ...treatyDefensePolicy(
+              activePacts,
+              defenderId,
+              id,
+              imperials.has(id),
+            ),
           };
         });
     const campaignId = `national:${attackerId.length}:${attackerId}:${defenderId.length}:${defenderId}`;
@@ -1234,7 +1255,20 @@ export class GameImpl implements Game {
   nationalPublicPoliticalView(): NationalPublicPoliticalView | null {
     if (this._national === null) return null;
     this.synchronizeNationalState();
-    return this._national.publicPoliticalView();
+    const view = this._national.publicPoliticalView();
+    // Preserve the historical engine-only candidate query. It is not a WIN
+    // unless the canonical terminal marker is present. Recipient projections
+    // may carry the candidate as historical public data, never as a WIN.
+    // Once committed, later politics cannot rewrite it.
+    return {
+      ...view,
+      victory:
+        this._nationalConfirmedVictory === null
+          ? view.victory
+          : NationalConfirmedVictorySchema.parse(
+              this._nationalConfirmedVictory,
+            ),
+    };
   }
 
   /**
@@ -1458,8 +1492,9 @@ export class GameImpl implements Game {
           throw new Error("NATIONAL: unauthorized constituent trade order");
         // No global embargo: mutate precisely this member/target Player pair.
         // No treasury credit/debit occurs unless a later legal trade pays.
-        if (command.embargo) member.addEmbargo(target, false);
-        else member.stopEmbargo(target);
+        const reason = `imperial:${command.empireId}`;
+        if (command.embargo) member.addEmbargo(target, false, reason);
+        else member.stopEmbargo(target, reason);
         this._national.advanceEconomicEpoch(
           actor.id(),
           command.empireId,
@@ -1837,51 +1872,61 @@ export class GameImpl implements Game {
     if (this._nationalAssessment === null || !this._config.nationalMode())
       throw new Error("NATIONAL assessment: mode not enabled");
     this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
-    const target = this._players.get(targetId);
-    if (
-      this.inSpawnPhase() ||
-      !actor.hasSpawned() ||
-      !actor.isAlive() ||
-      !target ||
-      !target.hasSpawned() ||
-      !target.isAlive() ||
-      targetId === actor.id()
-    )
-      throw new Error("NATIONAL assessment: inactive or invalid target");
-    return this._nationalAssessment.buy(
-      actor.id(),
-      targetId,
-      this._ticks,
-      requestId,
-      () => {
-        if (actor.gold() < NATIONAL_ASSESSMENT_COST)
-          throw new Error("NATIONAL assessment: insufficient gold");
-        const spent = actor.removeGold(NATIONAL_ASSESSMENT_COST);
-        if (spent !== NATIONAL_ASSESSMENT_COST) {
-          actor.addGold(spent);
-          throw new Error("NATIONAL assessment: non-atomic debit");
-        }
-      },
-      () => {
-        actor.addGold(NATIONAL_ASSESSMENT_COST);
-      },
-      () => {
-        const authority = this.nationalPoliticalAuthority();
-        const actorEmpire = authority?.empireOf(actor.id()) ?? null;
-        const targetEmpire = authority?.empireOf(targetId) ?? null;
-        const allies =
-          actorEmpire !== null &&
-          actorEmpire === targetEmpire &&
-          authority?.membersOf(actorEmpire).includes(actor.id()) === true &&
-          authority?.membersOf(actorEmpire).includes(targetId) === true;
-        return captureNationalAssessmentBands(
-          target.gold(),
-          target.troops(),
-          !allies &&
-            this._nationalAssessment!.isShielded(targetId, this._ticks),
-        );
-      },
-    );
+    try {
+      const target = this._players.get(targetId);
+      if (
+        this.inSpawnPhase() ||
+        !actor.hasSpawned() ||
+        !actor.isAlive() ||
+        !target ||
+        !target.hasSpawned() ||
+        !target.isAlive() ||
+        targetId === actor.id()
+      )
+        throw new Error("NATIONAL assessment: inactive or invalid target");
+      return this._nationalAssessment.buy(
+        actor.id(),
+        targetId,
+        this._ticks,
+        requestId,
+        () => {
+          if (actor.gold() < NATIONAL_ASSESSMENT_COST)
+            throw new Error("NATIONAL assessment: insufficient gold");
+          const spent = actor.removeGold(NATIONAL_ASSESSMENT_COST);
+          if (spent !== NATIONAL_ASSESSMENT_COST) {
+            actor.addGold(spent);
+            throw new Error("NATIONAL assessment: non-atomic debit");
+          }
+        },
+        () => {
+          actor.addGold(NATIONAL_ASSESSMENT_COST);
+        },
+        () => {
+          const authority = this.nationalPoliticalAuthority();
+          const actorEmpire = authority?.empireOf(actor.id()) ?? null;
+          const targetEmpire = authority?.empireOf(targetId) ?? null;
+          const allies =
+            actorEmpire !== null &&
+            actorEmpire === targetEmpire &&
+            authority?.membersOf(actorEmpire).includes(actor.id()) === true &&
+            authority?.membersOf(actorEmpire).includes(targetId) === true;
+          return captureNationalAssessmentBands(
+            target.gold(),
+            target.troops(),
+            !allies &&
+              this._nationalAssessment!.isShielded(targetId, this._ticks),
+          );
+        },
+      );
+    } catch (error) {
+      this._nationalAssessment.recordRejectedPurchase(
+        actor.id(),
+        targetId,
+        requestId,
+        this._ticks,
+      );
+      throw error;
+    }
   }
   /** No target or duration can be chosen by an untrusted client. */
   performNationalCounterassessment(
@@ -1910,6 +1955,23 @@ export class GameImpl implements Game {
       () => actor.addGold(NATIONAL_COUNTERASSESSMENT_COST),
     );
   }
+  nationalAssessmentReceiptsFor(
+    observer: Player,
+  ): readonly NationalAssessmentReceipt[] {
+    if (
+      this._config.isReplay() ||
+      this._players.get(observer.id()) !== observer ||
+      observer.type() !== PlayerType.Human ||
+      !observer.hasSpawned() ||
+      !observer.isAlive() ||
+      this.inSpawnPhase()
+    )
+      return [];
+    return (
+      this._nationalAssessment?.receiptsFor(observer.id(), this._ticks) ?? []
+    );
+  }
+
   nationalAssessmentsFor(
     payerId: PlayerID,
   ): readonly NationalAssessmentGrant[] {
@@ -2037,6 +2099,8 @@ export class GameImpl implements Game {
   ): boolean {
     const authority = this.nationalPoliticalAuthority();
     if (!authority?.alive(actorId)) return false;
+    if (command.kind === "invite-pact" || command.kind === "accept-pact")
+      return this._national?.mayReplayAdmission(actorId, command) === true;
     if (command.kind === "imperial-administration") {
       if (command.command.kind === "request-relief")
         return authority.empireOf(actorId) === command.command.empireId;
@@ -2433,6 +2497,7 @@ export class GameImpl implements Game {
     if (this._national !== null) {
       hash += this._national.stateHash();
       hash += NationalSanctionExecution.stateHash(this);
+      hash += NationalBlockadeExecution.stateHash(this);
       hash += NationalUltimatumExecution.stateHash(this);
     }
     if (this._nationalWar !== null)
@@ -2879,6 +2944,20 @@ export class GameImpl implements Game {
     winner: Player | Team | null,
     allPlayersStats: AllPlayersStats,
   ): void {
+    if (
+      this._national !== null &&
+      this._nationalConfirmedVictory === null &&
+      winner !== null &&
+      typeof winner !== "string"
+    ) {
+      const result = this.nationalVictoryRoster();
+      if (result?.prizes[0]?.nationId === winner.id()) {
+        this._nationalConfirmedVictory = NationalConfirmedVictorySchema.parse({
+          ...result,
+          confirmedTick: this._ticks,
+        });
+      }
+    }
     this._winner = winner;
     // OFM: snapshot final tiles for standings (bots skipped in recordFinalTiles).
     for (const player of this.players()) {
@@ -3376,6 +3455,9 @@ export class GameImpl implements Game {
           : typeof this._winner === "string"
             ? { team: this._winner }
             : { player: w.player(this._winner) },
+      ...(this._nationalConfirmedVictory === null
+        ? {}
+        : { nationalConfirmedVictory: this._nationalConfirmedVictory }),
       unitsVersion: this._unitsVersion,
       territoryVersion: this._territoryVersion,
       shipStaggers: { ...this.shipStaggers },
@@ -3437,6 +3519,18 @@ export class GameImpl implements Game {
         : "team" in s.winner
           ? s.winner.team
           : r.player(s.winner.player);
+    this._nationalConfirmedVictory = s.nationalConfirmedVictory ?? null;
+    if (
+      this._nationalConfirmedVictory !== null &&
+      (!this._config.nationalMode() ||
+        this._winner === null ||
+        typeof this._winner === "string" ||
+        this._nationalConfirmedVictory.prizes[0].nationId !==
+          this._winner.id() ||
+        this._nationalConfirmedVictory.confirmedTick > this._ticks)
+    ) {
+      throw new Error("NATIONAL inconsistent saved victory");
+    }
     this._unitsVersion = s.unitsVersion;
     this._territoryVersion = s.territoryVersion;
     // Not snapshotted: it only keys memos, which must not outlive the restore.
@@ -3469,6 +3563,13 @@ export class GameImpl implements Game {
         if (!this._players.has(shield.defenderId))
           throw new Error(
             "NATIONAL counterassessment: invalid restored defender",
+          );
+      }
+      for (const receipt of this._nationalAssessment.snapshot()
+        .rejectedPurchases ?? []) {
+        if (!this._players.has(receipt.payerId))
+          throw new Error(
+            "NATIONAL assessment: invalid restored receipt owner",
           );
       }
       for (const grant of this._nationalAssessment.snapshot().grants) {
@@ -3625,7 +3726,7 @@ export class GameImpl implements Game {
 
 export const GameSnapshot = snapshotType({
   name: "Game",
-  version: 6,
+  version: 7,
   migrations: {
     1: (data: unknown) => ({
       ...(data as Record<string, unknown>),
@@ -3647,6 +3748,8 @@ export const GameSnapshot = snapshotType({
       ...(data as Record<string, unknown>),
       nationalAssessment: null,
     }),
+    // Old saves did not record the terminal award roster. Never reconstruct it.
+    6: (data: unknown) => ({ ...(data as Record<string, unknown>) }),
   },
   schema: z.object({
     ticks: zInt(),
@@ -3672,6 +3775,7 @@ export const GameSnapshot = snapshotType({
         z.object({ team: z.string() }),
       ])
       .nullable(),
+    nationalConfirmedVictory: NationalConfirmedVictorySchema.optional(),
     unitsVersion: zInt(),
     territoryVersion: zInt(),
     shipStaggers: z.object({ tradeShip: zInt(), transportShip: zInt() }),
