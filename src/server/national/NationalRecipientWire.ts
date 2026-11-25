@@ -173,9 +173,11 @@ export function encodeNationalRecipientProjection(
             ...(filtered.nationalAssessments.receipts === undefined
               ? {}
               : {
-                  receipts: filtered.nationalAssessments.receipts.map((receipt) => ({
-                    ...receipt,
-                  })),
+                  receipts: filtered.nationalAssessments.receipts.map(
+                    (receipt) => ({
+                      ...receipt,
+                    }),
+                  ),
                 }),
             items: filtered.nationalAssessments.items.map((r) => ({
               targetId: r.targetId,

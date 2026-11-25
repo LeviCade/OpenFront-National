@@ -193,9 +193,40 @@ describe("C6 C1 E4: actual Game-owned counterassessment shield", () => {
         expect.objectContaining({ confidence: "shielded-coarse-estimate" }),
       ],
     });
+    // The payer now receives its own exact purchase IDs and costs, never
+    // the opponent's counterassessment receipt or private shield state.
+    expect(decoded.nationalAssessments).toMatchObject({
+      receipts: expect.arrayContaining([
+        {
+          requestId: "before-shield",
+          payerId: BUYER.id,
+          targetId: DEFENDER.id,
+          effectiveTick: original.effectiveTick,
+          outcome: "accepted",
+          cost: "1200",
+        },
+        {
+          requestId: "after-shield",
+          payerId: BUYER.id,
+          targetId: DEFENDER.id,
+          effectiveTick: shielded.effectiveTick,
+          outcome: "accepted",
+          cost: "1200",
+        },
+      ]),
+    });
+    expect(human?.receipts).toHaveLength(2);
+    for (const item of human?.items ?? []) {
+      expect(item).not.toHaveProperty("requestId");
+      expect(item).not.toHaveProperty("cost");
+    }
+    expect(
+      packet(game, OTHER.clientID!).nationalAssessments?.receipts ?? [],
+    ).toEqual([]);
+    expect(
+      packet(game, DEFENDER.clientID!).nationalAssessments?.receipts ?? [],
+    ).toEqual([]);
     expect(encoded).not.toContain("defense-1");
-    expect(encoded).not.toContain("after-shield");
-    expect(encoded).not.toContain('"cost"');
     expect(encoded).not.toContain('"shields"');
     const spectator = new NationalServerRecipientSession(game, {
       clientID: null,

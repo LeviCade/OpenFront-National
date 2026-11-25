@@ -67,7 +67,12 @@ function ids(value: unknown): value is string[] {
 function terms(value: unknown): NationalPactTerms | null {
   if (
     !record(value) ||
-    !keys(value, ["admission", "expulsion", "defenseContributionBps", "defenseReserveBps"]) ||
+    !keys(value, [
+      "admission",
+      "expulsion",
+      "defenseContributionBps",
+      "defenseReserveBps",
+    ]) ||
     (value.admission !== "leader" && value.admission !== "unanimous") ||
     (value.expulsion !== "leader" &&
       value.expulsion !== "unanimous" &&
@@ -78,9 +83,15 @@ function terms(value: unknown): NationalPactTerms | null {
   const reserve = value.defenseReserveBps;
   if (
     (cap !== undefined &&
-      (typeof cap !== "number" || !Number.isInteger(cap) || cap < 0 || cap > 1000)) ||
+      (typeof cap !== "number" ||
+        !Number.isInteger(cap) ||
+        cap < 0 ||
+        cap > 1000)) ||
     (reserve !== undefined &&
-      (typeof reserve !== "number" || !Number.isInteger(reserve) || reserve < 3000 || reserve > 10000))
+      (typeof reserve !== "number" ||
+        !Number.isInteger(reserve) ||
+        reserve < 3000 ||
+        reserve > 10000))
   )
     return null;
   return {
@@ -91,7 +102,10 @@ function terms(value: unknown): NationalPactTerms | null {
   };
 }
 function hasDefenseTerms(terms: NationalPactTerms): boolean {
-  return terms.defenseContributionBps !== undefined || terms.defenseReserveBps !== undefined;
+  return (
+    terms.defenseContributionBps !== undefined ||
+    terms.defenseReserveBps !== undefined
+  );
 }
 /** Strict reader rejects nested extras. Producer separately selects public keys. */
 export function readNationalPublicPacts(
@@ -172,7 +186,12 @@ export function readNationalPactDisclosure(
       if (
         p.relationship !== "member" ||
         !record(a) ||
-        !keys(a, ["terms", "administratorId", "approvedBy", "defenseVersion"]) ||
+        !keys(a, [
+          "terms",
+          "administratorId",
+          "approvedBy",
+          "defenseVersion",
+        ]) ||
         (a.defenseVersion !== undefined &&
           (typeof a.defenseVersion !== "number" ||
             !Number.isSafeInteger(a.defenseVersion) ||
@@ -189,8 +208,10 @@ export function readNationalPactDisclosure(
       if (
         !next ||
         (publicPact.kind !== "MDA" && hasDefenseTerms(next)) ||
-        (hasDefenseTerms(currentTerms) || hasDefenseTerms(next)) !== (a.defenseVersion !== undefined)
-      ) return null;
+        (hasDefenseTerms(currentTerms) || hasDefenseTerms(next)) !==
+          (a.defenseVersion !== undefined)
+      )
+        return null;
       amendment = {
         ...(typeof a.defenseVersion === "number"
           ? { defenseVersion: a.defenseVersion }

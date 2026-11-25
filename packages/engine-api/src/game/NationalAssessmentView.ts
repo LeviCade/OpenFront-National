@@ -15,7 +15,11 @@ const band = z
   })
   .strict();
 const receiptIdentity = {
-  requestId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/),
+  requestId: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[A-Za-z0-9_-]+$/),
   payerId: nation,
   targetId: nation,
   effectiveTick: tick,
@@ -28,11 +32,13 @@ export const NationalAssessmentRejectedReceiptSchema = z
   })
   .strict();
 export const NationalAssessmentReceiptSchema = z.discriminatedUnion("outcome", [
-  z.object({
-    ...receiptIdentity,
-    outcome: z.literal("accepted"),
-    cost: z.literal("1200"),
-  }).strict(),
+  z
+    .object({
+      ...receiptIdentity,
+      outcome: z.literal("accepted"),
+      cost: z.literal("1200"),
+    })
+    .strict(),
   NationalAssessmentRejectedReceiptSchema,
 ]);
 export type NationalAssessmentReceipt = z.infer<

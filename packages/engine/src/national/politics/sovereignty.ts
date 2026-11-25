@@ -189,8 +189,10 @@ export function initialPolitics(nations: PoliticsNation[]): PoliticsProjection {
 }
 
 function hasDefenseTerms(terms: PactTerms): boolean {
-  return terms.defenseContributionBps !== undefined ||
-    terms.defenseReserveBps !== undefined;
+  return (
+    terms.defenseContributionBps !== undefined ||
+    terms.defenseReserveBps !== undefined
+  );
 }
 
 /** Validate persisted projection boundaries before executing or evaluating rules. */
@@ -321,7 +323,10 @@ export function validatePolitics(world: PoliticsProjection): void {
         );
         pendingDefenseVersions.add(version);
       } else {
-        requireRule(proposed.defenseVersion === undefined, "unexpected defense version");
+        requireRule(
+          proposed.defenseVersion === undefined,
+          "unexpected defense version",
+        );
       }
       requireRule(
         (proposed.terms.admission === "leader" ||
@@ -645,7 +650,10 @@ export function proposePactAmendment(
     hasDefenseTerms(current.terms) || hasDefenseTerms(proposed.terms);
   const defenseVersion = (next.defenseAmendmentSequence ?? 0) + 1;
   if (versioned) {
-    requireRule(Number.isSafeInteger(defenseVersion), "defense version exhausted");
+    requireRule(
+      Number.isSafeInteger(defenseVersion),
+      "defense version exhausted",
+    );
     next.defenseAmendmentSequence = defenseVersion;
   }
   target.pendingAmendment = {

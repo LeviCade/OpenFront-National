@@ -799,7 +799,8 @@ export class NationalOutboundFilter {
       verified !== null &&
       this.observerId !== null &&
       game.hasPlayer(this.observerId)
-        ? game.nationalAssessmentReceiptsFor?.(game.player(this.observerId)) ?? []
+        ? (game.nationalAssessmentReceiptsFor?.(game.player(this.observerId)) ??
+          [])
         : [];
     const privateAssessments =
       verified !== null &&

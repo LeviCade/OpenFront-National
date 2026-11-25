@@ -28,6 +28,7 @@ import {
   GameUpdate,
   GameUpdateType,
 } from "@openfront/engine-api/game/GameUpdates";
+import type { NationalAssessmentReceipt } from "@openfront/engine-api/game/NationalAssessmentView";
 import {
   ReadonlyTileSet,
   UnitPredicate,
@@ -80,7 +81,6 @@ import type {
   TroopDebitTransactionAdapter,
   TroopSource,
 } from "../national/conflict/DefenseLevy";
-import type { NationalAssessmentReceipt } from "@openfront/engine-api/game/NationalAssessmentView";
 import { treatyDefensePolicy } from "../national/conflict/NationalTreatyDefensePolicy";
 import {
   NationalRuntime,
@@ -1069,7 +1069,8 @@ export class GameImpl implements Game {
             ) || imperialDonors.includes(id)
           ) ||
           entry.maximumFraction !== policy.maximumFraction ||
-          entry.protectedCapacityFraction !== policy.protectedCapacityFraction ||
+          entry.protectedCapacityFraction !==
+            policy.protectedCapacityFraction ||
           entry.treatyMaximumFraction !== policy.treatyMaximumFraction ||
           entry.troopCapacity !==
             Math.floor(this._config.maxTroops(this.player(id)))
@@ -1946,7 +1947,9 @@ export class GameImpl implements Game {
       this.inSpawnPhase()
     )
       return [];
-    return this._nationalAssessment?.receiptsFor(observer.id(), this._ticks) ?? [];
+    return (
+      this._nationalAssessment?.receiptsFor(observer.id(), this._ticks) ?? []
+    );
   }
 
   nationalAssessmentsFor(
@@ -3510,9 +3513,12 @@ export class GameImpl implements Game {
             "NATIONAL counterassessment: invalid restored defender",
           );
       }
-      for (const receipt of this._nationalAssessment.snapshot().rejectedPurchases ?? []) {
+      for (const receipt of this._nationalAssessment.snapshot()
+        .rejectedPurchases ?? []) {
         if (!this._players.has(receipt.payerId))
-          throw new Error("NATIONAL assessment: invalid restored receipt owner");
+          throw new Error(
+            "NATIONAL assessment: invalid restored receipt owner",
+          );
       }
       for (const grant of this._nationalAssessment.snapshot().grants) {
         if (

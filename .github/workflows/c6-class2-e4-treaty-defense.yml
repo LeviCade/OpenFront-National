@@ -44,7 +44,8 @@ jobs:
             tests/national/LiveLevyCombatRound5.test.ts \
             tests/national/RoundEightLevyOverlap.test.ts \
             tests/national/C5Class3PaidNationalAssessment.test.ts \
-            tests/national/C5Class3AssessmentWire.test.ts
+            tests/national/C5Class3AssessmentWire.test.ts \
+            tests/national/C6Class1CounterassessmentShield.test.ts
       - name: Pinned formatter
         id: format
         if: always() && steps.install.outcome == 'success'
@@ -78,5 +79,6 @@ jobs:
             packages/engine/src/national/politics/sovereignty.ts \
             src/server/national/NationalRecipientWire.ts \
             tests/national/C6Class2E4TreatyDefenseReceipts.test.ts \
-            tests/national/C5Class3PaidNationalAssessment.test.ts
+            tests/national/C5Class3PaidNationalAssessment.test.ts \
+            tests/national/C6Class1CounterassessmentShield.test.ts
           git --no-pager diff
