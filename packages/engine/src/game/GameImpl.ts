@@ -1458,8 +1458,9 @@ export class GameImpl implements Game {
           throw new Error("NATIONAL: unauthorized constituent trade order");
         // No global embargo: mutate precisely this member/target Player pair.
         // No treasury credit/debit occurs unless a later legal trade pays.
-        if (command.embargo) member.addEmbargo(target, false);
-        else member.stopEmbargo(target);
+        const reason = `imperial:${command.empireId}`;
+        if (command.embargo) member.addEmbargo(target, false, reason);
+        else member.stopEmbargo(target, reason);
         this._national.advanceEconomicEpoch(
           actor.id(),
           command.empireId,

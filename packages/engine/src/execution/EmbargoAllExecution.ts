@@ -34,7 +34,7 @@ export class EmbargoAllExecution implements Execution {
 
       if (this.action === "start") {
         if (
-          national ? !me.hasManualEmbargoAgainst(p) : !me.hasEmbargoAgainst(p)
+          national || !me.hasEmbargoAgainst(p)
         ) {
           me.addEmbargo(p, false);
         }

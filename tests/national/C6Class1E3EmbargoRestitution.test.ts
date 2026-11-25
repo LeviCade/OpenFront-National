@@ -320,30 +320,58 @@ describe("C6 Class 1 E3: actual enforced bilateral restitution", () => {
     expect(b.canTrade(c)).toBe(false);
   });
 
-  it("rejects parallel-sanction ownership and preexisting manual restrictions without touching money or trade", async () => {
-    const { game, b, c } = await world();
+  it("settles independent sanctions and manual reassertion without releasing competing causes", async () => {
+    const { game, b, c, src, other } = await world();
     const first = enforce(game, b, c, "c6-overlap-one");
     const second = enforce(game, b, c, "c6-overlap-two");
     expect(first).not.toBe(second);
-    const balances = [b.gold(), c.gold()];
-    offer(game, c, first, "30000", "overlap-ambiguous");
+    // The manual assertion occurs AFTER both sanctions, while the pair
+    // is already blocked. It must survive both separate payments.
+    b.addEmbargo(c, false);
+    offer(game, c, first, "30000", "overlap-first");
     offer(game, c, second, "30000", "overlap-second");
-    expect(status(game, b, first)).toBeUndefined();
-    expect(status(game, b, second)).toBeUndefined();
-    expect([b.gold(), c.gold()]).toEqual(balances);
-    expect(b.canTrade(c)).toBe(false);
-
-    const world2 = await world();
-    world2.b.addEmbargo(world2.c, false);
-    const sanctioned = enforce(
-      world2.game,
-      world2.b,
-      world2.c,
-      "c6-preexisting",
-    );
-    offer(world2.game, world2.c, sanctioned, "12000", "c6-unsafe-owner");
-    expect(status(world2.game, world2.b, sanctioned)).toBeUndefined();
-    expect(world2.b.canTrade(world2.c)).toBe(false);
+    expect(status(game, b, first)).toBe("pending");
+    expect(status(game, b, second)).toBe("pending");
+    const { restored, bytes, again } = await roundTrip(game, MAP);
+    expect(again).toEqual(bytes);
+    for (const g of [game, restored]) {
+      const issuer = g.player(ISSUER);
+      const payer = g.player(DELEGATE);
+      const before = [issuer.gold(), payer.gold()];
+      decide(
+        g,
+        issuer,
+        first,
+        DELEGATE,
+        "overlap-first",
+        "accept",
+        "overlap-accept-first",
+      );
+      expect(status(g, issuer, first)).toBe("accepted");
+      expect(issuer.canTrade(payer)).toBe(false);
+      decide(
+        g,
+        issuer,
+        second,
+        DELEGATE,
+        "overlap-second",
+        "accept",
+        "overlap-accept-second",
+      );
+      expect(status(g, issuer, second)).toBe("accepted");
+      expect(issuer.gold() - before[0]).toBe(60_000n);
+      expect(before[1] - payer.gold()).toBe(60_000n);
+      expect(issuer.canTrade(payer)).toBe(false);
+      const from = issuer.units(UnitType.Port)[0];
+      const to = payer.units(UnitType.Port)[0];
+      expect(trade(g, issuer, from, to)).toBe(0n);
+      issuer.stopEmbargo(payer);
+      expect(issuer.canTrade(payer)).toBe(true);
+      expect(trade(g, issuer, from, to)).toBeGreaterThan(0n);
+    }
+    expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
+    expect(src.owner()).toBe(c);
+    expect(other.owner()).toBe(b);
   });
 
   it("cannot pay to erase an independently enforced imperial ultimatum embargo", async () => {
@@ -408,8 +436,20 @@ describe("C6 Class 1 E3: actual enforced bilateral restitution", () => {
     ).toBe(true);
     const before = [a.gold(), b.gold()];
     offer(game, b, sanctionId, "23000", "c6-ultimatum-cross-reason-offer");
-    expect(status(game, a, sanctionId)).toBeUndefined();
+    expect(status(game, a, sanctionId)).toBe("pending");
     expect([a.gold(), b.gold()]).toEqual(before);
+    decide(
+      game,
+      a,
+      sanctionId,
+      ISSUER,
+      "c6-ultimatum-cross-reason-offer",
+      "accept",
+      "c6-ultimatum-cross-reason-accept",
+    );
+    expect(status(game, a, sanctionId)).toBe("accepted");
+    expect(a.gold() - before[0]).toBe(23_000n);
+    expect(before[1] - b.gold()).toBe(23_000n);
     expect(a.canTrade(b)).toBe(false);
   });
 

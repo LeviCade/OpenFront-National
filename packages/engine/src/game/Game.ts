@@ -340,6 +340,8 @@ export interface Embargo {
   createdAt: Tick;
   isTemporary: boolean;
   target: Player;
+  /** NATIONAL only; absent historical provenance is not releasable. */
+  reasons?: readonly string[];
 }
 
 export interface DisconnectSnapshot {
@@ -515,9 +517,9 @@ export interface Player extends PlayerLike {
   // Excludes the temporary embargo every attacked player places on its attacker
   hasManualEmbargoAgainst(other: Player): boolean;
   tradingPartners(): Player[];
-  addEmbargo(other: Player, isTemporary: boolean): void;
+  addEmbargo(other: Player, isTemporary: boolean, reason?: string): void;
   getEmbargoes(): Embargo[];
-  stopEmbargo(other: Player): void;
+  stopEmbargo(other: Player, reason?: string): void;
   endTemporaryEmbargo(other: Player): void;
   canTrade(other: Player): boolean;
 

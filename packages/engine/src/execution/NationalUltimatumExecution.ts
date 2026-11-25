@@ -341,7 +341,9 @@ export class NationalUltimatumExecution implements Execution {
         .map((id) => living(game, id))
         .filter((p): p is Player => p !== null);
       if (members.length === 0) return false;
-      for (const member of members) member.addEmbargo(target, false);
+      for (const member of members) {
+        member.addEmbargo(target, false, `ultimatum:${row.id}`);
+      }
       row.imposedMembers = members.map((m) => m.id());
       row.phase = "enforced";
       row.credibility = "kept";

@@ -17,7 +17,6 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
-import { NationalUltimatumExecution } from "./NationalUltimatumExecution";
 
 const commandSchema = z.discriminatedUnion("type", [
   NationalIssueSanctionIntentSchema,
@@ -35,8 +34,8 @@ const phaseSchema = z.enum([
   "backed-down",
   "expired",
 ]);
-// Sanctions can release only Player entries they independently created.
-// A null creation tick means an independent manual embargo pre-existed.
+// New claims carry an exact cause key; historical creation ticks alone
+// cannot prove exclusive ownership and are never sufficient to release.
 const sanctionEnforcementSchema = z.object({
   authorityId: z.string(),
   authorityVersion: z.number().int().nonnegative().nullable(),
@@ -45,6 +44,7 @@ const sanctionEnforcementSchema = z.object({
       z.object({
         id: z.string(),
         createdAt: z.number().int().nonnegative().nullable(),
+        reason: z.string().optional(),
       }),
     )
     .max(64),
@@ -431,14 +431,12 @@ export class NationalSanctionExecution implements Execution {
       };
       for (const owner of owners) {
         if (owner === recipient) continue;
-        const existing = owner.hasManualEmbargoAgainst(recipient);
-        owner.addEmbargo(recipient, false);
-        const entry = owner
-          .getEmbargoes()
-          .find((item) => item.target === recipient && !item.isTemporary);
+        const reason = `sanction:${d.id}`;
+        owner.addEmbargo(recipient, false, reason);
         enforcement.owners.push({
           id: owner.id(),
-          createdAt: existing ? null : (entry?.createdAt ?? null),
+          createdAt: game.ticks(),
+          reason,
         });
         imposed = true;
       }
@@ -447,7 +445,7 @@ export class NationalSanctionExecution implements Execution {
     d.phase = imposed ? "enforced" : "expired";
   }
 
-  /** Fail closed when another sovereign or sanction also owns this pair. */
+  /** Only the exact causal restriction can be released by its issuer. */
   private settlementOwners(row: Demand["recipients"][number]): Player[] | null {
     const game = this.game!;
     const d = this.demand!;
@@ -479,28 +477,14 @@ export class NationalSanctionExecution implements Execution {
       if (
         !owner ||
         claim.createdAt === null ||
-        !entry ||
-        entry.createdAt !== claim.createdAt ||
-        target.hasManualEmbargoAgainst(owner) ||
-        game.nationalWarAuthority()?.atWar(owner.id(), target.id()) ||
-        NationalUltimatumExecution.hasEnforcedEmbargoPair(
-          game,
-          owner.id(),
-          target.id(),
-        )
+        claim.reason !== `sanction:${d.id}` ||
+        !entry?.reasons?.includes(claim.reason) ||
+        (d.empire !== null &&
+          game.nationalPoliticalAuthority()?.empireOf(owner.id()) !==
+            d.empire) ||
+        game.nationalWarAuthority()?.atWar(owner.id(), target.id())
       )
         return null;
-      const overlap = NationalSanctionExecution.records(game).some((other) => {
-        if (other === this || other.demand?.phase !== "enforced") return false;
-        const competing = other.demand?.recipients.find(
-          (candidate) => candidate.id === row.id,
-        )?.enforcement;
-        return (
-          competing?.offer?.status !== "accepted" &&
-          competing?.owners.some((record) => record.id === owner.id())
-        );
-      });
-      if (overlap) return null;
       owners.push(owner);
     }
     return owners;
@@ -574,7 +558,9 @@ export class NationalSanctionExecution implements Execution {
       return;
     }
     actor.addGold(paid);
-    for (const owner of owners) owner.stopEmbargo(payer);
+    for (const owner of owners) {
+      owner.stopEmbargo(payer, `sanction:${this.demand!.id}`);
+    }
     offer.status = "accepted";
   }
 
