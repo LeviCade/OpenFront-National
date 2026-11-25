@@ -1,0 +1,64 @@
+name: C6 Class Two E4 — Treaty Defense and Assessment Receipts
+on:
+  push:
+    branches:
+      - feature/conductor6-class2-e4-treaty-defense-20261123
+  pull_request:
+    branches:
+      - stage3/conductor6-class2-integration-20261123
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c6-c2-e4-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    name: E4 exact-source ${{ matrix.gate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [typecheck, gameplay, format, lint, production-build, full-suite]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact source SHA
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha || github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Run exact-source gate
+        shell: bash
+        env:
+          GATE: ${{ matrix.gate }}
+        run: |
+          set -euo pipefail
+          case "$GATE" in
+            typecheck) npm run typecheck ;;
+            gameplay)
+              npx --no-install vitest run --project node \
+                tests/national/C6Class2E4TreatyDefenseReceipts.test.ts \
+                tests/national/DefenseLevyAtomic.test.ts \
+                tests/national/LiveLevyCombatRound5.test.ts \
+                tests/national/RoundEightLevyOverlap.test.ts \
+                tests/national/C5Class3PaidNationalAssessment.test.ts \
+                tests/national/C5Class3AssessmentWire.test.ts
+              ;;
+            format) npm run format:check ;;
+            lint) npm run lint ;;
+            production-build) npm run build-prod ;;
+            full-suite) npm test ;;
+            *) exit 1 ;;
+          esac
+      - name: Print pinned formatter patch
+        if: failure() && matrix.gate == 'format'
+        run: |
+          npx --no-install oxfmt --write $(git diff --name-only e9eb83cd9a18663d6e40d2b2e88219bed7fccb57 HEAD -- '*.ts')
+          git --no-pager diff
