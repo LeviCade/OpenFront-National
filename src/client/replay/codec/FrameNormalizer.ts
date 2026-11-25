@@ -110,6 +110,8 @@ export const VIEW_DATA_ROUTING: Record<
   // Recipient-only ultimatum terms cannot be recorded in public replay frames.
   nationalUltimatums: "dropped",
   nationalAssessments: "dropped",
+  // Recipient-private settlement evidence must never enter a replay frame.
+  nationalSettlements: "dropped",
   // Private purchased map intelligence must never be recorded in public replay.
   nationalReconnaissance: "dropped",
   nationalPactDisclosure: "dropped",

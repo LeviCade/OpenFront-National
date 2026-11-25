@@ -3,6 +3,7 @@ import type { ImperialReliefView } from "@openfront/engine-api/game/NationalImpe
 import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { keyed } from "lit/directives/keyed.js";
 import { createNationalPoliticalRequestId } from "./NationalDiplomacyState";
 import {
   reliefDecisionAllowed,
@@ -292,7 +293,7 @@ export class NationalImperialEconomicControls extends LitElement {
         ${
           view.canAmend
             ? nothing
-            : html`
+            : keyed(displayedKey, html`
                 <form
                   @submit=${(event: SubmitEvent) =>
                     this.submitRequest(event, displayedKey, game, bus)}
@@ -321,7 +322,7 @@ export class NationalImperialEconomicControls extends LitElement {
                     Request emergency relief
                   </button>
                 </form>
-              `
+              `)
         }
         <p role="status" aria-live="polite" aria-busy=${String(busy)}>
           ${this.status}

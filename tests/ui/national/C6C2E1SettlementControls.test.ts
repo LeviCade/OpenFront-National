@@ -83,6 +83,23 @@ describe("C6C2-E1 settlement view and native commands", () => {
     expect(element.textContent).not.toContain("recorded a paid settlement");
   });
 
+  it("does not carry payment consent to a replacement sanction row", async () => {
+    const { element, state, sent } = await mount("payer", payerRow);
+    const old = element.querySelector("form")!;
+    old.querySelector<HTMLInputElement>('input[name="amount"]')!.value = "50";
+    old.querySelector<HTMLInputElement>('input[name="confirm"]')!.checked = true;
+    state.rows = [{ ...payerRow, sanctionId: "sanction-2" }];
+    element.refresh();
+    await element.updateComplete;
+    const replacement = element.querySelector("form")!;
+    expect(replacement).not.toBe(old);
+    expect(replacement.querySelector<HTMLInputElement>('input[name="amount"]')!.value).toBe("");
+    expect(replacement.querySelector<HTMLInputElement>('input[name="confirm"]')!.checked).toBe(false);
+    old.dispatchEvent(new Event("submit", { cancelable: true }));
+    replacement.dispatchEvent(new Event("submit", { cancelable: true }));
+    expect(sent).toHaveLength(0);
+  });
+
   it("requires current issuer authority; separates accepted payment from maritime permission", async () => {
     const { element, state, sent } = await mount("issuer", issuerRow);
     const accept = element.querySelector<HTMLButtonElement>('[data-settlement-decision="accept"]')!;

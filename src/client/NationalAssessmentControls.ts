@@ -2,6 +2,7 @@ import { GameType } from "@openfront/engine-api/game/GameTypes";
 import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { keyed } from "lit/directives/keyed.js";
 import {
   assessmentPurchaseOutcome,
   assessmentReportKey,
@@ -39,6 +40,7 @@ export class NationalAssessmentControls extends LitElement {
   @state() private selectedTarget = "";
   @state() private status = "";
   private pending: PendingPurchase | null = null;
+  private session: { game: GameView; bus: EventBus; key: string } | null = null;
 
   override createRenderRoot() {
     return this;
@@ -82,13 +84,15 @@ export class NationalAssessmentControls extends LitElement {
   /** The parent calls this on each actual GameView/Worker frame. */
   public refresh(): void {
     const context = this.activeContext;
+    const key = context ? JSON.stringify([context.game.gameID(), context.actor.id(), context.game.nationalReceiptStreamId?.()]) : "";
+    if (!context || this.session?.game !== context.game || this.session?.bus !== context.bus || this.session?.key !== key) {
+      this.pending = null;
+      this.selectedTarget = "";
+      this.status = "";
+      this.session = context ? { game: context.game, bus: context.bus, key } : null;
+    }
     const pending = this.pending;
     if (!context) {
-      if (pending) {
-        this.pending = null;
-        this.status =
-          "Session authority changed; purchase outcome is unknown. No report is retained.";
-      }
       this.requestUpdate();
       return;
     }
@@ -138,8 +142,17 @@ export class NationalAssessmentControls extends LitElement {
     this.requestUpdate();
   }
 
+  override disconnectedCallback(): void {
+    this.pending = null;
+    this.session = null;
+    this.selectedTarget = "";
+    this.status = "";
+    super.disconnectedCallback();
+  }
+
   private submit(event: SubmitEvent, displayedGame: GameView, displayedBus: EventBus, displayedActor: string, displayedGameId: string, displayedStream: string | null | undefined): void {
     event.preventDefault();
+    this.refresh();
     if (!(event.currentTarget instanceof HTMLFormElement)) return;
     // Do not replace the one outstanding receipt when a second click arrives.
     if (this.pending) return;
@@ -236,7 +249,7 @@ export class NationalAssessmentControls extends LitElement {
       <p class="text-xs" data-national-assessment-wallet>
         Game-reported available gold: ${context.actor.gold().toString()}
       </p>
-      <form
+      ${keyed(JSON.stringify([displayedGameId, displayedActor, displayedStream]), html`<form
         class="space-y-2"
         data-national-assessment-form
         @submit=${(event: SubmitEvent) => this.submit(event, context.game, context.bus, displayedActor, displayedGameId, displayedStream)}
@@ -272,7 +285,7 @@ export class NationalAssessmentControls extends LitElement {
         >
           Purchase national assessment
         </button>
-      </form>
+      </form>`)}
       <p
         data-national-assessment-status
         role="status"

@@ -4,6 +4,7 @@ import type { Intent } from "@openfront/engine-api/Schemas";
 import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { keyed } from "lit/directives/keyed.js";
 import { createNationalPoliticalRequestId } from "./NationalDiplomacyState";
 import { settlementDecisionIntent, settlementOfferIntent } from "./NationalImperialSettlementIntentControls";
 import { hasTrustedNationalPrivateCapability } from "./NationalPrivateCapability";
@@ -136,7 +137,7 @@ export class NationalImperialSettlementControls extends LitElement {
             ${row.offer?.status === "accepted" ? html`<p>Game recorded a paid settlement; other trade restrictions may remain.</p>` : nothing}
             ${row.lastPaidCommerce ? html`<p data-settlement-paid-voyage>Game-confirmed paid voyage: ${row.payerId} and ${row.lastPaidCommerce.counterpartyId}: ${row.lastPaidCommerce.grossGold} gross gold at tick ${row.lastPaidCommerce.tick}.</p>` : nothing}
             ${row.role === "payer" && !row.offer && !row.canOffer ? html`<p>No payment is authorized by the current Game ledger.</p>` : nothing}
-            ${row.canOffer ? html`
+            ${row.canOffer ? keyed(JSON.stringify([gameId, streamId, actorId, key(row)]), html`
               <form class="space-y-2" @submit=${(event: SubmitEvent) => {
                 event.preventDefault();
                 if (!(event.currentTarget instanceof HTMLFormElement)) return;
@@ -148,7 +149,7 @@ export class NationalImperialSettlementControls extends LitElement {
                 <label class="block"><input name="confirm" type="checkbox" required /> Authorize this funded offer.</label>
                 <button class=${button} type="submit" ?disabled=${busy}>Propose restitution</button>
               </form>
-            ` : nothing}
+            `) : nothing}
             ${row.role === "issuer" && row.offer?.status === "pending" ? html`
               <div class="flex flex-wrap gap-2">
                 ${(["accept", "refuse"] as const).map((decision) => html`

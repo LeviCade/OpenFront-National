@@ -8,7 +8,7 @@ permissions:
   contents: read
 concurrency:
   group: c6c2-e1-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   exact-head:
     name: E1 exact-head pinned source gates
@@ -29,15 +29,6 @@ jobs:
       - name: Install pinned dependencies
         id: install
         run: npm run inst
-      - name: Pinned formatting
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: |
-          npm run format:check || {
-            npx --no-install oxfmt --write src/client/NationalImperial*Controls.ts src/client/NationalAssessmentClient.ts src/client/NationalAssessmentControls.ts src/client/NationalDiplomacyPanel.ts src/client/view/GameView.ts src/client/Transport.ts src/client/TrustedNationalSession.ts packages/engine-api/src/game/NationalSettlementView.ts packages/engine-api/src/game/GameUpdates.ts packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/execution/TradeShipExecution.ts packages/engine/src/national/observation/NationalOutbound.ts src/server/national/NationalRecipientWire.ts packages/shared/src/NationalObserverNativeWire.ts tests/ui/national/C6C2E1*.test.ts .github/workflows/c6c2-e1-native-imperial.yml
-            git diff
-            git restore --worktree .
-            exit 1
-          }
       - name: Typecheck
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run typecheck
@@ -56,6 +47,34 @@ jobs:
       - name: Complete regression
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm test
+  format:
+    name: Exact-head pinned format (independent diagnostic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact triggering commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: test "$(node --version)" = "v24.15.0" && test "$(npm --version)" = "12.1.0"
+      - name: Install pinned dependencies
+        id: install
+        run: npm run inst
+      - name: Pinned formatting
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: |
+          npm run format:check || {
+            npx --no-install oxfmt --write src/client/NationalImperial*Controls.ts src/client/NationalAssessmentClient.ts src/client/NationalAssessmentControls.ts src/client/NationalDiplomacyPanel.ts src/client/view/GameView.ts src/client/replay/codec/FrameNormalizer.ts src/client/Transport.ts src/client/TrustedNationalSession.ts packages/engine-api/src/game/NationalSettlementView.ts packages/engine-api/src/game/GameUpdates.ts packages/engine/src/execution/NationalSanctionExecution.ts packages/engine/src/execution/TradeShipExecution.ts packages/engine/src/national/observation/NationalOutbound.ts src/server/national/NationalRecipientWire.ts packages/shared/src/NationalObserverNativeWire.ts tests/ui/national/C6C2E1*.test.ts .github/workflows/c6c2-e1-native-imperial.yml
+            git diff
+            git restore --worktree .
+            exit 1
+          }
   causal-rehearsal:
     name: Read-only E3 causal integration rehearsal (not standalone certification)
     runs-on: ubuntu-latest
@@ -82,8 +101,10 @@ jobs:
       - run: npm install --global --ignore-scripts npm@12.1.0
       - run: test "$(node --version)" = "v24.15.0" && test "$(npm --version)" = "12.1.0"
       - run: npm run inst
+        id: install
       - run: npm run typecheck
       - name: Strict real native settlement and paid commerce
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
           C6C2_E1_REQUIRE_CAUSAL: "1"
         run: npx --no-install vitest run --project node tests/ui/national/C6C2E1SettlementGame.test.ts tests/ui/national/C6C2E1PaidVoyage.test.ts
