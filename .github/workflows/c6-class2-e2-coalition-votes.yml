@@ -1,0 +1,83 @@
+name: C6 C2 E2 — Coalition Voting Acceptance
+on:
+  push:
+    branches:
+      - feature/conductor6-class2-e2-coalition-votes-20261123
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c6-c2-e2-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    name: E2 immutable source — ${{ matrix.gate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        gate:
+          [
+            typecheck,
+            coalition-game,
+            inherited-politics,
+            lint,
+            pinned-format,
+            production-build,
+            full-tests,
+          ]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact triggering commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Execute actual source acceptance
+        shell: bash
+        env:
+          GATE: ${{ matrix.gate }}
+        run: |
+          set -euo pipefail
+          case "$GATE" in
+            typecheck) npm run typecheck ;;
+            coalition-game)
+              npx --no-install vitest run --project node tests/national/C6C2E2CoalitionVotes.test.ts
+              ;;
+            inherited-politics)
+              npx --no-install vitest run --project node \
+                tests/national/LiveSovereignty.test.ts \
+                tests/national/RoundEightSovereigntyGame.test.ts \
+                tests/national/C4Class2IndependentPactConsent.test.ts \
+                tests/national/NationalPoliticalPackets.test.ts
+              ;;
+            lint) npm run lint ;;
+            pinned-format)
+              npm run format:check || {
+                npx --no-install oxfmt --write \
+                  packages/engine-api/src/Schemas.ts \
+                  packages/engine-api/src/game/NationalPactView.ts \
+                  packages/engine/src/execution/NationalFoundEmpireExecution.ts \
+                  packages/engine/src/national/NationalRuntime.ts \
+                  packages/engine/src/national/observation/LiveObservation.ts \
+                  packages/engine/src/national/politics/PoliticalAuthorityAdapter.ts \
+                  packages/engine/src/national/politics/sovereignty.ts \
+                  src/client/NationalPactState.ts \
+                  src/client/NationalDiplomacyPanel.ts \
+                  tests/national/C6C2E2CoalitionVotes.test.ts
+                echo C6C2_E2_FORMAT_PATCH_BEGIN
+                git diff --no-color --no-ext-diff
+                echo C6C2_E2_FORMAT_PATCH_END
+                exit 1
+              }
+              ;;
+            production-build) npm run build-prod ;;
+            full-tests) npm test ;;
+            *) echo "unknown gate" >&2; exit 1 ;;
+          esac

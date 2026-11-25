@@ -122,18 +122,49 @@ export function pactActionAllowed(
   if (!pact || !privateView) return false;
   if (action.type === "national_accept_pact")
     return (
-      privateView.relationship === "invited" && !pact.memberIds.includes(actor)
+      privateView.relationship === "invited" &&
+      !pact.memberIds.includes(actor) &&
+      action.constitutionVersion === privateView.constitutionVersion
+    );
+  if (
+    action.type === "national_invite_pact" &&
+    action.admissionAction === "withdraw"
+  )
+    return (
+      privateView.relationship === "invited" &&
+      action.candidateId === actor &&
+      privateView.constitutionVersion !== undefined &&
+      action.constitutionVersion === privateView.constitutionVersion
     );
   if (privateView.relationship !== "member" || !pact.memberIds.includes(actor))
     return false;
   switch (action.type) {
-    case "national_invite_pact":
-      return (
-        independentCandidates.includes(action.candidateId) &&
-        !pact.memberIds.includes(action.candidateId) &&
-        (privateView.terms.admission === "unanimous" ||
-          pact.administratorId === actor)
+    case "national_invite_pact": {
+      if (
+        !independentCandidates.includes(action.candidateId) ||
+        pact.memberIds.includes(action.candidateId)
+      )
+        return false;
+      if (privateView.constitutionVersion === undefined)
+        return (
+          action.admissionAction === undefined &&
+          action.constitutionVersion === undefined &&
+          (privateView.terms.admission === "unanimous" ||
+            pact.administratorId === actor)
+        );
+      if (
+        action.constitutionVersion !== privateView.constitutionVersion ||
+        (privateView.terms.admission === "selected" &&
+          !privateView.terms.selectedApproverIds?.includes(actor))
+      )
+        return false;
+      const ballot = privateView.invitations?.find(
+        (record) => record.targetId === action.candidateId,
       );
+      return action.admissionAction === "approve"
+        ? ballot !== undefined && !ballot.approvedBy.includes(actor)
+        : action.admissionAction === "propose" && ballot === undefined;
+    }
     case "national_betray_pact":
       return true;
     case "national_propose_pact_amendment":
