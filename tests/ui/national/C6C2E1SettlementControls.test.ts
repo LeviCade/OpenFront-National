@@ -12,7 +12,7 @@ import type { GameView } from "../../../src/client/view";
 const payerRow: NationalSettlementRow = {
   sanctionId: "sanction-1", payerId: "payer", issuerId: "issuer",
   role: "payer", canOffer: true, canAccept: false, canRefuse: false,
-  tradePermitted: false, offer: null,
+  tradePermitted: false, offer: null, lastPaidCommerce: null,
 };
 const issuerRow: NationalSettlementRow = {
   ...payerRow, role: "issuer", canOffer: false, canAccept: true, canRefuse: true,
@@ -96,8 +96,13 @@ describe("C6C2-E1 settlement view and native commands", () => {
     state.rows = [{...issuerRow, canAccept: false, canRefuse: false, offer: {...issuerRow.offer!, status: "accepted"}}];
     element.refresh(); await element.updateComplete;
     expect(element.textContent).toContain("Game recorded a paid settlement");
-    expect(element.textContent).toContain("Game trade permission: restricted");
+    expect(element.textContent).toContain("Game diplomatic trade permission: restricted");
     expect(element.textContent).toContain("all routes, not a specific voyage receipt");
+    expect(element.querySelector("[data-settlement-paid-voyage]")).toBeNull();
+    state.tick++;
+    state.rows = [{...state.rows[0], tradePermitted: true, lastPaidCommerce: {tick: state.tick, counterpartyId: "issuer", grossGold: "411"}}];
+    element.refresh(); await element.updateComplete;
+    expect(element.querySelector("[data-settlement-paid-voyage]")?.textContent).toContain("411 gross gold");
     state.actor = "outsider"; element.refresh(); await element.updateComplete;
     expect(element.textContent).toBe("");
     accept.click(); expect(sent).toHaveLength(1);

@@ -23,6 +23,11 @@ const rowSchema = z
     canRefuse: z.boolean(),
     tradePermitted: z.boolean(),
     offer: offerSchema.nullable(),
+    lastPaidCommerce: z.object({
+      tick,
+      counterpartyId: id,
+      grossGold: z.string().regex(/^[1-9][0-9]{0,127}$/),
+    }).strict().nullable(),
   })
   .strict();
 const schema = z
@@ -69,6 +74,11 @@ export function readNationalSettlementView(
         (row.role !== "issuer" ||
           offer?.status !== "pending" ||
           offer.expiresAt <= packetTick)) ||
+      (row.lastPaidCommerce !== null &&
+        (offer?.status !== "accepted" ||
+          row.lastPaidCommerce.counterpartyId === row.payerId ||
+          row.lastPaidCommerce.tick < offer.offeredAt ||
+          row.lastPaidCommerce.tick > packetTick)) ||
       (offer !== null &&
         (offer.offeredAt > packetTick ||
           offer.expiresAt !== offer.offeredAt + 120 ||

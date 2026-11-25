@@ -22,7 +22,7 @@ export class NationalImperialSettlementControls extends LitElement {
   @property({ attribute: false }) public eventBus: EventBus | null = null;
   @state() private status = "";
   private pending: Pending | null = null;
-  private session: { game: GameView; bus: EventBus; actorId: string; gameId: string; tick: number } | null = null;
+  private session: { game: GameView; bus: EventBus; actorId: string; gameId: string; streamId: string | undefined; tick: number } | null = null;
 
   override createRenderRoot() { return this; }
 
@@ -44,18 +44,18 @@ export class NationalImperialSettlementControls extends LitElement {
         !hasTrustedNationalPrivateCapability(bus, game.gameID()))) ||
       !view || view.recipientId !== actor.id() || view.tick !== game.ticks()
     ) return null;
-    return { game, bus, actor, rows: view.items, paidMaritimeGold: view.paidMaritimeGold };
+    return { game, bus, actor, rows: view.items, paidMaritimeGold: view.paidMaritimeGold, streamId: view.streamId };
   }
 
   public refresh(): void {
     const c = this.context;
     const s = this.session;
     if (!c || !s || s.game !== c.game || s.bus !== c.bus ||
-      s.actorId !== c.actor.id() || s.gameId !== c.game.gameID() || s.tick > c.game.ticks()) {
+      s.actorId !== c.actor.id() || s.gameId !== c.game.gameID() || s.streamId !== c.streamId || s.tick > c.game.ticks()) {
       this.pending = null;
       this.status = "";
     }
-    this.session = c ? { game: c.game, bus: c.bus, actorId: c.actor.id(), gameId: c.game.gameID(), tick: c.game.ticks() } : null;
+    this.session = c ? { game: c.game, bus: c.bus, actorId: c.actor.id(), gameId: c.game.gameID(), streamId: c.streamId, tick: c.game.ticks() } : null;
     const attempt = this.pending;
     if (c && attempt) {
       const offer = c.rows.find((row) => key(row) === attempt.key)?.offer;
@@ -85,12 +85,14 @@ export class NationalImperialSettlementControls extends LitElement {
     game: GameView,
     bus: EventBus,
     actorId: string,
+    gameId: string,
+    streamId: string | undefined,
     build: (row: NationalSettlementRow, requestId: string, wallet: bigint, tick: number) => Intent | null,
     kind: Pending["kind"],
   ): void {
     this.refresh();
     const c = this.context;
-    if (!c || this.pending || c.game !== game || c.bus !== bus || c.actor.id() !== actorId) return;
+    if (!c || this.pending || c.game !== game || c.bus !== bus || c.actor.id() !== actorId || c.game.gameID() !== gameId || c.streamId !== streamId) return;
     const row = c.rows.find((r) => key(r) === key(displayed));
     if (!row || JSON.stringify(row.offer) !== JSON.stringify(displayed.offer)) {
       this.status = "Offer or authority changed. Review the current ledger.";
@@ -116,28 +118,31 @@ export class NationalImperialSettlementControls extends LitElement {
   override render() {
     const c = this.context;
     if (!c || c.rows.length === 0) return nothing;
-    const { game, bus, actor, rows, paidMaritimeGold } = c;
+    const { game, bus, actor, rows, paidMaritimeGold, streamId } = c;
+    const gameId = game.gameID();
     const actorId = actor.id();
     const busy = this.pending !== null;
     return html`
       <section aria-label="Embargo restitution" data-national-settlement class="space-y-3 border-t border-white/15 pt-3">
         <h2 class="font-semibold text-amber-200">Embargo restitution</h2>
         <p>Game wallet: ${actor.gold().toString()} gold</p>
-        <p>Game-recorded lifetime maritime earnings: ${paidMaritimeGold} gold (all routes, not a specific voyage receipt).</p>
+        <p>Game-recorded lifetime paid maritime trade value: ${paidMaritimeGold} gold (gross, all routes, not a specific voyage receipt).</p>
         <p role="status" aria-live="polite">${this.status}</p>
         ${rows.map((row) => html`
           <article data-sanction-id=${row.sanctionId} class="space-y-2 rounded border border-white/20 p-2">
-            <p>Sanction ${row.sanctionId} — ${row.role === "payer" ? "Issuer: " + row.issuerId : "Payer: " + row.payerId}</p>
-            <p>Game trade permission: ${row.tradePermitted ? "permitted" : "restricted"}. Permission alone does not prove a paid voyage.</p>
+            <p>Sanction ${row.sanctionId} — ${row.role === "payer" ? "Current issuer: " + row.issuerId : "Payer: " + row.payerId}</p>
+            <p>Game diplomatic trade permission: ${row.tradePermitted ? "permitted" : "restricted"}. Permission alone does not prove a paid voyage.</p>
             ${row.offer ? html`<p>Game offer: ${row.offer.gold} gold — ${row.offer.status}.</p>` : nothing}
             ${row.offer?.status === "accepted" ? html`<p>Game recorded a paid settlement; other trade restrictions may remain.</p>` : nothing}
+            ${row.lastPaidCommerce ? html`<p data-settlement-paid-voyage>Game-confirmed paid voyage with ${row.lastPaidCommerce.counterpartyId}: ${row.lastPaidCommerce.grossGold} gross gold at tick ${row.lastPaidCommerce.tick}.</p>` : nothing}
+            ${row.role === "payer" && !row.offer && !row.canOffer ? html`<p>No payment is authorized by the current Game ledger.</p>` : nothing}
             ${row.canOffer ? html`
               <form class="space-y-2" @submit=${(event: SubmitEvent) => {
                 event.preventDefault();
                 if (!(event.currentTarget instanceof HTMLFormElement)) return;
                 const data = new FormData(event.currentTarget);
                 if (data.get("confirm") !== "on") return;
-                this.send(row, game, bus, actorId, (current, id, wallet) => settlementOfferIntent(current, actorId, wallet, data.get("amount"), id), "offer");
+                this.send(row, game, bus, actorId, gameId, streamId, (current, id, wallet) => settlementOfferIntent(current, actorId, wallet, data.get("amount"), id), "offer");
               }}>
                 <label class="block">Restitution gold <input class="block w-full min-h-11 rounded bg-slate-900 p-2" name="amount" required inputmode="numeric" pattern="[1-9][0-9]{0,17}" maxlength="18" /></label>
                 <label class="block"><input name="confirm" type="checkbox" required /> Authorize this funded offer.</label>
@@ -149,7 +154,7 @@ export class NationalImperialSettlementControls extends LitElement {
                 ${(["accept", "refuse"] as const).map((decision) => html`
                   <button class=${button} type="button" data-settlement-decision=${decision}
                     ?disabled=${busy || !(decision === "accept" ? row.canAccept : row.canRefuse)}
-                    @click=${() => this.send(row, game, bus, actorId, (current, id, _wallet, tick) => settlementDecisionIntent(current, actorId, tick, decision, id), "decision")}>
+                    @click=${() => this.send(row, game, bus, actorId, gameId, streamId, (current, id, _wallet, tick) => settlementDecisionIntent(current, actorId, tick, decision, id), "decision")}>
                     ${decision === "accept" ? "Accept payment" : "Reject offer"}
                   </button>
                 `)}
