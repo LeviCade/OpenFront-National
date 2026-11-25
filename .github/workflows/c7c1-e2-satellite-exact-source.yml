@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           case "${{ matrix.gate }}" in
             typecheck) npm run typecheck ;;
-            focused) npx --no-install vitest run --project node tests/national/C7C1E2Satellite.test.ts tests/national/C5Class2FundedRecon.test.ts tests/national/C5CoastalVisibility.test.ts tests/national/C5Class3PaidNationalAssessment.test.ts ;;
+            focused) npx --no-install vitest run --project node tests/national/C7C1E2Satellite.test.ts tests/ui/national/C7C1E2SatelliteControls.test.ts tests/national/C5Class2FundedRecon.test.ts tests/national/C5CoastalVisibility.test.ts tests/national/C5Class3PaidNationalAssessment.test.ts ;;
             full) npm test ;;
             lint) npm run lint ;;
             production) npm run build-prod ;;
