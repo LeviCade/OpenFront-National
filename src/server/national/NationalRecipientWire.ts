@@ -14,6 +14,7 @@ import {
 import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/NationalAssessmentView";
 import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
+import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
 import {
   NATIONAL_OBSERVER_MAX_TILES,
   NATIONAL_OBSERVER_MAX_UNITS,
@@ -42,6 +43,12 @@ export function encodeNationalRecipientProjection(
   };
   const map = politics.nationalObserverMap;
   const conflicts = politics.nationalConflicts;
+  validateNationalSettlementPacket(
+    filtered.nationalSettlements,
+    map?.observerId ?? null,
+    filtered.tick,
+    map?.streamId,
+  );
   validateNationalAssessmentPacket(
     filtered.nationalAssessments,
     map?.observerId ?? null,
@@ -164,6 +171,9 @@ export function encodeNationalRecipientProjection(
     ...(filtered.nationalAccessionOffers === undefined
       ? {}
       : { nationalAccessionOffers: filtered.nationalAccessionOffers }),
+    ...(filtered.nationalSettlements === undefined
+      ? {}
+      : { nationalSettlements: filtered.nationalSettlements }),
     ...(filtered.nationalAssessments === undefined
       ? {}
       : {

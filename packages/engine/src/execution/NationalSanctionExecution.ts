@@ -1,4 +1,5 @@
 import { GameType, PlayerType } from "@openfront/engine-api/game/GameTypes";
+import type { NationalSettlementView } from "@openfront/engine-api/game/NationalSettlementView";
 import {
   type ClientID,
   NationalIssueSanctionIntentSchema,
@@ -690,6 +691,90 @@ export class NationalSanctionExecution implements Execution {
             : null,
       }));
     });
+  }
+
+  /**
+   * E1 proposed read-only projection hook; the Conductor must merge this
+   * method into E3's causal-ledger implementation without replacing E3.
+   * Never authorize payment from a legacy unjournaled manual pair.
+   */
+  static settlementViewFor(
+    game: Game,
+    observer: Player,
+    tick: number,
+    streamId?: string,
+  ): NationalSettlementView | undefined {
+    if (
+      !game.config().nationalMode() ||
+      living(game, observer.id()) !== observer ||
+      tick !== game.ticks()
+    )
+      return undefined;
+    const items: NationalSettlementView["items"] = [];
+    for (const execution of this.records(game)) {
+      const demand = execution.demand!;
+      if (demand.phase !== "enforced") continue;
+      const issuer = execution.controllingIssuer();
+      if (!issuer) continue;
+      for (const row of demand.recipients) {
+        const payer = execution.recipient(row.id);
+        const proof = row.enforcement;
+        if (!payer || !proof || issuer === payer) continue;
+        const isIssuer = issuer === observer;
+        if (!isIssuer && payer !== observer) continue;
+        const offer = proof.offer;
+        // The inherited v2 ledger cannot distinguish an idempotent manual
+        // reassertion. Require actual E3 causal records for every owner.
+        const owners = execution.settlementOwners(row);
+        const causal = owners !== null && owners.every((owner) => {
+          const entry = owner.getEmbargoes().find(
+            (candidate) => candidate.target === payer && !candidate.isTemporary,
+          );
+          return entry !== undefined &&
+            "reasons" in entry &&
+            Array.isArray(entry.reasons) &&
+            entry.reasons.includes("sanction:" + demand.id);
+        });
+        const pending = offer?.status === "pending" && offer.expiresAt > tick;
+        const canOffer = !isIssuer && offer === null && causal && payer.gold() > 0n;
+        const canAccept =
+          isIssuer && pending && causal && payer.gold() >= BigInt(offer.gold);
+        const canRefuse = isIssuer && pending;
+        if (!offer && !canOffer) continue;
+        const tradePermitted = proof.owners.length > 0 && proof.owners.every(
+          (claim) => {
+            const owner = living(game, claim.id);
+            return owner !== null && owner.canTrade(payer) && payer.canTrade(owner);
+          },
+        );
+        items.push({
+          sanctionId: demand.id,
+          payerId: payer.id(),
+          issuerId: issuer.id(),
+          role: isIssuer ? "issuer" : "payer",
+          canOffer,
+          canAccept,
+          canRefuse,
+          tradePermitted,
+          offer: offer === null ? null : {
+            requestId: offer.requestId,
+            gold: offer.gold,
+            offeredAt: offer.offeredAt,
+            expiresAt: offer.expiresAt,
+            status: offer.status === "pending" && offer.expiresAt <= tick
+              ? "expired"
+              : offer.status,
+          },
+        });
+      }
+    }
+    return {
+      version: 1,
+      recipientId: observer.id(),
+      tick,
+      ...(streamId === undefined ? {} : { streamId }),
+      items,
+    };
   }
 
   /** Trusted payout hook: only a real completed external trade event. */

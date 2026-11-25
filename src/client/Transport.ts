@@ -126,6 +126,10 @@ export class SendNationalPactIntentEvent implements GameEvent {
   constructor(public readonly intent: PactIntent) {}
 }
 
+export class SendNationalSettlementIntentEvent implements GameEvent {
+  constructor(public readonly intent: Intent) {}
+}
+
 export class SendNationalImperialPolicyIntentEvent implements GameEvent {
   constructor(public readonly intent: Intent) {}
 }
@@ -456,6 +460,16 @@ export class Transport {
       if (!this.nationalDiplomacyWireEnabled()) return;
       const parsed = parseNationalUltimatumIntent(e.candidate);
       if (parsed !== null) this.sendIntent(parsed);
+    });
+    this.subscribe(SendNationalSettlementIntentEvent, (e) => {
+      if (!this.nationalDiplomacyWireEnabled()) return;
+      const parsed = IntentSchema.safeParse(e.intent);
+      if (
+        parsed.success &&
+        (parsed.data.type === "national_offer_sanction_settlement" ||
+          parsed.data.type === "national_decide_sanction_settlement")
+      )
+        this.sendIntent(parsed.data);
     });
     this.subscribe(SendNationalImperialPolicyIntentEvent, (e) => {
       if (!this.nationalDiplomacyWireEnabled()) return;

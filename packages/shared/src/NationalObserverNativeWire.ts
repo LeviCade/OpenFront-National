@@ -6,6 +6,7 @@ import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
  * No simulation imports; used on both trusted host and browser.
  */
 import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
+import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import {
   NATIONAL_OBSERVER_MAX_UNITS,
@@ -137,6 +138,7 @@ interface NativeLanes {
   readonly nationalPolitics?: unknown;
   readonly nationalPactDisclosure?: unknown;
   readonly nationalImperialAdministration?: unknown;
+  readonly nationalSettlements?: unknown;
   readonly nationalConflicts?: unknown;
   readonly nationalAccessionOffers?: unknown;
   readonly nationalCommandResults?: unknown;
@@ -171,6 +173,12 @@ export function validateNationalObserverNativeLanes(
   validateNationalPactPacket(
     packet.nationalPolitics,
     packet.nationalPactDisclosure,
+    page.observerId,
+    page.tick,
+    page.streamId,
+  );
+  validateNationalSettlementPacket(
+    packet.nationalSettlements,
     page.observerId,
     page.tick,
     page.streamId,

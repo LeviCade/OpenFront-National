@@ -30,6 +30,10 @@ import {
 } from "@openfront/engine-api/game/NationalPactView";
 import type { NationalReconnaissanceViewData } from "@openfront/engine-api/game/NationalReconView";
 import {
+  readNationalSettlementView,
+  type NationalSettlementView,
+} from "@openfront/engine-api/game/NationalSettlementView";
+import {
   GameLike,
   ReadonlyTileSet,
   UnitPredicate,
@@ -133,6 +137,7 @@ export class GameView implements GameLike {
   private _nationalUltimatums: NationalUltimatumViewData | null = null;
   private _nationalReconnaissance: NationalReconnaissanceViewData | null = null;
   private _nationalAssessments: NationalAssessmentClientView | null = null;
+  private _nationalSettlements: NationalSettlementView | null = null;
   private _trustedProjectionReady = false;
   private trustedPrincipal: string | null = null;
   private trustedSight: NationalObserverMapContinuity | null = null;
@@ -145,6 +150,7 @@ export class GameView implements GameLike {
       this._nationalUltimatums = null;
       this._nationalReconnaissance = null;
       this._nationalAssessments = null;
+      this._nationalSettlements = null;
     }
     this.trustedPrincipal = principal;
   }
@@ -245,6 +251,7 @@ export class GameView implements GameLike {
     // No assessment survives revoked Private authority into a future socket.
     if (!ready) {
       this._nationalAssessments = null;
+    this._nationalSettlements = null;
       this._nationalImperialAdministration = null;
       this._nationalPactReceipts = [];
     }
@@ -263,6 +270,7 @@ export class GameView implements GameLike {
     this._nationalUltimatums = null;
     this._nationalReconnaissance = null;
     this._nationalAssessments = null;
+    this._nationalSettlements = null;
     this._trustedProjectionReady = false;
     this._trustedSpawnReady = false;
     this.trustedPendingTiles = [];
@@ -597,6 +605,15 @@ export class GameView implements GameLike {
   }
 
   /** Private, current, strictly validated E4 Game-funded strength reports. */
+  public nationalSettlements(): NationalSettlementView | null {
+    const actor = this.myPlayer()?.id();
+    const view = this._nationalSettlements;
+    return view && view.recipientId === actor && view.tick === this.ticks() &&
+      (!this._trustedNationalProjection || this._trustedProjectionReady)
+      ? view
+      : null;
+  }
+
   public nationalAssessments(): Readonly<NationalAssessmentClientView> | null {
     return this._trustedNationalProjection && !this._trustedProjectionReady
       ? null
@@ -629,6 +646,7 @@ export class GameView implements GameLike {
     this._nationalUltimatums = null;
     this._nationalReconnaissance = null;
     this._nationalAssessments = null;
+    this._nationalSettlements = null;
   }
   private startTick: Tick | null = null;
   private smallIDToID = new Map<number, PlayerID>();
@@ -826,16 +844,19 @@ export class GameView implements GameLike {
     this.lastUpdate =
       gu.nationalPactDisclosure === undefined &&
       gu.nationalImperialAdministration === undefined &&
-      assessed.nationalAssessments === undefined
+      assessed.nationalAssessments === undefined &&
+      gu.nationalSettlements === undefined
         ? gu
         : { ...gu };
     delete this.lastUpdate.nationalPactDisclosure;
     delete this.lastUpdate.nationalImperialAdministration;
+    delete this.lastUpdate.nationalSettlements;
     delete (
       this.lastUpdate as GameUpdateViewData & { nationalAssessments?: unknown }
     ).nationalAssessments;
     // An FFA view or an absent report must never preserve an earlier private lease.
     this._nationalAssessments = null;
+    this._nationalSettlements = null;
 
     // Legacy/replay test adapters can provide a partial Config without
     // gameConfig(). Keep ordinary FFA view updates entirely unchanged.
@@ -885,6 +906,17 @@ export class GameView implements GameLike {
               assessed.nationalAssessments,
               currentActorId,
               gu.tick,
+            );
+      this._nationalSettlements =
+        gu.tick < previousTick || this._config.isReplay?.() === true
+          ? null
+          : readNationalSettlementView(
+              gu.nationalSettlements,
+              currentActorId,
+              gu.tick,
+              this._trustedNationalProjection
+                ? (this.trustedSight?.lastAcceptedStreamId ?? null)
+                : undefined,
             );
       this._nationalImperialAdministration =
         gu.tick < previousTick

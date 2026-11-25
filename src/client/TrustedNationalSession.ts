@@ -3,6 +3,7 @@ import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/Nat
 import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
+import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { simpleHash } from "@openfront/engine-lib/Util";
 import { decodeNationalObserverNativeUnits } from "@openfront/shared/NationalObserverNativeWire";
@@ -32,6 +33,7 @@ const allowedFields = new Set([
   "nationalPactDisclosure",
   "nationalImperialAdministration",
   "nationalAssessments",
+  "nationalSettlements",
   "nationalObserverMap",
 ]);
 const permittedUpdates = new Set<number>([
@@ -223,6 +225,12 @@ export function parseTrustedNationalProjection(
   const map = record(parsed.nationalObserverMap)
     ? parsed.nationalObserverMap
     : null;
+  validateNationalSettlementPacket(
+    parsed.nationalSettlements,
+    typeof map?.observerId === "string" ? map.observerId : null,
+    expectedTick,
+    typeof map?.streamId === "string" ? map.streamId : undefined,
+  );
   validateNationalAssessmentPacket(
     parsed.nationalAssessments,
     typeof map?.observerId === "string" ? map.observerId : null,
@@ -400,6 +408,12 @@ export function materializeTrustedNationalUpdate(
   // E3's paged current-sight map gives late joiners real visible territory.
   // All added states belong to the authenticated observer's current sight.
   const visibleTilePairs = [...tiles, ...observerMapTilePairs(observerMap)];
+  validateNationalSettlementPacket(
+    packet.nationalSettlements,
+    observerMap?.observerId ?? null,
+    packet.tick,
+    observerMap?.streamId,
+  );
   validateNationalAssessmentPacket(
     packet.nationalAssessments,
     observerMap?.observerId ?? null,
@@ -445,6 +459,9 @@ export function materializeTrustedNationalUpdate(
     ...(packet.nationalAccessionOffers === undefined
       ? {}
       : { nationalAccessionOffers: packet.nationalAccessionOffers }),
+    ...(packet.nationalSettlements === undefined
+      ? {}
+      : { nationalSettlements: packet.nationalSettlements }),
     ...(packet.nationalAssessments === undefined
       ? {}
       : { nationalAssessments: packet.nationalAssessments }),

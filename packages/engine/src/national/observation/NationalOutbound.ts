@@ -28,6 +28,7 @@ import {
   packUnitUpdates,
   unpackUnitUpdates,
 } from "@openfront/engine-lib/game/PackedUnitUpdates";
+import { NationalSanctionExecution } from "../../execution/NationalSanctionExecution";
 import { NationalUltimatumExecution } from "../../execution/NationalUltimatumExecution";
 import type { Game } from "../../game/Game";
 import type { NationalPublicPoliticalView } from "../NationalRuntime";
@@ -815,6 +816,17 @@ export class NationalOutboundFilter {
             })),
           }
         : undefined;
+    const privateSettlements =
+      verified !== null &&
+      this.observerId !== null &&
+      game.hasPlayer(this.observerId)
+        ? NationalSanctionExecution.settlementViewFor(
+            game,
+            game.player(this.observerId),
+            data.tick,
+            page?.streamId,
+          )
+        : undefined;
     const privateReconnaissance = projectNationalReconnaissance(
       game,
       this.observerId,
@@ -854,6 +866,9 @@ export class NationalOutboundFilter {
       ...(privateAssessments === undefined
         ? {}
         : { nationalAssessments: privateAssessments }),
+      ...(privateSettlements === undefined
+        ? {}
+        : { nationalSettlements: privateSettlements }),
       ...(privateReconnaissance === undefined
         ? {}
         : { nationalReconnaissance: privateReconnaissance }),

@@ -191,6 +191,7 @@ export interface GameUpdateViewData {
   nationalReconnaissance?: import("./NationalReconView").NationalReconnaissanceViewData;
   nationalPactDisclosure?: NationalPactDisclosureWireData;
   nationalImperialAdministration?: NationalImperialAdministrationWire;
+  nationalSettlements?: import("./NationalSettlementView").NationalSettlementView;
   /**
    * Outcomes scoped to the authenticated recipient of THIS view only.
    * E3 must filter before serialization; never broadcast the E1 journal.
