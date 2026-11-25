@@ -162,7 +162,7 @@ function requireRule(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error("NATIONAL politics: " + message);
 }
 
-function unique(items: string[]): boolean {
+function unique<T>(items: T[]): boolean {
   return new Set(items).size === items.length;
 }
 
