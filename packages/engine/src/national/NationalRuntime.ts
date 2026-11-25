@@ -71,7 +71,13 @@ const metrics = z.object({
   warships: counter,
 });
 const pactTerms = z.object({
-  admission: z.enum(["leader", "unanimous", "selected", "majority", "supermajority"]),
+  admission: z.enum([
+    "leader",
+    "unanimous",
+    "selected",
+    "majority",
+    "supermajority",
+  ]),
   selectedApproverIds: z.array(z.string().min(1).max(256)).max(256).optional(),
   expulsion: z.enum(["leader", "unanimous", "forbidden"]),
 });
@@ -1674,13 +1680,16 @@ export class NationalRuntime {
     if (!p || this.authority().empireOf(actorId) !== null) return false;
     if (command.kind === "accept-pact") return p.memberIds.includes(actorId);
     if (command.admissionAction === "withdraw")
-      return command.candidateId === actorId &&
-        p.constitutionVersion === command.constitutionVersion;
+      return (
+        command.candidateId === actorId &&
+        p.constitutionVersion === command.constitutionVersion
+      );
     return (
       p.constitutionVersion === command.constitutionVersion &&
       p.memberIds.includes(actorId) &&
       p.invitations.some(
-        (i) => i.targetId === command.candidateId && i.approvedBy.includes(actorId),
+        (i) =>
+          i.targetId === command.candidateId && i.approvedBy.includes(actorId),
       )
     );
   }
@@ -1700,7 +1709,9 @@ export class NationalRuntime {
               ? {}
               : {
                   constitutionVersion: p.constitutionVersion,
-                  ...(p.role === "member" ? { invitations: p.invitations } : {}),
+                  ...(p.role === "member"
+                    ? { invitations: p.invitations }
+                    : {}),
                 }),
             ...(p.pendingAmendment
               ? {

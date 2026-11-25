@@ -5,14 +5,14 @@ import {
   PlayerInfo,
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
-import { createHash } from "node:crypto";
-import { NationalRuntime } from "@openfront/engine/national/NationalRuntime";
 import { readNationalPactDisclosure } from "@openfront/engine-api/game/NationalPactView";
-import type { Game } from "@openfront/engine/game/Game";
 import type { GameConfig } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
+import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
+import { NationalRuntime } from "@openfront/engine/national/NationalRuntime";
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { Client } from "../../src/server/Client";
 import { TrustedNationalMatch } from "../../src/server/national/TrustedNationalMatch";
@@ -145,7 +145,8 @@ function command(
 }
 
 function memberView(m: Match, id = A) {
-  const view = m.game.nationalPactViewsFor(m.game.player(id))
+  const view = m.game
+    .nationalPactViewsFor(m.game.player(id))
     .find((entry) => entry.id === pactId);
   expect(view).toBeDefined();
   return view!;
@@ -160,11 +161,13 @@ async function established(policy: Policy) {
     terms: { admission: "leader", expulsion: "forbidden" },
   });
   command(m, m.a, A, "invite-b", {
-    type: "national_invite_pact", candidateId: B,
+    type: "national_invite_pact",
+    candidateId: B,
   });
   command(m, m.b, B, "accept-b", { type: "national_accept_pact" });
   command(m, m.a, A, "invite-c", {
-    type: "national_invite_pact", candidateId: C,
+    type: "national_invite_pact",
+    candidateId: C,
   });
   command(m, m.c, C, "accept-c", { type: "national_accept_pact" });
   expect(new Set(m.game.nationalMdaAllies(A))).toEqual(new Set([B, C]));
@@ -179,9 +182,17 @@ async function established(policy: Policy) {
   });
   command(m, m.b, B, "amend-b", { type: "national_approve_pact_amendment" });
   expect(memberView(m).terms.admission).toBe("leader");
-  command(m, m.d, D, "amend-outsider", {
-    type: "national_approve_pact_amendment", clientID: CCLIENT,
-  }, false);
+  command(
+    m,
+    m.d,
+    D,
+    "amend-outsider",
+    {
+      type: "national_approve_pact_amendment",
+      clientID: CCLIENT,
+    },
+    false,
+  );
   expect(memberView(m).terms.admission).toBe("leader");
   command(m, m.c, C, "amend-c", { type: "national_approve_pact_amendment" });
   expect(memberView(m).terms.admission).toBe(policy);
@@ -189,8 +200,11 @@ async function established(policy: Policy) {
   return m;
 }
 
-function election(version: number, action: "propose" | "approve" | "withdraw",
-  candidateId = D) {
+function election(
+  version: number,
+  action: "propose" | "approve" | "withdraw",
+  candidateId = D,
+) {
   return {
     type: "national_invite_pact",
     candidateId,
@@ -221,13 +235,35 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
       ]);
       assertNoInvite(m);
       command(m, m.d, D, "premature-accept", accept(epoch), false);
-      command(m, m.d, D, "premature-withdraw", election(epoch, "withdraw"), false);
-      command(m, m.d, D, "forged-vote", {
-        ...election(epoch, "approve"), clientID: BCLIENT,
-      }, false);
+      command(
+        m,
+        m.d,
+        D,
+        "premature-withdraw",
+        election(epoch, "withdraw"),
+        false,
+      );
+      command(
+        m,
+        m.d,
+        D,
+        "forged-vote",
+        {
+          ...election(epoch, "approve"),
+          clientID: BCLIENT,
+        },
+        false,
+      );
       command(m, m.a, A, "duplicate-vote", election(epoch, "approve"), false);
       command(m, m.b, B, "stale-vote", election(epoch + 1, "approve"), false);
-      command(m, m.b, B, "invalid-candidate", election(epoch, "propose", A), false);
+      command(
+        m,
+        m.b,
+        B,
+        "invalid-candidate",
+        election(epoch, "propose", A),
+        false,
+      );
       if (policy === "selected")
         command(m, m.c, C, "not-selected", election(epoch, "approve"), false);
       assertNoInvite(m);
@@ -237,34 +273,63 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
       for (const current of [m, replay]) {
         command(current, current.b, B, "vote-b", election(epoch, "approve"));
         expect(memberView(current).invitations[0]).toEqual({
-          targetId: D, approvedBy: [A, B].sort(), authorized: true,
+          targetId: D,
+          approvedBy: [A, B].sort(),
+          authorized: true,
         });
         expect(current.game.nationalMdaAllies(D)).toEqual([]);
-        const disclosure = current.game.nationalPactDisclosure(current.game.player(D))!;
+        const disclosure = current.game.nationalPactDisclosure(
+          current.game.player(D),
+        )!;
         expect(disclosure.pacts[0].relationship).toBe("invited");
         expect(disclosure.pacts[0].invitations).toBeUndefined();
         const roster = current.game.nationalPublicPoliticalView()!.pacts!;
-        expect(readNationalPactDisclosure(disclosure, A, roster, false)).toBeNull();
-        command(current, current.c, C, "wrong-acceptor", {
-          ...accept(epoch), clientID: DCLIENT,
-        }, false);
+        expect(
+          readNationalPactDisclosure(disclosure, A, roster, false),
+        ).toBeNull();
+        command(
+          current,
+          current.c,
+          C,
+          "wrong-acceptor",
+          {
+            ...accept(epoch),
+            clientID: DCLIENT,
+          },
+          false,
+        );
         expect(current.game.nationalMdaAllies(D)).toEqual([]);
         command(current, current.d, D, "consent-d", accept(epoch));
-        expect(new Set(current.game.nationalMdaAllies(D))).toEqual(new Set([A, B, C]));
-        expect(new Set(current.game.nationalMdaAllies(A))).toEqual(new Set([B, C, D]));
+        expect(new Set(current.game.nationalMdaAllies(D))).toEqual(
+          new Set([A, B, C]),
+        );
+        expect(new Set(current.game.nationalMdaAllies(A))).toEqual(
+          new Set([B, C, D]),
+        );
         expect(memberView(current).memberIds).toEqual([A, B, C, D].sort());
         expect(memberView(current).invitations).toEqual([]);
         expect(memberView(current).constitutionVersion).toBeGreaterThan(epoch);
       }
       const final = await roundTrip(m.game, "plains");
       expect(final.again).toEqual(final.bytes);
-      expect(final.restored.nationalMdaAllies(D)).toEqual(m.game.nationalMdaAllies(D));
+      expect(final.restored.nationalMdaAllies(D)).toEqual(
+        m.game.nationalMdaAllies(D),
+      );
       const replayFinal = await roundTrip(replay.game, "plains");
       expect(replayFinal.bytes).toEqual(final.bytes);
       expect(gameHash(replay.game)).toBe(gameHash(m.game));
       const digest = createHash("sha256").update(final.bytes).digest("hex");
-      console.log("C6C2-E2-COALITION-VOTES", policy, policy === "selected" ? "1/2 => 2/2 eligible => 4 members" : "1/3 => 2/3 => 4 members",
-        "snapshot_sha256", digest, "replay_hash", gameHash(m.game));
+      console.log(
+        "C6C2-E2-COALITION-VOTES",
+        policy,
+        policy === "selected"
+          ? "1/2 => 2/2 eligible => 4 members"
+          : "1/3 => 2/3 => 4 members",
+        "snapshot_sha256",
+        digest,
+        "replay_hash",
+        gameHash(m.game),
+      );
     },
   );
 
@@ -273,9 +338,17 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
     const epoch = memberView(m).constitutionVersion!;
     command(m, m.a, A, "propose-d", election(epoch, "propose"));
     command(m, m.b, B, "vote-b", election(epoch, "approve"));
-    command(m, m.a, A, "forbidden-expel", {
-      type: "national_expel_pact", memberId: B,
-    }, false);
+    command(
+      m,
+      m.a,
+      A,
+      "forbidden-expel",
+      {
+        type: "national_expel_pact",
+        memberId: B,
+      },
+      false,
+    );
     command(m, m.b, B, "sovereign-betray", { type: "national_betray_pact" });
     const changed = memberView(m).constitutionVersion!;
     expect(changed).toBeGreaterThan(epoch);
@@ -286,9 +359,13 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
     command(m, m.a, A, "propose-again", election(changed, "propose"));
     command(m, m.c, C, "vote-c", election(changed, "approve"));
     issue(m, m.d, {
-      type: "national_found_empire", empireId: "independent_d", requestId: "found-d-empire",
+      type: "national_found_empire",
+      empireId: "independent_d",
+      requestId: "found-d-empire",
     });
-    expect(m.game.nationalPoliticalAuthority()?.empireOf(D)).toBe("independent_d");
+    expect(m.game.nationalPoliticalAuthority()?.empireOf(D)).toBe(
+      "independent_d",
+    );
     expect(memberView(m).invitations).toEqual([]);
     assertNoInvite(m);
     const current = memberView(m).constitutionVersion!;
@@ -301,9 +378,17 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
     const epoch = memberView(m).constitutionVersion!;
     command(m, m.a, A, "propose-d", election(epoch, "propose"));
     command(m, m.b, B, "vote-b", election(epoch, "approve"));
-    command(m, m.c, C, "forged-withdraw", {
-      ...election(epoch, "withdraw"), clientID: DCLIENT,
-    }, false);
+    command(
+      m,
+      m.c,
+      C,
+      "forged-withdraw",
+      {
+        ...election(epoch, "withdraw"),
+        clientID: DCLIENT,
+      },
+      false,
+    );
     command(m, m.d, D, "withdraw-d", election(epoch, "withdraw"));
     expect(memberView(m).invitations).toEqual([]);
     assertNoInvite(m);
@@ -314,29 +399,53 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
   it("fails closed on corrupted versioned snapshots, but round-trips unmodified legacy v1", () => {
     const runtime = new NationalRuntime([A, B, C, D]);
     runtime.perform(A, {
-      kind: "found-pact", pactId, name: "legacy", pactKind: "MDA",
+      kind: "found-pact",
+      pactId,
+      name: "legacy",
+      pactKind: "MDA",
       terms: { admission: "leader", expulsion: "forbidden" },
     });
     const legacy = runtime.snapshot();
     expect(legacy.politics.admissionEpoch).toBeUndefined();
-    expect(NationalRuntime.restore(legacy, [A, B, C, D], 0).snapshot()).toEqual(legacy);
+    expect(NationalRuntime.restore(legacy, [A, B, C, D], 0).snapshot()).toEqual(
+      legacy,
+    );
     runtime.perform(A, {
-      kind: "propose-pact-amendment", pactId, administratorId: A,
+      kind: "propose-pact-amendment",
+      pactId,
+      administratorId: A,
       terms: { admission: "majority", expulsion: "forbidden" },
     });
     const version = runtime.snapshot().politics.pacts[0].constitutionVersion!;
     runtime.perform(A, {
-      kind: "invite-pact", pactId, candidateId: D, constitutionVersion: version,
+      kind: "invite-pact",
+      pactId,
+      candidateId: D,
+      constitutionVersion: version,
       admissionAction: "propose",
     });
     const saved = runtime.snapshot();
     for (const corrupt of [
-      (x: typeof saved) => { x.politics.pacts[0].invitations[0].approvedBy = [A, A]; },
-      (x: typeof saved) => { x.politics.pacts[0].invitations[0].approvedBy = [D]; },
-      (x: typeof saved) => { x.politics.pacts[0].invitations[0].constitutionVersion = version + 1; },
-      (x: typeof saved) => { delete x.politics.admissionEpoch; },
-      (x: typeof saved) => { delete x.politics.pacts[0].invitations[0].proposerId; },
-      (x: typeof saved) => { x.politics.pacts[0].invitations = Array(257).fill(x.politics.pacts[0].invitations[0]); },
+      (x: typeof saved) => {
+        x.politics.pacts[0].invitations[0].approvedBy = [A, A];
+      },
+      (x: typeof saved) => {
+        x.politics.pacts[0].invitations[0].approvedBy = [D];
+      },
+      (x: typeof saved) => {
+        x.politics.pacts[0].invitations[0].constitutionVersion = version + 1;
+      },
+      (x: typeof saved) => {
+        delete x.politics.admissionEpoch;
+      },
+      (x: typeof saved) => {
+        delete x.politics.pacts[0].invitations[0].proposerId;
+      },
+      (x: typeof saved) => {
+        x.politics.pacts[0].invitations = Array(257).fill(
+          x.politics.pacts[0].invitations[0],
+        );
+      },
     ]) {
       const bad = structuredClone(saved);
       corrupt(bad);
@@ -350,7 +459,10 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
     for (const policy of ["majority", "supermajority"] as const) {
       const runtime = new NationalRuntime(ids);
       runtime.perform(A, {
-        kind: "found-pact", pactId, name: "Five", pactKind: "MDA",
+        kind: "found-pact",
+        pactId,
+        name: "Five",
+        pactKind: "MDA",
         terms: { admission: "leader", expulsion: "forbidden" },
       });
       for (const id of members.slice(1)) {
@@ -358,25 +470,37 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
         runtime.perform(id, { kind: "accept-pact", pactId });
       }
       runtime.perform(A, {
-        kind: "propose-pact-amendment", pactId, administratorId: A,
+        kind: "propose-pact-amendment",
+        pactId,
+        administratorId: A,
         terms: { admission: policy, expulsion: "forbidden" },
       });
       for (const id of members.slice(1))
         runtime.perform(id, { kind: "approve-pact-amendment", pactId });
       const version = runtime.snapshot().politics.pacts[0].constitutionVersion!;
       runtime.perform(A, {
-        kind: "invite-pact", pactId, candidateId: D,
-        admissionAction: "propose", constitutionVersion: version,
+        kind: "invite-pact",
+        pactId,
+        candidateId: D,
+        admissionAction: "propose",
+        constitutionVersion: version,
       });
-      const approve = (id: string) => runtime.perform(id, {
-        kind: "invite-pact", pactId, candidateId: D,
-        admissionAction: "approve", constitutionVersion: version,
-      });
+      const approve = (id: string) =>
+        runtime.perform(id, {
+          kind: "invite-pact",
+          pactId,
+          candidateId: D,
+          admissionAction: "approve",
+          constitutionVersion: version,
+        });
       approve(B);
       approve(C);
-      const consent = () => runtime.perform(D, {
-        kind: "accept-pact", pactId, constitutionVersion: version,
-      });
+      const consent = () =>
+        runtime.perform(D, {
+          kind: "accept-pact",
+          pactId,
+          constitutionVersion: version,
+        });
       if (policy === "supermajority") {
         expect(consent).toThrow();
         expect(runtime.snapshot().politics.pacts[0].memberIds).toHaveLength(5);
@@ -388,12 +512,23 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
   });
 
   it("legacy NATIONAL-disabled FFA cannot execute threshold governance", async () => {
-    const game = await setup("plains", {
-      gameType: GameType.Private, gameMode: GameMode.FFA, nationalMode: false,
-    }, people);
-    expect(() => game.performNationalCommand(game.player(A), {
-      kind: "found-pact", pactId, name: "invalid", pactKind: "NAP",
-      terms: { admission: "majority", expulsion: "forbidden" },
-    })).toThrow(/NATIONAL/);
+    const game = await setup(
+      "plains",
+      {
+        gameType: GameType.Private,
+        gameMode: GameMode.FFA,
+        nationalMode: false,
+      },
+      people,
+    );
+    expect(() =>
+      game.performNationalCommand(game.player(A), {
+        kind: "found-pact",
+        pactId,
+        name: "invalid",
+        pactKind: "NAP",
+        terms: { admission: "majority", expulsion: "forbidden" },
+      }),
+    ).toThrow(/NATIONAL/);
   });
 });

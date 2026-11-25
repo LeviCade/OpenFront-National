@@ -165,7 +165,13 @@ const NationalFoundEmpireStateSchema = z.object({
         name: z.string(),
         pactKind: z.enum(["NAP", "MDA"]),
         terms: z.object({
-          admission: z.enum(["leader", "unanimous", "selected", "majority", "supermajority"]),
+          admission: z.enum([
+            "leader",
+            "unanimous",
+            "selected",
+            "majority",
+            "supermajority",
+          ]),
           selectedApproverIds: z.array(z.string()).max(256).optional(),
           expulsion: z.enum(["leader", "unanimous", "forbidden"]),
         }),
@@ -186,7 +192,13 @@ const NationalFoundEmpireStateSchema = z.object({
         kind: z.literal("propose-pact-amendment"),
         pactId: z.string(),
         terms: z.object({
-          admission: z.enum(["leader", "unanimous", "selected", "majority", "supermajority"]),
+          admission: z.enum([
+            "leader",
+            "unanimous",
+            "selected",
+            "majority",
+            "supermajority",
+          ]),
           selectedApproverIds: z.array(z.string()).max(256).optional(),
           expulsion: z.enum(["leader", "unanimous", "forbidden"]),
         }),

@@ -1323,10 +1323,7 @@ export class NationalDiplomacyPanel extends LitElement {
       this.pactStatus = "Command transport failed; outcome unconfirmed.";
     }
   }
-  private pactTermsControls(
-    t: NationalPactTerms,
-    members: readonly string[],
-  ) {
+  private pactTermsControls(t: NationalPactTerms, members: readonly string[]) {
     return html`<label
         >Admission
         <select class="bg-slate-800" name="admission">
@@ -1342,18 +1339,28 @@ export class NationalDiplomacyPanel extends LitElement {
           <option value="majority" ?selected=${t.admission === "majority"}>
             Strict simple majority
           </option>
-          <option value="supermajority" ?selected=${t.admission === "supermajority"}>
+          <option
+            value="supermajority"
+            ?selected=${t.admission === "supermajority"}
+          >
             Two-thirds supermajority
           </option>
         </select></label
       >
       <fieldset>
         <legend>Selected approvers (only used for selected policy)</legend>
-        ${members.map((id) => html`<label>
-          <input type="checkbox" name="approver" value=${id}
-            .checked=${t.selectedApproverIds?.includes(id) ?? false} />
-          ${this.playerName(id)}
-        </label>`)}
+        ${members.map(
+          (id) =>
+            html`<label>
+              <input
+                type="checkbox"
+                name="approver"
+                value=${id}
+                .checked=${t.selectedApproverIds?.includes(id) ?? false}
+              />
+              ${this.playerName(id)}
+            </label>`,
+        )}
       </fieldset>
       <label
         >Expulsion
@@ -1932,18 +1939,21 @@ export class NationalDiplomacyPanel extends LitElement {
                           constitutionVersion: d.constitutionVersion,
                           admissionAction: d.invitations?.some(
                             (record) => record.targetId === candidateId,
-                          ) ? "approve" : "propose",
+                          )
+                            ? "approve"
+                            : "propose",
                         }),
                   });
-                  const decline = d?.constitutionVersion === undefined || !c
-                    ? null
-                    : ({
-                        type: "national_invite_pact",
-                        pactId: p.id,
-                        candidateId: c.actor,
-                        admissionAction: "withdraw",
-                        constitutionVersion: d.constitutionVersion,
-                      } as const);
+                  const decline =
+                    d?.constitutionVersion === undefined || !c
+                      ? null
+                      : ({
+                          type: "national_invite_pact",
+                          pactId: p.id,
+                          candidateId: c.actor,
+                          admissionAction: "withdraw",
+                          constitutionVersion: d.constitutionVersion,
+                        } as const);
                   const betray = {
                     type: "national_betray_pact",
                     pactId: p.id,
@@ -1986,12 +1996,18 @@ export class NationalDiplomacyPanel extends LitElement {
                               >
                                 Accept displayed constitution
                               </button>
-                              ${decline === null ? nothing : html`
-                                <button class=${button} type="button"
-                                  ?disabled=${!allowed(decline)}
-                                  @click=${() => send(decline)}>
-                                  Decline invitation
-                                </button>`}`
+                              ${
+                                decline === null
+                                  ? nothing
+                                  : html` <button
+                                      class=${button}
+                                      type="button"
+                                      ?disabled=${!allowed(decline)}
+                                      @click=${() => send(decline)}
+                                    >
+                                      Decline invitation
+                                    </button>`
+                              }`
                           : nothing
                       }
                       ${
@@ -2021,16 +2037,22 @@ export class NationalDiplomacyPanel extends LitElement {
                                 </button>
                                 ${d.terms.admission === "unanimous" ? html`<p>Unanimous admission requires all members’ consent. With multiple members, this records the first vote, not an authorized invitation; additional admission ballot controls are not available.</p>` : nothing}
                               </form>
-                              ${d.invitations?.map((record) => html`
-                                <p data-national-admission-ballot>
-                                  ${this.playerName(record.targetId)}: ${record.approvedBy.length}
-                                  approval(s) — ${record.authorized ? "awaiting applicant consent" : "pending votes"}.
-                                  <button class=${button} type="button"
-                                    ?disabled=${!allowed(invite(record.targetId))}
-                                    @click=${() => send(invite(record.targetId))}>
-                                    Approve candidate
-                                  </button>
-                                </p>`)}
+                              ${d.invitations?.map(
+                                (record) =>
+                                  html` <p data-national-admission-ballot>
+                                    ${this.playerName(record.targetId)}:
+                                    ${record.approvedBy.length} approval(s) —
+                                    ${record.authorized ? "awaiting applicant consent" : "pending votes"}.
+                                    <button
+                                      class=${button}
+                                      type="button"
+                                      ?disabled=${!allowed(invite(record.targetId))}
+                                      @click=${() => send(invite(record.targetId))}
+                                    >
+                                      Approve candidate
+                                    </button>
+                                  </p>`,
+                              )}
                               <form
                                 class=${formClass}
                                 @submit=${(e: SubmitEvent) =>

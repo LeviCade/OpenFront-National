@@ -115,7 +115,8 @@ export class PoliticalAuthorityAdapter
         const member = p.memberIds.includes(observerId);
         const pending = p.invitations.find((i) => i.targetId === observerId);
         const invited =
-          pending !== undefined && pactAdmissionAuthorized(p, pending.approvedBy);
+          pending !== undefined &&
+          pactAdmissionAuthorized(p, pending.approvedBy);
         return {
           id: publicPact.id,
           kind: publicPact.kind,

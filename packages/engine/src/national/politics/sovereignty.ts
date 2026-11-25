@@ -31,7 +31,11 @@ export interface PoliticsNation {
 export type PactKind = "NAP" | "MDA";
 export type VoteRule = "leader" | "unanimous";
 export type ExpulsionRule = VoteRule | "forbidden";
-export type AdmissionRule = VoteRule | "selected" | "majority" | "supermajority";
+export type AdmissionRule =
+  | VoteRule
+  | "selected"
+  | "majority"
+  | "supermajority";
 export type AdmissionAction = "propose" | "approve" | "withdraw";
 const MAX_ADMISSION_RECORDS = 256;
 const MAX_ADMISSION_VOTERS = 256;
@@ -733,7 +737,8 @@ export function withdrawPactInvitation(
     usesAdmissionElection(p.terms.admission) &&
       actorId === candidateId &&
       p.invitations.some(
-        (i) => i.targetId === actorId && pactAdmissionAuthorized(p, i.approvedBy),
+        (i) =>
+          i.targetId === actorId && pactAdmissionAuthorized(p, i.approvedBy),
       ),
     "only an authorized applicant may withdraw",
   );
