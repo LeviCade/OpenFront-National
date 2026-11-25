@@ -2,12 +2,7 @@
 // GameView/decoded authority observations are read-only. No event emission,
 // direct engine mutation, simulated receipt, or injected terminal state.
 import assert from "node:assert/strict";
-import { setTimeout as delay } from "node:timers/promises";
 import { until } from "../national-staging/operator-harness.mjs";
-import {
-  soloSpawnFractions,
-  unobstructedCanvasPoint,
-} from "./browser-r11-verdict.mjs";
 
 const panelToggle =
   'national-diplomacy-panel button[aria-controls="national-diplomacy-content"]';
@@ -43,10 +38,14 @@ export async function nativeFill(profile, selector, value) {
       while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
       return el?.matches(${JSON.stringify(selector)}) === true;
     })()`);
-  await until(async () => {
-    await profile.click(selector);
-    return focused();
-  }, "native input focus", 30_000);
+  await until(
+    async () => {
+      await profile.click(selector);
+      return focused();
+    },
+    "native input focus",
+    30_000,
+  );
   await profile.send("Input.dispatchKeyEvent", {
     type: "keyDown",
     key: "a",
@@ -60,8 +59,9 @@ export async function nativeFill(profile, selector, value) {
     modifiers: 2,
   });
   await profile.send("Input.insertText", { text: value });
-  await until(() =>
-    profile.evaluate(`(() => {
+  await until(
+    () =>
+      profile.evaluate(`(() => {
       let el = document.activeElement;
       while (el?.shadowRoot?.activeElement) el = el.shadowRoot.activeElement;
       return el?.matches(${JSON.stringify(selector)}) === true &&
@@ -135,15 +135,76 @@ async function hit(profile, point, button = "left") {
   }
 }
 
-async function mapPoint(profile, fractions) {
-  return profile.evaluate(
-    "(() => {const point=" +
-      unobstructedCanvasPoint.toString() +
-      ";for(const canvas of document.querySelectorAll('canvas')){" +
-      "const hit=point(document,canvas," +
-      JSON.stringify(fractions) +
-      ");if(hit)return hit;}return null;})()",
+// Deterministic legal initial placements on the actual public map. The
+// attack pair shares a border; the third site is separate. No hidden state,
+// owner mutation, or authority injection is used to choose a click.
+export function chooseAdjacentSpawnSites(width, height, free, reachable) {
+  const patch = (x, y) => {
+    if (x < 4 || y < 4 || x >= width - 4 || y >= height - 4) return false;
+    if (!reachable(x, y)) return false;
+    for (let dy = -4; dy <= 4; dy++)
+      for (let dx = -4; dx <= 4; dx++)
+        if (dx * dx + dy * dy <= 16 && !free(x + dx, y + dy)) return false;
+    return true;
+  };
+  const candidates = [];
+  for (let y = 12; y < height - 12; y += 3)
+    for (let x = 12; x < width - 12; x += 3)
+      candidates.push({ x, y });
+  candidates.sort(
+    (a, b) =>
+      (a.x - width / 2) ** 2 + (a.y - height / 2) ** 2 -
+      (b.x - width / 2) ** 2 - (b.y - height / 2) ** 2,
   );
+  for (const a of candidates) {
+    if (!patch(a.x, a.y)) continue;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const c = { x: a.x + dx * 9, y: a.y + dy * 9 };
+      if (!patch(c.x, c.y)) continue;
+      for (const direction of [1, -1]) {
+        const b = { x: a.x - dy * 18 * direction, y: a.y + dx * 18 * direction };
+        if (patch(b.x, b.y)) return [a, b, c];
+      }
+    }
+  }
+  return null;
+}
+
+async function nativeSpawnSites(profile) {
+  return profile.evaluate(`(() => {
+    const timer = document.querySelector("spawn-timer");
+    const game = timer?.game, camera = timer?.transformHandler;
+    const input = document.querySelector("#game-input-overlay");
+    if (!game || !camera || !input || !game.inSpawnPhase()) return null;
+    const choose = ${chooseAdjacentSpawnSites.toString()};
+    const free = (x, y) => {
+      const ref = game.ref(x, y);
+      return game.isLand(ref) && !game.isImpassable(ref) && !game.hasOwner(ref);
+    };
+    const reachable = (x, y) => {
+      const p = camera.worldToScreenCoordinates({x: x + 0.5, y: y + 0.5});
+      const hit = document.elementFromPoint(p.x, p.y);
+      return hit === input || input.contains(hit);
+    };
+    return choose(game.width(), game.height(), free, reachable);
+  })()`);
+}
+
+async function nativeSpawnPoint(profile, site) {
+  return profile.evaluate(`(() => {
+    const timer = document.querySelector("spawn-timer");
+    const game = timer?.game, camera = timer?.transformHandler;
+    const input = document.querySelector("#game-input-overlay");
+    const site = ${JSON.stringify(site)};
+    if (!game || !camera || !input || !game.inSpawnPhase()) return null;
+    const point = camera.worldToScreenCoordinates({x: site.x + 0.5, y: site.y + 0.5});
+    const mapped = camera.screenToWorldCoordinates(point.x, point.y);
+    const hit = document.elementFromPoint(point.x, point.y);
+    const tile = game.ref(site.x, site.y);
+    return mapped.x === site.x && mapped.y === site.y &&
+      game.isLand(tile) && !game.isImpassable(tile) && !game.hasOwner(tile) &&
+      (hit === input || input.contains(hit)) ? point : null;
+  })()`);
 }
 
 function ownDisclosure(sample, pact) {
@@ -234,29 +295,24 @@ export async function runPrivateNativeGameplay({
   const actors = current.map((s) => s.actor);
   assert.equal(new Set(actors).size, 3);
   stage("three real native map spawn inputs");
-  // Different starting points, same real compact map. Success is established
-  // only from each authenticated GameView's own player and nonzero land.
-  const fractions = soloSpawnFractions();
-  await Promise.all(
-    profiles.map(async (p, i) => {
-      await panel(p, false);
-      const order = [...fractions.slice(i), ...fractions.slice(0, i)];
-      for (const fraction of order) {
-        const prior = await p.evaluate(observation);
-        if (prior?.spawned && prior.tiles > 0) return;
-        assert(prior?.inSpawn, "spawn phase ended before native spawn");
-        const point = await mapPoint(p, [fraction]);
-        if (!point) continue;
-        await hit(p, point);
-        for (let j = 0; j < 8; j++) {
-          await delay(150);
-          const now = await p.evaluate(observation);
-          if (now?.spawned && now.tiles > 0) return;
-        }
-      }
-      throw new Error("native map spawn not confirmed");
-    }),
-  );
+  await Promise.all(profiles.map((p) => panel(p, false)));
+  let sites;
+  await until(async () => {
+    sites = await nativeSpawnSites(a);
+    return Array.isArray(sites) && sites.length === 3;
+  }, "three reachable legal initial sites", 15_000);
+  await Promise.all(profiles.map(async (p, i) => {
+    let point;
+    await until(async () => {
+      point = await nativeSpawnPoint(p, sites[i]);
+      return Boolean(point);
+    }, "native spawn coordinate on real input surface", 10_000);
+    await hit(p, point);
+    await until(async () => {
+      const now = await p.evaluate(observation);
+      return now?.spawned && now.tiles > 0;
+    }, "native spawn accepted by authority", 20_000);
+  }));
   await wait(
     "three spawned seats and authoritative phase end",
     (ss) =>
@@ -468,7 +524,7 @@ export async function runPrivateNativeGameplay({
       point = await a.evaluate(
         "(() => {const e=[...document.querySelectorAll('[data-national-map-target-id]')].find(n=>n.getAttribute('data-national-map-target-id')===" +
           JSON.stringify(actors[2]) +
-          ");if(!e)return null;const r=e.getBoundingClientRect();const x=r.x+r.width/2,y=r.y+r.height/2;const top=document.elementFromPoint(x,y);return r.width&&r.height&&top?.tagName==='CANVAS'?{x,y}:null;})()",
+          ");if(!e)return null;const r=e.getBoundingClientRect();const x=r.x+r.width/2,y=r.y+r.height/2;const top=document.elementFromPoint(x,y);return r.width&&r.height&&(top===document.querySelector('#game-input-overlay')||document.querySelector('#game-input-overlay')?.contains(top))?{x,y}:null;})()",
       );
       return Boolean(point);
     },

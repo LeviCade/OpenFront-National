@@ -38,7 +38,6 @@ import {
 } from "../national-staging/operator-harness.mjs";
 import {
   nativeClick,
-  nativeFill,
   runPrivateNativeGameplay,
 } from "./c7c1e6-private-gameplay.mjs";
 
@@ -65,7 +64,8 @@ const children = [];
 const sockets = [];
 const passed = (name) => console.log("BROWSER_AUTH_STAGE_PASS " + name);
 let stage = "startup";
-let diagnostic = () => ({});
+const profileDiagnostics = [];
+const diagnostic = () => profileDiagnostics.map((read) => read());
 
 function allowedLocal(value) {
   try {
@@ -173,7 +173,7 @@ async function openProfile(executable, index, email) {
   let profileReadFailures = 0;
   let accountMismatch = false;
   const statuses = { mail: [], exchange: [], refresh: [], profile: [] };
-  diagnostic = () => ({
+  profileDiagnostics.push(() => ({
     status: statuses,
     mail: observed.mail,
     exchange: observed.exchange,
@@ -187,7 +187,8 @@ async function openProfile(executable, index, email) {
     authorityFrames: observed.authorityFrames,
     invalidAuthorityFrame: observed.invalidAuthorityFrame,
     observedLobbySeats: observed.lobby?.lobby?.clients?.length ?? 0,
-  });
+    activeGame: Boolean(observed.authority),
+  }));
   function send(method, params = {}) {
     return new Promise((resolve, reject) => {
       const id = ++seq;
@@ -710,8 +711,10 @@ try {
       stage,
     );
     if (functionalSoftware) {
-      stage = "native Onion map search";
-      await nativeFill(a, 'input[placeholder="Search maps..."]', "Onion");
+      stage = "native all-map tab";
+      await nativeClick(a, 'map-picker button[role="tab"]', "All");
+      stage = "native Arcade map category";
+      await nativeClick(a, 'map-picker button[aria-expanded] span', "Arcade");
       stage = "native Onion map selection";
       await nativeClick(a, '[role="button"][aria-label="Onion"]');
       stage = "native compact map selection";
@@ -1067,7 +1070,14 @@ try {
 } catch (error) {
   // Only a fixed diagnostic category, never error text (which can contain
   // credentials, raw frames, paths or private browser data).
-  console.error("SAFE_FAILURE_KIND " + (error instanceof assert.AssertionError ? "ASSERTION" : error instanceof TypeError ? "TYPE" : "OTHER"));
+  console.error(
+    "SAFE_FAILURE_KIND " +
+      (error instanceof assert.AssertionError
+        ? "ASSERTION"
+        : error instanceof TypeError
+          ? "TYPE"
+          : "OTHER"),
+  );
   // Never expose DevTools errors, URLs, credential bodies or profile IDs.
   console.error("LOCAL_STAGING_BROWSER_AUTH_FAIL stage=" + stage);
   console.error("SAFE_BROWSER_STATUS " + JSON.stringify(diagnostic()));
