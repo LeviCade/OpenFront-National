@@ -351,6 +351,23 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
     ).toBe("unresolved");
   }, 120_000);
 
+  it("preserves the archived v1 public winner without reconstructing personal awards", async () => {
+    const m = await scenario(true);
+    const b = mount(m, B);
+    const win = m.conquer();
+    b.replay();
+    await b.update({
+      ...win,
+      nationalPolitics: undefined,
+      updates: { ...win.updates, [GameUpdateType.Win]: m.wins },
+    });
+    expect(b.modal.isVisible).toBe(true);
+    expect(b.modal.textContent).toContain("win_modal.other_won");
+    expect(b.modal.querySelector("[data-national-award]")).toBeNull();
+    expect(b.modal.querySelector("[data-national-crisis]")).toBeNull();
+    expect(b.votes).toEqual([]);
+  }, 120_000);
+
   it("expires only on real simulation ticks; members see restored sovereignty, never a victory", async () => {
     const m = await scenario();
     const a = mount(m, A);

@@ -1500,6 +1500,38 @@ export class WinModal extends LitElement implements Controller {
     const updates = this.game.updatesSinceLastTick();
     const winUpdates = updates?.[GameUpdateType.Win] ?? [];
     if (this.game.config().gameConfig?.().nationalMode === true) {
+      // Historical replay v1 retains raw WIN, but deliberately excludes
+      // sovereignty projections. Preserve its old public winner display
+      // without inventing a personal NATIONAL prize or restoring commands.
+      if (
+        this.game.config().isReplay() &&
+        winUpdates.length === 1 &&
+        !nationalVictoryAt(
+          this.game.nationalPolitics(),
+          this.game.nationalPoliticsTick(),
+          this.game.ticks(),
+        )
+      ) {
+        const winner = winUpdates[0].winner;
+        if (winner?.[0] === "player") {
+          const player = this.game
+            .players()
+            .find((p) => p.clientID() === winner[1]);
+          if (!player) return;
+          this._title = translateText("win_modal.other_won", {
+            player: player.displayName(),
+          });
+        } else if (winner?.[0] === "nation") {
+          this._title = translateText("win_modal.nation_won", {
+            nation: winner[1],
+          });
+        } else return;
+        this.nationalAward = null;
+        this.isWin = false;
+        this.gameOverSeen = true;
+        void this.show();
+        return;
+      }
       this.tickNational(winUpdates);
       return;
     }
