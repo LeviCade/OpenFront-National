@@ -115,6 +115,7 @@ export class GPURenderer {
    * runs, but the map may render with black areas — the owner should warn.
    */
   readonly glLimited: { renderer: string; maxTextureSize: number } | null;
+  readonly glSoftwareDiagnostic: string | null;
 
   // Passes
   private terrainPass: TerrainPass;
@@ -244,6 +245,8 @@ export class GPURenderer {
     if (res.gl === null) {
       throw new GLUnavailableError(res.status, res.renderer);
     }
+    this.glSoftwareDiagnostic =
+      res.status === "software-diagnostic" ? res.renderer : null;
     this.glLimited =
       res.status === "limited"
         ? { renderer: res.renderer, maxTextureSize: res.maxTextureSize }
