@@ -367,6 +367,61 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
     },
   );
 
+  it("combines admission epochs and defense amendment versions in one authenticated MDA", async () => {
+    const m = await established("majority");
+    const epoch = memberView(m).constitutionVersion!;
+    command(m, m.a, A, "mixed-proposal", election(epoch, "propose"));
+    command(m, m.b, B, "mixed-ballot", election(epoch, "approve"));
+    expect(memberView(m).invitations[0].authorized).toBe(true);
+    command(m, m.a, A, "mixed-defense", {
+      type: "national_propose_pact_amendment",
+      administratorId: A,
+      terms: {
+        admission: "majority",
+        expulsion: "forbidden",
+        defenseContributionBps: 400,
+        defenseReserveBps: 8000,
+      },
+    });
+    const defenseVersion = memberView(m).pendingAmendment?.defenseVersion;
+    expect(defenseVersion).toBeGreaterThan(0);
+    command(m, m.b, B, "mixed-missing-version", {
+      type: "national_approve_pact_amendment",
+    }, false);
+    for (const [client, actor, id] of [[m.b, B, "mixed-b"], [m.c, C, "mixed-c"]] as const) {
+      command(m, client, actor, id, {
+        type: "national_approve_pact_amendment",
+        expectedDefenseVersion: defenseVersion,
+      });
+    }
+    const changed = memberView(m);
+    expect(changed.terms).toEqual({
+      admission: "majority",
+      expulsion: "forbidden",
+      defenseContributionBps: 400,
+      defenseReserveBps: 8000,
+    });
+    expect(changed.constitutionVersion).toBeGreaterThan(epoch);
+    expect(changed.invitations).toEqual([]);
+    command(m, m.d, D, "mixed-stale", accept(epoch), false);
+    command(m, m.a, A, "mixed-renewed", election(changed.constitutionVersion!, "propose"));
+    command(m, m.b, B, "mixed-renewed-vote", election(changed.constitutionVersion!, "approve"));
+    const privateFrame = wireFrame(m, m.d);
+    expect(privateFrame.nationalPactDisclosure?.pacts[0].terms.defenseContributionBps).toBe(400);
+    expect(privateFrame.nationalPactDisclosure?.pacts[0].terms.admission).toBe("majority");
+    command(m, m.d, D, "mixed-consent", accept(changed.constitutionVersion!));
+    expect(memberView(m, D).terms.defenseReserveBps).toBe(8000);
+    const final = await roundTrip(m.game, "plains");
+    expect(final.again).toEqual(final.bytes);
+    console.info("C6C2_JOINT_CONSTITUTION=" + JSON.stringify({
+      originalEpoch: epoch,
+      defenseVersion,
+      finalEpoch: memberView(m).constitutionVersion,
+      members: memberView(m).memberIds.length,
+      terms: memberView(m).terms,
+    }));
+  });
+
   it("revokes a departed approver and a candidate entering an empire; preserves Betray and non-expulsion", async () => {
     const m = await established("majority");
     const epoch = memberView(m).constitutionVersion!;

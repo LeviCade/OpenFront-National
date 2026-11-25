@@ -217,13 +217,26 @@ export class WarshipSelectionController implements Controller {
       return false;
     const actor = this.game.myPlayer();
     if (!actor || ship.owner() !== actor || !ship.isActive()) return false;
+    if (
+      this.game.isTrustedNationalProjection() &&
+      (!this.game.trustedProjectionReady() ||
+        this.game.trustedNationalPrincipal() !== actor.id() ||
+        !this.game.trustedTileObserved(tile))
+    )
+      return false;
     const port = this.game
       .units(UnitType.Port)
       .find((u) => u.isActive() && u.owner() !== actor && u.tile() === tile);
     if (!port) return false;
     const politics = this.game.nationalPolitics();
     const conflicts = this.game.nationalConflicts();
-    if (!politics || !conflicts || conflicts.recipientId !== actor.id())
+    if (
+      !politics ||
+      !conflicts ||
+      conflicts.recipientId !== actor.id() ||
+      this.game.nationalPoliticsTick() !== this.game.ticks() ||
+      this.game.nationalConflictsTick() !== this.game.ticks()
+    )
       return false;
     const empireOf = (id: string) =>
       politics.empires.find((empire) => empire.memberIds.includes(id))?.id;

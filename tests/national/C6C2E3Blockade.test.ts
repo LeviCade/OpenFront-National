@@ -190,6 +190,45 @@ describe("C6 C2 E3 player-directed physical blockade", () => {
     );
   });
 
+  it("restores a live physical blockade and replays the neutral return without paying twice", async () => {
+    const { game, a, c, enemy, home, ship } = await world();
+    war(game);
+    const run = runner(game);
+    step(game, run, [order(ship, enemy, "restore-active")]);
+    until(game, run, () =>
+      NationalBlockadeExecution.viewFor(game, a).some((r) => r.phase === "active"),
+    );
+    const active = await roundTrip(game, MAP);
+    expect(active.again).toEqual(active.bytes);
+    const restored = active.restored;
+    expect(NationalBlockadeExecution.viewFor(restored, restored.player(A))).toEqual(
+      NationalBlockadeExecution.viewFor(game, a),
+    );
+    const restoreRun = runner(restored);
+    const before = gold(game);
+    const voyage = sail(game, run, c, home, enemy);
+    const second = sail(
+      restored,
+      restoreRun,
+      restored.player(C),
+      restored.player(C).units(UnitType.Port)[0],
+      restored.player(B).units(UnitType.Port)[0],
+    );
+    for (let i = 0; i < 120 && (voyage.isActive() || second.isActive()); i++) {
+      step(game, run);
+      step(restored, restoreRun);
+    }
+    expect(voyage.isActive()).toBe(false);
+    expect(second.isActive()).toBe(false);
+    expect(gold(game)).toEqual(before);
+    expect(gold(restored)).toEqual(before);
+    const final = await roundTrip(game, MAP);
+    const replay = await roundTrip(restored, MAP);
+    expect(final.bytes).toEqual(replay.bytes);
+    expect(final.again).toEqual(final.bytes);
+    console.info("C6C2_ACTIVE_BLOCKADE_REPLAY_BYTES=" + final.bytes.length);
+  });
+
   it("rejects peace, nonowner, false coordinates, duplicate orders and stale WAR", async () => {
     const { game, a, b, enemy, ship } = await world();
     const run = runner(game);

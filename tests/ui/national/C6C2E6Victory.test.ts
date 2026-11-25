@@ -100,6 +100,7 @@ function mount(m: Match, actor: string | null, privateMode = false) {
     updatesSinceLastTick: () => frame.updates,
     isTrustedNationalProjection: () => privateMode,
     trustedProjectionReady: () => true,
+    trustedNationalPrincipal: () => privateMode ? actor : null,
     myPlayer: () => players.find((p) => p.id() === actor) ?? null,
     players: () => players,
     isSpectator: () => actor === null || replay,
@@ -289,6 +290,7 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
         v.modal.querySelector("[data-national-award]")?.textContent?.trim(),
       ).toBe(title);
       expect(v.view.nationalPoliticsTick()).toBe(v.view.ticks());
+      expect(v.view.gameOver()).toBe(true);
     }
   }, 120_000);
 

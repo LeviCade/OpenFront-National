@@ -1424,7 +1424,7 @@ export class NationalDiplomacyPanel extends LitElement {
   }
   private readPactTerms(
     data: FormData,
-    defense = false,
+    defense?: NationalPactTerms,
   ): NationalPactTerms | null {
     const admission = data.get("admission"),
       expulsion = data.get("expulsion");
@@ -1456,10 +1456,10 @@ export class NationalDiplomacyPanel extends LitElement {
       const c = Number(cap),
         r = Number(reserve);
       if (c < 0 || c > 1000 || r < 3000 || r > 10000) return null;
-      Object.assign(policy, {
-        defenseContributionBps: c,
-        defenseReserveBps: r,
-      });
+      if (c !== 1000 || defense.defenseContributionBps !== undefined)
+        Object.assign(policy, { defenseContributionBps: c });
+      if (r !== 3000 || defense.defenseReserveBps !== undefined)
+        Object.assign(policy, { defenseReserveBps: r });
     }
     if (admission === "selected") {
       const selectedApproverIds = data.getAll("approver").map(String).sort();
@@ -2052,7 +2052,7 @@ export class NationalDiplomacyPanel extends LitElement {
                         Members:
                         ${p.memberIds.map((id) => this.playerName(id)).join(", ")}
                       </p>
-                      ${d ? html`<p data-national-pact-terms>Constitution: admission ${d.terms.admission}; expulsion ${d.terms.expulsion}.${d.terms.selectedApproverIds === undefined ? nothing : html` Selected approvers: ${d.terms.selectedApproverIds.map((id) => this.playerName(id)).join(", ") || "none"}.`}</p>` : nothing}
+                      ${d ? html`<p data-national-pact-terms>Constitution: admission ${d.terms.admission}; expulsion ${d.terms.expulsion}.${d.terms.selectedApproverIds === undefined ? nothing : html` Selected approvers: ${d.terms.selectedApproverIds.map((id) => this.playerName(id)).join(", ") || "none"}.`}${p.kind === "MDA" ? html` Defense contribution max ${(d.terms.defenseContributionBps ?? 1000) / 100}%; protected reserve ${(d.terms.defenseReserveBps ?? 3000) / 100}%.` : nothing}</p>` : nothing}
                       ${
                         d?.relationship === "invited"
                           ? html`<p>
@@ -2187,7 +2187,7 @@ export class NationalDiplomacyPanel extends LitElement {
                                         submit(e, (data) => {
                                           const terms = this.readPactTerms(
                                             data,
-                                            p.kind === "MDA",
+                                            p.kind === "MDA" ? d.terms : undefined,
                                           );
                                           const admin = String(
                                             data.get("administrator") ?? "",
