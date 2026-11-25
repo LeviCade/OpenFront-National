@@ -155,6 +155,10 @@ async function produce() {
     targetId: B,
   });
   for (let i = 0; i < 5; i++) m.tick();
+  // Use the real Player troop setter to establish an explicitly funded
+  // defensive scenario (above the protected reserve) before writing bytes.
+  const donor = game.player(C);
+  donor.setTroops(Math.floor(game.config().maxTroops(donor) * 0.8));
   const evidence = state(game);
   expect(evidence.leader).toBe(A);
   expect(evidence.members).toEqual([A, D]);
