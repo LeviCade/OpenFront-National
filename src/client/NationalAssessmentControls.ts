@@ -3,6 +3,7 @@ import type { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import {
+  assessmentPurchaseOutcome,
   assessmentReportKey,
   NATIONAL_ASSESSMENT_QUOTE,
   type NationalAssessmentClientReport,
@@ -13,6 +14,8 @@ import { SendNationalAssessmentIntentEvent } from "./Transport";
 import type { GameView } from "./view";
 
 interface PendingPurchase {
+  readonly game: GameView;
+  readonly bus: EventBus;
   readonly gameId: string;
   readonly actorId: string;
   readonly targetId: string;
@@ -91,6 +94,8 @@ export class NationalAssessmentControls extends LitElement {
     if (pending) {
       const tick = context.game.ticks();
       if (
+        context.game !== pending.game ||
+        context.bus !== pending.bus ||
         context.game.gameID() !== pending.gameId ||
         context.actor.id() !== pending.actorId ||
         tick < pending.tick
@@ -105,16 +110,26 @@ export class NationalAssessmentControls extends LitElement {
             report.effectiveTick >= pending.tick &&
             !pending.previousReports.has(assessmentReportKey(report)),
         );
-        if (newReport) {
+        const receipt = assessmentPurchaseOutcome(
+          context.game.nationalAssessments?.() ?? null,
+          pending,
+          context.game.gameID(),
+          context.actor.id(),
+          tick,
+        );
+        if (receipt) {
           this.pending = null;
-          // E4 does not publish requestId in the projection. This validates a
-          // NEW Game-paid lease, not exact-click ID correlation.
           this.status =
-            "A new Game-owned paid national assessment arrived. An exact request-ID receipt is not exposed by the present server contract.";
+            receipt.outcome === "accepted"
+              ? "Game confirmed this exact assessment request: 1,200 gold paid. Inspect the current Game-issued reports below."
+              : "Game rejected this exact assessment request: no debit.";
         } else if (tick - pending.tick >= 200) {
           this.pending = null;
           this.status =
-            "No new Game-owned report arrived within 200 ticks. The purchase result is unknown; review your actual gold and reports before retrying.";
+            "No exact Game-owned receipt arrived within 200 ticks. The purchase result is unknown; review your actual gold and reports before retrying.";
+        } else if (newReport) {
+          this.status =
+            "A new Game-owned paid national assessment arrived, but the exact request-ID receipt is still unconfirmed.";
         }
       }
     }
@@ -149,6 +164,8 @@ export class NationalAssessmentControls extends LitElement {
     }
     const { game, actor, bus } = context;
     this.pending = {
+      game,
+      bus,
       gameId: game.gameID(),
       actorId: actor.id(),
       targetId: targetId as string,
