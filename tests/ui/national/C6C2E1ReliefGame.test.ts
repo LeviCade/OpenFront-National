@@ -127,12 +127,10 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
           game.nationalImperialAdministrationFor(actor),
         nationalPactReceipts: () =>
           readPactReceipts(
-            game
-              .nationalPoliticalCommandResults(actor)
-              .map((row) => ({
-                ...row,
-                type: "national_imperial_administration",
-              })),
+            game.nationalPoliticalCommandResults(actor).map((row) => ({
+              ...row,
+              type: "national_imperial_administration",
+            })),
             actor.id(),
             game.ticks(),
           ),

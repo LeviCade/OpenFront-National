@@ -44,8 +44,24 @@ jobs:
       - name: Production build
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run build-prod
+  complete-regression:
+    name: E1 exact-head complete regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact triggering commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: test "$(node --version)" = "v24.15.0" && test "$(npm --version)" = "12.1.0"
+      - run: npm run inst
       - name: Complete regression
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm test
   format:
     name: Exact-head pinned format (independent diagnostic)
