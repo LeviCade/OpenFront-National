@@ -531,7 +531,28 @@ export class GameConfigSettings extends LitElement {
                               )
                         }"
                       >
-                        <span aria-hidden="true" class="text-3xl">👑</span>
+                        <svg
+                          data-national-emblem
+                          aria-hidden="true"
+                          focusable="false"
+                          viewBox="0 0 48 48"
+                          class="size-12 shrink-0"
+                        >
+                          <path
+                            d="M24 3 42 10v15c0 9-8 16-18 20C14 41 6 34 6 25V10Z"
+                            fill="#713f12"
+                            stroke="#fde68a"
+                            stroke-width="2"
+                          />
+                          <path
+                            d="m12 16 7 5 5-10 5 10 7-5-3 15H15Z"
+                            fill="#fbbf24"
+                            stroke="#fef3c7"
+                            stroke-width="1.5"
+                            stroke-linejoin="round"
+                          />
+                          <path d="M16 34h16" stroke="#fde68a" stroke-width="2" />
+                        </svg>
                         <strong
                           class="${CARD_LABEL_CLASS} text-center text-white"
                         >
@@ -540,7 +561,7 @@ export class GameConfigSettings extends LitElement {
                         <span
                           class="text-xs text-center text-white/75 normal-case"
                         >
-                          Sovereignty · Solo FFA · Impossible AI
+                          Every nation fights to win. Deep diplomacy, sovereign empires, and one final world power.
                         </span>
                       </button>
                     </div>`
@@ -550,9 +571,10 @@ export class GameConfigSettings extends LitElement {
             ${
               settings.difficulty.nationalMode
                 ? html`<p role="status" class="mt-3 text-sm text-yellow-200">
-                    NATIONAL selected. Click Start Game, place your nation on
-                    the map, then open the crown Diplomacy panel. You can switch
-                    back to ordinary Solo by choosing any standard difficulty.
+                    NATIONAL selected. The last surviving sovereign nation or
+                    empire wins, not the largest land share. Start Game, place
+                    your nation, then open the crown Diplomacy panel. Choose
+                    any standard difficulty to return to ordinary Solo.
                   </p>`
                 : nothing
             }

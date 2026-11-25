@@ -59,6 +59,14 @@ const legacy = process.argv.includes("--legacy");
 // Explicit diagnostic only. The default three-principal path remains strict.
 const soloOnly = process.argv.includes("--solo");
 if (legacy && soloOnly) throw Error("SOLO_DIAGNOSTIC_MODE_CONFLICT");
+// The independent signed release lane retains its existing contract.
+// Owner-functional completion is a separate, explicitly requested journey.
+const ownerResolution = process.argv.includes("--owner-functional-resolution");
+if (
+  ownerResolution &&
+  ((!legacy && !soloOnly) || process.env.NATIONAL_REQUIRE_HARDWARE_GPU === "1")
+)
+  throw Error("OWNER_FUNCTIONAL_MODE_CONFLICT");
 const base = "http://127.0.0.1:9000/";
 const reportDir =
   "national-qa-artifacts/browser-" +
@@ -82,11 +90,11 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let stage = "boot";
 
 const watchdog = setTimeout(() => {
-  record("deadline", { stage, error: "180s hard acceptance deadline" });
+  record("deadline", { stage, error: "hard acceptance deadline" });
   persist();
   for (const child of childProcesses) child.kill("SIGKILL");
   process.exit(1);
-}, 180_000);
+}, ownerResolution ? 570_000 : 180_000);
 
 function record(name, extra = {}) {
   records.push({
@@ -282,6 +290,15 @@ const probe = `(() => {
       if (!candidate || typeof candidate !== 'object') continue;
       if (Number.isSafeInteger(candidate.tick)) info.tick = candidate.tick;
       if (candidate.nationalPolitics) info.publicPolitics = candidate.nationalPolitics;
+      // Read-only observation of the actual worker WIN update. Never publish
+      // raw winner identities; the report sanitizer does not retain this field.
+      if (candidate.updates && typeof candidate.updates === 'object') {
+        const wins = Object.values(candidate.updates)
+          .flatMap(group => Array.isArray(group) ? group : [])
+          .filter(update => update && Array.isArray(update.winner))
+          .map(update => ({type:update.type,winner:update.winner}));
+        if (wins.length) info.winResults = wins.slice(0,4);
+      }
       if (candidate.nationalAccessionOffers) info.accessionOffers = candidate.nationalAccessionOffers;
       if (candidate.nationalCommandResults) info.commandResults = candidate.nationalCommandResults;
       if (candidate.nationalConflicts) info.publicConflicts = candidate.nationalConflicts;
@@ -635,6 +652,50 @@ async function main() {
       via: mobile ? "touch" : "mouse",
     });
   };
+  const configureOwnerMatch = async () => {
+    if (!ownerResolution) return;
+    // A bounded, ordinary player-selectable scenario. No cheats, state
+    // injection, timer shortcut or scripted result; still Impossible AI.
+    const compact = await evaluate(
+      "window.__nationalQaFind('single-player-modal')?.compactMap === true",
+    );
+    if (!compact) await click("^compact map$", "single-player-modal");
+    for (const [key, value] of [
+      ["bots", 0],
+      ["nations", 2],
+    ]) {
+      const selector = 'fluent-slider[labelkey="game_settings.' + key + '"]';
+      await clickSelector(selector + ' [role="button"]');
+      await fill(selector + ' input[type="number"]', String(value));
+      await send("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "Enter",
+        code: "Enter",
+      });
+      await send("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "Enter",
+        code: "Enter",
+      });
+    }
+    const configured = await poll(
+      () =>
+        evaluate(`(() => {
+          const m=window.__nationalQaFind('single-player-modal');
+          return m?.compactMap===true && m.bots===0 && m.nations===2 &&
+            !m.infiniteGold && !m.infiniteTroops && !m.randomSpawn &&
+            !m.maxTimer && !m.doomsdayClock;
+        })()`),
+      "ordinary compact two-nation configuration without cheats",
+      20,
+      150,
+    );
+    if (!configured) throw Error("OWNER_FUNCTIONAL_CONFIGURATION_UNVERIFIED");
+    record("owner-functional-bounded-native-config", {
+      verified: true,
+      nativeSelect: true,
+    });
+  };
   const confirmLaunch = async (national) => {
     const launches = await poll(
       async () => {
@@ -861,6 +922,170 @@ async function main() {
     }
     throw Error("CHROMIUM_NATIVE_OPTION_NOT_SELECTED: " + selector);
   };
+  const waitForResolution = async (match, national) => {
+    if (!ownerResolution) return;
+    if (!match?.gameId || !match.actorId)
+      throw Error("OWNER_FUNCTIONAL_MATCH_IDENTITY_MISSING");
+    const winType = await evaluate(
+      "import('/packages/engine-api/src/game/GameUpdates.ts').then(m=>m.GameUpdateType.Win)",
+    );
+    const result = await poll(
+      async () => {
+        const state = await evaluate(`(() => {
+          const modal=window.__nationalQaFind('win-modal');
+          const g=modal?.game;
+          const actor=g?.myPlayer?.();
+          const heading=modal?.querySelector('h2');
+          if (!g || !actor || !g.gameOver?.() || !modal.gameOverSeen ||
+              !modal.isVisible || !heading?.getBoundingClientRect().height ||
+              heading.innerText.trim() !== modal._title?.trim()) return null;
+          return {
+            gameId:g.gameID(),actorId:actor.id(),tick:g.ticks(),
+            victory:g.nationalPolitics?.()?.victory ?? null,
+            politicsTick:g.nationalPoliticsTick?.() ?? null,
+            award:modal.nationalAward ?? null,title:modal._title,
+            legacyWinner:modal.gameEnd?.winner ?? null,
+            legacyTick:modal.gameEnd?.tick ?? null,
+          };
+        })()`);
+        if (!state || state.gameId !== match.gameId ||
+            state.actorId !== match.actorId || !Number.isSafeInteger(state.tick))
+          return null;
+        const packets = await worker();
+        if (national) {
+          const v = state.victory;
+          const first = v?.prizes?.[0];
+          if (state.politicsTick !== state.tick || !v?.resolved ||
+              v.sovereignPowerCount !== 1 ||
+              !Number.isSafeInteger(v.confirmedTick) ||
+              v.confirmedTick <= 0 || v.confirmedTick > state.tick ||
+              !["SovereignVictor", "ImperialVictor"].includes(first?.kind))
+            return null;
+          const own = v.prizes.find((p) => p.nationId === match.actorId);
+          const titles = {
+            SovereignVictor: "Sovereign Victor",
+            ImperialVictor: "Imperial Victor",
+            EmpireVictor: "Empire Victor",
+          };
+          if (own
+            ? state.award !== own.kind || state.title !== titles[own.kind]
+            : state.award !== null ||
+              !state.title.startsWith("NATIONAL victory: " + titles[first.kind] + " — "))
+            return null;
+          if (!packets.some((p) =>
+            JSON.stringify(p.publicPolitics?.victory) === JSON.stringify(v)))
+            return null;
+          return {
+            tick: v.confirmedTick,
+            classification: first.kind === "SovereignVictor"
+              ? "NATIONAL_SOVEREIGN"
+              : "NATIONAL_IMPERIAL",
+          };
+        }
+        const winner = state.legacyWinner;
+        if (!Array.isArray(winner) ||
+            !["player", "nation"].includes(winner[0]) ||
+            typeof winner[1] !== "string" || !winner[1] ||
+            !Number.isSafeInteger(state.legacyTick) ||
+            state.legacyTick <= 0 || state.legacyTick > state.tick ||
+            !packets.some((p) => p.winResults?.some((w) =>
+              w.type === winType && JSON.stringify(w.winner) === JSON.stringify(winner))))
+          return null;
+        return {tick: state.legacyTick,classification:"LEGACY_WINNER"};
+      },
+      "genuine same-game terminal worker result and visible outcome",
+      420,
+      1000,
+    );
+    record("authoritative-game-resolution", {
+      ...result,
+      verified: true,
+      uiConfirmed: true,
+      sameGameId: true,
+    });
+    await capture("sovereign-victory");
+  };
+  const legacyMatch = () =>
+    evaluate(`(() => {
+      const g=window.__nationalQaFind('game-right-sidebar')?.game;
+      const p=g?.myPlayer?.();
+      return g&&p?{gameId:g.gameID(),actorId:p.id(),tick:g.ticks(),
+        spawned:p.hasSpawned(),tiles:p.numTilesOwned(),
+        spawning:g.inSpawnPhase(),alive:p.isAlive()}:null;
+    })()`);
+  const exerciseLegacyCombat = async (match) => {
+    if (!ownerResolution) return;
+    const ready = await poll(
+      async () => {
+        const state = await legacyMatch();
+        return state?.gameId === match.gameId && state.actorId === match.actorId &&
+          state.spawned && state.alive && !state.spawning ? state : null;
+      },
+      "legacy live player after spawn phase",
+      100,
+      300,
+    );
+    const attached = await evaluate(`(async () => {
+      const hud=window.__nationalQaFind('game-right-sidebar');
+      if (!hud?.eventBus || !hud.game?.myPlayer()) return false;
+      const T=await import('/src/client/Transport.ts');
+      window.__c7LegacyAttackInputs=[];
+      hud.eventBus.on(T.SendAttackIntentEvent,e=>window.__c7LegacyAttackInputs.push({
+        targetId:e.targetID,troops:e.troops,
+      }));
+      return true;
+    })()`);
+    if (!attached) throw Error("OWNER_FUNCTIONAL_LEGACY_ATTACK_OBSERVER_MISSING");
+    const baseline = Math.max(0, ...(await worker()).map((p) => p.sequence));
+    for (const fraction of soloSpawnFractions()) {
+      const point = await mapPoint([fraction]);
+      if (!point) continue;
+      await hit(point.x, point.y);
+      const center = await evaluate(`(() => {
+        const button=document.querySelector('.radial-menu-container .center-button-hitbox');
+        const r=button?.getBoundingClientRect();
+        return r?.width && r.height && getComputedStyle(button).cursor==='pointer'
+          ? {x:r.x+r.width/2,y:r.y+r.height/2}:null;
+      })()`);
+      if (center) await hit(center.x, center.y);
+      const result = await poll(
+        async () => {
+          const state = await legacyMatch();
+          if (state?.gameId !== ready.gameId || state.actorId !== ready.actorId)
+            return null;
+          const own = await evaluate(`(() => {
+            const g=window.__nationalQaFind('game-right-sidebar')?.game;
+            const actor=g?.myPlayer?.();
+            const attacks=actor?.outgoingAttacks?.() ?? [];
+            return (window.__c7LegacyAttackInputs ?? []).some(input => {
+              if (!Number.isFinite(input.troops) || input.troops<=0 ||
+                  input.targetId===actor?.id()) return false;
+              const target=input.targetId===null ? 0 :
+                g?.players?.().find(p=>p.id()===input.targetId)?.smallID?.();
+              return target!==undefined && attacks.some(a=>a.targetID===target);
+            });
+          })()`);
+          return own && (await worker()).some((p) =>
+            p.sequence > baseline && p.hasAuthoritativeAttackDelta === true)
+            ? state : null;
+        },
+        "legacy native attack correlated with own live engine attack",
+        4,
+        150,
+      ).catch(() => null);
+      if (result) {
+        record("legacy-real-combat-engine-correlated", {
+          actorCorrelated: true,
+          observedEngineChange: true,
+          sameGameId: true,
+          tick: result.tick,
+          input: mobile ? "touch" : "mouse",
+        });
+        return;
+      }
+    }
+    throw Error("OWNER_FUNCTIONAL_LEGACY_COMBAT_NOT_OBSERVED");
+  };
   const currentConflicts = () =>
     evaluate(
       "(() => {" +
@@ -1074,6 +1299,7 @@ async function main() {
       await step("legacy-configuration", async () => {
         await selectNational();
         await selectOrdinaryImpossible();
+        await configureOwnerMatch();
         await capture("legacy-difficulty-restored");
       });
       await step("legacy-ffa", async () => {
@@ -1130,14 +1356,8 @@ async function main() {
           [0.38, 0.48],
           [0.7, 0.42],
         ]) {
-          const position = await evaluate(
-            "(() => { const canvas = [...document.querySelectorAll('canvas')].filter((e) => e.getBoundingClientRect().width > 150).sort((a,b) => b.getBoundingClientRect().width-a.getBoundingClientRect().width)[0]; const r=canvas?.getBoundingClientRect(); return r ? { x: r.x + r.width * " +
-              u +
-              ", y:r.y + r.height * " +
-              v +
-              " } : null; })()",
-          );
-          if (!position) throw Error("LEGACY_PLAYABLE_CANVAS_MISSING");
+          const position = await mapPoint([[u, v]]);
+          if (!position) continue;
           await hit(position.x, position.y);
           await sleep(450);
         }
@@ -1178,11 +1398,17 @@ async function main() {
           playerTiles: spawned.tiles,
         });
         await capture("legacy-player-action");
+        if (ownerResolution) {
+          const match = await legacyMatch();
+          await exerciseLegacyCombat(match);
+          await waitForResolution(match, false);
+        }
       });
       return;
     }
     await step("national-mode", async () => {
       await selectNational();
+      await configureOwnerMatch();
       await capture("national-enabled");
     });
     await step("start", async () => {
@@ -2276,6 +2502,7 @@ async function main() {
           workerPacketCount: packets.length,
         });
         await capture("solo-battle-authoritative");
+        await waitForResolution(live, true);
       });
       return;
     }
