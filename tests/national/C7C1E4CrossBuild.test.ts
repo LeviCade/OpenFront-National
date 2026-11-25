@@ -71,6 +71,8 @@ function state(game: Game) {
     protected: authority.protectedByTreaty(B, C),
     atWar: wars.atWar(A, B),
     peaceful: !wars.atWar(A, C),
+    recon: ids.flatMap((id) => game.nationalReconnaissanceFor?.(id) ?? []),
+    assessments: ids.flatMap((id) => game.nationalAssessmentsFor?.(id) ?? []),
     layers: game.nationalWarState()!.wars.layers.map((l) => ({
       id: l.id,
       scope: l.scope,
@@ -154,7 +156,33 @@ async function produce() {
     aggressorId: A,
     targetId: B,
   });
-  for (let i = 0; i < 5; i++) m.tick();
+  // Earn funds through actual simulation ticks, then exercise the writer's
+  // own paid intelligence records where its pinned version implements them.
+  while (game.ticks() < 20) m.tick();
+  if (typeof game.performNationalReconnaissance === "function") {
+    const payer = game.player(D);
+    const before = payer.gold();
+    game.performNationalReconnaissance(
+      payer,
+      B,
+      33,
+      25,
+      "c7e4-recon",
+      payer.clientID()!,
+    );
+    expect(payer.gold()).toBe(before - 500n);
+  }
+  if (typeof game.performNationalAssessment === "function") {
+    const payer = game.player(A);
+    const before = payer.gold();
+    game.performNationalAssessment(
+      payer,
+      B,
+      "c7e4-assessment",
+      payer.clientID()!,
+    );
+    expect(payer.gold()).toBe(before - 1200n);
+  }
   // Use the real Player troop setter to establish an explicitly funded
   // defensive scenario (above the protected reserve) before writing bytes.
   const donor = game.player(C);
@@ -166,6 +194,10 @@ async function produce() {
   expect(evidence.protected).toBe(true);
   expect(evidence.atWar).toBe(true);
   expect(evidence.peaceful).toBe(true);
+  if (mode === "same-build") {
+    expect(evidence.recon).toHaveLength(1);
+    expect(evidence.assessments).toHaveLength(1);
+  }
   expect(evidence.layers).toContainEqual({
     id: war,
     scope: "national",
@@ -181,17 +213,22 @@ async function produce() {
 
 function continueGame(m: ReturnType<typeof attach>) {
   const before = state(m.game);
+  const timeline: string[] = [];
+  const tick = (...intents: Record<string, unknown>[]) => {
+    m.tick(...intents);
+    timeline.push(sha256(m.runner.snapshot()));
+  };
   const actor = m.game.player(A);
   const target = m.game.player(C);
   const defender = m.game.player(B);
   expect(actor.sharesBorderWith(defender)).toBe(true);
-  m.tick({
+  tick({
     type: "attack",
     clientID: actor.clientID(),
     targetID: B,
     troops: 5000,
   });
-  m.tick();
+  tick();
   const result = m.game.nationalWarState()!.levy.processed[0].result;
   expect(result.application).toBe("applied");
   expect(result.attackTroopsBefore).toBe(5000);
@@ -211,13 +248,44 @@ function continueGame(m: ReturnType<typeof attach>) {
     requestId: "c7e4-new-war",
     clientID: actor.clientID(),
   });
-  for (let i = 0; i < 4; i++) m.tick();
+  for (let i = 0; i < 4; i++) tick();
   expect(m.game.nationalWarAuthority()?.atWar(A, C)).toBe(true);
   expect(m.game.nationalWarAuthority()?.atWar(A, B)).toBe(true);
   expect(m.game.ticks()).toBe(before.tick + 7);
   expect(m.game.nationalPoliticalAuthority()?.emperorOf(empire)).toBe(A);
   expect(m.game.nationalMdaAllies(B)).toContain(C);
-  return { ...state(m.game), interception: result };
+  const after = state(m.game);
+  expect(after.recon).toEqual(before.recon);
+  expect(after.assessments).toEqual(before.assessments);
+  // The paid request is immutable and cannot debit its payer twice.
+  if (before.recon.length) {
+    const payer = m.game.player(D);
+    const balance = payer.gold();
+    expect(() =>
+      m.game.performNationalReconnaissance(
+        payer,
+        B,
+        33,
+        25,
+        "c7e4-recon",
+        payer.clientID()!,
+      ),
+    ).toThrow();
+    expect(payer.gold()).toBe(balance);
+  }
+  if (before.assessments.length) {
+    const balance = actor.gold();
+    expect(() =>
+      m.game.performNationalAssessment(
+        actor,
+        B,
+        "c7e4-assessment",
+        actor.clientID()!,
+      ),
+    ).toThrow();
+    expect(actor.gold()).toBe(balance);
+  }
+  return { ...state(m.game), interception: result, timeline };
 }
 
 type Evidence = ReturnType<typeof state>;
@@ -245,6 +313,8 @@ function verify(bytes: Uint8Array, manifest: Manifest, writer: string) {
   );
   const root = decodeSnapshotValue(bytes) as { game: { v: number } };
   expect(root.game.v).toBe(manifest.gameRecordVersion);
+  expect(manifest.before.recon).toHaveLength(root.game.v >= 5 ? 1 : 0);
+  expect(manifest.before.assessments).toHaveLength(root.game.v >= 6 ? 1 : 0);
   expect(root.game.v).toBe(
     writers.indexOf(writer as (typeof writers)[number]) + 4,
   );
@@ -354,6 +424,12 @@ test("C7 E4 pinned historical writer / independent consumer / same-build continu
       );
       expect(() =>
         verify(bytes, { ...manifest, writer: "" }, writer),
+      ).toThrow();
+      expect(() =>
+        verify(bytes, { ...manifest, driverSource: "" }, writer),
+      ).toThrow();
+      expect(() =>
+        verify(bytes, { ...manifest, run: "0" }, writer),
       ).toThrow();
       const corrupt = bytes.slice();
       corrupt[corrupt.length - 1] ^= 1;
