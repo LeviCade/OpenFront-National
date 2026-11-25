@@ -1,4 +1,5 @@
 import { UnitType } from "@openfront/engine-api/game/GameTypes";
+import { NationalBlockadeExecution } from "../../execution/NationalBlockadeExecution";
 import type { Game, Player, Unit } from "../../game/Game";
 
 /** The actual controlling nation's authority, never its empire's inferred hostility. */
@@ -72,6 +73,7 @@ export function neutralBlockader(
       game.euclideanDistSquared(unit.tile(), destination.tile()) >
         radius ** 2 ||
       !mayAttackAtSea(game, unit.owner(), destination.owner()) ||
+      !NationalBlockadeExecution.allowsInterdiction(game, unit, destination) ||
       war.atWar(unit.owner().id(), merchant.owner().id())
     ) {
       continue;

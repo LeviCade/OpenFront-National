@@ -73,7 +73,8 @@ export type Intent =
   | NationalResolveUltimatumIntent
   | NationalReconnaissanceIntent
   | NationalAssessmentIntent
-  | NationalCounterassessmentIntent;
+  | NationalCounterassessmentIntent
+  | NationalBlockadeIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -1050,6 +1051,17 @@ export type NationalCounterassessmentIntent = z.infer<
   typeof NationalCounterassessmentIntentSchema
 >;
 
+// Append-only NATIONAL command; the stamped client is the sole principal.
+export const NationalBlockadeIntentSchema = z.object({
+  type: z.literal("national_blockade"),
+  warId: NationalWarId,
+  shipId: zb.uint(),
+  portId: zb.uint(),
+  portTile: zb.uint(),
+  requestId: NationalPoliticalRequestId,
+});
+export type NationalBlockadeIntent = z.infer<typeof NationalBlockadeIntentSchema>;
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -1103,6 +1115,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalDecideSanctionSettlementIntentSchema,
   NationalAssessmentIntentSchema,
   NationalCounterassessmentIntentSchema,
+  NationalBlockadeIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

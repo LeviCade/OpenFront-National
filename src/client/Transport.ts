@@ -335,6 +335,16 @@ export class NewLobbyEvent implements GameEvent {
   constructor(public readonly gameID: string) {}
 }
 
+export class NationalBlockadeIntentEvent implements GameEvent {
+  constructor(
+    public readonly shipId: number,
+    public readonly portId: number,
+    public readonly portTile: number,
+    public readonly warId: string,
+    public readonly requestId: string,
+  ) {}
+}
+
 export class MoveWarshipIntentEvent implements GameEvent {
   constructor(
     public readonly unitIds: number[],
@@ -525,6 +535,18 @@ export class Transport {
       this.onCancelBoatIntentEvent(e),
     );
 
+    this.subscribe(NationalBlockadeIntentEvent, (e) => {
+      if (!this.nationalDiplomacyWireEnabled()) return;
+      const parsed = IntentSchema.safeParse({
+        type: "national_blockade",
+        shipId: e.shipId,
+        portId: e.portId,
+        portTile: e.portTile,
+        warId: e.warId,
+        requestId: e.requestId,
+      });
+      if (parsed.success) this.sendIntent(parsed.data);
+    });
     this.subscribe(MoveWarshipIntentEvent, (e) => {
       this.onMoveWarshipEvent(e);
     });
