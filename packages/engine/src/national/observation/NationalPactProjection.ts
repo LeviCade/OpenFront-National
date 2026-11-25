@@ -142,6 +142,11 @@ export function projectNationalImperialAdministration(
           })),
         }),
     canAmend: source.canAmend,
+    ...(source.canAmend &&
+    source.armyMode === "centralized" &&
+    source.warPolicyVersion !== undefined
+      ? { warPolicyVersion: source.warPolicyVersion }
+      : {}),
     ...(source.armyMode === undefined
       ? {}
       : {

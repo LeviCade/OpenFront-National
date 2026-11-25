@@ -14,6 +14,7 @@ import {
 } from "./controllers/NationalMapTargetController";
 import type { NationalAssessmentControls } from "./NationalAssessmentControls";
 import "./NationalImperialEconomicControls";
+import "./NationalImperialNavalControls";
 import "./NationalImperialSettlementControls";
 import {
   confirmedNationalDiplomacy,
@@ -34,6 +35,7 @@ import {
   type NationalPoliticalAction,
 } from "./NationalDiplomacyState";
 import type { NationalImperialEconomicControls } from "./NationalImperialEconomicControls";
+import type { NationalImperialNavalControls } from "./NationalImperialNavalControls";
 import type { NationalImperialSettlementControls } from "./NationalImperialSettlementControls";
 import {
   imperialConstructionCategories,
@@ -238,6 +240,9 @@ export class NationalDiplomacyPanel extends LitElement {
     )?.refresh();
     this.querySelector<NationalImperialEconomicControls>(
       "national-imperial-economic-controls",
+    )?.refresh();
+    this.querySelector<NationalImperialNavalControls>(
+      "national-imperial-naval-controls",
     )?.refresh();
     this.querySelector<NationalImperialSettlementControls>(
       "national-imperial-settlement-controls",
@@ -3823,6 +3828,10 @@ export class NationalDiplomacyPanel extends LitElement {
                   .game=${game}
                   .eventBus=${this.eventBus}
                 ></national-imperial-economic-controls>
+                <national-imperial-naval-controls
+                  .game=${game}
+                  .eventBus=${this.eventBus}
+                ></national-imperial-naval-controls>
                 <national-imperial-settlement-controls
                   .game=${game}
                   .eventBus=${this.eventBus}

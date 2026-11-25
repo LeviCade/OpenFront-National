@@ -33,6 +33,7 @@ export class MoveWarshipExecution implements Execution {
       hull.isMarkedForDeletion() ||
       hull.isUnderConstruction() ||
       hull.health() <= 0 ||
+      !mg.isWater(hull.tile()) ||
       !mg.isValidRef(position) ||
       !mg.isWater(position)
     )

@@ -29,6 +29,8 @@ export interface NationalImperialAdministrationView {
   readonly hybridThresholdBps?: number;
   readonly imperialTroops?: string;
   readonly imperialTroopCapacity?: string;
+  /** Current crown only; binds naval orders to the authoritative WAR epoch. */
+  readonly warPolicyVersion?: number;
 }
 export interface NationalImperialAdministrationWire extends NationalImperialAdministrationView {
   readonly version: 1;
@@ -72,6 +74,7 @@ export function readNationalImperialAdministration(
         "hybridThresholdBps",
         "imperialTroops",
         "imperialTroopCapacity",
+        "warPolicyVersion",
       ].includes(k),
     ) ||
     value.version !== 1 ||
@@ -116,6 +119,15 @@ export function readNationalImperialAdministration(
       e.memberIds.includes(actor),
   );
   if (!empire || (empire.leaderId === actor) !== value.canAmend) return null;
+  if (
+    value.warPolicyVersion !== undefined &&
+    (!value.canAmend ||
+      value.armyMode !== "centralized" ||
+      typeof value.warPolicyVersion !== "number" ||
+      !Number.isSafeInteger(value.warPolicyVersion) ||
+      value.warPolicyVersion < 0)
+  )
+    return null;
   const requests = value.reliefRequests;
   if (requests !== undefined) {
     if (
@@ -206,6 +218,9 @@ export function readNationalImperialAdministration(
           imperialTroopCapacity: value.imperialTroopCapacity as string,
         }
       : {}),
+    ...(value.warPolicyVersion === undefined
+      ? {}
+      : { warPolicyVersion: value.warPolicyVersion as number }),
     empireId: value.empireId,
     workerIncomeBps: value.workerIncomeBps,
     ...(value.nonWorkerIncomeBps === undefined

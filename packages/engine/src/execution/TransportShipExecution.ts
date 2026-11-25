@@ -106,7 +106,7 @@ export class TransportShipExecution implements Execution {
     this.lastMove = ticks;
     this.mg = mg;
     this.target = mg.owner(this.ref);
-    const stagger = mg.nextShipStagger("transportShip");
+    const stagger = fund ? 0 : mg.nextShipStagger("transportShip");
     this.pathFinder = new WaterPathFinder(mg, stagger);
 
     if (
@@ -205,6 +205,7 @@ export class TransportShipExecution implements Execution {
       return;
     }
     fund?.();
+    if (fund) this.pathFinder = new WaterPathFinder(mg, mg.nextShipStagger("transportShip"));
     if (
       fund &&
       this.target.isPlayer() &&
