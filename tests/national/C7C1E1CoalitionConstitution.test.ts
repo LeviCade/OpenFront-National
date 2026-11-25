@@ -815,7 +815,11 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
         type: "national_propose_pact_amendment_v2",
         administratorId: A,
         constitutionVersion: old,
-        terms: { admission: "leader", expulsion: "forbidden", membershipCap: 3 },
+        terms: {
+          admission: "leader",
+          expulsion: "forbidden",
+          membershipCap: 3,
+        },
       },
       false,
     );
