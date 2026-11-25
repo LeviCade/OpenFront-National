@@ -29,6 +29,7 @@ function fixture(mode) {
       ...stages.map((stage) => ({ name: "stage-complete", stage })),
       { name: mobile ? "actual-touch-input" : "actual-mouse-input" },
       { name: "owner-functional-bounded-native-config", verified: true },
+      { name: "owner-functional-launch-config", verified: true },
       ...(legacy
         ? [
             { name: "legacy-ffa-verified" },
@@ -38,6 +39,7 @@ function fixture(mode) {
               actorCorrelated: true,
               observedEngineChange: true,
               sameGameId: true,
+              input: mobile ? "touch" : "mouse",
               tick: 100,
             },
           ]
@@ -113,6 +115,9 @@ void test("software, missing touch, wrong head, errors and missing combat are no
     (r) => { r.events = r.events.filter((e) => e.name !== "legacy-real-combat-engine-correlated"); },
     (r) => { r.actualHardware.webgl1.unmaskedRenderer = "SwiftShader"; },
     (r) => { r.restrictedRuntimeAssets.push({}); },
+    (r) => { r.events = r.events.filter((e) => e.name !== "owner-functional-launch-config"); },
+    (r) => { r.events.find((e) => e.name === "legacy-real-combat-engine-correlated").input = "mouse"; },
+    (r) => { r.viewport = "1280x800 desktop"; },
   ]) {
     const report = fixture(mode);
     change(report);

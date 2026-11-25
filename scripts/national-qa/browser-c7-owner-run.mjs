@@ -115,6 +115,7 @@ mkdirSync(output, { recursive: true });
 const privateLogs = mkdtempSync(join(tmpdir(), "c7-owner-"));
 const results = [];
 let abnormal = false;
+let admissionComplete = false;
 try {
   for (const mode of MODES) {
     if (abnormal) {
@@ -147,16 +148,18 @@ try {
     }
     results.push(result);
     console.log(JSON.stringify(result));
-    abnormal = Boolean(out.error || out.signal || [124, 137].includes(out.status));
+    abnormal = out.error !== undefined || out.signal !== null || [124, 137].includes(out.status);
   }
   assertAdmission();
+  admissionComplete = true;
 } finally {
   rmSync(privateLogs, { recursive: true, force: true });
   const summary = {
     exactSource: sha,
     lane: software ? "software-only" : "owner-functional",
     results,
-    allModesObserved: !software && results.length === MODES.length &&
+    admissionComplete,
+    allModesObserved: admissionComplete && !software && results.length === MODES.length &&
       results.every((r) => r.gameplayObserved),
     releaseCertified: false,
     independentGameplayWitness: false,

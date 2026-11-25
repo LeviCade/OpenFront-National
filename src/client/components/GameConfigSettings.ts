@@ -520,6 +520,7 @@ export class GameConfigSettings extends LitElement {
                           settings.difficulty.nationalMode === true,
                         )}
                         aria-label="NATIONAL sovereignty mode, Solo Free For All at Impossible difficulty"
+                        aria-describedby="national-difficulty-description"
                         ?disabled=${settings.difficulty.disabled}
                         @click=${this.handleNationalSelect}
                         class="${
@@ -559,6 +560,8 @@ export class GameConfigSettings extends LitElement {
                           NATIONAL
                         </strong>
                         <span
+                          id="national-difficulty-description"
+                          data-national-description
                           class="text-xs text-center text-white/75 normal-case"
                         >
                           Every nation fights to win. Deep diplomacy, sovereign empires, and one final world power.

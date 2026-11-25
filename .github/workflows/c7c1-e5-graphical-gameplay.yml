@@ -44,7 +44,13 @@ jobs:
             regression) npm test ;;
             typecheck) npm run typecheck ;;
             lint) npm run lint ;;
-            formatting) npm run format:check ;;
+            formatting)
+              npm run format:check || {
+                npx --no-install oxfmt --write scripts/national-qa/browser-c7-owner-run.mjs scripts/national-qa/browser-c7-owner-verdict.check.mjs scripts/national-qa/browser-c7-owner-verdict.mjs scripts/national-qa/browser-gameplay.mjs src/client/components/GameConfigSettings.ts
+                git diff --no-color -- scripts/national-qa/browser-c7-owner-run.mjs scripts/national-qa/browser-c7-owner-verdict.check.mjs scripts/national-qa/browser-c7-owner-verdict.mjs scripts/national-qa/browser-gameplay.mjs src/client/components/GameConfigSettings.ts
+                exit 1
+              }
+              ;;
             production) npm run build-prod ;;
           esac
   owner-functional:

@@ -35,8 +35,9 @@ export function classifyOwnerResolution(mode, sha, exitCode, report, software = 
   const battle = unique("authoritative-solo-playability-complete");
   const inputName = mode.endsWith("mobile") ? "actual-touch-input" : "actual-mouse-input";
   const inputObserved = events.some((e) => e?.name === inputName);
+  const modeMatches = MODES.includes(mode) && report?.scenarioKind === (legacy ? "legacy" : "national-solo") && report?.viewport === (mode.endsWith("mobile") ? "390x844 mobile" : "1280x800 desktop") && report?.hardwareAcceptanceRequired === false;
   const terminalObserved =
-    base.sourceMatches &&
+    modeMatches && base.sourceMatches &&
     result?.verified === true &&
     result.uiConfirmed === true &&
     result.sameGameId === true &&
@@ -47,6 +48,7 @@ export function classifyOwnerResolution(mode, sha, exitCode, report, software = 
         combat?.actorCorrelated === true &&
         combat.observedEngineChange === true &&
         combat.sameGameId === true &&
+        combat.input === (mode.endsWith("mobile") ? "touch" : "mouse") &&
         Number.isSafeInteger(combat.tick) &&
         combat.tick > 0 &&
         result.tick >= combat.tick
@@ -59,9 +61,10 @@ export function classifyOwnerResolution(mode, sha, exitCode, report, software = 
     base.functionalGameplayObserved &&
     physicalGameplayContract(report, mode) &&
     config?.verified === true &&
+    unique("owner-functional-launch-config")?.verified === true &&
     inputObserved &&
     terminalObserved &&
-    report.restrictedRuntimeAssets?.length === 0;
+    Array.isArray(report.restrictedRuntimeAssets) && report.restrictedRuntimeAssets.length === 0;
   return {
     mode,
     sourceMatches: base.sourceMatches,

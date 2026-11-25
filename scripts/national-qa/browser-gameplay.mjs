@@ -376,6 +376,10 @@ const probe = `(() => {
       difficulty: config.difficulty ?? null,
       hasNationalMode: Object.prototype.hasOwnProperty.call(config, 'nationalMode'),
       nationalMode: config.nationalMode ?? null,
+      gameMapSize: config.gameMapSize ?? null,
+      bots: config.bots ?? null,
+      nations: config.nations ?? null,
+      customRules: Boolean(config.infiniteGold || config.infiniteTroops || config.randomSpawn || config.instantBuild || config.maxTimerValue || config.doomsdayClock || config.goldMultiplier || config.startingGold || config.overtime),
     });
   }, true);
   Object.defineProperty(window, '__nationalQaSoloLaunches', {
@@ -577,6 +581,9 @@ async function main() {
         nationalMode: modal.nationalMode === true,
         difficulty: modal.selectedDifficulty,
         gameMode: modal.gameMode,
+        emblem: button.querySelector("svg[data-national-emblem][aria-hidden=true]") !== null,
+        description: button.querySelector("[data-national-description]")?.textContent?.trim() ?? "",
+        descriptionLinked: button.getAttribute("aria-describedby") === button.querySelector("[data-national-description]")?.id,
       };
     })()`);
   const selectNational = async () => {
@@ -601,6 +608,7 @@ async function main() {
       150,
     );
     assertSoloSelection(selected, true);
+    if (ownerResolution && (!selected.emblem || !selected.descriptionLinked || !selected.description.includes("one final world power"))) throw Error("OWNER_FUNCTIONAL_NATIONAL_IDENTITY_UNVERIFIED");
     record("national-difficulty-selected", {
       ariaPressed: selected.pressed,
       difficulty: selected.difficulty,
@@ -712,6 +720,11 @@ async function main() {
       "actual-singleplayer-launch-config",
       assertSoloLaunch(launches, national),
     );
+    if (ownerResolution) {
+      const config = launches[0];
+      if (String(config.gameMapSize).toLowerCase() !== "compact" || config.bots !== 0 || config.nations !== 2 || config.customRules !== false) throw Error("OWNER_FUNCTIONAL_CONFIGURATION_UNVERIFIED");
+      record("owner-functional-launch-config", { verified: true });
+    }
   };
   const clickSelector = async (selector) => {
     const target = await poll(
