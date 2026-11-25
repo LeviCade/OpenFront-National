@@ -193,16 +193,21 @@ async function openProfile(executable, index, email) {
     invalidAuthorityFrame: observed.invalidAuthorityFrame,
     observedLobbySeats: observed.lobby?.lobby?.clients?.length ?? 0,
     activeGame: Boolean(observed.authority),
+    authorityStarts: observed.authorityStarts,
+    authorityCloses: observed.authorityCloses,
     nativeSpawnIntents: observed.spawnIntents.length,
     nativeAttackIntents: observed.attackIntents.length,
   }));
   function send(method, params = {}) {
     return new Promise((resolve, reject) => {
       const id = ++seq;
-      const timeout = setTimeout(() => {
-        pending.delete(id);
-        reject(new Error("browser command timed out"));
-      }, functionalSoftware ? 45_000 : 12_000);
+      const timeout = setTimeout(
+        () => {
+          pending.delete(id);
+          reject(new Error("browser command timed out"));
+        },
+        functionalSoftware ? 45_000 : 12_000,
+      );
       pending.set(id, { resolve, reject, timeout });
       ws.send(JSON.stringify({ id, method, params }));
     });
@@ -844,6 +849,17 @@ try {
         stage,
         90_000,
       );
+      if (functionalSoftware)
+        console.log(
+          "C7C1E6_STAGE " +
+            JSON.stringify({
+              name: "authoritative-host-admitted",
+              match: admission.gameID,
+              authenticatedSeats: admission.authenticatedSeats,
+              distinctAccounts: admission.distinctAccounts,
+              authoritativeRunners: admission.authoritativeRunners,
+            }),
+        );
       const snapshots = () =>
         Promise.all(
           profiles.map((p) =>
