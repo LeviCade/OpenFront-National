@@ -9,7 +9,9 @@ verifies source/run/toolchain/map/content identity, restores real engine state
 and performs actual MDA-funded combat plus a new stamped war declaration.
 The older writers' available paid reconnaissance/assessment grants are bought
 with earned gold and compared through restoration; absent old capabilities
-must restore as empty entitlements, never as invented paid grants. Same-build
+must restore as empty entitlements, never as invented paid grants. The v5/v6
+writers also persist a genuine accepted stamped WAR receipt; v4 lacks that
+port and must not acquire a fabricated receipt on migration. Same-build
 continuation includes a byte digest at every simulated tick. The default test is same-build,
 not a substitute for historical compatibility. The engine authority API is
 used for historical pact formation because older writers lack native pact

@@ -24,7 +24,7 @@ const writers = [
 const gameId = "C7E4TEST1";
 const empire = "c7e4-empire";
 const pact = "c7e4-mda";
-const war = "c7e4-war";
+const oldWarRequest = "c7e4-old-war";
 const ids = ["C7E4NATA", "C7E4NATB", "C7E4NATC", "C7E4NATD"];
 const [A, B, C, D] = ids;
 const sha256 = (bytes: Uint8Array) =>
@@ -73,6 +73,9 @@ function state(game: Game) {
     peaceful: !wars.atWar(A, C),
     recon: ids.flatMap((id) => game.nationalReconnaissanceFor?.(id) ?? []),
     assessments: ids.flatMap((id) => game.nationalAssessmentsFor?.(id) ?? []),
+    warReceipts: ids.flatMap(
+      (id) => game.nationalWarCommandResults?.(game.player(id)) ?? [],
+    ),
     layers: game.nationalWarState()!.wars.layers.map((l) => ({
       id: l.id,
       scope: l.scope,
@@ -150,11 +153,16 @@ async function produce() {
     kind: "accept-pact",
     pactId: pact,
   });
-  game.performNationalWarCommand(game.player(A), {
-    kind: "declare-national",
-    warId: war,
-    aggressorId: A,
+  // All three historical writers support native stamped declarations.
+  // v4 has no WAR receipt port; v5+ must persist the actual accepted receipt.
+  m.tick({
+    type: "national_declare_war",
+    scope: "national",
+    nationId: A,
     targetId: B,
+    targetKind: "nation",
+    requestId: oldWarRequest,
+    clientID: game.player(A).clientID(),
   });
   // Earn funds through actual simulation ticks, then exercise the writer's
   // own paid intelligence records where its pinned version implements them.
@@ -197,12 +205,22 @@ async function produce() {
   if (mode === "same-build") {
     expect(evidence.recon).toHaveLength(1);
     expect(evidence.assessments).toHaveLength(1);
+    expect(evidence.warReceipts).toHaveLength(1);
   }
-  expect(evidence.layers).toContainEqual({
-    id: war,
+  expect(evidence.layers).toHaveLength(1);
+  expect(evidence.layers[0]).toMatchObject({
     scope: "national",
     endedTick: null,
   });
+  for (const receipt of evidence.warReceipts) {
+    expect(receipt).toMatchObject({
+      requestId: oldWarRequest,
+      actorId: A,
+      recipientId: A,
+      accepted: true,
+      warId: evidence.layers[0].id,
+    });
+  }
   for (const p of evidence.players) {
     expect(p.alive).toBe(true);
     expect(p.tiles).toBeGreaterThan(0);
@@ -257,6 +275,8 @@ function continueGame(m: ReturnType<typeof attach>) {
   const after = state(m.game);
   expect(after.recon).toEqual(before.recon);
   expect(after.assessments).toEqual(before.assessments);
+  for (const receipt of before.warReceipts)
+    expect(after.warReceipts).toContainEqual(receipt);
   // The paid request is immutable and cannot debit its payer twice.
   if (before.recon.length) {
     const payer = m.game.player(D);
@@ -315,6 +335,7 @@ function verify(bytes: Uint8Array, manifest: Manifest, writer: string) {
   expect(root.game.v).toBe(manifest.gameRecordVersion);
   expect(manifest.before.recon).toHaveLength(root.game.v >= 5 ? 1 : 0);
   expect(manifest.before.assessments).toHaveLength(root.game.v >= 6 ? 1 : 0);
+  expect(manifest.before.warReceipts).toHaveLength(root.game.v >= 5 ? 1 : 0);
   expect(root.game.v).toBe(
     writers.indexOf(writer as (typeof writers)[number]) + 4,
   );
@@ -334,14 +355,20 @@ function verify(bytes: Uint8Array, manifest: Manifest, writer: string) {
 
 // Only called by the current reader. Mutations are adversarial inputs, not
 // historical fixture generation.
-async function rejectForgedReceipts(bytes: Uint8Array) {
+async function rejectForgedReceipts(bytes: Uint8Array, oldWarId: string) {
   for (const change of [
     { recipientId: B },
     { actorId: "unknown-principal", recipientId: "unknown-principal" },
     { commandFingerprint: undefined },
     { warId: "unrecorded-war" },
-    { warId: war },
-    { commandFingerprint: JSON.stringify({ kind: "declare-national", aggressorId: A, targetId: D }) },
+    { warId: oldWarId },
+    {
+      commandFingerprint: JSON.stringify({
+        kind: "declare-national",
+        aggressorId: A,
+        targetId: D,
+      }),
+    },
   ]) {
     const root = decodeSnapshotValue(bytes) as {
       game: {
@@ -453,7 +480,10 @@ test("C7 E4 pinned historical writer / independent consumer / same-build continu
           "plains",
         ),
       ).rejects.toThrow(/header tick/);
-      await rejectForgedReceipts(m.runner.snapshot(current));
+      await rejectForgedReceipts(
+        m.runner.snapshot(current),
+        manifest.before.layers[0].id,
+      );
       console.info(
         "C7E4_CONSUMER",
         JSON.stringify({
