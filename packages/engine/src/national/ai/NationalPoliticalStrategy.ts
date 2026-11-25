@@ -429,6 +429,9 @@ export function planAIPoliticalInterest(
     const command: AIPoliticalCommand = {
       kind: "accept-pact",
       pactId: pact.id,
+      ...(typeof pact.terms.constitutionVersion === "number"
+        ? { constitutionVersion: pact.terms.constitutionVersion }
+        : {}),
     };
     if (!alreadyAttempted(command, memory))
       return result({
@@ -447,6 +450,8 @@ export function planAIPoliticalInterest(
     )
     .sort((a, b) => compare(a.id, b.id));
   for (const pact of ownPacts) {
+    // No AI is implicitly delegated a selected-approver vote.
+    if (typeof pact.terms?.constitutionVersion === "number") continue;
     for (const targetId of frontiers) {
       const target = nations.get(targetId)!;
       if (

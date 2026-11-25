@@ -13,7 +13,10 @@
 import type { PlayerID } from "@openfront/engine-api/game/GameTypes";
 import {
   lastSovereignVictory,
+  pactAdmissionAuthorized,
+  usesAdmissionElection,
   viewPact,
+  type PactTerms,
   type LastSovereignResult,
   type PoliticsProjection,
 } from "./sovereignty";
@@ -25,10 +28,8 @@ export interface NationalRecipientDiplomacy {
     readonly kind: "NAP" | "MDA";
     readonly leaderId: string;
     readonly members: readonly string[];
-    readonly terms?: {
-      readonly admission: "leader" | "unanimous";
-      readonly expulsion: "leader" | "unanimous" | "forbidden";
-    };
+    readonly terms?: Readonly<PactTerms>;
+    readonly constitutionVersion?: number;
     readonly invited: boolean;
     /** Only an incumbent member sees its pact's unaccepted invitees. */
     readonly pendingInvitees?: readonly string[];
@@ -114,11 +115,7 @@ export class PoliticalAuthorityAdapter
         const member = p.memberIds.includes(observerId);
         const pending = p.invitations.find((i) => i.targetId === observerId);
         const invited =
-          pending !== undefined &&
-          (p.terms.admission === "leader"
-            ? p.administratorId !== null &&
-              pending.approvedBy.includes(p.administratorId)
-            : p.memberIds.every((id) => pending.approvedBy.includes(id)));
+          pending !== undefined && pactAdmissionAuthorized(p, pending.approvedBy);
         return {
           id: publicPact.id,
           kind: publicPact.kind,
@@ -128,6 +125,9 @@ export class PoliticalAuthorityAdapter
             ? {}
             : { terms: { ...publicPact.terms } }),
           invited,
+          ...((member || invited) && usesAdmissionElection(p.terms.admission)
+            ? { constitutionVersion: p.constitutionVersion }
+            : {}),
           ...(member
             ? {
                 pendingInvitees: p.invitations

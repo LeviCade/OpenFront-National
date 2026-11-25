@@ -330,7 +330,15 @@ export function collectLiveNationalObservation(
       kind: pact.kind === "NAP" ? "nap" : "mda",
       leaderId: pact.leaderId,
       members: [...pact.members],
-      terms: pact.terms === undefined ? {} : { ...pact.terms },
+      terms: pact.terms === undefined
+        ? {}
+        : {
+            admission: pact.terms.admission,
+            expulsion: pact.terms.expulsion,
+            ...(pact.constitutionVersion === undefined
+              ? {}
+              : { constitutionVersion: pact.constitutionVersion }),
+          },
       ...(pact.pendingInvitees === undefined
         ? {}
         : { pendingInvitees: [...pact.pendingInvitees] }),

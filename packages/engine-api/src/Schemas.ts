@@ -777,7 +777,8 @@ export const NationalFoundPactIntentSchema = z.object({
   name: z.string().min(1).max(64).regex(/\S/),
   pactKind: z.enum(["NAP", "MDA"]),
   terms: z.object({
-    admission: z.enum(["leader", "unanimous"]),
+    admission: z.enum(["leader", "unanimous", "selected", "majority", "supermajority"]),
+    selectedApproverIds: z.array(MappedID).max(256).optional(),
     expulsion: z.enum(["leader", "unanimous", "forbidden"]),
   }),
   requestId: NationalPoliticalRequestId,
@@ -787,11 +788,14 @@ export const NationalInvitePactIntentSchema = z.object({
   pactId: NationalPoliticalId,
   candidateId: MappedID,
   requestId: NationalPoliticalRequestId,
+  admissionAction: z.enum(["propose", "approve", "withdraw"]).optional(),
+  constitutionVersion: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER - 1 }).optional(),
 });
 export const NationalAcceptPactIntentSchema = z.object({
   type: z.literal("national_accept_pact"),
   pactId: NationalPoliticalId,
   requestId: NationalPoliticalRequestId,
+  constitutionVersion: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER - 1 }).optional(),
 });
 
 export const NationalBetrayPactIntentSchema = z.object({

@@ -26,7 +26,13 @@ import { PoliticalAuthorityAdapter } from "./politics/PoliticalAuthorityAdapter"
 import {
   acceptEmpireAccession,
   acceptPactInvitation,
+  approvePactInvitation,
   approvePactAmendment,
+  clonePactTerms,
+  pactAdmissionAuthorized,
+  usesAdmissionElection,
+  withdrawPactInvitation,
+  type AdmissionAction,
   betrayPact,
   clonePoliticalProjection,
   eliminatePoliticalNation,
@@ -65,7 +71,8 @@ const metrics = z.object({
   warships: counter,
 });
 const pactTerms = z.object({
-  admission: z.enum(["leader", "unanimous"]),
+  admission: z.enum(["leader", "unanimous", "selected", "majority", "supermajority"]),
+  selectedApproverIds: z.array(z.string().min(1).max(256)).max(256).optional(),
   expulsion: z.enum(["leader", "unanimous", "forbidden"]),
 });
 const politicsSchema = z.object({
@@ -84,10 +91,13 @@ const politicsSchema = z.object({
       memberIds: z.array(z.string()),
       administratorId: z.string().nullable(),
       terms: pactTerms,
+      constitutionVersion: counter.optional(),
       invitations: z.array(
         z.object({
           targetId: z.string(),
           approvedBy: z.array(z.string()),
+          constitutionVersion: counter.optional(),
+          proposerId: z.string().min(1).max(256).optional(),
         }),
       ),
       // Absent in older v1 snapshots. No authority is inferred from absence.
@@ -125,6 +135,7 @@ const politicsSchema = z.object({
     }),
   ),
   simulationMs: counter,
+  admissionEpoch: counter.optional(),
 });
 
 // One authority record per empire, attached to the canonical NATIONAL runtime.
@@ -405,8 +416,14 @@ export type NationalCommand =
       pactKind: PactKind;
       terms: PactTerms;
     }
-  | { kind: "invite-pact"; pactId: string; candidateId: PlayerID }
-  | { kind: "accept-pact"; pactId: string }
+  | {
+      kind: "invite-pact";
+      pactId: string;
+      candidateId: PlayerID;
+      admissionAction?: AdmissionAction;
+      constitutionVersion?: number;
+    }
+  | { kind: "accept-pact"; pactId: string; constitutionVersion?: number }
   | {
       kind: "propose-pact-amendment";
       pactId: string;
@@ -469,6 +486,7 @@ export interface NationalPublicPactView {
 
 export interface NationalRecipientPactView extends NationalPublicPactView {
   readonly role: "member" | "invited";
+  readonly constitutionVersion?: number;
   readonly terms: Readonly<PactTerms>;
   readonly invitations: readonly {
     readonly targetId: PlayerID;
@@ -493,6 +511,12 @@ export interface NationalPactDisclosureViewData {
   readonly pacts: readonly {
     readonly pactId: string;
     readonly relationship: "member" | "invited";
+    readonly constitutionVersion?: number;
+    readonly invitations?: readonly {
+      readonly targetId: PlayerID;
+      readonly approvedBy: readonly PlayerID[];
+      readonly authorized: boolean;
+    }[];
     readonly terms: Readonly<PactTerms>;
     readonly pendingAmendment?: {
       readonly terms: Readonly<PactTerms>;
@@ -1583,9 +1607,7 @@ export class NationalRuntime {
     for (const p of this.politics.pacts) {
       const member = p.memberIds.includes(recipientId);
       const authorized = (approvedBy: readonly PlayerID[]) =>
-        p.terms.admission === "leader"
-          ? p.administratorId !== null && approvedBy.includes(p.administratorId)
-          : p.memberIds.every((id) => approvedBy.includes(id));
+        pactAdmissionAuthorized(p, approvedBy);
       const invited =
         !member &&
         p.invitations.some(
@@ -1597,7 +1619,10 @@ export class NationalRuntime {
         Object.freeze({
           ...publicById.get(p.id)!,
           role: member ? "member" : "invited",
-          terms: Object.freeze({ ...p.terms }),
+          terms: Object.freeze(clonePactTerms(p.terms)),
+          ...(usesAdmissionElection(p.terms.admission)
+            ? { constitutionVersion: p.constitutionVersion }
+            : {}),
           invitations: Object.freeze(
             member
               ? p.invitations.map((i) =>
@@ -1611,7 +1636,7 @@ export class NationalRuntime {
           ),
           pendingAmendment: pending
             ? Object.freeze({
-                terms: Object.freeze({ ...pending.terms }),
+                terms: Object.freeze(clonePactTerms(pending.terms)),
                 administratorId: pending.administratorId,
                 approvedBy: Object.freeze([...pending.approvedBy].sort()),
                 ownVote: pending.approvedBy.includes(recipientId),
@@ -1639,6 +1664,27 @@ export class NationalRuntime {
     );
   }
 
+  /** Historical receipts cannot be reused after the electorate/epoch changes. */
+  mayReplayAdmission(
+    actorId: PlayerID,
+    command: Extract<NationalCommand, { kind: "invite-pact" | "accept-pact" }>,
+  ): boolean {
+    if (command.constitutionVersion === undefined) return true;
+    const p = this.politics.pacts.find((entry) => entry.id === command.pactId);
+    if (!p || this.authority().empireOf(actorId) !== null) return false;
+    if (command.kind === "accept-pact") return p.memberIds.includes(actorId);
+    if (command.admissionAction === "withdraw")
+      return command.candidateId === actorId &&
+        p.constitutionVersion === command.constitutionVersion;
+    return (
+      p.constitutionVersion === command.constitutionVersion &&
+      p.memberIds.includes(actorId) &&
+      p.invitations.some(
+        (i) => i.targetId === command.candidateId && i.approvedBy.includes(actorId),
+      )
+    );
+  }
+
   /** Minimal canonical disclosure contract consumed by E4's strict encoder. */
   pactDisclosure(recipientId: PlayerID): NationalPactDisclosureViewData {
     return Object.freeze({
@@ -1650,6 +1696,12 @@ export class NationalRuntime {
             pactId: p.id,
             relationship: p.role,
             terms: p.terms,
+            ...(p.constitutionVersion === undefined
+              ? {}
+              : {
+                  constitutionVersion: p.constitutionVersion,
+                  ...(p.role === "member" ? { invitations: p.invitations } : {}),
+                }),
             ...(p.pendingAmendment
               ? {
                   pendingAmendment: Object.freeze({
@@ -1741,16 +1793,49 @@ export class NationalRuntime {
         break;
       case "invite-pact":
         requireCommandId(command.pactId);
-        next = inviteToPact(
-          this.politics,
-          command.pactId,
-          actorId,
-          command.candidateId,
-        );
+        switch (command.admissionAction) {
+          case undefined:
+          case "propose":
+            next = inviteToPact(
+              this.politics,
+              command.pactId,
+              actorId,
+              command.candidateId,
+              command.constitutionVersion,
+            );
+            break;
+          case "approve":
+            if (command.constitutionVersion === undefined)
+              throw new Error("NATIONAL: versioned admission vote required");
+            next = approvePactInvitation(
+              this.politics,
+              command.pactId,
+              actorId,
+              command.candidateId,
+              command.constitutionVersion,
+            );
+            break;
+          case "withdraw":
+            next = withdrawPactInvitation(
+              this.politics,
+              command.pactId,
+              actorId,
+              command.candidateId,
+              command.constitutionVersion,
+            );
+            break;
+          default:
+            throw new Error("NATIONAL: invalid admission action");
+        }
         break;
       case "accept-pact":
         requireCommandId(command.pactId);
-        next = acceptPactInvitation(this.politics, command.pactId, actorId);
+        next = acceptPactInvitation(
+          this.politics,
+          command.pactId,
+          actorId,
+          command.constitutionVersion,
+        );
         break;
       case "propose-pact-amendment":
         requireCommandId(command.pactId);

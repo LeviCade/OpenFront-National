@@ -154,6 +154,12 @@ export class Executor {
             kind: "invite-pact",
             pactId: intent.pactId,
             candidateId: intent.candidateId,
+            ...(intent.admissionAction === undefined
+              ? {}
+              : { admissionAction: intent.admissionAction }),
+            ...(intent.constitutionVersion === undefined
+              ? {}
+              : { constitutionVersion: intent.constitutionVersion }),
           },
           intent.requestId,
           intent.clientID,
@@ -162,7 +168,13 @@ export class Executor {
         return new NationalFoundEmpireExecution(
           player,
           "",
-          { kind: "accept-pact", pactId: intent.pactId },
+          {
+            kind: "accept-pact",
+            pactId: intent.pactId,
+            ...(intent.constitutionVersion === undefined
+              ? {}
+              : { constitutionVersion: intent.constitutionVersion }),
+          },
           intent.requestId,
           intent.clientID,
         );
