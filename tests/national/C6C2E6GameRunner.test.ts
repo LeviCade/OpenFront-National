@@ -1,3 +1,8 @@
+import { createHash } from "node:crypto";
+import { NationalOutboundFilter } from "@openfront/engine/national/observation/NationalOutbound";
+import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
+import { parseTrustedNationalProjection, materializeTrustedNationalUpdate } from "../../src/client/TrustedNationalSession";
+import { encodeNationalRecipientProjection } from "../../src/server/national/NationalRecipientWire";
 import { readNationalConfirmedVictory } from "@openfront/engine-api/game/NationalVictoryView";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
@@ -16,6 +21,12 @@ describe("Sixth Conductor Second Class E6 GameRunner endgame", () => {
     expect(warning.remainingMs).toBeGreaterThan(0);
     expect(warning.remainingMs).toBeLessThanOrEqual(10_000);
     expect(m.packet().nationalPolitics?.victory).toBeNull();
+    const before = m.packet();
+    const poisoned = { ...before, nationalPolitics: { ...before.nationalPolitics!, victory: {
+      resolved: true, sovereignPowerCount: 1, confirmedTick: before.tick,
+      prizes: [{ kind: "SovereignVictor" as const, nationId: A }],
+    } } };
+    expect(new NationalOutboundFilter(m.game, null).project(m.game, poisoned, null).nationalPolitics?.victory).toBeNull();
     const politics = readVersioned(GameSnapshot, snapshotGameData(m.game).game).national!.politics;
     for (const metric of METRIC_KEYS) {
       const tied = structuredClone(politics);
@@ -36,6 +47,13 @@ describe("Sixth Conductor Second Class E6 GameRunner endgame", () => {
     const victory = nationalVictoryAt(readNationalPolitics(packet.nationalPolitics), packet.tick, packet.tick)!;
     expect(victory).not.toBeNull();
     expect(victory.prizes).toHaveLength(8);
+    const wire = encodeNationalRecipientProjection(packet);
+    const decoded = materializeTrustedNationalUpdate(parseTrustedNationalProjection(wire, packet.tick), packet.tick - 1);
+    expect(decoded.nationalPolitics?.victory).toEqual(victory);
+    expect(decoded.updates[GameUpdateType.Win]).toEqual([]);
+    expect(wire).not.toContain("allPlayersStats");
+    expect(wire).not.toContain("nationalPactDisclosure");
+    expect(() => encodeNationalRecipientProjection({ ...packet, nationalPolitics: { ...packet.nationalPolitics!, victory: { ...victory, confirmedTick: packet.tick + 1 } } })).toThrow(/public politics/);
     for (const p of infos.slice(0,8)) {
       const view = nationalVictoryPresentation(victory, p.id, (id) => id);
       expect(view.award).toBe(p.id === B ? "ImperialVictor" : "EmpireVictor");
@@ -45,6 +63,13 @@ describe("Sixth Conductor Second Class E6 GameRunner endgame", () => {
     const restored = await roundTrip(m.game, "plains");
     expect(restored.restored.nationalPublicPoliticalView()?.victory).toEqual(victory);
     expect([...restored.again]).toEqual([...restored.bytes]);
+    console.info("C6C2-E6-SOVEREIGN-ENDGAME", JSON.stringify({
+      warning, confirmedTick: victory.confirmedTick, awards: victory.prizes,
+      rawWinner: m.wins[0].winner, unclaimed: m.game.numLandTiles() - m.game.players().reduce((sum,p) => sum + p.numTilesOwned(),0),
+      players: m.game.players().map(p => ({ id:p.id(), tiles:p.numTilesOwned(), troops:p.troops(), gold:String(p.gold()) })),
+      snapshotSha256: createHash("sha256").update(restored.bytes).digest("hex"),
+      restoredSha256: createHash("sha256").update(restored.again).digest("hex"),
+    }));
     const forged = { ...victory, confirmedTick: packet.tick + 1 };
     expect(readNationalConfirmedVictory(forged, packet.tick)).toBeNull();
   }, 120_000);

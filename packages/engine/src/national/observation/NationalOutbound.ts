@@ -123,12 +123,18 @@ export type { NationalPublicConflictView } from "@openfront/engine-api/game/Nati
  * sight history through the worker. Clone nested arrays before delivery.
  */
 function publicPolitics(
+  game: Game,
   packet: GameUpdateViewData,
 ): GameUpdateViewData["nationalPolitics"] {
   const source = (
     "nationalPolitics" in packet ? packet.nationalPolitics : undefined
   ) as NationalPublicPoliticalView | null | undefined;
   if (source === null || source === undefined) return undefined;
+  // The terminal marker is owned by the real Game, not by a caller-supplied
+  // view object. Do not attach present truth to a stale packet.
+  const victory = packet.tick === game.ticks()
+    ? game.nationalPublicPoliticalView()?.victory ?? null
+    : null;
   return {
     empires: source.empires.map((empire) => ({
       id: empire.id,
@@ -142,15 +148,15 @@ function publicPolitics(
       blockedByAssetDisposition: warning.blockedByAssetDisposition,
     })),
     victory:
-      source.victory === null
+      victory === null
         ? null
         : {
-            sovereignPowerCount: source.victory.sovereignPowerCount,
-            resolved: source.victory.resolved,
-            ...(source.victory.confirmedTick === undefined
+            sovereignPowerCount: victory.sovereignPowerCount,
+            resolved: victory.resolved,
+            ...(victory.confirmedTick === undefined
               ? {}
-              : { confirmedTick: source.victory.confirmedTick }),
-            prizes: source.victory.prizes.map((prize) =>
+              : { confirmedTick: victory.confirmedTick }),
+            prizes: victory.prizes.map((prize) =>
               prize.kind === "SovereignVictor"
                 ? { kind: prize.kind, nationId: prize.nationId }
                 : {
@@ -765,7 +771,7 @@ export class NationalOutboundFilter {
                   : { commandTargetId: item.commandTargetId }),
             }));
 
-    const publicPoliticalView = publicPolitics(data);
+    const publicPoliticalView = publicPolitics(game, data);
     const publicPacts = projectNationalPublicPacts(game);
     const privatePacts =
       publicPoliticalView && verified

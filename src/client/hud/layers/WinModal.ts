@@ -1153,6 +1153,7 @@ export class WinModal extends LitElement implements Controller {
     if (
       mode === GameType.Private &&
       player.clientID() !== null &&
+      (!player.isAlive() || game.trustedProjectionReady()) &&
       hasTrustedNationalPrivateCapability(this.eventBus, game.gameID(), player.clientID())
     )
       return player.id();
@@ -1339,6 +1340,8 @@ export class WinModal extends LitElement implements Controller {
     }
     if (this.nationalVictoryKey !== null) {
       this.clearNationalExperience();
+      this.nationalIdentity = identity;
+      this.nationalLastTick = tick;
       return;
     }
     this.nationalCrisis = nationalCrisisAt(politics, activeActor, tick);

@@ -115,7 +115,9 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
     expect(a.events).toHaveLength(1);
     expect(m.game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(A);
     const action = a.events[0];
-    m.transfer(A, B, action.requestId);
+    expect(action.empireId).toBe(EMPIRE);
+    expect(action.successorId).toBe(B);
+    m.transfer(A, action.successorId, action.requestId);
     await a.update();
     expect(a.modal.querySelector('[data-national-crisis]')?.textContent).toContain("Crown transferred");
     const win = m.conquer();

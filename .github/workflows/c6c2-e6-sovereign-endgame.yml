@@ -23,9 +23,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24.15.0"
-      - run: npm install -g npm@12.1.0
+      - run: npm install -g --ignore-scripts npm@12.1.0
       - run: |
           test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test "$(node -v)" = v24.15.0
+          test "$(npm -v)" = 12.1.0
           node -v
           npm -v
           npm run inst

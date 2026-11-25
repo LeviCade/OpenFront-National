@@ -1,3 +1,5 @@
+import { readNationalConfirmedVictory } from "./NationalVictoryView";
+
 /** Detached wire contract. No engine state or client-derived political authority. */
 export interface NationalPublicPactView {
   readonly id: string;
@@ -257,8 +259,11 @@ export function validateNationalPactPacket(
           !keys(politics.victory, [
             "sovereignPowerCount",
             "resolved",
+            "confirmedTick",
             "prizes",
           ]) ||
+          (politics.victory.confirmedTick !== undefined &&
+            readNationalConfirmedVictory(politics.victory, tick) === null) ||
           !Number.isSafeInteger(politics.victory.sovereignPowerCount) ||
           typeof politics.victory.resolved !== "boolean" ||
           !Array.isArray(politics.victory.prizes) ||
