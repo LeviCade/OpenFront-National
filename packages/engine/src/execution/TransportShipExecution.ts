@@ -205,7 +205,11 @@ export class TransportShipExecution implements Execution {
       return;
     }
     fund?.();
-    if (fund) this.pathFinder = new WaterPathFinder(mg, mg.nextShipStagger("transportShip"));
+    if (fund)
+      this.pathFinder = new WaterPathFinder(
+        mg,
+        mg.nextShipStagger("transportShip"),
+      );
     if (
       fund &&
       this.target.isPlayer() &&
