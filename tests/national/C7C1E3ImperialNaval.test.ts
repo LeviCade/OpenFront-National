@@ -20,7 +20,7 @@ import { roundTrip } from "../util/Snapshot";
 
 const MAP = "half_land_half_ocean";
 const MATCH = "c7-naval";
-const [A, B, C] = ["c7-naval-a", "c7-naval-b", "c7-naval-c"];
+const [A, B, C] = ["c7naval01", "c7naval02", "c7naval03"];
 const EMPIRE = "c7-imperium";
 const WAR = "c7-imperial-war";
 
