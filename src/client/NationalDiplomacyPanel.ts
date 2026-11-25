@@ -13,6 +13,8 @@ import {
   NationalReconMapPointSelectedEvent,
 } from "./controllers/NationalMapTargetController";
 import type { NationalAssessmentControls } from "./NationalAssessmentControls";
+import type { NationalSatelliteControls } from "./NationalSatelliteControls";
+import "./NationalSatelliteControls";
 import "./NationalImperialEconomicControls";
 import "./NationalImperialSettlementControls";
 import {
@@ -233,6 +235,7 @@ export class NationalDiplomacyPanel extends LitElement {
     this.refreshPact();
     this.refreshImperialPolicy();
     this.refreshSovereignActions();
+    this.querySelector<NationalSatelliteControls>("national-satellite-controls")?.refresh();
     this.querySelector<NationalAssessmentControls>(
       "national-assessment-controls",
     )?.refresh();
@@ -3831,6 +3834,10 @@ export class NationalDiplomacyPanel extends LitElement {
                   .game=${game}
                   .eventBus=${this.eventBus}
                 ></national-assessment-controls>
+                <national-satellite-controls
+                  .game=${game}
+                  .eventBus=${this.eventBus}
+                ></national-satellite-controls>
               </div>`
             : nothing
         }

@@ -380,7 +380,7 @@ export function collectLiveNationalObservation(
   // vessels worldwide, not every map cell or any confidential unit field.
   // One reciprocal living payer is enough; own/ordinary sight takes priority.
   const satellitePayer = observer.isAlive()
-    ? sightOrder.find((id) => game.nationalSatelliteFor(id) !== null)
+    ? sightOrder.find((id) => game.nationalSatelliteFor?.(id) != null)
     : undefined;
   const assets: NationalWorld["assets"][number][] = [];
   const sightGrants: NationalWorld["sightGrants"][number][] = [];
