@@ -227,7 +227,8 @@ function accept(version: number) {
 }
 
 function wireFrame(m: Match, client: Client): GameUpdateViewData {
-  const packet = m.received.get(client.clientID)?.at(-1);
+  const frames = m.received.get(client.clientID) ?? [];
+  const packet = frames[frames.length - 1];
   expect(packet).toBeDefined();
   const decoded = decodeServerMessage(
     encodeServerMessage(
@@ -406,7 +407,7 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
     command(m, m.d, D, "empire-voter", election(current, "approve", B), false);
   });
 
-  it("withdrawal revokes the entire election epoch and cannot be forged", async () => {
+  it("withdrawal rotates the election epoch and cannot be forged", async () => {
     const m = await established("supermajority");
     const epoch = memberView(m).constitutionVersion!;
     command(m, m.a, A, "propose-d", election(epoch, "propose"));
@@ -543,7 +544,11 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
       ).toBe(true);
       expect(
         pactActionAllowed(
-          { type: "national_accept_pact", pactId, constitutionVersion: epoch + 1 },
+          {
+            type: "national_accept_pact",
+            pactId,
+            constitutionVersion: epoch + 1,
+          },
           context,
         ),
       ).toBe(false);
@@ -597,6 +602,79 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
     const replayed = await roundTrip(replay.game, "plains");
     expect(after.bytes).toEqual(replayed.bytes);
     expect(after.again).toEqual(after.bytes);
+  });
+
+  it("a declining applicant cannot veto another candidate's lawful votes", () => {
+    const other = "C6EXTRAE";
+    const runtime = new NationalRuntime([A, B, C, D, other]);
+    runtime.perform(A, {
+      kind: "found-pact",
+      pactId,
+      name: "Separate candidates",
+      pactKind: "MDA",
+      terms: { admission: "leader", expulsion: "forbidden" },
+    });
+    for (const id of [B, C]) {
+      runtime.perform(A, { kind: "invite-pact", pactId, candidateId: id });
+      runtime.perform(id, { kind: "accept-pact", pactId });
+    }
+    runtime.perform(A, {
+      kind: "propose-pact-amendment",
+      pactId,
+      administratorId: A,
+      terms: { admission: "majority", expulsion: "forbidden" },
+    });
+    for (const id of [B, C])
+      runtime.perform(id, { kind: "approve-pact-amendment", pactId });
+    const epoch = runtime.snapshot().politics.pacts[0].constitutionVersion!;
+    for (const id of [D, other]) {
+      runtime.perform(A, {
+        kind: "invite-pact",
+        pactId,
+        candidateId: id,
+        admissionAction: "propose",
+        constitutionVersion: epoch,
+      });
+      runtime.perform(B, {
+        kind: "invite-pact",
+        pactId,
+        candidateId: id,
+        admissionAction: "approve",
+        constitutionVersion: epoch,
+      });
+    }
+    runtime.perform(D, {
+      kind: "invite-pact",
+      pactId,
+      candidateId: D,
+      admissionAction: "withdraw",
+      constitutionVersion: epoch,
+    });
+    const pact = runtime.snapshot().politics.pacts[0];
+    expect(pact.constitutionVersion).toBeGreaterThan(epoch);
+    expect(pact.invitations).toEqual([
+      {
+        targetId: other,
+        approvedBy: [A, B].sort(),
+        proposerId: A,
+        constitutionVersion: pact.constitutionVersion,
+      },
+    ]);
+    expect(() =>
+      runtime.perform(other, {
+        kind: "accept-pact",
+        pactId,
+        constitutionVersion: epoch,
+      }),
+    ).toThrow();
+    runtime.perform(other, {
+      kind: "accept-pact",
+      pactId,
+      constitutionVersion: pact.constitutionVersion,
+    });
+    expect(runtime.snapshot().politics.pacts[0].memberIds).toEqual(
+      [A, B, C, other].sort(),
+    );
   });
 
   it("enforces distinct pending-candidate bounds in commands and hostile snapshots", () => {

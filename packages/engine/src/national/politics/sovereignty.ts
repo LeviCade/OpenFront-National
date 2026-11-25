@@ -212,18 +212,25 @@ export function pactAdmissionAuthorized(
   return votes >= required;
 }
 
-/** Membership/policy changes revoke all threshold invitations, not just a vote.
- * The global epoch also prevents old commands from targeting a recycled pact ID.
+/** Membership/policy changes revoke all ballots. A candidate-only loss
+ * rotates the epoch but preserves other candidates' lawfully cast ballots.
+ * The global epoch prevents old commands from targeting a recycled pact ID.
  */
 function revokeAdmissionElections(
   world: PoliticsProjection,
   p: PoliticsPact,
+  excludedCandidateId?: string,
 ): void {
   const epoch = (world.admissionEpoch ?? 0) + 1;
   requireRule(validEpoch(epoch), "admission epoch exhausted");
   world.admissionEpoch = epoch;
   p.constitutionVersion = epoch;
-  p.invitations = [];
+  p.invitations =
+    excludedCandidateId === undefined
+      ? []
+      : p.invitations
+          .filter((i) => i.targetId !== excludedCandidateId)
+          .map((i) => ({ ...i, constitutionVersion: epoch }));
 }
 
 function checkElectionVersion(p: PoliticsPact, expected?: number): void {
@@ -560,7 +567,7 @@ function removePactMember(world: PoliticsProjection, id: string): void {
         usesAdmissionElection(p.terms.admission) &&
         p.invitations.some((i) => i.targetId === id)
       )
-        revokeAdmissionElections(world, p);
+        revokeAdmissionElections(world, p, id);
       else p.invitations = p.invitations.filter((i) => i.targetId !== id);
       return [p];
     }
@@ -669,8 +676,9 @@ export function inviteToPact(
   if (election)
     requireRule(
       eligibleAdmissionVoters(p).includes(proposerId) &&
-        p.invitations.length < MAX_ADMISSION_RECORDS,
-      "ineligible proposer or admission ballot cap reached",
+        p.invitations.length < MAX_ADMISSION_RECORDS &&
+        p.memberIds.length < MAX_ADMISSION_VOTERS,
+      "ineligible proposer or admission capacity reached",
     );
   requireRule(!p.memberIds.includes(candidateId), "already a member");
   requireRule(
@@ -743,7 +751,7 @@ export function withdrawPactInvitation(
     "only an authorized applicant may withdraw",
   );
   const next = copy(world);
-  revokeAdmissionElections(next, pact(next, pactId));
+  revokeAdmissionElections(next, pact(next, pactId), actorId);
   validatePolitics(next);
   return next;
 }

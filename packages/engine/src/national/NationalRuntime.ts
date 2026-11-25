@@ -1675,8 +1675,9 @@ export class NationalRuntime {
     actorId: PlayerID,
     command: Extract<NationalCommand, { kind: "invite-pact" | "accept-pact" }>,
   ): boolean {
-    if (command.constitutionVersion === undefined) return true;
     const p = this.politics.pacts.find((entry) => entry.id === command.pactId);
+    if (command.constitutionVersion === undefined)
+      return !p || !usesAdmissionElection(p.terms.admission);
     if (!p || this.authority().empireOf(actorId) !== null) return false;
     if (command.kind === "accept-pact") return p.memberIds.includes(actorId);
     if (command.admissionAction === "withdraw")
