@@ -1,0 +1,50 @@
+name: C7 C1 E3 - Imperial naval exact source
+on:
+  push:
+    branches:
+      - stage3/c7c1-e3-centralized-naval
+      - stage3/conductor7-class1-integration-20261125
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [focused, typecheck, lint, format, build, full]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact head
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA" && git rev-parse HEAD
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Execute gate
+        env:
+          GATE: ${{ matrix.gate }}
+        run: |
+          set -euo pipefail
+          case "$GATE" in
+            focused) npx --no-install vitest run --project node tests/national/C7C1E3ImperialNaval.test.ts tests/national/C5ImperialCentralCombat.test.ts tests/national/C6C2E3Blockade.test.ts tests/national/C6Class1NavalEscort.test.ts tests/core/executions/TransportShipExecution.test.ts ;;
+            typecheck) npm run typecheck ;;
+            lint) npm run lint ;;
+            format)
+              npm run format:check || {
+                npx --no-install oxfmt --write
+                echo C7C1E3_FORMAT_DIFF_BEGIN
+                git -c color.ui=false diff
+                echo C7C1E3_FORMAT_DIFF_END
+                exit 1
+              }
+              ;;
+            build) npm run build-prod ;;
+            full) npm test ;;
+          esac
