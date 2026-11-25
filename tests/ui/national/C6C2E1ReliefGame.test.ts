@@ -138,6 +138,15 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
     expect(structure.owner()).toBe(member);
     expect(member.gold()).toBe(37n);
     expect(treasury()).toBe(19n);
+    const secondRequest = "np_" + "5".repeat(32);
+    submit(memberId, { ...request, reliefId: secondRequest, amount: "10" }, secondRequest);
+    game.performNationalCommand(emperor, { kind: "transfer-crown", empireId, successorId: memberId });
+    const staleDecision = { ...decide, reliefId: secondRequest };
+    submit(emperorId, staleDecision, "np_" + "6".repeat(32));
+    submit(memberId, staleDecision, "np_" + "7".repeat(32));
+    expect(BigInt(game.nationalImperialAdministrationFor(member)!.treasury)).toBe(19n);
+    expect(member.gold()).toBe(37n);
+    expect(game.nationalImperialAdministrationFor(member)?.reliefRequests.find((item) => item.reliefId === secondRequest)?.status).toBe("pending");
     const { restored, bytes, again } = await roundTrip(game, map);
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
@@ -147,6 +156,7 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
           treasuryBefore: (grant + 19n).toString(),
           grant: grant.toString(),
           treasuryAfter: treasury().toString(),
+          staleCrownAndSelfApprovalRejected: true,
           cityCost: cost.toString(),
           walletAfterConstruction: member.gold().toString(),
           snapshotBytes: bytes.length,

@@ -168,6 +168,7 @@ describe("C6C2 E1 native settlement wire through authenticated GameRunner", () =
     expect(native(3)).toBeUndefined();
     const payerProjection = native(1);
     const causal = issuer.getEmbargoes().some((entry) => entry.target === payer && "reasons" in entry && Array.isArray(entry.reasons) && entry.reasons.includes("sanction:" + id));
+    if (process.env.C6C2_E1_REQUIRE_CAUSAL === "1") expect(causal).toBe(true);
     const nativeOffer = payerProjection?.items.find((row) => row.sanctionId === id);
     expect(nativeOffer?.canOffer ?? false).toBe(causal);
     const offerIntent = nativeOffer ? settlementOfferIntent(nativeOffer, PAYER, payer.gold(), "25000", offerId) : null;
