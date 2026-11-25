@@ -176,6 +176,7 @@ export function pactActionAllowed(
     case "national_approve_pact_amendment":
       return (
         !!privateView.pendingAmendment &&
+        action.expectedDefenseVersion === privateView.pendingAmendment.defenseVersion &&
         !privateView.pendingAmendment.approvedBy.includes(actor)
       );
     case "national_expel_pact":

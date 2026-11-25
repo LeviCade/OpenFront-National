@@ -1170,6 +1170,7 @@ export class WinModal extends LitElement implements Controller {
       ) &&
       game.isTrustedNationalProjection() &&
       game.trustedProjectionReady() &&
+      game.trustedNationalPrincipal() === player.id() &&
       game.nationalConflictsTick() === game.ticks() &&
       game.nationalConflicts()?.recipientId === player.id()
     )

@@ -118,7 +118,7 @@ export class NationalBlockadeExecution implements Execution {
     if (!NationalBlockadeIntentSchema.safeParse(this.command).success ||
         !this.authorized() || !game.isValidRef(this.command.portTile)) return;
     const records = NationalBlockadeExecution.records(game);
-    if (records.length >= MAX_MISSIONS ||
+    if (records.filter((record) => record.actor === this.actor).length >= MAX_MISSIONS ||
         records.some((record) => record.actor === this.actor &&
           record.command.requestId === this.command.requestId)) return;
     this.retained = true;
@@ -202,9 +202,13 @@ export class NationalBlockadeExecution implements Execution {
   /** Legacy passive blockaders stay intact. A commissioned hull may only
    * interdict its actual target while its own mandate and physical cover hold. */
   static allowsInterdiction(game: Game, ship: Unit, port: Unit): boolean {
-    const record = this.records(game)
-      .filter((item) => item.mission !== null && item.actor === ship.owner() && item.command.shipId === ship.id())
-      .at(-1);
+    const records = this.records(game).filter(
+      (item) =>
+        item.mission !== null &&
+        item.actor === ship.owner() &&
+        item.command.shipId === ship.id(),
+    );
+    const record = records[records.length - 1];
     if (!record) return true;
     const units = record.current();
     return units !== null && units.port === port && record.covers(ship, port);

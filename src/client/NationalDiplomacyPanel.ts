@@ -1333,7 +1333,11 @@ export class NationalDiplomacyPanel extends LitElement {
       this.pactStatus = "Command transport failed; outcome unconfirmed.";
     }
   }
-  private pactTermsControls(t: NationalPactTerms, members: readonly string[]) {
+  private pactTermsControls(
+    t: NationalPactTerms,
+    members: readonly string[],
+    defense = false,
+  ) {
     return html`<label
         >Admission
         <select class="bg-slate-800" name="admission">
@@ -1385,9 +1389,22 @@ export class NationalDiplomacyPanel extends LitElement {
             Forbidden
           </option>
         </select></label
-      >`;
+      >
+      ${defense
+        ? html`<fieldset>
+            <legend>Mutual defense contribution policy (basis points)</legend>
+            <label>Maximum contribution (0–1000 bps)
+              <input type="number" name="defense-cap" min="0" max="1000" step="1"
+                required .value=${String(t.defenseContributionBps ?? 1000)} />
+            </label>
+            <label>Protected home reserve (3000–10000 bps)
+              <input type="number" name="defense-reserve" min="3000" max="10000" step="1"
+                required .value=${String(t.defenseReserveBps ?? 3000)} />
+            </label>
+          </fieldset>`
+        : nothing}`;
   }
-  private readPactTerms(data: FormData): NationalPactTerms | null {
+  private readPactTerms(data: FormData, defense = false): NationalPactTerms | null {
     const admission = data.get("admission"),
       expulsion = data.get("expulsion");
     if (
@@ -1401,12 +1418,22 @@ export class NationalDiplomacyPanel extends LitElement {
         expulsion !== "forbidden")
     )
       return null;
+    const policy: Pick<NationalPactTerms, "defenseContributionBps" | "defenseReserveBps"> = {};
+    if (defense) {
+      const cap = data.get("defense-cap");
+      const reserve = data.get("defense-reserve");
+      if (typeof cap !== "string" || !/^\d+$/.test(cap) ||
+          typeof reserve !== "string" || !/^\d+$/.test(reserve)) return null;
+      const c = Number(cap), r = Number(reserve);
+      if (c < 0 || c > 1000 || r < 3000 || r > 10000) return null;
+      Object.assign(policy, { defenseContributionBps: c, defenseReserveBps: r });
+    }
     if (admission === "selected") {
       const selectedApproverIds = data.getAll("approver").map(String).sort();
       if (!selectedApproverIds.length) return null;
-      return { admission, expulsion, selectedApproverIds };
+      return { admission, expulsion, selectedApproverIds, ...policy };
     }
-    return { admission, expulsion };
+    return { admission, expulsion, ...policy };
   }
   @state() private imperialStatus = "";
   private imperialAttempt: {
@@ -1971,6 +1998,9 @@ export class NationalDiplomacyPanel extends LitElement {
                   const approve = {
                     type: "national_approve_pact_amendment",
                     pactId: p.id,
+                    ...(pending?.defenseVersion === undefined
+                      ? {}
+                      : { expectedDefenseVersion: pending.defenseVersion }),
                   } as const;
                   return keyed(
                     key,
@@ -2101,6 +2131,7 @@ export class NationalDiplomacyPanel extends LitElement {
                                         ${pending.terms.expulsion};
                                         administrator
                                         ${pending.administratorId ? this.playerName(pending.administratorId) : "None"}.
+                                        ${p.kind === "MDA" ? html` Defense contribution max ${(pending.terms.defenseContributionBps ?? 1000) / 100}%; protected reserve ${(pending.terms.defenseReserveBps ?? 3000) / 100}%.` : nothing}
                                       </p>
                                       <p>
                                         Approved: ${pending.approvedBy.length}
@@ -2122,7 +2153,7 @@ export class NationalDiplomacyPanel extends LitElement {
                                       @submit=${(e: SubmitEvent) =>
                                         submit(e, (data) => {
                                           const terms =
-                                            this.readPactTerms(data);
+                                            this.readPactTerms(data, p.kind === "MDA");
                                           const admin = String(
                                             data.get("administrator") ?? "",
                                           );
@@ -2136,7 +2167,7 @@ export class NationalDiplomacyPanel extends LitElement {
                                         })}
                                     >
                                       <h4>Propose constitutional amendment</h4>
-                                      ${this.pactTermsControls(d.terms, p.memberIds)}
+                                      ${this.pactTermsControls(d.terms, p.memberIds, p.kind === "MDA")}
                                       <label
                                         >Administrator
                                         <select

@@ -151,6 +151,9 @@ export class GameView implements GameLike {
       this._nationalReconnaissance = null;
       this._nationalAssessments = null;
       this._nationalSettlements = null;
+      this._nationalPolitics = null;
+      this._nationalPoliticsTick = null;
+      this._nationalConflicts = null;
     }
     this.trustedPrincipal = principal;
   }
@@ -248,8 +251,11 @@ export class GameView implements GameLike {
   public setTrustedProjectionReady(ready: boolean): void {
     if (!this._trustedNationalProjection) return;
     this._trustedProjectionReady = ready;
-    // No assessment survives revoked Private authority into a future socket.
+    // No private authority survives revoked Private capability into a future socket.
     if (!ready) {
+      this._nationalPolitics = null;
+      this._nationalPoliticsTick = null;
+      this._nationalConflicts = null;
       this._nationalAssessments = null;
       this._nationalSettlements = null;
       this._nationalImperialAdministration = null;
@@ -560,6 +566,12 @@ export class GameView implements GameLike {
       this._nationalPolitics?.pacts?.map((p) => [p.id, p.memberIds]),
       this._nationalConflicts?.layers.filter((l) => l.endedTick === null),
     ]);
+  }
+
+  public trustedNationalPrincipal(): string | null {
+    return this._trustedNationalProjection && this._trustedProjectionReady
+      ? this.trustedPrincipal
+      : null;
   }
 
   public nationalPolitics(): Readonly<NationalPublicPolitics> | null {
@@ -1086,7 +1098,11 @@ export class GameView implements GameLike {
     if (spawnPhaseEndUpdate) {
       this.startTick = spawnPhaseEndUpdate.startTick;
     }
-    if (gu.updates[GameUpdateType.Win].length > 0) {
+    if (
+      gu.updates[GameUpdateType.Win].length > 0 ||
+      (this._nationalPoliticsTick === gu.tick &&
+        this._nationalPolitics?.victory !== undefined)
+    ) {
       this._gameOver = true;
     }
 
