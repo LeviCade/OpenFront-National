@@ -694,6 +694,18 @@ try {
       stage,
       60_000,
     );
+    if (functionalSoftware) {
+      // Creating the modal is not the same as joining the server lobby.
+      // Wait for the actual host socket before changing any configuration.
+      stage = "host admitted before native configuration";
+      await until(
+        () =>
+          Boolean(a.observed.lobby?.myClientID) &&
+          a.observed.lobby?.lobby?.clients?.length === 1,
+        stage,
+        60_000,
+      );
+    }
     stage = "native NATIONAL configuration";
     await until(
       () =>
@@ -711,14 +723,29 @@ try {
       stage,
     );
     if (functionalSoftware) {
+      stage = "server acknowledges NATIONAL configuration";
+      await until(
+        () => a.observed.lobby?.lobby?.gameConfig?.nationalMode === true,
+        stage,
+        45_000,
+      );
       stage = "native all-map tab";
       await nativeClick(a, 'map-picker button[role="tab"]', "All");
       stage = "native Arcade map category";
       await nativeClick(a, 'map-picker button[aria-expanded] span', "Arcade");
       stage = "native Onion map selection";
       await nativeClick(a, '[role="button"][aria-label="Onion"]');
+      stage = "server acknowledges Onion map";
+      await until(
+        () => a.observed.lobby?.lobby?.gameConfig?.gameMap === GameMapType.Onion,
+        stage,
+        45_000,
+      );
       stage = "native compact map selection";
-      await nativeClick(a, "button", "Compact Map");
+      if (
+        a.observed.lobby?.lobby?.gameConfig?.gameMapSize !== GameMapSize.Compact
+      )
+        await nativeClick(a, "button", "Compact Map");
       stage = "authoritative compact Onion configuration";
       await until(
         () =>
