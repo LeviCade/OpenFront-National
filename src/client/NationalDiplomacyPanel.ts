@@ -1390,21 +1390,42 @@ export class NationalDiplomacyPanel extends LitElement {
           </option>
         </select></label
       >
-      ${defense
-        ? html`<fieldset>
-            <legend>Mutual defense contribution policy (basis points)</legend>
-            <label>Maximum contribution (0–1000 bps)
-              <input type="number" name="defense-cap" min="0" max="1000" step="1"
-                required .value=${String(t.defenseContributionBps ?? 1000)} />
-            </label>
-            <label>Protected home reserve (3000–10000 bps)
-              <input type="number" name="defense-reserve" min="3000" max="10000" step="1"
-                required .value=${String(t.defenseReserveBps ?? 3000)} />
-            </label>
-          </fieldset>`
-        : nothing}`;
+      ${
+        defense
+          ? html`<fieldset>
+              <legend>Mutual defense contribution policy (basis points)</legend>
+              <label
+                >Maximum contribution (0–1000 bps)
+                <input
+                  type="number"
+                  name="defense-cap"
+                  min="0"
+                  max="1000"
+                  step="1"
+                  required
+                  .value=${String(t.defenseContributionBps ?? 1000)}
+                />
+              </label>
+              <label
+                >Protected home reserve (3000–10000 bps)
+                <input
+                  type="number"
+                  name="defense-reserve"
+                  min="3000"
+                  max="10000"
+                  step="1"
+                  required
+                  .value=${String(t.defenseReserveBps ?? 3000)}
+                />
+              </label>
+            </fieldset>`
+          : nothing
+      }`;
   }
-  private readPactTerms(data: FormData, defense = false): NationalPactTerms | null {
+  private readPactTerms(
+    data: FormData,
+    defense = false,
+  ): NationalPactTerms | null {
     const admission = data.get("admission"),
       expulsion = data.get("expulsion");
     if (
@@ -1418,15 +1439,27 @@ export class NationalDiplomacyPanel extends LitElement {
         expulsion !== "forbidden")
     )
       return null;
-    const policy: Pick<NationalPactTerms, "defenseContributionBps" | "defenseReserveBps"> = {};
+    const policy: Pick<
+      NationalPactTerms,
+      "defenseContributionBps" | "defenseReserveBps"
+    > = {};
     if (defense) {
       const cap = data.get("defense-cap");
       const reserve = data.get("defense-reserve");
-      if (typeof cap !== "string" || !/^\d+$/.test(cap) ||
-          typeof reserve !== "string" || !/^\d+$/.test(reserve)) return null;
-      const c = Number(cap), r = Number(reserve);
+      if (
+        typeof cap !== "string" ||
+        !/^\d+$/.test(cap) ||
+        typeof reserve !== "string" ||
+        !/^\d+$/.test(reserve)
+      )
+        return null;
+      const c = Number(cap),
+        r = Number(reserve);
       if (c < 0 || c > 1000 || r < 3000 || r > 10000) return null;
-      Object.assign(policy, { defenseContributionBps: c, defenseReserveBps: r });
+      Object.assign(policy, {
+        defenseContributionBps: c,
+        defenseReserveBps: r,
+      });
     }
     if (admission === "selected") {
       const selectedApproverIds = data.getAll("approver").map(String).sort();
@@ -2152,8 +2185,10 @@ export class NationalDiplomacyPanel extends LitElement {
                                       class=${formClass}
                                       @submit=${(e: SubmitEvent) =>
                                         submit(e, (data) => {
-                                          const terms =
-                                            this.readPactTerms(data, p.kind === "MDA");
+                                          const terms = this.readPactTerms(
+                                            data,
+                                            p.kind === "MDA",
+                                          );
                                           const admin = String(
                                             data.get("administrator") ?? "",
                                           );

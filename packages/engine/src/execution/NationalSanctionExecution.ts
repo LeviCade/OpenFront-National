@@ -353,7 +353,9 @@ export class NationalSanctionExecution implements Execution {
     )
       return;
     if (decision === "comply") {
-      const empire = this.game!.nationalPoliticalAuthority()?.empireOf(actor.id());
+      const empire = this.game!.nationalPoliticalAuthority()?.empireOf(
+        actor.id(),
+      );
       actor.addEmbargo(target, false, empire ? `imperial:${empire}` : "manual");
     }
     row.response = decision;
@@ -399,7 +401,8 @@ export class NationalSanctionExecution implements Execution {
       (auth.empireOf(target.id()) === empireId && !charter.allowInternal)
     )
       throw new Error("NATIONAL: ineligible imperial sanction demand");
-    if (decision === "comply") member.addEmbargo(target, false, `imperial:${empireId}`);
+    if (decision === "comply")
+      member.addEmbargo(target, false, `imperial:${empireId}`);
     row.response = decision;
     advanceEpoch();
   }

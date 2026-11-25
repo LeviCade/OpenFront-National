@@ -1079,7 +1079,9 @@ export const NationalBlockadeIntentSchema = z.object({
   portTile: zb.uint(),
   requestId: NationalPoliticalRequestId,
 });
-export type NationalBlockadeIntent = z.infer<typeof NationalBlockadeIntentSchema>;
+export type NationalBlockadeIntent = z.infer<
+  typeof NationalBlockadeIntentSchema
+>;
 
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,

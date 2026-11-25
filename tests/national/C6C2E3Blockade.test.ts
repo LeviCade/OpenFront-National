@@ -1,4 +1,8 @@
-import { PlayerInfo, PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
+import {
+  PlayerInfo,
+  PlayerType,
+  UnitType,
+} from "@openfront/engine-api/game/GameTypes";
 import type { StampedIntent } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { NationalBlockadeExecution } from "@openfront/engine/execution/NationalBlockadeExecution";
@@ -24,7 +28,12 @@ class MaritimeConfig extends TestConfig {
 }
 
 function runner(game: Game) {
-  return new GameRunner(game, new Executor(game, "blockade-match", A), () => {}, A);
+  return new GameRunner(
+    game,
+    new Executor(game, "blockade-match", A),
+    () => {},
+    A,
+  );
 }
 function step(game: Game, run: GameRunner, intents: StampedIntent[] = []) {
   run.addTurn({ turnNumber: game.ticks(), intents });
@@ -36,9 +45,11 @@ function until(game: Game, run: GameRunner, done: () => boolean) {
 }
 async function world() {
   const game = await setup(
-    MAP, { nationalMode: true, instantBuild: true },
+    MAP,
+    { nationalMode: true, instantBuild: true },
     [A, B, C].map((id) => new PlayerInfo(id, PlayerType.Human, id, id)),
-    undefined, MaritimeConfig,
+    undefined,
+    MaritimeConfig,
   );
   const [a, b, c] = [A, B, C].map((id, i) => {
     const player = game.player(id);
@@ -63,14 +74,38 @@ async function world() {
   return { game, a, b, c, own, enemy, home, ship, start };
 }
 function war(game: Game) {
-  expect(game.performNationalWarCommandWithOutcome(game.player(A), {
-    kind: "declare-national", warId: WAR, aggressorId: A, targetId: B,
-  }).accepted).toBe(true);
+  expect(
+    game.performNationalWarCommandWithOutcome(game.player(A), {
+      kind: "declare-national",
+      warId: WAR,
+      aggressorId: A,
+      targetId: B,
+    }).accepted,
+  ).toBe(true);
 }
-function order(ship: Unit, port: Unit, requestId: string, clientID = A): StampedIntent {
-  return { type: "national_blockade", clientID, shipId: ship.id(), portId: port.id(), portTile: port.tile(), warId: WAR, requestId };
+function order(
+  ship: Unit,
+  port: Unit,
+  requestId: string,
+  clientID = A,
+): StampedIntent {
+  return {
+    type: "national_blockade",
+    clientID,
+    shipId: ship.id(),
+    portId: port.id(),
+    portTile: port.tile(),
+    warId: WAR,
+    requestId,
+  };
 }
-function sail(game: Game, run: GameRunner, owner: Player, home: Unit, dest: Unit) {
+function sail(
+  game: Game,
+  run: GameRunner,
+  owner: Player,
+  home: Unit,
+  dest: Unit,
+) {
   const voyage = new TradeShipExecution(owner, home, dest);
   game.addExecution(voyage);
   step(game, run);
@@ -96,7 +131,9 @@ describe("C6 C2 E3 player-directed physical blockade", () => {
     const positions = new Set([start, ship.tile()]);
     until(game, run, () => {
       positions.add(ship.tile());
-      return NationalBlockadeExecution.viewFor(game, a).some((r) => r.phase === "active");
+      return NationalBlockadeExecution.viewFor(game, a).some(
+        (r) => r.phase === "active",
+      );
     });
     expect(positions.size).toBeGreaterThan(1);
     expect(ship.tile()).not.toBe(start);
@@ -116,7 +153,13 @@ describe("C6 C2 E3 player-directed physical blockade", () => {
     expect(c.tradeGold()).toBe(0n);
     const cp = control.player(C);
     const bp = control.player(B);
-    const clean = sail(control, controlRun, cp, cp.units(UnitType.Port)[0], bp.units(UnitType.Port)[0]);
+    const clean = sail(
+      control,
+      controlRun,
+      cp,
+      cp.units(UnitType.Port)[0],
+      bp.units(UnitType.Port)[0],
+    );
     until(control, controlRun, () => !clean.isActive());
     expect(cp.tradeGold()).toBeGreaterThan(0n);
     expect(bp.tradeGold()).toBe(cp.tradeGold());
@@ -130,37 +173,84 @@ describe("C6 C2 E3 player-directed physical blockade", () => {
     const paid = gold(game);
     for (let i = 0; i < 8; i++) step(game, run);
     expect(gold(game)).toEqual(paid);
-    console.info("C6C2E3_BLOCKADE_WITNESS=" + JSON.stringify({
-      hull: ship.id(), visited: [...positions], turning, returned: merchant.tile(),
-      neutralOwner: merchant.owner().id(), failedTrade: "0",
-      baselinePaid: cp.tradeGold().toString(), resumedPaid: c.tradeGold().toString(),
-      before: before.map(String), after: paid.map(String),
-    }));
+    console.info(
+      "C6C2E3_BLOCKADE_WITNESS=" +
+        JSON.stringify({
+          hull: ship.id(),
+          visited: [...positions],
+          turning,
+          returned: merchant.tile(),
+          neutralOwner: merchant.owner().id(),
+          failedTrade: "0",
+          baselinePaid: cp.tradeGold().toString(),
+          resumedPaid: c.tradeGold().toString(),
+          before: before.map(String),
+          after: paid.map(String),
+        }),
+    );
   });
 
   it("rejects peace, nonowner, false coordinates, duplicate orders and stale WAR", async () => {
     const { game, a, b, enemy, ship } = await world();
     const run = runner(game);
     step(game, run, [order(ship, enemy, "peace")]);
-    expect(NationalBlockadeExecution.viewFor(game, a).some((r) => r.phase !== "rejected")).toBe(false);
+    expect(
+      NationalBlockadeExecution.viewFor(game, a).some(
+        (r) => r.phase !== "rejected",
+      ),
+    ).toBe(false);
     war(game);
-    const falseOrder = { ...order(ship, enemy, "false-position"), portTile: game.ref(0, 0) };
-    step(game, run, [order(ship, enemy, "nonowner", B), falseOrder, order(ship, enemy, "peace")]);
-    expect(NationalBlockadeExecution.viewFor(game, b).every((r) => r.phase === "rejected")).toBe(true);
-    expect(NationalBlockadeExecution.viewFor(game, a).every((r) => r.phase === "rejected")).toBe(true);
+    const falseOrder = {
+      ...order(ship, enemy, "false-position"),
+      portTile: game.ref(0, 0),
+    };
+    step(game, run, [
+      order(ship, enemy, "nonowner", B),
+      falseOrder,
+      order(ship, enemy, "peace"),
+    ]);
+    expect(
+      NationalBlockadeExecution.viewFor(game, b).every(
+        (r) => r.phase === "rejected",
+      ),
+    ).toBe(true);
+    expect(
+      NationalBlockadeExecution.viewFor(game, a).every(
+        (r) => r.phase === "rejected",
+      ),
+    ).toBe(true);
     const valid = order(ship, enemy, "valid");
     step(game, run, [valid, valid]);
     step(game, run);
-    expect(NationalBlockadeExecution.viewFor(game, a).filter((r) => r.requestId === "valid")).toHaveLength(1);
-    expect(game.performNationalWarCommandWithOutcome(a, {
-      kind: "propose-peace", warId: WAR, motionId: "blockade-peace",
-    }).accepted).toBe(true);
-    expect(game.performNationalWarCommandWithOutcome(b, {
-      kind: "accept-peace", motionId: "blockade-peace",
-    }).accepted).toBe(true);
+    expect(
+      NationalBlockadeExecution.viewFor(game, a).filter(
+        (r) => r.requestId === "valid",
+      ),
+    ).toHaveLength(1);
+    expect(
+      game.performNationalWarCommandWithOutcome(a, {
+        kind: "propose-peace",
+        warId: WAR,
+        motionId: "blockade-peace",
+      }).accepted,
+    ).toBe(true);
+    expect(
+      game.performNationalWarCommandWithOutcome(b, {
+        kind: "accept-peace",
+        motionId: "blockade-peace",
+      }).accepted,
+    ).toBe(true);
     step(game, run);
-    expect(NationalBlockadeExecution.viewFor(game, a).find((r) => r.requestId === "valid")?.phase).toBe("ended");
+    expect(
+      NationalBlockadeExecution.viewFor(game, a).find(
+        (r) => r.requestId === "valid",
+      )?.phase,
+    ).toBe("ended");
     step(game, run, [order(ship, enemy, "stale")]);
-    expect(NationalBlockadeExecution.viewFor(game, a).find((r) => r.requestId === "stale")?.phase).toBe("rejected");
+    expect(
+      NationalBlockadeExecution.viewFor(game, a).find(
+        (r) => r.requestId === "stale",
+      )?.phase,
+    ).toBe("rejected");
   });
 });

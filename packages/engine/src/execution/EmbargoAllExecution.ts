@@ -33,9 +33,7 @@ export class EmbargoAllExecution implements Execution {
       if (me.isAlliedWith(p)) continue;
 
       if (this.action === "start") {
-        if (
-          national || !me.hasEmbargoAgainst(p)
-        ) {
+        if (national || !me.hasEmbargoAgainst(p)) {
           me.addEmbargo(p, false);
         }
       } else {

@@ -4,8 +4,8 @@ import {
   NationalBlockadeIntentSchema,
   type NationalBlockadeIntent,
 } from "@openfront/engine-api/Schemas";
-import { simpleHash } from "@openfront/engine-lib/Util";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
+import { simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import type { Execution, Game, Player, Unit } from "../game/Game";
 import { blockadeRadius } from "../national/conflict/NationalMaritime";
@@ -52,11 +52,14 @@ export class NationalBlockadeExecution implements Execution {
   ) {}
 
   private static records(game: Game): NationalBlockadeExecution[] {
-    return game.executions().filter(
-      (execution): execution is NationalBlockadeExecution =>
-        execution instanceof NationalBlockadeExecution &&
-        execution.game !== null && execution.retained,
-    );
+    return game
+      .executions()
+      .filter(
+        (execution): execution is NationalBlockadeExecution =>
+          execution instanceof NationalBlockadeExecution &&
+          execution.game !== null &&
+          execution.retained,
+      );
   }
 
   private authorized(): boolean {
@@ -79,17 +82,27 @@ export class NationalBlockadeExecution implements Execution {
     const game = this.game!;
     const war = game.nationalWarAuthority();
     const politics = game.nationalPoliticalAuthority();
-    if (!war || !politics || !war.authorizeOffensiveAction(this.actor.id(), targetId))
+    if (
+      !war ||
+      !politics ||
+      !war.authorizeOffensiveAction(this.actor.id(), targetId)
+    )
       return false;
-    const layer = war.snapshot().wars.layers.find(
-      (item) => item.id === this.command.warId && item.endedTick === null,
-    );
+    const layer = war
+      .snapshot()
+      .wars.layers.find(
+        (item) => item.id === this.command.warId && item.endedTick === null,
+      );
     if (!layer) return false;
     const contains = (side: typeof layer.first, id: string) =>
-      side.kind === "nation" ? side.id === id : politics.empireOf(id) === side.id;
+      side.kind === "nation"
+        ? side.id === id
+        : politics.empireOf(id) === side.id;
     return (
-      (contains(layer.first, this.actor.id()) && contains(layer.second, targetId)) ||
-      (contains(layer.second, this.actor.id()) && contains(layer.first, targetId))
+      (contains(layer.first, this.actor.id()) &&
+        contains(layer.second, targetId)) ||
+      (contains(layer.second, this.actor.id()) &&
+        contains(layer.first, targetId))
     );
   }
 
@@ -98,38 +111,62 @@ export class NationalBlockadeExecution implements Execution {
     const ship = game.unit(this.command.shipId);
     const port = game.unit(this.command.portId);
     if (
-      !ship || !port ||
+      !ship ||
+      !port ||
       ship.owner() !== this.actor ||
       ship.type() !== UnitType.Warship ||
       port.type() !== UnitType.Port ||
-      !ship.isActive() || !port.isActive() ||
-      ship.isMarkedForDeletion() || port.isMarkedForDeletion() ||
-      ship.isUnderConstruction() || port.isUnderConstruction() ||
+      !ship.isActive() ||
+      !port.isActive() ||
+      ship.isMarkedForDeletion() ||
+      port.isMarkedForDeletion() ||
+      ship.isUnderConstruction() ||
+      port.isUnderConstruction() ||
       ship.health() <= 0 ||
       port.tile() !== this.command.portTile ||
       !game.isWater(ship.tile())
-    ) return null;
+    )
+      return null;
     return { ship, port };
   }
 
   init(game: Game): void {
     this.game = game;
     this.retained = false;
-    if (!NationalBlockadeIntentSchema.safeParse(this.command).success ||
-        !this.authorized() || !game.isValidRef(this.command.portTile)) return;
+    if (
+      !NationalBlockadeIntentSchema.safeParse(this.command).success ||
+      !this.authorized() ||
+      !game.isValidRef(this.command.portTile)
+    )
+      return;
     const records = NationalBlockadeExecution.records(game);
-    if (records.filter((record) => record.actor === this.actor).length >= MAX_MISSIONS ||
-        records.some((record) => record.actor === this.actor &&
-          record.command.requestId === this.command.requestId)) return;
+    if (
+      records.filter((record) => record.actor === this.actor).length >=
+        MAX_MISSIONS ||
+      records.some(
+        (record) =>
+          record.actor === this.actor &&
+          record.command.requestId === this.command.requestId,
+      )
+    )
+      return;
     this.retained = true;
     // Sight is obtained before accepting the foreign ID or its claimed tile.
     // Rejections are silent; callers cannot query for hidden port coordinates.
-    const visible = collectLiveNationalObservation(game, this.actor.id()).observation;
-    if (!visible.visibleAssets.some((asset) =>
-        asset.id === String(this.command.portId) &&
-        asset.kind === "structure" &&
-        asset.x === game.x(this.command.portTile) &&
-        asset.y === game.y(this.command.portTile))) return;
+    const visible = collectLiveNationalObservation(
+      game,
+      this.actor.id(),
+    ).observation;
+    if (
+      !visible.visibleAssets.some(
+        (asset) =>
+          asset.id === String(this.command.portId) &&
+          asset.kind === "structure" &&
+          asset.x === game.x(this.command.portTile) &&
+          asset.y === game.y(this.command.portTile),
+      )
+    )
+      return;
     const units = this.liveUnits();
     if (!units || !this.exactWar(units.port.owner().id())) return;
     const { ship, port } = units;
@@ -139,9 +176,15 @@ export class NationalBlockadeExecution implements Execution {
     const approaches = [port.tile()];
     game.forEachNeighbor(port.tile(), (tile) => approaches.push(tile));
     const approach = approaches
-      .filter((tile) => game.isWater(tile) && game.getWaterComponent(tile) === component)
-      .sort((a, b) => game.manhattanDist(ship.tile(), a) -
-        game.manhattanDist(ship.tile(), b) || a - b)[0];
+      .filter(
+        (tile) =>
+          game.isWater(tile) && game.getWaterComponent(tile) === component,
+      )
+      .sort(
+        (a, b) =>
+          game.manhattanDist(ship.tile(), a) -
+            game.manhattanDist(ship.tile(), b) || a - b,
+      )[0];
     if (approach === undefined) return;
     const politics = game.nationalPoliticalAuthority()!;
     for (const record of records) {
@@ -162,15 +205,20 @@ export class NationalBlockadeExecution implements Execution {
 
   private current(): { ship: Unit; port: Unit } | null {
     const mission = this.mission;
-    if (!mission || mission.phase === "ended" || !this.authorized()) return null;
+    if (!mission || mission.phase === "ended" || !this.authorized())
+      return null;
     const politics = this.game!.nationalPoliticalAuthority()!;
     const units = this.liveUnits();
-    if (!units ||
-        politics.empireOf(this.actor.id()) !== mission.empire ||
-        politics.warPolicyVersionFor(this.actor.id()) !== mission.authorityVersion ||
-        units.port.owner().id() !== mission.targetOwner ||
-        units.ship.warshipState().patrolTile !== mission.approach ||
-        !this.exactWar(mission.targetOwner)) return null;
+    if (
+      !units ||
+      politics.empireOf(this.actor.id()) !== mission.empire ||
+      politics.warPolicyVersionFor(this.actor.id()) !==
+        mission.authorityVersion ||
+      units.port.owner().id() !== mission.targetOwner ||
+      units.ship.warshipState().patrolTile !== mission.approach ||
+      !this.exactWar(mission.targetOwner)
+    )
+      return null;
     return units;
   }
 
@@ -181,7 +229,8 @@ export class NationalBlockadeExecution implements Execution {
       ship.warshipState().state === "patrolling" &&
       component !== null &&
       game.hasWaterComponent(port.tile(), component) &&
-      game.euclideanDistSquared(ship.tile(), port.tile()) <= blockadeRadius(game) ** 2
+      game.euclideanDistSquared(ship.tile(), port.tile()) <=
+        blockadeRadius(game) ** 2
     );
   }
 
@@ -217,7 +266,10 @@ export class NationalBlockadeExecution implements Execution {
   /** No other player can inspect the command journal. */
   static viewFor(game: Game, actor: Player) {
     return this.records(game)
-      .filter((record) => record.actor === actor && actor.clientID() === record.clientId)
+      .filter(
+        (record) =>
+          record.actor === actor && actor.clientID() === record.clientId,
+      )
       .map((record) => ({
         requestId: record.command.requestId,
         shipId: record.command.shipId,
@@ -229,11 +281,15 @@ export class NationalBlockadeExecution implements Execution {
   static stateHash(game: Game): number {
     const records = this.records(game);
     if (records.length === 0) return 0;
-    return simpleHash(JSON.stringify(records.map((record) => ({
-      actor: record.actor.id(),
-      command: record.command,
-      mission: record.mission,
-    }))));
+    return simpleHash(
+      JSON.stringify(
+        records.map((record) => ({
+          actor: record.actor.id(),
+          command: record.command,
+          mission: record.mission,
+        })),
+      ),
+    );
   }
 
   isActive(): boolean {

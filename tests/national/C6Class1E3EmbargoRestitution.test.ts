@@ -9,9 +9,9 @@ import { NationalUltimatumExecution } from "@openfront/engine/execution/National
 import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecution";
 import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
+import { encodeSnapshotValue } from "@openfront/engine/snapshot/SnapshotCodec";
 import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
-import { encodeSnapshotValue } from "@openfront/engine/snapshot/SnapshotCodec";
 import { restoreTestGame, roundTrip } from "../util/Snapshot";
 
 const MAP = "half_land_half_ocean";
@@ -201,7 +201,15 @@ describe("C6 Class 1 E3: actual enforced bilateral restitution", () => {
     const issuer = restored.player(ISSUER);
     const payer = restored.player(DELEGATE);
     const before = [issuer.gold(), payer.gold()];
-    decide(restored, issuer, id, DELEGATE, "legacy-offer", "accept", "legacy-accept");
+    decide(
+      restored,
+      issuer,
+      id,
+      DELEGATE,
+      "legacy-offer",
+      "accept",
+      "legacy-accept",
+    );
     issuer.stopEmbargo(payer);
     expect(issuer.canTrade(payer)).toBe(false);
     expect([issuer.gold(), payer.gold()]).toEqual(before);

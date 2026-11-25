@@ -81,7 +81,13 @@ function ids(value: unknown): value is string[] {
 function terms(value: unknown): NationalPactTerms | null {
   if (
     !record(value) ||
-    !keys(value, ["admission", "expulsion", "selectedApproverIds", "defenseContributionBps", "defenseReserveBps"]) ||
+    !keys(value, [
+      "admission",
+      "expulsion",
+      "selectedApproverIds",
+      "defenseContributionBps",
+      "defenseReserveBps",
+    ]) ||
     (value.admission !== "leader" &&
       value.admission !== "unanimous" &&
       value.admission !== "selected" &&

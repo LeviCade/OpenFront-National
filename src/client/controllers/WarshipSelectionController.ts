@@ -15,7 +15,10 @@ import {
 } from "../InputHandler";
 import { MapRenderer } from "../render/gl";
 import { TransformHandler } from "../TransformHandler";
-import { MoveWarshipIntentEvent, NationalBlockadeIntentEvent } from "../Transport";
+import {
+  MoveWarshipIntentEvent,
+  NationalBlockadeIntentEvent,
+} from "../Transport";
 import { GameView, UnitView } from "../view";
 
 const WARSHIP_SELECTION_RADIUS = 10;
@@ -210,7 +213,8 @@ export class WarshipSelectionController implements Controller {
   /** Selecting a single owned hull, then a visible hostile port, orders a blockade. */
   private tryBlockade(tile: TileRef): boolean {
     const ship = this.selectedUnit;
-    if (!ship || !this.game.config?.().gameConfig?.()?.nationalMode) return false;
+    if (!ship || !this.game.config?.().gameConfig?.()?.nationalMode)
+      return false;
     const actor = this.game.myPlayer();
     if (!actor || ship.owner() !== actor || !ship.isActive()) return false;
     const port = this.game
@@ -223,8 +227,10 @@ export class WarshipSelectionController implements Controller {
       return false;
     const empireOf = (id: string) =>
       politics.empires.find((empire) => empire.memberIds.includes(id))?.id;
-    const contains = (side: { kind: "nation" | "empire"; id: string }, id: string) =>
-      side.kind === "nation" ? side.id === id : side.id === empireOf(id);
+    const contains = (
+      side: { kind: "nation" | "empire"; id: string },
+      id: string,
+    ) => (side.kind === "nation" ? side.id === id : side.id === empireOf(id));
     const war = conflicts.layers
       .filter(
         (layer) =>
