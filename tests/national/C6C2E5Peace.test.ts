@@ -120,9 +120,9 @@ async function fixture(layered = false, incoming = false) {
     });
     click();
     expect(
-      game.nationalWarState()?.wars.motions.some(
-        (motion) => motion.proposedBy === human.id,
-      ),
+      game
+        .nationalWarState()
+        ?.wars.motions.some((motion) => motion.proposedBy === human.id),
     ).toBe(true);
   }
   game.addExecution(new NationExecution(MATCH, nation));
@@ -136,9 +136,11 @@ function layer(game: Game, id: string) {
 }
 
 function aiMotion(game: Game) {
-  return game.nationalWarState()?.wars.motions.find(
-    (motion) => motion.layerId === WAR && motion.proposedBy === bot.id,
-  );
+  return game
+    .nationalWarState()
+    ?.wars.motions.find(
+      (motion) => motion.layerId === WAR && motion.proposedBy === bot.id,
+    );
 }
 
 describe("C6C2-E5-AI-PEACE canonical GameRunner witness", () => {
@@ -154,7 +156,10 @@ describe("C6C2-E5-AI-PEACE canonical GameRunner witness", () => {
       expect(layer(game, WAR).endedTick).toBeNull();
       const b = game.player(human.id);
       expect(b.outgoingAttacks().length).toBeGreaterThan(0);
-      const observed = collectLiveNationalObservation(game, human.id).observation;
+      const observed = collectLiveNationalObservation(
+        game,
+        human.id,
+      ).observation;
       expect(observed.peaceNegotiations).toContainEqual(
         expect.objectContaining({
           warId: WAR,
@@ -183,17 +188,18 @@ describe("C6C2-E5-AI-PEACE canonical GameRunner witness", () => {
         game.nationalWarState()?.wars.motions.find((m) => m.id === motion!.id)
           ?.acceptedBy,
       ).toBe(human.id);
-      expect(game.nationalWarAuthority()?.atWar(bot.id, human.id)).toBe(layered);
+      expect(game.nationalWarAuthority()?.atWar(bot.id, human.id)).toBe(
+        layered,
+      );
       if (layered) expect(layer(game, IMPERIAL).endedTick).toBeNull();
       const a = game.player(bot.id);
       const land = a.numTilesOwned();
       const botTerritory = [...a.tiles()];
       const opponentTerritory = [...b.tiles()];
       const reserve = b.troops();
-      const surviving = b.outgoingAttacks().reduce(
-        (sum, attack) => sum + attack.troops(),
-        0,
-      );
+      const surviving = b
+        .outgoingAttacks()
+        .reduce((sum, attack) => sum + attack.troops(), 0);
       expect(surviving).toBeGreaterThan(0);
       for (let i = 0; i < (layered ? 5 : 35); i++) {
         advance();
@@ -205,14 +211,21 @@ describe("C6C2-E5-AI-PEACE canonical GameRunner witness", () => {
         // Neutral expansion is lawful; neither belligerent may seize the
         // other's territory, and surviving assault troops must return.
         expect(botTerritory.every((tile) => a.tiles().has(tile))).toBe(true);
-        expect(opponentTerritory.every((tile) => b.tiles().has(tile))).toBe(true);
-        expect(a.outgoingAttacks().filter((attack) => attack.target() === b))
-          .toHaveLength(0);
+        expect(opponentTerritory.every((tile) => b.tiles().has(tile))).toBe(
+          true,
+        );
+        expect(
+          a.outgoingAttacks().filter((attack) => attack.target() === b),
+        ).toHaveLength(0);
         expect(b.troops()).toBeGreaterThanOrEqual(reserve + surviving);
-        expect(game.nationalWarAuthority()?.atWar(bot.id, human.id)).toBe(false);
+        expect(game.nationalWarAuthority()?.atWar(bot.id, human.id)).toBe(
+          false,
+        );
       } else {
         expect(
-          game.nationalWarAuthority()?.authorizeOffensiveAction(human.id, bot.id),
+          game
+            .nationalWarAuthority()
+            ?.authorizeOffensiveAction(human.id, bot.id),
         ).toBe(true);
         expect(b.outgoingAttacks().length).toBeGreaterThan(0);
       }
@@ -298,6 +311,25 @@ describe("C6C2-E5-AI-PEACE canonical GameRunner witness", () => {
     ).toContainEqual(
       expect.objectContaining({ accepted: false, requestId: "e5-duplicate" }),
     );
+    const completedWar = game.nationalWarState()?.wars;
+    advance({
+      type: "national_accept_peace",
+      motionId: motion.id,
+      requestId: "e5-valid",
+    });
+    advance();
+    advance({
+      type: "national_propose_peace",
+      warId: WAR,
+      requestId: "e5-closed",
+    });
+    advance();
+    expect(game.nationalWarState()?.wars).toEqual(completedWar);
+    expect(
+      game.nationalWarCommandResults(game.player(human.id)),
+    ).toContainEqual(
+      expect.objectContaining({ accepted: false, requestId: "e5-closed" }),
+    );
   });
 
   it("current crown and national delegation control private capabilities", async () => {
@@ -356,17 +388,110 @@ describe("C6C2-E5-AI-PEACE canonical GameRunner witness", () => {
     expect(layer(game, WAR).endedTick).toBeNull();
   });
 
+  it("a real AI member negotiates its national layer only after delegation", async () => {
+    const game = await fixture();
+    const emperor = game.player(outsider.id);
+    const member = game.player(bot.id);
+    const empireId = "e5-member-empire";
+    game.performNationalCommand(emperor, { kind: "found-empire", empireId });
+    game.performNationalCommand(emperor, {
+      kind: "offer-empire",
+      empireId,
+      candidateId: bot.id,
+    });
+    game.performNationalCommand(member, {
+      kind: "accept-empire",
+      empireId,
+      candidateId: bot.id,
+    });
+    game.performNationalWarCommand(emperor, {
+      kind: "declare-imperial",
+      warId: IMPERIAL,
+      aggressor: { kind: "empire", id: empireId },
+      target: { kind: "nation", id: human.id },
+    });
+    const observe = () =>
+      collectLiveNationalObservation(game, bot.id).observation
+        .peaceNegotiations ?? [];
+    expect(observe()).toEqual([]);
+    const advance = runner(game);
+    for (let i = 0; i < 5; i++) advance();
+    expect(aiMotion(game)).toBeUndefined();
+    member.setTroops(400);
+    game.performNationalCommand(emperor, {
+      kind: "set-national-peace-delegation",
+      empireId,
+      memberId: bot.id,
+      enabled: true,
+    });
+    expect(observe().map((item) => item.warId)).toEqual([WAR]);
+    for (let i = 0; i < 15 && !aiMotion(game); i++) advance();
+    const motion = aiMotion(game);
+    expect(motion).toBeDefined();
+    expect(
+      game
+        .nationalWarState()
+        ?.wars.motions.some(
+          (item) => item.layerId === IMPERIAL && item.proposedBy === bot.id,
+        ),
+    ).toBe(false);
+    advance({
+      type: "national_accept_peace",
+      motionId: motion!.id,
+      requestId: "e5-delegated-accept",
+    });
+    advance();
+    expect(layer(game, WAR).endedTick).not.toBeNull();
+    expect(layer(game, IMPERIAL).endedTick).toBeNull();
+    expect(game.nationalWarAuthority()?.atWar(bot.id, human.id)).toBe(true);
+  });
+
+  it("an AI emperor accepts an actual imperial offer and preserves national WAR", async () => {
+    const game = await fixture();
+    const emperor = game.player(bot.id);
+    const empireId = "e5-ai-empire";
+    game.performNationalCommand(emperor, { kind: "found-empire", empireId });
+    game.performNationalWarCommand(emperor, {
+      kind: "declare-imperial",
+      warId: IMPERIAL,
+      aggressor: { kind: "empire", id: empireId },
+      target: { kind: "nation", id: human.id },
+    });
+    const advance = runner(game);
+    advance({
+      type: "national_propose_peace",
+      warId: IMPERIAL,
+      requestId: "e5-imperial-incoming",
+    });
+    for (let i = 0; i < 20 && layer(game, IMPERIAL).endedTick === null; i++)
+      advance();
+    expect(layer(game, IMPERIAL).endedTick).not.toBeNull();
+    expect(layer(game, WAR).endedTick).toBeNull();
+    expect(game.nationalWarState()?.wars.motions).toContainEqual(
+      expect.objectContaining({
+        layerId: IMPERIAL,
+        proposedBy: human.id,
+        acceptedBy: bot.id,
+      }),
+    );
+    expect(game.nationalWarAuthority()?.atWar(bot.id, human.id)).toBe(true);
+  });
+
   it("no foreign balance or controller identity changes the peace decision", async () => {
     const game = await fixture();
     const before = collectLiveNationalObservation(game, bot.id).observation;
     const foe = game.player(human.id);
     foe.setTroops(9_000_000);
     foe.addGold(1_000_000n);
-    foe.setPlayerInfo(new PlayerInfo("Opponent", PlayerType.Nation, null, human.id));
+    foe.setPlayerInfo(
+      new PlayerInfo("Opponent", PlayerType.Nation, null, human.id),
+    );
     expect(foe.type()).toBe(PlayerType.Nation);
     const after = collectLiveNationalObservation(game, bot.id).observation;
     expect(after).toEqual(before);
-    expect(planNationalPeace(after, null)).toEqual(planNationalPeace(before, null));
+    expect(planNationalPeace(after, null)).toEqual(
+      planNationalPeace(before, null),
+    );
     // Controller identity is intentionally not part of the observation DTO.
     expect(after.nations.every((n) => !("controllerKind" in n))).toBe(true);
   });

@@ -111,7 +111,9 @@ export function planNationalPeace(
       (overmatched && ownResources.troops <= 1000) ||
       (attrition && (overmatched || visibleThreat));
     const exhaustedRemoteWar =
-      !reachable && !visibleThreat && tick - war.startedTick >= 180 &&
+      !reachable &&
+      !visibleThreat &&
+      tick - war.startedTick >= 180 &&
       ownResources.troops <= 1000;
     if (!((reachable || visibleThreat) && vulnerable) && !exhaustedRemoteWar)
       continue;

@@ -11,7 +11,6 @@ import { PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import type { Game, Player } from "../../game/Game";
 import type { NationalRecipientDiplomacy } from "../politics/PoliticalAuthorityAdapter";
 import { projectLiveNationalAssessments } from "./NationalAssessment";
-import { projectNationalPublicConflict } from "./NationalOutbound";
 import {
   projectNationalObservation,
   type AssetKind,
@@ -20,6 +19,7 @@ import {
   type NationalWorld,
   type SovereignStatus,
 } from "./NationalObservation";
+import { projectNationalPublicConflict } from "./NationalOutbound";
 
 interface PoliticalReadFacade {
   empireOf(id: string): string | null;
@@ -595,7 +595,9 @@ export function collectLiveNationalObservation(
           .filter((motion) => motion.proposingSide !== side)
           .map((motion) => motion.id)
           .sort(),
-        outgoingPending: pending.some((motion) => motion.proposingSide === side),
+        outgoingPending: pending.some(
+          (motion) => motion.proposingSide === side,
+        ),
       });
     }
   }

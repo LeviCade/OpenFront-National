@@ -38,19 +38,19 @@ import {
   type NationalEconomicMemory,
 } from "../national/ai/NationalEconomicPlanner";
 import {
-  deriveNationalWarSides,
-  initialNationalPlannerMemory,
-  planNationalInterest,
-  recordNationalWarOutcome,
-  type NationalPlannerMemory,
-} from "../national/ai/NationalPlanner";
-import {
   holdsNationalPeace,
   NationalPeaceMemorySchema,
   planNationalPeace,
   recordNationalPeaceOutcome,
   type NationalPeaceMemory,
 } from "../national/ai/NationalPeaceStrategy";
+import {
+  deriveNationalWarSides,
+  initialNationalPlannerMemory,
+  planNationalInterest,
+  recordNationalWarOutcome,
+  type NationalPlannerMemory,
+} from "../national/ai/NationalPlanner";
 import {
   initialAIPoliticalMemory,
   planAIPoliticalInterest,
@@ -441,7 +441,8 @@ export class NationExecution implements Execution {
           outcome.recipientId !== player.id() ||
           outcome.tick !== observation.tick ||
           (outcome.accepted &&
-            (outcome.warId !== choice.warId || outcome.motionId !== motionId)) ||
+            (outcome.warId !== choice.warId ||
+              outcome.motionId !== motionId)) ||
           outcome.commandKind !==
             (choice.kind === "propose-peace"
               ? "national_propose_peace"
