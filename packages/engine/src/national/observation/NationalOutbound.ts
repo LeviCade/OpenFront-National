@@ -136,8 +136,7 @@ function publicPolitics(
     packet.tick === game.ticks()
       ? (game.nationalPublicPoliticalView()?.victory ?? null)
       : null;
-  const victory =
-    candidate?.confirmedTick === undefined ? null : candidate;
+  const victory = candidate?.confirmedTick === undefined ? null : candidate;
   return {
     empires: source.empires.map((empire) => ({
       id: empire.id,

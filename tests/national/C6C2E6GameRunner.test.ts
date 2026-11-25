@@ -130,14 +130,12 @@ describe("Sixth Conductor Second Class E6 GameRunner endgame", () => {
         unclaimed:
           m.game.numLandTiles() -
           m.game.players().reduce((sum, p) => sum + p.numTilesOwned(), 0),
-        players: m.game
-          .players()
-          .map((p) => ({
-            id: p.id(),
-            tiles: p.numTilesOwned(),
-            troops: p.troops(),
-            gold: String(p.gold()),
-          })),
+        players: m.game.players().map((p) => ({
+          id: p.id(),
+          tiles: p.numTilesOwned(),
+          troops: p.troops(),
+          gold: String(p.gold()),
+        })),
         snapshotSha256: createHash("sha256")
           .update(restored.bytes)
           .digest("hex"),
@@ -172,8 +170,14 @@ describe("Sixth Conductor Second Class E6 GameRunner endgame", () => {
     expect(m.wins).toEqual([]);
     expect(m.packet().nationalPolitics?.victory).toBeNull();
     m.transfer(A, B, "e6-late");
-    expect(m.game.nationalPoliticalAuthority()?.empireExists(EMPIRE)).toBe(false);
-    expect(m.game.nationalPoliticalCommandResults(m.game.player(A)).find((r) => r.requestId === "e6-late")?.accepted).toBe(false);
+    expect(m.game.nationalPoliticalAuthority()?.empireExists(EMPIRE)).toBe(
+      false,
+    );
+    expect(
+      m.game
+        .nationalPoliticalCommandResults(m.game.player(A))
+        .find((r) => r.requestId === "e6-late")?.accepted,
+    ).toBe(false);
     expect(m.wins).toEqual([]);
   }, 120_000);
 });

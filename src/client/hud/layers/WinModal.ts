@@ -1272,8 +1272,7 @@ export class WinModal extends LitElement implements Controller {
                 </p>
               `
             : html`<p role="status">
-                ${this.nationalResolution}
-                ${this.nationalWarStatus}
+                ${this.nationalResolution} ${this.nationalWarStatus}
                 <button
                   type="button"
                   class="ml-2 min-h-11 underline focus-visible:outline-2"

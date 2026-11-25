@@ -16,8 +16,6 @@ import {
   acceptTrustedNationalPrivateCapability,
   revokeTrustedNationalPrivateCapability,
 } from "../../../src/client/NationalPrivateCapability";
-import { encodeNationalRecipientProjection } from "../../../src/server/national/NationalRecipientWire";
-import { makeGameView, stubConfig } from "../../util/viewStubs";
 import {
   nationalCrisisAt,
   nationalVictoryAt,
@@ -32,6 +30,7 @@ import {
   readTrustedVictory,
 } from "../../../src/client/TrustedNationalSession";
 import type { GameView } from "../../../src/client/view";
+import { encodeNationalRecipientProjection } from "../../../src/server/national/NationalRecipientWire";
 import {
   A,
   B,
@@ -41,6 +40,7 @@ import {
   infos,
   scenario,
 } from "../../national/C6C2E6Scenario";
+import { makeGameView, stubConfig } from "../../util/viewStubs";
 
 vi.mock("../../../src/client/Utils", () => ({
   translateText: (key: string) => key,
@@ -157,12 +157,26 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
       config: config.gameConfig(),
       players: infos.map((p) => ({ clientID: p.clientID })),
     } as WireGameStartInfo;
-    expect(acceptTrustedNationalPrivateCapability(bus, {
-      type: "national_start", gameStartInfo: start, myClientID: clientID, tick: m.game.ticks(),
-    }, {
-      gameID: view.gameID(), start, startClientID: clientID,
-      remoteSocketOpen: true, sessionReady: true, replay: false, spectator: false,
-    })).toBe(true);
+    expect(
+      acceptTrustedNationalPrivateCapability(
+        bus,
+        {
+          type: "national_start",
+          gameStartInfo: start,
+          myClientID: clientID,
+          tick: m.game.ticks(),
+        },
+        {
+          gameID: view.gameID(),
+          start,
+          startClientID: clientID,
+          remoteSocketOpen: true,
+          sessionReady: true,
+          replay: false,
+          spectator: false,
+        },
+      ),
+    ).toBe(true);
     const modal = document.createElement("win-modal") as WinModal;
     modal.eventBus = bus;
     modal.game = view;
@@ -175,13 +189,19 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
     const advance = async () => {
       m.tick();
       const raw = recipient.packet();
-      const decoded = parseTrustedNationalProjection(encodeNationalRecipientProjection(raw), raw.tick);
+      const decoded = parseTrustedNationalProjection(
+        encodeNationalRecipientProjection(raw),
+        raw.tick,
+      );
       const delta = continuity.acceptProjection(decoded);
       const update = materializeTrustedNationalUpdate(decoded, prior);
       prior = update.tick;
       if (delta.clearAllTiles) view.resetTrustedTileSight();
       view.reconcileTrustedTileVisibility(delta.removedTileRefs);
-      view.reconcileTrustedUnitVisibility(delta.clearAllUnits, delta.removedUnitIds);
+      view.reconcileTrustedUnitVisibility(
+        delta.clearAllUnits,
+        delta.removedUnitIds,
+      );
       update.packedUnitUpdates = delta.nativeUnits;
       view.applyTrustedUnitPage(update, delta, continuity);
       view.setTrustedProjectionReady(delta.usable);
@@ -189,11 +209,14 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
       modal.tick();
       await modal.updateComplete;
     };
-    for (let i = 0; i < 10 && !view.trustedProjectionReady(); i++) await advance();
+    for (let i = 0; i < 10 && !view.trustedProjectionReady(); i++)
+      await advance();
     expect(view.myPlayer()?.id()).toBe(A);
     expect(view.nationalConflicts()?.recipientId).toBe(A);
     expect(view.nationalPoliticsTick()).toBe(view.ticks());
-    expect(modal.querySelector('[data-national-crisis="active"]')).not.toBeNull();
+    expect(
+      modal.querySelector('[data-national-crisis="active"]'),
+    ).not.toBeNull();
     const select = modal.querySelector("select")!;
     select.value = B;
     select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -201,7 +224,9 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
     const form = modal.querySelector("form")!;
     // Revocation is immediate, even before the stale DOM is re-rendered.
     revokeTrustedNationalPrivateCapability(bus, view.gameID());
-    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    form.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
     expect(events).toEqual([]);
     await modal.updateComplete;
     expect(modal.querySelector("[data-national-crisis]")).toBeNull();
