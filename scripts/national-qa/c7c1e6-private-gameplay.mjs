@@ -235,6 +235,48 @@ export async function runPrivateNativeGameplay({
     ownDisclosure(ss[2], pact) === null,
   );
   assert.equal(ownDisclosure(current[1], pact).terms.expulsion, "forbidden");
+
+  // The legitimate browser controls never expose these hostile actions.
+  // Explicit negative probes go through the existing authenticated socket.
+  stage("same-match unauthorized outsider and forged sovereign claim");
+  const denied = async (intent) => {
+    await c.sendNegative(intent);
+    await until(() => c.observed.receipts.has(intent.requestId), "canonical negative receipt", 30_000);
+    const receipt = c.observed.receipts.get(intent.requestId);
+    assert.equal(receipt.actorId, actors[2]);
+    assert.equal(receipt.recipientId, actors[2]);
+    assert.equal(receipt.accepted, false);
+    assert(!a.observed.receipts.has(intent.requestId));
+    assert(!b.observed.receipts.has(intent.requestId));
+  };
+  await denied({ type: "national_accept_pact", pactId: pact, requestId: "c7-e6-outsider-denied" });
+  await denied({
+    type: "national_declare_war",
+    scope: "national",
+    nationId: actors[0],
+    targetId: actors[1],
+    targetKind: "nation",
+    requestId: "c7-e6-forged-actor-denied",
+  });
+  await wait("negative actions leave pact and war state unchanged", (ss) =>
+    ss.every(s => s.politics?.pacts?.some(p => p.id === pact && p.memberIds.length === 1 && p.memberIds[0] === actors[0]) &&
+      !s.conflicts?.layers?.some(l => l.endedTick === null))
+  );
+  mark("same-match-denials", { outsider: true, forgedSovereign: true, foreignReceiptLeak: false });
+
+  stage("same-match duplicate request and foreign replay");
+  const original = [...a.observed.politicalIntents.values()].find(i => i.type === "national_found_pact" && i.pactId === pact);
+  assert(original?.requestId);
+  await until(() => a.observed.receipts.get(original.requestId)?.accepted === true, "original native founding receipt");
+  const canonical = a.observed.receipts.get(original.requestId);
+  const replayStart = current.map(s => s.tick);
+  await a.sendNegative(original);
+  await c.sendNegative(original);
+  await wait("ticks advance after replay probes", ss => ss.every((s,i) => s.tick > replayStart[i] + 3));
+  assert.equal(a.observed.receipts.get(original.requestId).tick, canonical.tick);
+  assert.equal(a.observed.receipts.get(original.requestId).sequence, canonical.sequence);
+  assert(!c.observed.receipts.has(original.requestId));
+  mark("same-match-replay-denied", { sameActor: true, crossActor: true });
   await nativeClick(b, pactRow + ' [data-national-pact-action="accept"]');
   await wait("canonical pact consent", (ss) =>
     ss.every((s) => s.politics?.pacts?.some((p) => p.id === pact && p.memberIds.length === 2)) &&
@@ -341,6 +383,15 @@ export async function runPrivateNativeGameplay({
     120_000,
   );
   mark("durable-recovery", recovered);
+  stage("same-match old command replay on recovered lease");
+  const afterRecovery = current.map(s => s.tick);
+  await a.sendNegative(original);
+  await c.sendNegative(original);
+  await wait("recovered authority advances after stale request", ss => ss.every((s,i) => s.tick > afterRecovery[i] + 3));
+  assert.equal(a.observed.receipts.get(original.requestId).tick, canonical.tick);
+  assert.equal(a.observed.receipts.get(original.requestId).sequence, canonical.sequence);
+  assert(!c.observed.receipts.has(original.requestId));
+  mark("post-recovery-replay-denied", { durableRequestOwnership: true });
   await panel(c, true);
   await nativeSelect(c, "#national-peace-motion-id", motion);
   await nativeClick(c, "#national-accept-peace");

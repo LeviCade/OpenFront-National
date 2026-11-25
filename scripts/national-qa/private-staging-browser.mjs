@@ -5,6 +5,8 @@ import { GameMapSize, GameMapType } from "@openfront/engine-api/game/GameTypes";
 import {
   createGameWireContext,
   decodeServerMessage,
+  decodeClientMessage,
+  encodeClientMessage,
 } from "@openfront/shared/ZbinWire";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -147,6 +149,7 @@ async function openProfile(executable, index, email) {
   const profileRequests = new Set();
   const localSockets = new Set();
   const authoritySockets = new Map();
+  const socketUrls = new Map();
   const observed = {
     mail: 0,
     exchange: 0,
@@ -156,6 +159,8 @@ async function openProfile(executable, index, email) {
     missingMusicRequests: 0,
     lobby: null,
     authority: null,
+    politicalIntents: new Map(),
+    receipts: new Map(),
     projection: null,
     authorityStarts: 0,
     authorityCloses: 0,
@@ -235,9 +240,34 @@ async function openProfile(executable, index, email) {
       ) {
         observed.authorityCloses++;
         authoritySockets.delete(m.params.requestId);
+        socketUrls.delete(m.params.requestId);
       }
       if (m.method === "Network.webSocketCreated") {
-        if (allowedLocal(m.params.url)) localSockets.add(m.params.requestId);
+        if (allowedLocal(m.params.url)) {
+          localSockets.add(m.params.requestId);
+          socketUrls.set(m.params.requestId, m.params.url);
+        }
+      }
+      if (
+        functionalSoftware &&
+        m.method === "Network.webSocketFrameSent" &&
+        authoritySockets.has(m.params.requestId) &&
+        m.params.response.opcode === 2
+      ) {
+        const binding = authoritySockets.get(m.params.requestId);
+        try {
+          const message = decodeClientMessage(
+            Buffer.from(m.params.response.payloadData, "base64"),
+            binding.context,
+          );
+          if (
+            message.type === "intent" &&
+            message.intent.type.startsWith("national_") &&
+            typeof message.intent.requestId === "string"
+          ) observed.politicalIntents.set(message.intent.requestId, message.intent);
+        } catch {
+          observed.invalidAuthorityFrame = true;
+        }
       }
       if (
         m.method === "Network.webSocketFrameReceived" &&
@@ -258,6 +288,7 @@ async function openProfile(executable, index, email) {
               actor: trustedNationalPrincipal(packet),
               seat: packet.myClientID,
               match: packet.gameStartInfo.gameID,
+              socketUrl: socketUrls.get(socket),
             };
             if (
               observed.authority &&
@@ -288,6 +319,7 @@ async function openProfile(executable, index, email) {
             for (const receipt of parsed.nationalCommandResults ?? []) {
               assert.equal(receipt.actorId, binding.actor);
               assert.equal(receipt.recipientId, binding.actor);
+              if (receipt.requestId) observed.receipts.set(receipt.requestId, receipt);
             }
             observed.projection = parsed;
             observed.authorityFrames++;
@@ -483,7 +515,40 @@ async function openProfile(executable, index, email) {
   );
   assert((await refreshCredential()) !== first, "refresh cookie unchanged");
   passed("independent-profile-" + index + "-normal-login-and-rotating-reload");
-  return { account: observed.account, send, evaluate, click, observed };
+  // Only the isolated QA browser's existing authenticated socket is used.
+  // No successful action is injected: this helper is exclusively for deliberate
+  // denial/replay probes against the very same native gameplay match.
+  async function sendNegative(intent) {
+    assert(functionalSoftware);
+    assert(["national_accept_pact", "national_declare_war", "national_found_pact"].includes(intent.type));
+    const binding = observed.authority;
+    assert(binding && binding.socketUrl && allowedLocal(binding.socketUrl));
+    const data = Buffer.from(encodeClientMessage({ type: "intent", intent }, binding.context)).toString("base64");
+    const objectGroup = "e6-negative-wire-probe";
+    try {
+      const prototype = await send("Runtime.evaluate", {
+        expression: "WebSocket.prototype",
+        objectGroup,
+        returnByValue: false,
+      });
+      assert(prototype.result.objectId);
+      const result = await send("Runtime.queryObjects", {
+        prototypeObjectId: prototype.result.objectId,
+        objectGroup,
+      });
+      assert(result.objects.objectId);
+      const sent = await send("Runtime.callFunctionOn", {
+        objectId: result.objects.objectId,
+        functionDeclaration: "function(url, data) { const live = this.filter(s => s.readyState === WebSocket.OPEN && s.url === url); if (live.length !== 1) return false; live[0].send(Uint8Array.from(atob(data), c => c.charCodeAt(0))); return true; }",
+        arguments: [{ value: binding.socketUrl }, { value: data }],
+        returnByValue: true,
+      });
+      assert.equal(sent.result.value, true, "unique live game socket required");
+    } finally {
+      await send("Runtime.releaseObjectGroup", { objectGroup });
+    }
+  }
+  return { account: observed.account, send, evaluate, click, observed, sendNegative };
 }
 
 try {
