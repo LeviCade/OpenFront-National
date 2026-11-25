@@ -388,7 +388,10 @@ export class NationExecution implements Execution {
       return;
     const verified = collectLiveNationalObservation(this.mg, player.id());
     const observation = verified.observation;
-    if (observation.wars.length > 0 || this.nationalPeaceMemory !== null) {
+    if (
+      player.type() === PlayerType.Nation &&
+      (observation.wars.length > 0 || this.nationalPeaceMemory !== null)
+    ) {
       const peace = planNationalPeace(observation, this.nationalPeaceMemory);
       this.nationalPeaceMemory = peace.memory;
       if (peace.choice !== null) {

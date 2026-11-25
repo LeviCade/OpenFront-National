@@ -18,7 +18,7 @@ jobs:
           - gate: typecheck
             command: npm run typecheck
           - gate: focused
-            command: npx --no-install vitest run --project node tests/national/C6C2E5Peace.test.ts tests/national/RoundEightWarInFlight.test.ts tests/national/RoundElevenImperialPeaceDelegation.test.ts tests/national/NationalAIRealWar.test.ts
+            command: npx --no-install vitest run --project node tests/national/C6C2E5Peace.test.ts tests/national/RoundEightWarInFlight.test.ts tests/national/RoundElevenImperialPeaceDelegation.test.ts tests/national/NationalAIRealWar.test.ts tests/national/NationalLiveObservation.test.ts
           - gate: regression
             command: npm test
           - gate: lint
@@ -41,3 +41,8 @@ jobs:
       - run: npm run inst
       - name: Run gate
         run: ${{ matrix.command }}
+      - name: Report exact formatter patch on failure
+        if: failure() && matrix.gate == 'formatting'
+        run: |
+          npx --no-install oxfmt --write packages/engine/src/national/ai/NationalPeaceStrategy.ts packages/engine/src/execution/NationExecution.ts packages/engine/src/national/observation/NationalObservation.ts packages/engine/src/national/observation/LiveObservation.ts tests/national/C6C2E5Peace.test.ts
+          git diff --no-ext-diff

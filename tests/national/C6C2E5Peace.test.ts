@@ -185,16 +185,31 @@ describe("C6C2-E5-AI-PEACE canonical GameRunner witness", () => {
       ).toBe(human.id);
       expect(game.nationalWarAuthority()?.atWar(bot.id, human.id)).toBe(layered);
       if (layered) expect(layer(game, IMPERIAL).endedTick).toBeNull();
-      const land = game.player(bot.id).numTilesOwned();
-      for (let i = 0; i < 5; i++) {
+      const a = game.player(bot.id);
+      const land = a.numTilesOwned();
+      const botTerritory = [...a.tiles()];
+      const opponentTerritory = [...b.tiles()];
+      const reserve = b.troops();
+      const surviving = b.outgoingAttacks().reduce(
+        (sum, attack) => sum + attack.troops(),
+        0,
+      );
+      expect(surviving).toBeGreaterThan(0);
+      for (let i = 0; i < (layered ? 5 : 35); i++) {
         advance();
         replay();
         expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
       }
       if (!layered) {
         expect(b.outgoingAttacks()).toHaveLength(0);
-        expect(game.player(bot.id).numTilesOwned()).toBe(land);
-        expect(game.player(bot.id).outgoingAttacks()).toHaveLength(0);
+        // Neutral expansion is lawful; neither belligerent may seize the
+        // other's territory, and surviving assault troops must return.
+        expect(botTerritory.every((tile) => a.tiles().has(tile))).toBe(true);
+        expect(opponentTerritory.every((tile) => b.tiles().has(tile))).toBe(true);
+        expect(a.outgoingAttacks().filter((attack) => attack.target() === b))
+          .toHaveLength(0);
+        expect(b.troops()).toBeGreaterThanOrEqual(reserve + surviving);
+        expect(game.nationalWarAuthority()?.atWar(bot.id, human.id)).toBe(false);
       } else {
         expect(
           game.nationalWarAuthority()?.authorizeOffensiveAction(human.id, bot.id),
@@ -204,7 +219,10 @@ describe("C6C2-E5-AI-PEACE canonical GameRunner witness", () => {
       console.log(MATCH, {
         layered,
         war: layer(game, WAR),
+        reserveBeforeStop: reserve,
+        survivingBeforeStop: surviving,
         troops: b.troops(),
+        landBefore: land,
         outgoing: b.outgoingAttacks().length,
         land: game.player(bot.id).numTilesOwned(),
         snapshotBytes: bytes.length,
@@ -343,6 +361,9 @@ describe("C6C2-E5-AI-PEACE canonical GameRunner witness", () => {
     const before = collectLiveNationalObservation(game, bot.id).observation;
     const foe = game.player(human.id);
     foe.setTroops(9_000_000);
+    foe.addGold(1_000_000n);
+    foe.setPlayerInfo(new PlayerInfo("Opponent", PlayerType.Nation, null, human.id));
+    expect(foe.type()).toBe(PlayerType.Nation);
     const after = collectLiveNationalObservation(game, bot.id).observation;
     expect(after).toEqual(before);
     expect(planNationalPeace(after, null)).toEqual(planNationalPeace(before, null));
