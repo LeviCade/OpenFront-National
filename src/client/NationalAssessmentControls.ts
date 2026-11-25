@@ -86,9 +86,10 @@ export class NationalAssessmentControls extends LitElement {
     const context = this.activeContext;
     const key = context ? JSON.stringify([context.game.gameID(), context.actor.id(), context.game.nationalReceiptStreamId?.()]) : "";
     if (!context || this.session?.game !== context.game || this.session?.bus !== context.bus || this.session?.key !== key) {
+      const hadPending = this.pending !== null;
       this.pending = null;
       this.selectedTarget = "";
-      this.status = "";
+      this.status = hadPending ? "Game or principal changed; purchase unconfirmed." : "";
       this.session = context ? { game: context.game, bus: context.bus, key } : null;
     }
     const pending = this.pending;
