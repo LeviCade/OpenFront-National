@@ -84,13 +84,28 @@ export class NationalAssessmentControls extends LitElement {
   /** The parent calls this on each actual GameView/Worker frame. */
   public refresh(): void {
     const context = this.activeContext;
-    const key = context ? JSON.stringify([context.game.gameID(), context.actor.id(), context.game.nationalReceiptStreamId?.()]) : "";
-    if (!context || this.session?.game !== context.game || this.session?.bus !== context.bus || this.session?.key !== key) {
+    const key = context
+      ? JSON.stringify([
+          context.game.gameID(),
+          context.actor.id(),
+          context.game.nationalReceiptStreamId?.(),
+        ])
+      : "";
+    if (
+      !context ||
+      this.session?.game !== context.game ||
+      this.session?.bus !== context.bus ||
+      this.session?.key !== key
+    ) {
       const hadPending = this.pending !== null;
       this.pending = null;
       this.selectedTarget = "";
-      this.status = hadPending ? "Game or principal changed; purchase unconfirmed." : "";
-      this.session = context ? { game: context.game, bus: context.bus, key } : null;
+      this.status = hadPending
+        ? "Game or principal changed; purchase unconfirmed."
+        : "";
+      this.session = context
+        ? { game: context.game, bus: context.bus, key }
+        : null;
     }
     const pending = this.pending;
     if (!context) {
@@ -151,7 +166,14 @@ export class NationalAssessmentControls extends LitElement {
     super.disconnectedCallback();
   }
 
-  private submit(event: SubmitEvent, displayedGame: GameView, displayedBus: EventBus, displayedActor: string, displayedGameId: string, displayedStream: string | null | undefined): void {
+  private submit(
+    event: SubmitEvent,
+    displayedGame: GameView,
+    displayedBus: EventBus,
+    displayedActor: string,
+    displayedGameId: string,
+    displayedStream: string | null | undefined,
+  ): void {
     event.preventDefault();
     this.refresh();
     if (!(event.currentTarget instanceof HTMLFormElement)) return;
@@ -162,8 +184,10 @@ export class NationalAssessmentControls extends LitElement {
     const targetId = form.get("target");
     if (
       !context ||
-      context.game !== displayedGame || context.bus !== displayedBus ||
-      context.actor.id() !== displayedActor || context.game.gameID() !== displayedGameId ||
+      context.game !== displayedGame ||
+      context.bus !== displayedBus ||
+      context.actor.id() !== displayedActor ||
+      context.game.gameID() !== displayedGameId ||
       context.game.nationalReceiptStreamId?.() !== displayedStream ||
       !this.candidates(context).some((player) => player.id() === targetId) ||
       form.get("confirm") !== "on" ||
@@ -250,43 +274,47 @@ export class NationalAssessmentControls extends LitElement {
       <p class="text-xs" data-national-assessment-wallet>
         Game-reported available gold: ${context.actor.gold().toString()}
       </p>
-      ${keyed(JSON.stringify([displayedGameId, displayedActor, displayedStream]), html`<form
-        class="space-y-2"
-        data-national-assessment-form
-        @submit=${(event: SubmitEvent) => this.submit(event, context.game, context.bus, displayedActor, displayedGameId, displayedStream)}
-      >
-        <label class="block" for="national-assessment-target">
-          Target nation
-          <select
-            id="national-assessment-target"
-            name="target"
-            required
-            class="w-full min-h-11 rounded bg-slate-900 text-white p-2"
-            .value=${this.selectedTarget}
-            @change=${(e: Event) => {
-              this.selectedTarget = (e.target as HTMLSelectElement).value;
-            }}
-          >
-            <option value="">Select a living nation</option>
-            ${candidates.map(
-              (player) =>
-                html`<option value=${player.id()}>${player.name()}</option>`,
-            )}
-          </select>
-        </label>
-        <label class="flex items-start gap-2 text-sm">
-          <input type="checkbox" name="confirm" required class="mt-1" />
-          I authorize one Game-owned debit of 1,200 gold for the chosen target.
-        </label>
-        <button
-          type="submit"
-          data-national-assessment-buy
-          class="min-h-11 w-full rounded bg-amber-400 p-2 font-semibold text-slate-950 disabled:opacity-50"
-          ?disabled=${pending || !canAfford || candidates.length === 0}
+      ${keyed(
+        JSON.stringify([displayedGameId, displayedActor, displayedStream]),
+        html`<form
+          class="space-y-2"
+          data-national-assessment-form
+          @submit=${(event: SubmitEvent) => this.submit(event, context.game, context.bus, displayedActor, displayedGameId, displayedStream)}
         >
-          Purchase national assessment
-        </button>
-      </form>`)}
+          <label class="block" for="national-assessment-target">
+            Target nation
+            <select
+              id="national-assessment-target"
+              name="target"
+              required
+              class="w-full min-h-11 rounded bg-slate-900 text-white p-2"
+              .value=${this.selectedTarget}
+              @change=${(e: Event) => {
+                this.selectedTarget = (e.target as HTMLSelectElement).value;
+              }}
+            >
+              <option value="">Select a living nation</option>
+              ${candidates.map(
+                (player) =>
+                  html`<option value=${player.id()}>${player.name()}</option>`,
+              )}
+            </select>
+          </label>
+          <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="confirm" required class="mt-1" />
+            I authorize one Game-owned debit of 1,200 gold for the chosen
+            target.
+          </label>
+          <button
+            type="submit"
+            data-national-assessment-buy
+            class="min-h-11 w-full rounded bg-amber-400 p-2 font-semibold text-slate-950 disabled:opacity-50"
+            ?disabled=${pending || !canAfford || candidates.length === 0}
+          >
+            Purchase national assessment
+          </button>
+        </form>`,
+      )}
       <p
         data-national-assessment-status
         role="status"

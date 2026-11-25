@@ -23,11 +23,14 @@ const rowSchema = z
     canRefuse: z.boolean(),
     tradePermitted: z.boolean(),
     offer: offerSchema.nullable(),
-    lastPaidCommerce: z.object({
-      tick,
-      counterpartyId: id,
-      grossGold: z.string().regex(/^[1-9][0-9]{0,127}$/),
-    }).strict().nullable(),
+    lastPaidCommerce: z
+      .object({
+        tick,
+        counterpartyId: id,
+        grossGold: z.string().regex(/^[1-9][0-9]{0,127}$/),
+      })
+      .strict()
+      .nullable(),
   })
   .strict();
 const schema = z

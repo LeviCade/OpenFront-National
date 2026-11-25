@@ -21,9 +21,15 @@ import { setup } from "../../util/Setup";
 import { roundTrip } from "../../util/Snapshot";
 import { TestConfig } from "../../util/TestConfig";
 
+import {
+  settlementDecisionIntent,
+  settlementOfferIntent,
+} from "../../../src/client/NationalImperialSettlementIntentControls";
+import {
+  parseTrustedNationalProjection,
+  materializeTrustedNationalUpdate,
+} from "../../../src/client/TrustedNationalSession";
 import { encodeNationalRecipientProjection } from "../../../src/server/national/NationalRecipientWire";
-import { parseTrustedNationalProjection, materializeTrustedNationalUpdate } from "../../../src/client/TrustedNationalSession";
-import { settlementDecisionIntent, settlementOfferIntent } from "../../../src/client/NationalImperialSettlementIntentControls";
 
 const MATCH = "C6C2E1PAY";
 const [ISSUER, PAYER, STRANGER, TARGET] = [
@@ -93,13 +99,23 @@ describe("C6C2 E1 native settlement wire through authenticated GameRunner", () =
     );
     const sockets = clients.map(seat);
     const packets = new Map<string, GameUpdateViewData>();
-    const host = new TrustedNationalMatch(MATCH, runner, sockets, (client, packet) => { packets.set(client.clientID, packet); });
+    const host = new TrustedNationalMatch(
+      MATCH,
+      runner,
+      sockets,
+      (client, packet) => {
+        packets.set(client.clientID, packet);
+      },
+    );
     const native = (index: number) => {
       const packet = packets.get(clients[index])!;
       expect(packet).toBeDefined();
       const wire = encodeNationalRecipientProjection(packet);
       const parsed = parseTrustedNationalProjection(wire, packet.tick);
-      const materialized = materializeTrustedNationalUpdate(parsed, packet.tick - 1);
+      const materialized = materializeTrustedNationalUpdate(
+        parsed,
+        packet.tick - 1,
+      );
       return materialized.nationalSettlements;
     };
     const issuer = game.player(ISSUER);
@@ -151,7 +167,11 @@ describe("C6C2 E1 native settlement wire through authenticated GameRunner", () =
       amountGold: "25000",
       requestId: "c6-host-forged-offer",
       clientID: clients[1],
-      lastPaidCommerce: { tick: game.ticks(), counterpartyId: ISSUER, grossGold: "999999999" },
+      lastPaidCommerce: {
+        tick: game.ticks(),
+        counterpartyId: ISSUER,
+        grossGold: "999999999",
+      },
     });
     expect(view(issuer)[0].settlements).toEqual([]);
     expect(native(1)?.items[0].lastPaidCommerce ?? null).toBeNull();
@@ -169,21 +189,42 @@ describe("C6C2 E1 native settlement wire through authenticated GameRunner", () =
     expect(native(2)).toBeUndefined();
     expect(native(3)).toBeUndefined();
     const payerProjection = native(1);
-    const causal = issuer.getEmbargoes().some((entry) => entry.target === payer && "reasons" in entry && Array.isArray(entry.reasons) && entry.reasons.includes("sanction:" + id));
+    const causal = issuer
+      .getEmbargoes()
+      .some(
+        (entry) =>
+          entry.target === payer &&
+          "reasons" in entry &&
+          Array.isArray(entry.reasons) &&
+          entry.reasons.includes("sanction:" + id),
+      );
     if (process.env.C6C2_E1_REQUIRE_CAUSAL === "1") expect(causal).toBe(true);
-    const nativeOffer = payerProjection?.items.find((row) => row.sanctionId === id);
+    const nativeOffer = payerProjection?.items.find(
+      (row) => row.sanctionId === id,
+    );
     expect(nativeOffer?.canOffer ?? false).toBe(causal);
-    const offerIntent = nativeOffer ? settlementOfferIntent(nativeOffer, PAYER, payer.gold(), "25000", offerId) : null;
+    const offerIntent = nativeOffer
+      ? settlementOfferIntent(
+          nativeOffer,
+          PAYER,
+          payer.gold(),
+          "25000",
+          offerId,
+        )
+      : null;
     expect(offerIntent !== null).toBe(causal);
     // The founding engine permits historical raw settlement but lacks causal ownership.
     // Only the integrated E3 path is a new native-payment witness.
-    act(1, offerIntent ?? {
-      type: "national_offer_sanction_settlement",
-      sanctionId: id,
-      amountGold: "25000",
-      requestId: offerId,
-      clientID: clients[0],
-    });
+    act(
+      1,
+      offerIntent ?? {
+        type: "national_offer_sanction_settlement",
+        sanctionId: id,
+        amountGold: "25000",
+        requestId: offerId,
+        clientID: clients[0],
+      },
+    );
     expect(view(issuer)[0].settlements[0]?.status).toBe("pending");
     expect(native(1)?.items[0].offer?.requestId).toBe(offerId);
     expect(native(0)?.items[0].offer?.status).toBe("pending");
@@ -236,7 +277,13 @@ describe("C6C2 E1 native settlement wire through authenticated GameRunner", () =
     };
     const current = native(0)?.items[0];
     expect(current).toBeDefined();
-    const nativeAccept = settlementDecisionIntent(current!, ISSUER, game.ticks(), "accept", accept.requestId);
+    const nativeAccept = settlementDecisionIntent(
+      current!,
+      ISSUER,
+      game.ticks(),
+      "accept",
+      accept.requestId,
+    );
     expect(nativeAccept !== null).toBe(causal);
     const receipt = act(0, nativeAccept ?? accept);
     const issuerTransfer = issuer.gold() - acceptanceBefore[0] - passive[0];
@@ -249,7 +296,10 @@ describe("C6C2 E1 native settlement wire through authenticated GameRunner", () =
     ).toBe(passive[0] + passive[1]);
     expect(issuer.canTrade(payer)).toBe(true);
     expect(view(issuer)[0].settlements[0]?.status).toBe("accepted");
-    expect(native(0)?.items[0]).toMatchObject({ tradePermitted: true, offer: { status: "accepted", gold: "25000" } });
+    expect(native(0)?.items[0]).toMatchObject({
+      tradePermitted: true,
+      offer: { status: "accepted", gold: "25000" },
+    });
     expect(native(1)?.items[0].offer?.status).toBe("accepted");
     expect(native(0)?.paidMaritimeGold).toBe(issuer.tradeGold().toString());
     expect(native(2)).toBeUndefined();

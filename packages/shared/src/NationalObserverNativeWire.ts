@@ -6,12 +6,12 @@ import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
  * No simulation imports; used on both trusted host and browser.
  */
 import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
-import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import {
   NATIONAL_OBSERVER_MAX_UNITS,
   type NationalObserverMapV1,
 } from "@openfront/engine-api/game/NationalRecipientView";
+import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
 import {
   OFFSET_HEALTH,
   OFFSET_ID,

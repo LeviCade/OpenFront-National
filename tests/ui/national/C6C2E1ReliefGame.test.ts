@@ -9,17 +9,17 @@ import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventBus } from "@openfront/shared/EventBus";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import "../../../src/client/NationalImperialEconomicControls";
 import type { NationalImperialEconomicControls } from "../../../src/client/NationalImperialEconomicControls";
-import { readPactReceipts } from "../../../src/client/NationalPactState";
-import { SendNationalImperialPolicyIntentEvent } from "../../../src/client/Transport";
-import type { GameView } from "../../../src/client/view";
 import {
   reliefIntent,
   type ReliefCommand,
 } from "../../../src/client/NationalImperialReliefControls";
+import { readPactReceipts } from "../../../src/client/NationalPactState";
+import { SendNationalImperialPolicyIntentEvent } from "../../../src/client/Transport";
+import type { GameView } from "../../../src/client/view";
 import { setup } from "../../util/Setup";
 import { roundTrip } from "../../util/Snapshot";
 
@@ -112,7 +112,9 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
     const mount = async (actor: typeof member) => {
       const bus = new EventBus();
       const sent: SendNationalImperialPolicyIntentEvent[] = [];
-      bus.on(SendNationalImperialPolicyIntentEvent, (event) => sent.push(event));
+      bus.on(SendNationalImperialPolicyIntentEvent, (event) =>
+        sent.push(event),
+      );
       const view = {
         config: () => game.config(),
         myPlayer: () => actor,
@@ -121,12 +123,25 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
         inSpawnPhase: () => false,
         nationalPolitics: () => game.nationalPublicPoliticalView(),
         nationalPoliticsTick: () => game.ticks(),
-        nationalImperialAdministration: () => game.nationalImperialAdministrationFor(actor),
-        nationalPactReceipts: () => readPactReceipts(game.nationalPoliticalCommandResults(actor).map((row) => ({ ...row, type: "national_imperial_administration" })), actor.id(), game.ticks()),
+        nationalImperialAdministration: () =>
+          game.nationalImperialAdministrationFor(actor),
+        nationalPactReceipts: () =>
+          readPactReceipts(
+            game
+              .nationalPoliticalCommandResults(actor)
+              .map((row) => ({
+                ...row,
+                type: "national_imperial_administration",
+              })),
+            actor.id(),
+            game.ticks(),
+          ),
         ticks: () => game.ticks(),
         gameID: () => "E1Match",
       } as unknown as GameView;
-      const element = document.createElement("national-imperial-economic-controls") as NationalImperialEconomicControls;
+      const element = document.createElement(
+        "national-imperial-economic-controls",
+      ) as NationalImperialEconomicControls;
       element.game = view;
       element.eventBus = bus;
       document.body.appendChild(element);
@@ -139,13 +154,16 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
     const outsiderUI = await mount(outsider);
     expect(outsiderUI.element.textContent).toBe("");
     const form = memberUI.element.querySelector("form")!;
-    form.querySelector<HTMLInputElement>('input[name="amount"]')!.value = grant.toString();
-    form.querySelector<HTMLInputElement>('input[name="confirm"]')!.checked = true;
+    form.querySelector<HTMLInputElement>('input[name="amount"]')!.value =
+      grant.toString();
+    form.querySelector<HTMLInputElement>('input[name="confirm"]')!.checked =
+      true;
     form.dispatchEvent(new Event("submit", { cancelable: true }));
     form.dispatchEvent(new Event("submit", { cancelable: true }));
     expect(memberUI.sent).toHaveLength(1);
     const memberClick = memberUI.sent[0].intent;
-    if (memberClick.type !== "national_imperial_administration") throw Error("unexpected member intent");
+    if (memberClick.type !== "national_imperial_administration")
+      throw Error("unexpected member intent");
     const requestId = memberClick.requestId!;
     const request: ReliefCommand = {
       kind: "request-relief",
@@ -161,14 +179,28 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
       decision: "approve",
     };
     expect(memberClick.command).toEqual(request);
-    runner.addTurn({ turnNumber: turnNumber++, intents: [StampedIntentSchema.parse({ ...memberClick, clientID: member.clientID() })] });
+    runner.addTurn({
+      turnNumber: turnNumber++,
+      intents: [
+        StampedIntentSchema.parse({
+          ...memberClick,
+          clientID: member.clientID(),
+        }),
+      ],
+    });
     expect(runner.executeNextTick()).toBe(true);
     game.executeNextTick();
     memberUI.element.refresh();
     emperorUI.element.refresh();
     outsiderUI.element.refresh();
-    await Promise.all([memberUI.element.updateComplete, emperorUI.element.updateComplete, outsiderUI.element.updateComplete]);
-    expect(memberUI.element.textContent).toContain("Game recorded the relief request");
+    await Promise.all([
+      memberUI.element.updateComplete,
+      emperorUI.element.updateComplete,
+      outsiderUI.element.updateComplete,
+    ]);
+    expect(memberUI.element.textContent).toContain(
+      "Game recorded the relief request",
+    );
     expect(outsiderUI.element.textContent).toBe("");
     expect(
       game.nationalImperialAdministrationFor(member)?.reliefRequests[0]?.status,
@@ -179,19 +211,37 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
     expect(member.gold()).toBe(0n);
     emperorUI.element.refresh();
     await emperorUI.element.updateComplete;
-    emperorUI.element.querySelector<HTMLButtonElement>("[data-relief-approve]")!.click();
+    emperorUI.element
+      .querySelector<HTMLButtonElement>("[data-relief-approve]")!
+      .click();
     expect(emperorUI.sent).toHaveLength(1);
     const emperorClick = emperorUI.sent[0].intent;
-    if (emperorClick.type !== "national_imperial_administration") throw Error("unexpected emperor intent");
+    if (emperorClick.type !== "national_imperial_administration")
+      throw Error("unexpected emperor intent");
     expect(emperorClick.command).toEqual(decide);
-    runner.addTurn({ turnNumber: turnNumber++, intents: [StampedIntentSchema.parse({ ...emperorClick, clientID: emperor.clientID() })] });
+    runner.addTurn({
+      turnNumber: turnNumber++,
+      intents: [
+        StampedIntentSchema.parse({
+          ...emperorClick,
+          clientID: emperor.clientID(),
+        }),
+      ],
+    });
     expect(runner.executeNextTick()).toBe(true);
     game.executeNextTick();
     memberUI.element.refresh();
     emperorUI.element.refresh();
-    await Promise.all([memberUI.element.updateComplete, emperorUI.element.updateComplete]);
-    expect(emperorUI.element.textContent).toContain("Game confirmed the relief decision");
-    expect(memberUI.element.textContent).toContain("Game wallet: " + grant.toString() + " gold");
+    await Promise.all([
+      memberUI.element.updateComplete,
+      emperorUI.element.updateComplete,
+    ]);
+    expect(emperorUI.element.textContent).toContain(
+      "Game confirmed the relief decision",
+    );
+    expect(memberUI.element.textContent).toContain(
+      "Game wallet: " + grant.toString() + " gold",
+    );
     expect(treasury()).toBe(19n);
     expect(member.gold()).toBe(grant);
     expect(
@@ -204,23 +254,47 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
     if (placement === false) throw new Error("no lawful City placement");
     runner.addTurn({
       turnNumber: turnNumber++,
-      intents: [StampedIntentSchema.parse({ type: "build_unit", unit: UnitType.City, tile: placement, clientID: member.clientID() })],
+      intents: [
+        StampedIntentSchema.parse({
+          type: "build_unit",
+          unit: UnitType.City,
+          tile: placement,
+          clientID: member.clientID(),
+        }),
+      ],
     });
     expect(runner.executeNextTick()).toBe(true);
     game.executeNextTick();
-    const structure = member.units(UnitType.City).find((unit) => unit.tile() === placement);
+    const structure = member
+      .units(UnitType.City)
+      .find((unit) => unit.tile() === placement);
     expect(structure?.owner()).toBe(member);
     expect(member.gold()).toBe(37n);
     expect(treasury()).toBe(19n);
     const secondRequest = "np_" + "5".repeat(32);
-    submit(memberId, { ...request, reliefId: secondRequest, amount: "10" }, secondRequest);
-    game.performNationalCommand(emperor, { kind: "transfer-crown", empireId, successorId: memberId });
+    submit(
+      memberId,
+      { ...request, reliefId: secondRequest, amount: "10" },
+      secondRequest,
+    );
+    game.performNationalCommand(emperor, {
+      kind: "transfer-crown",
+      empireId,
+      successorId: memberId,
+    });
     const staleDecision = { ...decide, reliefId: secondRequest };
     submit(emperorId, staleDecision, "np_" + "6".repeat(32));
     submit(memberId, staleDecision, "np_" + "7".repeat(32));
-    expect(BigInt(game.nationalImperialAdministrationFor(member)!.treasury)).toBe(19n);
+    expect(
+      BigInt(game.nationalImperialAdministrationFor(member)!.treasury),
+    ).toBe(19n);
     expect(member.gold()).toBe(37n);
-    expect(game.nationalImperialAdministrationFor(member)?.reliefRequests.find((item) => item.reliefId === secondRequest)?.status).toBe("pending");
+    expect(
+      game
+        .nationalImperialAdministrationFor(member)
+        ?.reliefRequests.find((item) => item.reliefId === secondRequest)
+        ?.status,
+    ).toBe("pending");
     const { restored, bytes, again } = await roundTrip(game, map);
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));

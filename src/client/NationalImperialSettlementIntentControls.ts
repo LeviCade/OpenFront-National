@@ -9,11 +9,15 @@ export function settlementOfferIntent(
   requestId: string,
 ): Intent | null {
   if (
-    row.role !== "payer" || row.payerId !== actor ||
-    !row.canOffer || row.offer !== null ||
-    typeof amount !== "string" || !/^[1-9][0-9]{0,17}$/.test(amount) ||
+    row.role !== "payer" ||
+    row.payerId !== actor ||
+    !row.canOffer ||
+    row.offer !== null ||
+    typeof amount !== "string" ||
+    !/^[1-9][0-9]{0,17}$/.test(amount) ||
     BigInt(amount) > wallet
-  ) return null;
+  )
+    return null;
   const result = IntentSchema.safeParse({
     type: "national_offer_sanction_settlement",
     sanctionId: row.sanctionId,
@@ -31,11 +35,14 @@ export function settlementDecisionIntent(
   requestId: string,
 ): Intent | null {
   if (
-    row.role !== "issuer" || row.issuerId !== actor ||
-    row.payerId === actor || row.offer?.status !== "pending" ||
+    row.role !== "issuer" ||
+    row.issuerId !== actor ||
+    row.payerId === actor ||
+    row.offer?.status !== "pending" ||
     row.offer.expiresAt <= tick ||
     !(decision === "accept" ? row.canAccept : row.canRefuse)
-  ) return null;
+  )
+    return null;
   const result = IntentSchema.safeParse({
     type: "national_decide_sanction_settlement",
     sanctionId: row.sanctionId,

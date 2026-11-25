@@ -293,36 +293,41 @@ export class NationalImperialEconomicControls extends LitElement {
         ${
           view.canAmend
             ? nothing
-            : keyed(displayedKey, html`
-                <form
-                  @submit=${(event: SubmitEvent) =>
-                    this.submitRequest(event, displayedKey, game, bus)}
-                  class="space-y-2"
-                >
-                  <label class="block">
-                    Requested gold
-                    <input
-                      name="amount"
-                      inputmode="numeric"
-                      pattern="[1-9][0-9]{0,11}"
-                      maxlength="12"
-                      required
-                      class="block w-full min-h-11 rounded bg-slate-900 p-2"
-                      .value=${this.amount}
-                      @input=${(event: Event) => {
-                        this.amount = (event.target as HTMLInputElement).value;
-                      }}
-                    />
-                  </label>
-                  <label class="block">
-                    <input name="confirm" type="checkbox" required />
-                    Request assistance from the current emperor.
-                  </label>
-                  <button type="submit" class=${button} ?disabled=${busy}>
-                    Request emergency relief
-                  </button>
-                </form>
-              `)
+            : keyed(
+                displayedKey,
+                html`
+                  <form
+                    @submit=${(event: SubmitEvent) =>
+                      this.submitRequest(event, displayedKey, game, bus)}
+                    class="space-y-2"
+                  >
+                    <label class="block">
+                      Requested gold
+                      <input
+                        name="amount"
+                        inputmode="numeric"
+                        pattern="[1-9][0-9]{0,11}"
+                        maxlength="12"
+                        required
+                        class="block w-full min-h-11 rounded bg-slate-900 p-2"
+                        .value=${this.amount}
+                        @input=${(event: Event) => {
+                          this.amount = (
+                            event.target as HTMLInputElement
+                          ).value;
+                        }}
+                      />
+                    </label>
+                    <label class="block">
+                      <input name="confirm" type="checkbox" required />
+                      Request assistance from the current emperor.
+                    </label>
+                    <button type="submit" class=${button} ?disabled=${busy}>
+                      Request emergency relief
+                    </button>
+                  </form>
+                `,
+              )
         }
         <p role="status" aria-live="polite" aria-busy=${String(busy)}>
           ${this.status}

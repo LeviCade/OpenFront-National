@@ -14,7 +14,6 @@ import {
 import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/NationalAssessmentView";
 import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
-import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
 import {
   NATIONAL_OBSERVER_MAX_TILES,
   NATIONAL_OBSERVER_MAX_UNITS,
@@ -23,6 +22,7 @@ import {
   type NationalObserverMapV1,
   type NationalPublicConflictView,
 } from "@openfront/engine-api/game/NationalRecipientView";
+import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
 import { validateNationalObserverNativeLanes } from "@openfront/shared/NationalObserverNativeWire";
 import { replacer } from "@openfront/shared/SharedUtil";
 

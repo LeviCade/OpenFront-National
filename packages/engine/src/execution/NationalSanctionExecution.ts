@@ -68,11 +68,13 @@ const recipientSchema = z.object({
   // Optional to migrate earlier version-one sanctioned demands.
   enforcement: sanctionEnforcementSchema.optional(),
   // Append-only optional observation; legacy snapshots have no voyage witness.
-  lastPaidCommerce: z.object({
-    tick: z.number().int().nonnegative(),
-    counterpartyId: z.string(),
-    grossGold: z.string().regex(/^[1-9][0-9]{0,127}$/),
-  }).optional(),
+  lastPaidCommerce: z
+    .object({
+      tick: z.number().int().nonnegative(),
+      counterpartyId: z.string(),
+      grossGold: z.string().regex(/^[1-9][0-9]{0,127}$/),
+    })
+    .optional(),
 });
 const demandSchema = z.object({
   id: z.string(),
@@ -732,27 +734,37 @@ export class NationalSanctionExecution implements Execution {
         // The inherited v2 ledger cannot distinguish an idempotent manual
         // reassertion. Require actual E3 causal records for every owner.
         const owners = execution.settlementOwners(row);
-        const causal = owners !== null && owners.every((owner) => {
-          const entry = owner.getEmbargoes().find(
-            (candidate) => candidate.target === payer && !candidate.isTemporary,
-          );
-          return entry !== undefined &&
-            "reasons" in entry &&
-            Array.isArray(entry.reasons) &&
-            entry.reasons.includes("sanction:" + demand.id);
-        });
+        const causal =
+          owners !== null &&
+          owners.every((owner) => {
+            const entry = owner
+              .getEmbargoes()
+              .find(
+                (candidate) =>
+                  candidate.target === payer && !candidate.isTemporary,
+              );
+            return (
+              entry !== undefined &&
+              "reasons" in entry &&
+              Array.isArray(entry.reasons) &&
+              entry.reasons.includes("sanction:" + demand.id)
+            );
+          });
         const pending = offer?.status === "pending" && offer.expiresAt > tick;
-        const canOffer = !isIssuer && offer === null && causal && payer.gold() > 0n;
+        const canOffer =
+          !isIssuer && offer === null && causal && payer.gold() > 0n;
         const canAccept =
           isIssuer && pending && causal && payer.gold() >= BigInt(offer.gold);
         const canRefuse = isIssuer && pending;
         if (!offer && !canOffer && isIssuer) continue;
-        const tradePermitted = proof.owners.length > 0 && proof.owners.every(
-          (claim) => {
+        const tradePermitted =
+          proof.owners.length > 0 &&
+          proof.owners.every((claim) => {
             const owner = living(game, claim.id);
-            return owner !== null && owner.canTrade(payer) && payer.canTrade(owner);
-          },
-        );
+            return (
+              owner !== null && owner.canTrade(payer) && payer.canTrade(owner)
+            );
+          });
         items.push({
           sanctionId: demand.id,
           payerId: payer.id(),
@@ -762,20 +774,29 @@ export class NationalSanctionExecution implements Execution {
           canAccept,
           canRefuse,
           tradePermitted,
-          lastPaidCommerce: offer?.status === "accepted" && row.lastPaidCommerce &&
-            row.lastPaidCommerce.tick >= offer.offeredAt && row.lastPaidCommerce.tick <= tick &&
-            proof.owners.some((claim) => claim.id === row.lastPaidCommerce?.counterpartyId)
-            ? { ...row.lastPaidCommerce }
-            : null,
-          offer: offer === null ? null : {
-            requestId: offer.requestId,
-            gold: offer.gold,
-            offeredAt: offer.offeredAt,
-            expiresAt: offer.expiresAt,
-            status: offer.status === "pending" && offer.expiresAt <= tick
-              ? "expired"
-              : offer.status,
-          },
+          lastPaidCommerce:
+            offer?.status === "accepted" &&
+            row.lastPaidCommerce &&
+            row.lastPaidCommerce.tick >= offer.offeredAt &&
+            row.lastPaidCommerce.tick <= tick &&
+            proof.owners.some(
+              (claim) => claim.id === row.lastPaidCommerce?.counterpartyId,
+            )
+              ? { ...row.lastPaidCommerce }
+              : null,
+          offer:
+            offer === null
+              ? null
+              : {
+                  requestId: offer.requestId,
+                  gold: offer.gold,
+                  offeredAt: offer.offeredAt,
+                  expiresAt: offer.expiresAt,
+                  status:
+                    offer.status === "pending" && offer.expiresAt <= tick
+                      ? "expired"
+                      : offer.status,
+                },
         });
       }
     }
@@ -798,13 +819,23 @@ export class NationalSanctionExecution implements Execution {
       // This is a bounded last-voyage witness, never a payment instruction.
       // TradeShipExecution calls the hook only after its real paid arrival.
       // Capture only the exact former embargo pair, after accepted settlement.
-      if (grossGold !== undefined && grossGold > 0n && d.phase === "enforced" &&
-        a.canTrade(b) && b.canTrade(a)) {
+      if (
+        grossGold !== undefined &&
+        grossGold > 0n &&
+        d.phase === "enforced" &&
+        a.canTrade(b) &&
+        b.canTrade(a)
+      ) {
         for (const row of d.recipients) {
           const proof = row.enforcement;
           if (proof?.offer?.status !== "accepted") continue;
-          const counterparty = row.id === a.id() ? b.id() : row.id === b.id() ? a.id() : null;
-          if (counterparty === null || !proof.owners.some((claim) => claim.id === counterparty)) continue;
+          const counterparty =
+            row.id === a.id() ? b.id() : row.id === b.id() ? a.id() : null;
+          if (
+            counterparty === null ||
+            !proof.owners.some((claim) => claim.id === counterparty)
+          )
+            continue;
           row.lastPaidCommerce = {
             tick: game.ticks(),
             counterpartyId: counterparty,

@@ -12,7 +12,10 @@ import { setup } from "../../util/Setup";
 import { roundTrip } from "../../util/Snapshot";
 
 import { readNationalSettlementView } from "@openfront/engine-api/game/NationalSettlementView";
-import { settlementDecisionIntent, settlementOfferIntent } from "../../../src/client/NationalImperialSettlementIntentControls";
+import {
+  settlementDecisionIntent,
+  settlementOfferIntent,
+} from "../../../src/client/NationalImperialSettlementIntentControls";
 
 const MAP = "half_land_half_ocean";
 const [CROWN, ISSUER, DELEGATE, MEMBER, TARGET] = [
@@ -165,32 +168,74 @@ describe("C6C2 E1 authoritative post-settlement voyage evidence", () => {
     expect(trade(game, b, other, src)).toBe(0n);
     expect(b.tradeGold()).toBe(blockedBefore);
     const rowFor = (g: Game, actor: Player) => {
-      const wire = NationalSanctionExecution.settlementViewFor(g, actor, g.ticks());
-      return readNationalSettlementView(wire, actor.id(), g.ticks())?.items.find((row) => row.sanctionId === id);
+      const wire = NationalSanctionExecution.settlementViewFor(
+        g,
+        actor,
+        g.ticks(),
+      );
+      return readNationalSettlementView(
+        wire,
+        actor.id(),
+        g.ticks(),
+      )?.items.find((row) => row.sanctionId === id);
     };
-    const causal = b.getEmbargoes().some((entry) =>
-      entry.target === c && "reasons" in entry && Array.isArray(entry.reasons) &&
-      entry.reasons.includes("sanction:" + id));
+    const causal = b
+      .getEmbargoes()
+      .some(
+        (entry) =>
+          entry.target === c &&
+          "reasons" in entry &&
+          Array.isArray(entry.reasons) &&
+          entry.reasons.includes("sanction:" + id),
+      );
     // Conductor acceptance is strict on the integrated E3 causal source.
     // Standalone founding-source regression must fail closed instead of bypassing it.
     if (process.env.C6C2_E1_REQUIRE_CAUSAL === "1") expect(causal).toBe(true);
     const payerView = rowFor(game, c)!;
     expect(payerView.canOffer).toBe(causal);
     const offerId = "c6c2-e1-maritime-offer";
-    const offer = settlementOfferIntent(payerView, c.id(), c.gold(), "55000", offerId);
+    const offer = settlementOfferIntent(
+      payerView,
+      c.id(),
+      c.gold(),
+      "55000",
+      offerId,
+    );
     expect(offer !== null).toBe(causal);
-    if (offer?.type === "national_offer_sanction_settlement") send(game, c, offer);
-    else send(game, c, { type: "national_offer_sanction_settlement", sanctionId: id, amountGold: "55000", requestId: offerId });
+    if (offer?.type === "national_offer_sanction_settlement")
+      send(game, c, offer);
+    else
+      send(game, c, {
+        type: "national_offer_sanction_settlement",
+        sanctionId: id,
+        amountGold: "55000",
+        requestId: offerId,
+      });
     expect(status(game, b, id)).toBe("pending");
     // The real E3 reason journal retains a separately asserted manual restriction.
     if (causal) b.addEmbargo(c, false);
     const issuerView = rowFor(game, b)!;
     expect(issuerView.canAccept).toBe(causal);
-    const accept = settlementDecisionIntent(issuerView, b.id(), game.ticks(), "accept", "c6c2-e1-maritime-accept");
+    const accept = settlementDecisionIntent(
+      issuerView,
+      b.id(),
+      game.ticks(),
+      "accept",
+      "c6c2-e1-maritime-accept",
+    );
     expect(accept !== null).toBe(causal);
     const balances = [b.gold(), c.gold()];
-    if (accept?.type === "national_decide_sanction_settlement") send(game, b, accept);
-    else send(game, b, { type: "national_decide_sanction_settlement", sanctionId: id, recipientId: c.id(), offerId, decision: "accept", requestId: "c6c2-e1-maritime-accept" });
+    if (accept?.type === "national_decide_sanction_settlement")
+      send(game, b, accept);
+    else
+      send(game, b, {
+        type: "national_decide_sanction_settlement",
+        sanctionId: id,
+        recipientId: c.id(),
+        offerId,
+        decision: "accept",
+        requestId: "c6c2-e1-maritime-accept",
+      });
     expect(b.gold() - balances[0]).toBe(55_000n);
     expect(balances[1] - c.gold()).toBe(55_000n);
     expect(rowFor(game, b)?.offer?.status).toBe("accepted");
@@ -210,22 +255,30 @@ describe("C6C2 E1 authoritative post-settlement voyage evidence", () => {
     const paid = trade(game, b, other, src);
     expect(paid).toBeGreaterThan(0n);
     const receipt = rowFor(game, c)?.lastPaidCommerce;
-    expect(receipt).toMatchObject({counterpartyId: b.id(), grossGold: paid.toString()});
+    expect(receipt).toMatchObject({
+      counterpartyId: b.id(),
+      grossGold: paid.toString(),
+    });
     expect(rowFor(game, b)?.lastPaidCommerce).toEqual(receipt);
     expect(rowFor(game, e)).toBeUndefined();
     const { restored, bytes, again } = await roundTrip(game, MAP);
     expect(again).toEqual(bytes);
     expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
-    expect(rowFor(restored, restored.player(DELEGATE))?.lastPaidCommerce).toEqual(receipt);
-    console.info("C6C2_E1_PAID_VOYAGE_WITNESS=" + JSON.stringify({
-      nativePaymentEnabled: causal,
-      settlement: "55000",
-      exactConservation: true,
-      independentRestrictionBlocked: true,
-      unrelatedRouteExcluded: true,
-      paidVoyage: paid.toString(),
-      receipt,
-      snapshotBytes: bytes.length,
-    }));
+    expect(
+      rowFor(restored, restored.player(DELEGATE))?.lastPaidCommerce,
+    ).toEqual(receipt);
+    console.info(
+      "C6C2_E1_PAID_VOYAGE_WITNESS=" +
+        JSON.stringify({
+          nativePaymentEnabled: causal,
+          settlement: "55000",
+          exactConservation: true,
+          independentRestrictionBlocked: true,
+          unrelatedRouteExcluded: true,
+          paidVoyage: paid.toString(),
+          receipt,
+          snapshotBytes: bytes.length,
+        }),
+    );
   });
 });
