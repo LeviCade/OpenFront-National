@@ -335,7 +335,7 @@ export function decodeSnapshotValue(bytes: Uint8Array): unknown {
           if (k === "__proto__") {
             throw new SnapshotCodecError("invalid object key __proto__");
           }
-          if (Object.hasOwn(out, k)) {
+          if (Object.getOwnPropertyDescriptor(out, k) !== undefined) {
             throw new SnapshotCodecError(`duplicate object key ${k}`);
           }
           out[k] = read();

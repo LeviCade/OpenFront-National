@@ -4,7 +4,10 @@ import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
-import { decodeSnapshotValue, encodeSnapshotValue } from "@openfront/engine/snapshot/SnapshotCodec";
+import {
+  decodeSnapshotValue,
+  encodeSnapshotValue,
+} from "@openfront/engine/snapshot/SnapshotCodec";
 import { readSnapshotHeader } from "@openfront/engine/snapshot/GameSnapshot";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -78,6 +81,7 @@ function state(game: Game) {
         id,
         alive: p.isAlive(),
         tiles: p.numTilesOwned(),
+        tileDigest: sha256(Buffer.from(JSON.stringify([...p.tiles()].sort((a, b) => a - b)))),
         troops: p.troops(),
         gold: String(p.gold()),
       };
@@ -90,7 +94,12 @@ async function produce() {
   const game = await setup("plains", { nationalMode: true }, people);
   const m = attach(game);
   m.runner.init();
-  const points = [[25, 25], [55, 25], [25, 75], [75, 75]];
+  const points = [
+    [25, 25],
+    [33, 25],
+    [25, 75],
+    [75, 75],
+  ];
   for (let i = 0; i < people.length; i++) {
     game.addExecution(new SpawnExecution(gameId, people[i], game.ref(points[i][0], points[i][1])));
   }
@@ -147,12 +156,31 @@ function continueGame(m: ReturnType<typeof attach>) {
   expect(m.game.ticks()).toBe(before.tick + 5);
   expect(m.game.nationalPoliticalAuthority()?.emperorOf(empire)).toBe(A);
   expect(m.game.nationalMdaAllies(B)).toContain(C);
-  return state(m.game);
+  const defender = m.game.player(B);
+  expect(actor.sharesBorderWith(defender)).toBe(true);
+  m.tick({
+    type: "attack",
+    clientID: actor.clientID(),
+    targetID: B,
+    troops: 5000,
+  });
+  m.tick();
+  const result = m.game.nationalWarState()!.levy.processed[0].result;
+  expect(result.application).toBe("applied");
+  expect(result.attackTroopsBefore).toBe(5000);
+  expect(result.intercepted).toBeGreaterThan(0);
+  expect(result.intercepted + result.remainingAttackingTroops).toBe(5000);
+  expect(result.contributions.reduce((n, c) => n + c.troopsDebited, 0)).toBe(result.intercepted);
+  expect(result.contributions.some((c) => c.nationId === C)).toBe(true);
+  return { ...state(m.game), interception: result };
 }
 
 type Evidence = ReturnType<typeof state>;
 interface Manifest {
   writer: string;
+  driverSource: string;
+  driverDigest: string;
+  gameRecordVersion: number;
   node: string;
   npm: string;
   run: string;
@@ -165,6 +193,12 @@ interface Manifest {
 
 function verify(bytes: Uint8Array, manifest: Manifest, writer: string) {
   expect(manifest.writer).toBe(writer);
+  expect(manifest.driverSource).toMatch(/^[a-f0-9]{40}$/);
+  expect(manifest.driverSource).toBe(process.env.CURRENT_SHA);
+  expect(manifest.driverDigest).toBe(sha256(readFileSync("tests/national/C7C1E4CrossBuild.test.ts")));
+  const root = decodeSnapshotValue(bytes) as { game: { v: number } };
+  expect(root.game.v).toBe(manifest.gameRecordVersion);
+  expect(root.game.v).toBe(writers.indexOf(writer as typeof writers[number]) + 4);
   expect(manifest.node).toBe("v24.15.0");
   expect(manifest.npm).toBe("12.1.0");
   expect(manifest.run).toBe(process.env.GITHUB_RUN_ID);
@@ -188,7 +222,11 @@ test("C7 E4 pinned historical writer / independent consumer / same-build continu
     const m = await produce();
     const bytes = m.runner.snapshot(writer);
     const manifest: Manifest = {
-      writer, node: process.version,
+      writer,
+      driverSource: process.env.CURRENT_SHA!,
+      driverDigest: sha256(readFileSync("tests/national/C7C1E4CrossBuild.test.ts")),
+      gameRecordVersion: (decodeSnapshotValue(bytes) as { game: { v: number } }).game.v,
+      node: process.version,
       npm: execFileSync("npm", ["--version"], { encoding: "utf8" }).trim(),
       run: process.env.GITHUB_RUN_ID!,
       attempt: process.env.GITHUB_RUN_ATTEMPT!,
@@ -221,6 +259,7 @@ test("C7 E4 pinned historical writer / independent consumer / same-build continu
       const after = continueGame(m);
       expect(continueGame(duplicate)).toEqual(after);
       const current = gitHead();
+      expect(current).toBe(manifest.driverSource);
       expect(m.runner.snapshot(current)).toEqual(duplicate.runner.snapshot(current));
       expect(() => verify(bytes, { ...manifest, writer: "" }, writer)).toThrow();
       const corrupt = bytes.slice();

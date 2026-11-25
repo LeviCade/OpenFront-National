@@ -1,4 +1,7 @@
-import { readVersioned, snapshotType } from "@openfront/engine-lib/snapshot/SnapshotType";
+import {
+  readVersioned,
+  snapshotType,
+} from "@openfront/engine-lib/snapshot/SnapshotType";
 import { decodeSnapshotValue } from "@openfront/engine/snapshot/SnapshotCodec";
 import { z } from "zod";
 

@@ -4,9 +4,6 @@ on:
     branches:
       - stage3/c7c1-e4-cross-build-compat
       - stage3/conductor7-class1-integration-20261125
-  pull_request:
-    branches:
-      - stage3/conductor7-class1-integration-20261125
   workflow_dispatch:
 permissions:
   contents: read
@@ -120,6 +117,14 @@ jobs:
             typecheck) npm run typecheck ;;
             full) npm test ;;
             lint) npm run lint ;;
-            format) npm run format:check ;;
+            format) npm run format:check || {
+              npx --no-install oxfmt --write tests/core/snapshot/C7C1E4Malformed.test.ts tests/national/C7C1E4CrossBuild.test.ts
+              for file in tests/core/snapshot/C7C1E4Malformed.test.ts tests/national/C7C1E4CrossBuild.test.ts; do
+                echo "C7E4_FORMAT_BEGIN $file"
+                cat "$file"
+                echo C7E4_FORMAT_END
+              done
+              exit 1
+            } ;;
             production) npm run build-prod ;;
           esac
