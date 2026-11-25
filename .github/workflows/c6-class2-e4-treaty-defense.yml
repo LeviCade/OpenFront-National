@@ -60,5 +60,22 @@ jobs:
       - name: Print pinned formatter patch
         if: failure() && matrix.gate == 'format'
         run: |
-          npx --no-install oxfmt --write $(git diff --name-only e9eb83cd9a18663d6e40d2b2e88219bed7fccb57 HEAD -- '*.ts')
+          npx --no-install oxfmt --write \
+            packages/engine-api/src/Schemas.ts \
+            packages/engine-api/src/game/GameUpdates.ts \
+            packages/engine-api/src/game/NationalAssessmentView.ts \
+            packages/engine-api/src/game/NationalPactView.ts \
+            packages/engine/src/execution/ExecutionManager.ts \
+            packages/engine/src/execution/NationalFoundEmpireExecution.ts \
+            packages/engine/src/game/Game.ts \
+            packages/engine/src/game/GameImpl.ts \
+            packages/engine/src/national/NationalRuntime.ts \
+            packages/engine/src/national/conflict/DefenseLevy.ts \
+            packages/engine/src/national/conflict/NationalTreatyDefensePolicy.ts \
+            packages/engine/src/national/observation/NationalAssessment.ts \
+            packages/engine/src/national/observation/NationalOutbound.ts \
+            packages/engine/src/national/politics/sovereignty.ts \
+            src/server/national/NationalRecipientWire.ts \
+            tests/national/C6Class2E4TreatyDefenseReceipts.test.ts \
+            tests/national/C5Class3PaidNationalAssessment.test.ts
           git --no-pager diff

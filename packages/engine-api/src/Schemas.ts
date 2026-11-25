@@ -779,8 +779,8 @@ export const NationalFoundPactIntentSchema = z.object({
   terms: z.object({
     admission: z.enum(["leader", "unanimous"]),
     expulsion: z.enum(["leader", "unanimous", "forbidden"]),
-    defenseContributionBps: z.number().int().min(0).max(1000).optional(),
-    defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
+    defenseContributionBps: zb.uint({ min: 0, max: 1000 }).optional(),
+    defenseReserveBps: zb.uint({ min: 3000, max: 10000 }).optional(),
   }),
   requestId: NationalPoliticalRequestId,
 });
@@ -812,7 +812,7 @@ export const NationalProposePactAmendmentIntentSchema = z.object({
 export const NationalApprovePactAmendmentIntentSchema = z.object({
   type: z.literal("national_approve_pact_amendment"),
   pactId: NationalPoliticalId,
-  expectedDefenseVersion: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  expectedDefenseVersion: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }).optional(),
   requestId: NationalPoliticalRequestId,
 });
 export const NationalExpelPactIntentSchema = z.object({

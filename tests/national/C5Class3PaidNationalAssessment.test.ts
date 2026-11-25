@@ -495,8 +495,17 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
         }),
       ],
     });
-    expect(hostEncoded).not.toContain('"requestId":"private-canonical"');
-    expect(hostEncoded).not.toContain('"cost":"1200"');
+    expect(browserDecoded.nationalAssessments?.receipts).toEqual([
+      expect.objectContaining({
+        requestId: "private-canonical",
+        payerId: BUYER.id,
+        targetId: TARGET.id,
+        outcome: "accepted",
+        cost: "1200",
+      }),
+    ]);
+    expect(browserDecoded.nationalAssessments?.items[0]).not.toHaveProperty("requestId");
+    expect(browserDecoded.nationalAssessments?.items[0]).not.toHaveProperty("cost");
     const foreign = new NationalServerRecipientSession(game, {
       ...liveLink,
       clientID: OTHER.clientID!,
@@ -506,6 +515,8 @@ describe("M7: paid target-specific national assessment; real Game and GameRunner
       packet(game, OTHER.clientID!),
     );
     expect(foreignFiltered?.nationalAssessments?.items).toEqual([]);
+    expect(foreignFiltered?.nationalAssessments?.receipts ?? []).toEqual([]);
+    expect(encodeNationalRecipientProjection(foreignFiltered!)).not.toContain("private-canonical");
     expect(
       parseTrustedNationalProjection(
         encodeNationalRecipientProjection(foreignFiltered!),

@@ -187,8 +187,10 @@ describe("C6 Class 2 E4 real constitutional defense and assessment receipts", ()
     const purchase = (requestId: string): StampedIntent => ({
       type: "national_buy_national_assessment", clientID: client(B), targetId: A, requestId,
     });
-    frame(game, [purchase("first"), purchase("second"), purchase("denied")], client(B));
+    frame(game, [purchase("first")], client(B));
+    const earlier = frame(game, [purchase("second"), purchase("denied")], client(B));
     const packet = frame(game, [], client(B));
+    expect(earlier.nationalAssessments?.receipts?.map((r) => r.requestId)).toEqual(["first"]);
     const report = packet.nationalAssessments!;
     expect(payer.gold()).toBe(0n);
     expect(report.items).toHaveLength(2);
@@ -196,7 +198,16 @@ describe("C6 Class 2 E4 real constitutional defense and assessment receipts", ()
     expect(report.receipts).toHaveLength(3);
     const reversed = { ...report, receipts: [...report.receipts!].reverse() };
     validateNationalAssessmentPacket(reversed, B, game.ticks());
-    const outcomes = new Map(reversed.receipts.map((r) => [r.requestId, [r.outcome, r.cost]]));
+    const outcomes = new Map<string, string[]>();
+    // Deliver two genuine snapshots newest first. Missing older rows cannot
+    // revoke an acknowledged request or acknowledge another pending click.
+    for (const f of [packet, earlier]) {
+      validateNationalAssessmentPacket(f.nationalAssessments, B, f.tick);
+      for (const receipt of f.nationalAssessments?.receipts ?? []) {
+        expect(receipt.targetId).toBe(A);
+        outcomes.set(receipt.requestId, [receipt.outcome, receipt.cost]);
+      }
+    }
     expect(outcomes.get("first")).toEqual(["accepted", "1200"]);
     expect(outcomes.get("second")).toEqual(["accepted", "1200"]);
     expect(outcomes.get("denied")).toEqual(["rejected", "0"]);

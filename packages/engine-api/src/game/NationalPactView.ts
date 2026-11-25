@@ -90,6 +90,9 @@ function terms(value: unknown): NationalPactTerms | null {
     ...(reserve === undefined ? {} : { defenseReserveBps: reserve }),
   };
 }
+function hasDefenseTerms(terms: NationalPactTerms): boolean {
+  return terms.defenseContributionBps !== undefined || terms.defenseReserveBps !== undefined;
+}
 /** Strict reader rejects nested extras. Producer separately selects public keys. */
 export function readNationalPublicPacts(
   value: unknown,
@@ -159,6 +162,7 @@ export function readNationalPactDisclosure(
     if (
       !publicPact ||
       !currentTerms ||
+      (publicPact.kind !== "MDA" && hasDefenseTerms(currentTerms)) ||
       publicPact.memberIds.includes(actor) !== (p.relationship === "member")
     )
       return null;
@@ -182,7 +186,11 @@ export function readNationalPactDisclosure(
       )
         return null;
       const next = terms(a.terms);
-      if (!next) return null;
+      if (
+        !next ||
+        (publicPact.kind !== "MDA" && hasDefenseTerms(next)) ||
+        (hasDefenseTerms(currentTerms) || hasDefenseTerms(next)) !== (a.defenseVersion !== undefined)
+      ) return null;
       amendment = {
         ...(typeof a.defenseVersion === "number"
           ? { defenseVersion: a.defenseVersion }
