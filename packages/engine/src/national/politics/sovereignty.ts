@@ -688,6 +688,7 @@ export function validatePolitics(world: PoliticsProjection): void {
           ? invitation.expiresAtMs === undefined
           : invitation.expiresAtMs !== undefined &&
               Number.isSafeInteger(invitation.expiresAtMs) &&
+              invitation.expiresAtMs % 100 === 0 &&
               invitation.expiresAtMs > world.simulationMs &&
               invitation.expiresAtMs <=
                 world.simulationMs + p.terms.invitationDurationTicks * 100,
@@ -929,7 +930,9 @@ export function inviteToPact(
       ? {}
       : {
           expiresAtMs:
-            world.simulationMs + p.terms.invitationDurationTicks * 100,
+            (Math.floor(world.simulationMs / 100) +
+              p.terms.invitationDurationTicks) *
+            100,
         }),
   });
   validatePolitics(next);

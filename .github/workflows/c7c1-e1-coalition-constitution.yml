@@ -50,7 +50,9 @@ jobs:
           git rev-parse HEAD > /tmp/c7c1-e1/head.txt
           case "$GATE" in
             constitution)
-              npx --no-install vitest run --project node tests/national/C7C1E1CoalitionConstitution.test.ts
+              npx --no-install vitest run --project node \
+                tests/national/C7C1E1CoalitionConstitution.test.ts \
+                tests/ui/national/NationalDiplomacyPanel.test.ts
               ;;
             inherited-politics)
               npx --no-install vitest run --project node \
@@ -77,6 +79,7 @@ jobs:
                   src/client/NationalDiplomacyPanel.ts \
                   src/client/NationalPactState.ts \
                   tests/national/C7C1E1CoalitionConstitution.test.ts \
+                  tests/ui/national/NationalDiplomacyPanel.test.ts \
                   docs/release/C7C1E1_COALITION_CONSTITUTION.md \
                   .github/workflows/c7c1-e1-coalition-constitution.yml
                 echo C7C1E1_FORMAT_PATCH_BEGIN

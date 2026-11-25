@@ -6,7 +6,10 @@ import {
   PlayerType,
 } from "@openfront/engine-api/game/GameTypes";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
-import { readNationalPactDisclosure } from "@openfront/engine-api/game/NationalPactView";
+import {
+  readNationalPactDisclosure,
+  readNationalPactWireDisclosure,
+} from "@openfront/engine-api/game/NationalPactView";
 import type { GameConfig } from "@openfront/engine-api/Schemas";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
@@ -604,6 +607,63 @@ describe("C7C1E1 authenticated extended coalition constitution", () => {
         constitutionVersion: version,
       }),
     ).toThrow();
+  });
+
+  it("recreated pact IDs never restore expired constitutional authority", async () => {
+    const m = await found(3);
+    consent(m, m.b, B, invite(m, B, "old-invite"), "old-join");
+    const old = memberView(m).constitutionVersion!;
+    command(m, m.b, B, "dissolve", { type: "national_betray_pact" });
+    expect(m.game.nationalPublicPoliticalView()!.pacts!).toEqual([]);
+    command(m, m.a, A, "recreate", {
+      type: "national_found_pact_v2",
+      name: "Replacement pact",
+      pactKind: "MDA",
+      terms: { admission: "leader", expulsion: "majority", membershipCap: 3 },
+    });
+    const fresh = invite(m, B, "replacement-invite");
+    expect(fresh).toBeGreaterThan(old);
+    consent(m, m.b, B, old, "old-pact-consent", false);
+    consent(m, m.b, B, fresh, "new-pact-consent");
+    vote(m, m.a, A, B, old, "old-pact-expulsion", false);
+    expect(memberView(m).memberIds).toEqual([A, B].sort());
+  });
+
+  it("rejects invented wire deadlines and off-tick restored invitation deadlines", async () => {
+    const m = await found(3, 20);
+    invite(m, B, "invite-private");
+    const roster = m.game.nationalPublicPoliticalView()!.pacts!;
+    const tick = m.game.ticks();
+    const privateView = m.game.nationalPactDisclosure(m.game.player(B))!;
+    const frame = { ...privateView, tick };
+    expect(readNationalPactWireDisclosure(frame, B, roster, false, tick)).not.toBeNull();
+    for (const deadline of [tick, tick + 21]) {
+      const forged = {
+        ...frame,
+        pacts: [{ ...frame.pacts[0], invitationExpiresAtTick: deadline }],
+      };
+      expect(
+        readNationalPactWireDisclosure(forged, B, roster, false, tick),
+      ).toBeNull();
+    }
+    const runtime = new NationalRuntime([A, B]);
+    runtime.perform(A, {
+      kind: "found-pact",
+      pactId,
+      name: "Clock witness",
+      pactKind: "NAP",
+      terms: { admission: "leader", expulsion: "leader", invitationDurationTicks: 20 },
+    });
+    runtime.perform(A, {
+      kind: "invite-pact",
+      pactId,
+      candidateId: B,
+      constitutionVersion: runtime.snapshot().politics.pacts[0].constitutionVersion!,
+    });
+    const snapshot = runtime.snapshot();
+    expect(NationalRuntime.restore(snapshot, [A, B], 0).snapshot()).toEqual(snapshot);
+    snapshot.politics.pacts[0].invitations[0].expiresAtMs!--;
+    expect(() => NationalRuntime.restore(snapshot, [A, B], 0)).toThrow();
   });
 
   it("does not enable any constitutional command in legacy FFA", async () => {

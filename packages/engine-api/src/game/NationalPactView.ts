@@ -286,6 +286,7 @@ export function readNationalPactDisclosure(
       currentTerms.admission === "selected" ||
       currentTerms.admission === "majority" ||
       currentTerms.admission === "supermajority";
+    if (election && publicPact.memberIds.length > 256) return null;
     if (
       (currentTerms.selectedApproverIds ?? []).some(
         (v) => !publicPact.memberIds.includes(v),
@@ -509,12 +510,18 @@ export function readNationalPactWireDisclosure(
   );
   if (
     decoded?.pacts.some(
-      (p) =>
-        (p.invitationExpiresAtTick !== undefined &&
-          p.invitationExpiresAtTick <= tick) ||
-        p.invitations?.some(
-          (i) => i.expiresAtTick !== undefined && i.expiresAtTick <= tick,
-        ),
+      (p) => {
+        const duration = p.terms.invitationDurationTicks;
+        const invalidDeadline = (deadline?: number) =>
+          deadline !== undefined &&
+          (deadline <= tick ||
+            duration === undefined ||
+            deadline - tick > duration);
+        return (
+          invalidDeadline(p.invitationExpiresAtTick) ||
+          p.invitations?.some((i) => invalidDeadline(i.expiresAtTick))
+        );
+      },
     )
   )
     return null;

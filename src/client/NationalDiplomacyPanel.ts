@@ -2192,7 +2192,7 @@ export class NationalDiplomacyPanel extends LitElement {
                                 >
                                   ${d.constitutionVersion !== undefined ? "Propose or approve admission" : d.terms.admission === "unanimous" && p.memberIds.length > 1 ? "Record initial admission vote" : "Submit invitation"}
                                 </button>
-                                ${d.terms.admission === "unanimous" ? html`<p>Unanimous admission requires all members’ consent. With multiple members, this records the first vote, not an authorized invitation; additional admission ballot controls are not available.</p>` : nothing}
+                                ${d.terms.admission === "unanimous" ? html`<p>${d.extendedGovernance ? "Unanimous admission requires every member’s approval before the applicant may accept." : "Unanimous admission requires all members’ consent. With multiple members, this records the first vote, not an authorized invitation; additional admission ballot controls are not available."}</p>` : nothing}
                               </form>
                               ${d.invitations?.map(
                                 (record) =>
@@ -2200,6 +2200,7 @@ export class NationalDiplomacyPanel extends LitElement {
                                     ${this.playerName(record.targetId)}:
                                     ${record.approvedBy.length} approval(s) —
                                     ${record.authorized ? "awaiting applicant consent" : "pending votes"}.
+                                    ${record.expiresAtTick === undefined ? nothing : html` Expires at tick ${record.expiresAtTick}.`}
                                     <button
                                       class=${button}
                                       type="button"
@@ -2248,6 +2249,7 @@ export class NationalDiplomacyPanel extends LitElement {
                                         ${pending.terms.expulsion};
                                         ${pending.terms.membershipCap === undefined ? "No membership cap" : "Membership cap " + pending.terms.membershipCap};
                                         ${pending.terms.invitationDurationTicks === undefined ? "No invitation deadline" : "Invitation duration " + pending.terms.invitationDurationTicks + " ticks"};
+                                        ${pending.terms.selectedApproverIds === undefined ? nothing : html`Selected admission approvers: ${pending.terms.selectedApproverIds.map((id) => this.playerName(id)).join(", ")}.`}
                                         ${pending.terms.selectedExpellerIds === undefined ? nothing : html`Selected expulsion approvers: ${pending.terms.selectedExpellerIds.map((id) => this.playerName(id)).join(", ")}.`}
                                         administrator
                                         ${pending.administratorId ? this.playerName(pending.administratorId) : "None"}.
