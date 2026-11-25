@@ -1,17 +1,37 @@
 // @vitest-environment jsdom
 import { GameType } from "@openfront/engine-api/game/GameTypes";
-import { GameUpdateType, type GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import {
+  GameUpdateType,
+  type GameUpdateViewData,
+} from "@openfront/engine-api/game/GameUpdates";
 import { EventBus } from "@openfront/shared/EventBus";
 import { html } from "lit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "../../../src/client/hud/layers/WinModal";
 import type { WinModal } from "../../../src/client/hud/layers/WinModal";
 import { readNationalPolitics } from "../../../src/client/NationalDiplomacyState";
-import { nationalCrisisAt, nationalVictoryAt } from "../../../src/client/NationalVictoryExperience";
-import { materializeTrustedNationalUpdate, readTrustedVictory } from "../../../src/client/TrustedNationalSession";
-import { SendNationalTransferCrownIntentEvent, SendWinnerEvent } from "../../../src/client/Transport";
+import {
+  nationalCrisisAt,
+  nationalVictoryAt,
+} from "../../../src/client/NationalVictoryExperience";
+import {
+  SendNationalTransferCrownIntentEvent,
+  SendWinnerEvent,
+} from "../../../src/client/Transport";
+import {
+  materializeTrustedNationalUpdate,
+  readTrustedVictory,
+} from "../../../src/client/TrustedNationalSession";
 import type { GameView } from "../../../src/client/view";
-import { A, B, C, I, EMPIRE, infos, scenario } from "../../national/C6C2E6Scenario";
+import {
+  A,
+  B,
+  C,
+  I,
+  EMPIRE,
+  infos,
+  scenario,
+} from "../../national/C6C2E6Scenario";
 
 vi.mock("../../../src/client/Utils", () => ({
   translateText: (key: string) => key,
@@ -21,7 +41,9 @@ vi.mock("../../../src/client/Utils", () => ({
   homeHref: () => "/",
   TUTORIAL_VIDEO_URL: "https://example.com/tutorial",
 }));
-vi.mock("../../../src/client/Api", () => ({ getUserMe: vi.fn(async () => null) }));
+vi.mock("../../../src/client/Api", () => ({
+  getUserMe: vi.fn(async () => null),
+}));
 vi.mock("../../../src/client/Cosmetics", async (original) => ({
   ...(await original<typeof import("../../../src/client/Cosmetics")>()),
   fetchCosmetics: vi.fn(async () => null),
@@ -41,19 +63,24 @@ function mount(m: Match, actor: string | null, privateMode = false) {
   const votes: SendWinnerEvent[] = [];
   bus.on(SendNationalTransferCrownIntentEvent, (e) => events.push(e));
   bus.on(SendWinnerEvent, (e) => votes.push(e));
-  const players = infos.filter((p) => m.game.hasPlayer(p.id)).map((p) => ({
-    id: () => p.id,
-    clientID: () => p.clientID,
-    displayName: () => p.name,
-    name: () => p.name,
-    isAlive: () => m.game.player(p.id).isAlive(),
-    hasSpawned: () => m.game.player(p.id).hasSpawned(),
-  }));
+  const players = infos
+    .filter((p) => m.game.hasPlayer(p.id))
+    .map((p) => ({
+      id: () => p.id,
+      clientID: () => p.clientID,
+      displayName: () => p.name,
+      name: () => p.name,
+      isAlive: () => m.game.player(p.id).isAlive(),
+      hasSpawned: () => m.game.player(p.id).hasSpawned(),
+    }));
   const modal = document.createElement("win-modal") as WinModal;
   modal.eventBus = bus;
   modal.game = {
     config: () => ({
-      gameConfig: () => ({ nationalMode: true, gameType: privateMode ? GameType.Private : GameType.Singleplayer }),
+      gameConfig: () => ({
+        nationalMode: true,
+        gameType: privateMode ? GameType.Private : GameType.Singleplayer,
+      }),
       isReplay: () => replay,
     }),
     gameID: () => "e6-test",
@@ -76,8 +103,12 @@ function mount(m: Match, actor: string | null, privateMode = false) {
   document.body.append(modal);
   modals.push(modal);
   return {
-    modal, events, votes,
-    replay: () => { replay = true; },
+    modal,
+    events,
+    votes,
+    replay: () => {
+      replay = true;
+    },
     async update(next = m.packet()) {
       frame = next;
       modal.tick();
@@ -98,17 +129,27 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
     const c = mount(m, C);
     const observer = mount(m, null);
     const unauthenticated = mount(m, A, true);
-    await Promise.all([a.update(), b.update(), c.update(), observer.update(), unauthenticated.update()]);
-    expect(a.modal.querySelector('[role="timer"]')?.textContent).toContain("10 seconds");
-    for (const viewer of [b,c,observer,unauthenticated])
-      expect(viewer.modal.querySelector('[data-national-crisis]')).toBeNull();
+    await Promise.all([
+      a.update(),
+      b.update(),
+      c.update(),
+      observer.update(),
+      unauthenticated.update(),
+    ]);
+    expect(a.modal.querySelector('[role="timer"]')?.textContent).toContain(
+      "10 seconds",
+    );
+    for (const viewer of [b, c, observer, unauthenticated])
+      expect(viewer.modal.querySelector("[data-national-crisis]")).toBeNull();
     const select = a.modal.querySelector("select")!;
     select.focus();
     expect(document.activeElement).toBe(select);
     select.value = B;
     select.dispatchEvent(new Event("change", { bubbles: true }));
     await a.modal.updateComplete;
-    const button = a.modal.querySelector<HTMLButtonElement>('[data-national-crisis] button[type="submit"]')!;
+    const button = a.modal.querySelector<HTMLButtonElement>(
+      '[data-national-crisis] button[type="submit"]',
+    )!;
     expect(button.disabled).toBe(false);
     button.click();
     button.click();
@@ -163,27 +204,61 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
       await a.update();
       await c.update();
     }
-    for (const viewer of [a,c]) {
-      expect(viewer.modal.querySelector('[data-national-crisis]')?.textContent).toContain("independent sovereignty is restored");
+    for (const viewer of [a, c]) {
+      expect(
+        viewer.modal.querySelector("[data-national-crisis]")?.textContent,
+      ).toContain("independent sovereignty is restored");
       expect(viewer.modal.isVisible).toBe(false);
     }
     expect(m.wins).toEqual([]);
   }, 120_000);
 
   it("rejects malformed awards, invented clocks and private WIN buckets", () => {
-    const base = { empires: [{ id: EMPIRE, leaderId: A, memberIds: [A,B] }], warnings: [{ empireId: EMPIRE, deadlineMs: 11000, remainingMs: 10000, blockedByAssetDisposition: false }] };
+    const base = {
+      empires: [{ id: EMPIRE, leaderId: A, memberIds: [A, B] }],
+      warnings: [
+        {
+          empireId: EMPIRE,
+          deadlineMs: 11000,
+          remainingMs: 10000,
+          blockedByAssetDisposition: false,
+        },
+      ],
+    };
     expect(nationalCrisisAt(readNationalPolitics(base), A, 10)).not.toBeNull();
     expect(nationalCrisisAt(readNationalPolitics(base), A, 11)).toBeNull();
     expect(nationalCrisisAt(readNationalPolitics(base), B, 10)).toBeNull();
-    const award = { resolved: true, sovereignPowerCount: 1, confirmedTick: 10, prizes: [{ kind: "SovereignVictor", nationId: A }] };
+    const award = {
+      resolved: true,
+      sovereignPowerCount: 1,
+      confirmedTick: 10,
+      prizes: [{ kind: "SovereignVictor", nationId: A }],
+    };
     for (const invalid of [
       { ...award, prizes: [...award.prizes, ...award.prizes] },
-      { ...award, prizes: [{ kind: "EmpireVictor", nationId: A, empireId: EMPIRE }] },
+      {
+        ...award,
+        prizes: [{ kind: "EmpireVictor", nationId: A, empireId: EMPIRE }],
+      },
       { ...award, privateConstitution: { secret: true } },
       { ...award, confirmedTick: 11 },
-    ]) expect(nationalVictoryAt(readNationalPolitics({ ...base, victory: invalid }), 10, 10)).toBeNull();
-    expect(() => materializeTrustedNationalUpdate({
-      tick: 10, packedTileUpdates: [], updates: { [GameUpdateType.Win]: [{ winner: ["player", I] }] },
-    } as never, 9)).toThrow(/unauthorized engine update bucket/);
+    ])
+      expect(
+        nationalVictoryAt(
+          readNationalPolitics({ ...base, victory: invalid }),
+          10,
+          10,
+        ),
+      ).toBeNull();
+    expect(() =>
+      materializeTrustedNationalUpdate(
+        {
+          tick: 10,
+          packedTileUpdates: [],
+          updates: { [GameUpdateType.Win]: [{ winner: ["player", I] }] },
+        } as never,
+        9,
+      ),
+    ).toThrow(/unauthorized engine update bucket/);
   });
 });

@@ -1,9 +1,9 @@
 import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
-import { readNationalConfirmedVictory } from "@openfront/engine-api/game/NationalVictoryView";
 import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/NationalAssessmentView";
 import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
+import { readNationalConfirmedVictory } from "@openfront/engine-api/game/NationalVictoryView";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { simpleHash } from "@openfront/engine-lib/Util";
 import { decodeNationalObserverNativeUnits } from "@openfront/shared/NationalObserverNativeWire";

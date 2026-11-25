@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-const publicId = z.string().min(1).max(256);
+const publicId = z.string().min(1).max(256).refine((id) =>
+  !Array.from(id).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127),
+);
 const prizeSchema = z.union([
   z.strictObject({ kind: z.literal("SovereignVictor"), nationId: publicId }),
   z.strictObject({
@@ -21,7 +23,7 @@ export const NationalConfirmedVictorySchema = z
     sovereignPowerCount: z.literal(1),
     resolved: z.literal(true),
     confirmedTick: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    prizes: z.array(prizeSchema).min(1),
+    prizes: z.array(prizeSchema).min(1).max(4096),
   })
   .refine(({ prizes }) => {
     const first = prizes[0];
@@ -30,9 +32,11 @@ export const NationalConfirmedVictorySchema = z
     if (first.kind === "SovereignVictor") return prizes.length === 1;
     return (
       first.kind === "ImperialVictor" &&
-      prizes.slice(1).every(
-        (p) => p.kind === "EmpireVictor" && p.empireId === first.empireId,
-      )
+      prizes
+        .slice(1)
+        .every(
+          (p) => p.kind === "EmpireVictor" && p.empireId === first.empireId,
+        )
     );
   }, "Invalid sovereign award roster");
 

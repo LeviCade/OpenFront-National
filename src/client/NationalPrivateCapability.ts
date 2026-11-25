@@ -107,6 +107,8 @@ export function hasTrustedNationalPrivateCapability(
   clientID?: string | null,
 ): boolean {
   const seat = bus ? accepted.get(bus) : null;
-  return seat?.gameID === gameID &&
-    (clientID === undefined || seat.clientID === clientID);
+  return (
+    seat?.gameID === gameID &&
+    (clientID === undefined || seat.clientID === clientID)
+  );
 }

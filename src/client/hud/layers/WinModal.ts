@@ -44,6 +44,18 @@ import {
   momentShareText,
   momentShareUrl,
 } from "../../MomentShare";
+import { createNationalPoliticalRequestId } from "../../NationalDiplomacyState";
+import {
+  hasTrustedNationalPrivateCapability,
+  NationalPrivateCapabilityChangedEvent,
+} from "../../NationalPrivateCapability";
+import {
+  NationalCrisisTracker,
+  nationalCrisisAt,
+  nationalVictoryAt,
+  nationalVictoryPresentation,
+  type NationalCrisis,
+} from "../../NationalVictoryExperience";
 import { Platform } from "../../Platform";
 import { MAX_PRESTIGE, reachedLegendThisGame } from "../../Progression";
 import { resolveXpAccount } from "../../ProgressionAccount";
@@ -69,18 +81,6 @@ import {
   SendNationalTransferCrownIntentEvent,
   SendWinnerEvent,
 } from "../../Transport";
-import { createNationalPoliticalRequestId } from "../../NationalDiplomacyState";
-import {
-  hasTrustedNationalPrivateCapability,
-  NationalPrivateCapabilityChangedEvent,
-} from "../../NationalPrivateCapability";
-import {
-  NationalCrisisTracker,
-  nationalCrisisAt,
-  nationalVictoryAt,
-  nationalVictoryPresentation,
-  type NationalCrisis,
-} from "../../NationalVictoryExperience";
 import { shareGame } from "../../utilities/ShareGame";
 import { GameView } from "../../view";
 
@@ -1107,14 +1107,20 @@ export class WinModal extends LitElement implements Controller {
       this.game?.config?.().gameConfig?.().nationalMode !== true
     )
       return;
-    this.eventBus.on(NationalPrivateCapabilityChangedEvent, this.onNationalTransport);
+    this.eventBus.on(
+      NationalPrivateCapabilityChangedEvent,
+      this.onNationalTransport,
+    );
     this.eventBus.on(NationalTransportStatusEvent, this.onNationalTransport);
     this.nationalSubscribed = true;
   }
 
   private unsubscribeNationalTransport(): void {
     if (!this.nationalSubscribed) return;
-    this.eventBus.off(NationalPrivateCapabilityChangedEvent, this.onNationalTransport);
+    this.eventBus.off(
+      NationalPrivateCapabilityChangedEvent,
+      this.onNationalTransport,
+    );
     this.eventBus.off(NationalTransportStatusEvent, this.onNationalTransport);
     this.nationalSubscribed = false;
   }
@@ -1177,7 +1183,12 @@ export class WinModal extends LitElement implements Controller {
   }
 
   private nationalName(id: string): string {
-    return this.game.players().find((p) => p.id() === id)?.displayName() ?? id;
+    return (
+      this.game
+        .players()
+        .find((p) => p.id() === id)
+        ?.displayName() ?? id
+    );
   }
 
   private renderNationalCrisis() {
@@ -1189,50 +1200,80 @@ export class WinModal extends LitElement implements Controller {
         class="fixed top-2 left-1/2 z-[10009] w-[min(94vw,32rem)] max-h-[55dvh] -translate-x-1/2 overflow-y-auto rounded-lg border-2 border-amber-400 bg-slate-950 p-3 text-white shadow-xl"
         data-national-crisis=${crisis ? "active" : "resolved"}
       >
-        ${crisis
-          ? html`
-              <div role="alert">
-                <h2 class="text-lg font-bold text-amber-200">Ungovernable empire</h2>
-                <p>Your nation is strictly lowest across all eight required metrics. Transfer the crown before the simulation deadline.</p>
-              </div>
-              <p role="timer" aria-live="polite" class="mt-2 text-xl font-bold tabular-nums">
-                ${Math.ceil(crisis.remainingMs / 1000)} seconds remaining
-              </p>
-              ${crisis.blockedByAssetDisposition
-                ? html`<p role="status">Deadline expired. Awaiting authoritative asset disposition; transfer is no longer available.</p>`
-                : html`
-                    <form @submit=${this.transferNationalCrown} class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
-                      <label class="min-w-0 flex-1">
-                        <span class="block">Successor</span>
-                        <select
-                          class="min-h-11 w-full rounded border border-slate-400 bg-slate-900 px-2 text-base focus-visible:outline-2 focus-visible:outline-amber-300"
-                          .value=${this.nationalSuccessor}
-                          ?disabled=${this.crisisRequest !== null}
-                          @change=${(e: Event) => {
-                            this.nationalSuccessor = (e.target as HTMLSelectElement).value;
-                          }}
+        ${
+          crisis
+            ? html`
+                <div role="alert">
+                  <h2 class="text-lg font-bold text-amber-200">
+                    Ungovernable empire
+                  </h2>
+                  <p>
+                    Your nation is strictly lowest across all eight required
+                    metrics. Transfer the crown before the simulation deadline.
+                  </p>
+                </div>
+                <p
+                  role="timer"
+                  aria-live="polite"
+                  class="mt-2 text-xl font-bold tabular-nums"
+                >
+                  ${Math.ceil(crisis.remainingMs / 1000)} seconds remaining
+                </p>
+                ${
+                  crisis.blockedByAssetDisposition
+                    ? html`<p role="status">
+                        Deadline expired. Awaiting authoritative asset
+                        disposition; transfer is no longer available.
+                      </p>`
+                    : html`
+                        <form
+                          @submit=${this.transferNationalCrown}
+                          class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end"
                         >
-                          <option value="">Choose a living member</option>
-                          ${crisis.successorIds.map((id) => html`<option value=${id}>${this.nationalName(id)}</option>`)}
-                        </select>
-                      </label>
-                      <button
-                        type="submit"
-                        class="min-h-11 rounded bg-amber-300 px-3 font-semibold text-slate-950 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-white"
-                        ?disabled=${this.crisisRequest !== null || !crisis.successorIds.includes(this.nationalSuccessor)}
-                      >Transfer crown</button>
-                    </form>
-                  `}
-              <p role="status" class="mt-2 text-sm">${this.nationalTransferStatus}</p>
-            `
-          : html`<p role="status">${this.nationalResolution} <button
-              type="button"
-              class="ml-2 min-h-11 underline focus-visible:outline-2"
-              @click=${() => {
-                this.crisisTracker.clear();
-                this.nationalResolution = "";
-              }}
-            >Dismiss</button></p>`}
+                          <label class="min-w-0 flex-1">
+                            <span class="block">Successor</span>
+                            <select
+                              class="min-h-11 w-full rounded border border-slate-400 bg-slate-900 px-2 text-base focus-visible:outline-2 focus-visible:outline-amber-300"
+                              .value=${this.nationalSuccessor}
+                              ?disabled=${this.crisisRequest !== null}
+                              @change=${(e: Event) => {
+                                this.nationalSuccessor = (
+                                  e.target as HTMLSelectElement
+                                ).value;
+                              }}
+                            >
+                              <option value="">Choose a living member</option>
+                              ${crisis.successorIds.map((id) => html`<option value=${id}>${this.nationalName(id)}</option>`)}
+                            </select>
+                          </label>
+                          <button
+                            type="submit"
+                            class="min-h-11 rounded bg-amber-300 px-3 font-semibold text-slate-950 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-white"
+                            ?disabled=${this.crisisRequest !== null || !crisis.successorIds.includes(this.nationalSuccessor)}
+                          >
+                            Transfer crown
+                          </button>
+                        </form>
+                      `
+                }
+                <p role="status" class="mt-2 text-sm">
+                  ${this.nationalTransferStatus}
+                </p>
+              `
+            : html`<p role="status">
+                ${this.nationalResolution}
+                <button
+                  type="button"
+                  class="ml-2 min-h-11 underline focus-visible:outline-2"
+                  @click=${() => {
+                    this.crisisTracker.clear();
+                    this.nationalResolution = "";
+                  }}
+                >
+                  Dismiss
+                </button>
+              </p>`
+        }
       </section>
     `;
   }
@@ -1242,12 +1283,12 @@ export class WinModal extends LitElement implements Controller {
     const game = this.game;
     const actor = this.activeNationalActor();
     const tick = game.ticks();
-    const politics = game.nationalPoliticsTick() === tick
-      ? game.nationalPolitics()
-      : null;
+    const politics =
+      game.nationalPoliticsTick() === tick ? game.nationalPolitics() : null;
     const crisis = nationalCrisisAt(politics, actor, tick);
     if (
       !actor ||
+      tick < this.nationalLastTick ||
       !crisis ||
       crisis.remainingMs === 0 ||
       this.crisisRequest !== null ||
@@ -1263,21 +1304,32 @@ export class WinModal extends LitElement implements Controller {
         successorId: this.nationalSuccessor,
         requestId,
       };
-      this.eventBus.emit(new SendNationalTransferCrownIntentEvent(
-        crisis.empireId, this.nationalSuccessor, requestId,
-      ));
-      this.nationalTransferStatus = "Transfer requested. Awaiting the game; the crown has not changed yet.";
+      this.eventBus.emit(
+        new SendNationalTransferCrownIntentEvent(
+          crisis.empireId,
+          this.nationalSuccessor,
+          requestId,
+        ),
+      );
+      this.nationalTransferStatus =
+        "Transfer requested. Awaiting the game; the crown has not changed yet.";
     } catch {
       this.crisisRequest = null;
       this.nationalTransferStatus = "Transfer could not be sent.";
     }
   };
 
-  private tickNational(winUpdates: readonly import("@openfront/engine-api/game/GameUpdates").WinUpdate[]): void {
+  private tickNational(
+    winUpdates: readonly import("@openfront/engine-api/game/GameUpdates").WinUpdate[],
+  ): void {
     const game = this.game;
     const tick = game.ticks();
     const actor = this.nationalActor();
-    const identity = JSON.stringify([game.gameID(), actor]);
+    const identity = JSON.stringify([
+      game.gameID(),
+      actor,
+      game.myPlayer()?.clientID(),
+    ]);
     if (this.nationalIdentity !== identity) {
       this.clearNationalExperience();
       this.nationalIdentity = identity;
@@ -1285,17 +1337,21 @@ export class WinModal extends LitElement implements Controller {
     if (tick < this.nationalLastTick) {
       this.nationalCrisis = null;
       this.nationalResolution = "";
+      this.nationalSuccessor = "";
       this.crisisRequest = null;
       this.nationalTransferStatus = "";
       this.crisisTracker.clear();
       return;
     }
     this.nationalLastTick = tick;
-    const politics = game.nationalPoliticsTick() === tick
-      ? game.nationalPolitics()
-      : null;
+    const politics =
+      game.nationalPoliticsTick() === tick ? game.nationalPolitics() : null;
     const activeActor = this.activeNationalActor();
-    const victory = nationalVictoryAt(politics, game.nationalPoliticsTick(), tick);
+    const victory = nationalVictoryAt(
+      politics,
+      game.nationalPoliticsTick(),
+      tick,
+    );
     if (victory) {
       this.nationalCrisis = null;
       this.nationalResolution = "";
@@ -1318,18 +1374,30 @@ export class WinModal extends LitElement implements Controller {
         )
           return;
       }
-      const key = JSON.stringify([identity, victory.confirmedTick, victory.prizes]);
+      const key = JSON.stringify([
+        identity,
+        victory.confirmedTick,
+        victory.prizes,
+      ]);
       if (this.nationalVictoryKey === key) return;
       if (this.nationalVictoryKey !== null) return;
       this.nationalVictoryKey = key;
-      const display = nationalVictoryPresentation(victory, actor, (id) => this.nationalName(id));
+      const display = nationalVictoryPresentation(victory, actor, (id) =>
+        this.nationalName(id),
+      );
       this.nationalAward = display.award;
       this._title = display.title;
       this.isWin = display.won;
       this.gameOverSeen = true;
       if (raw && !game.isTrustedNationalProjection()) {
-        this.eventBus.emit(new SendWinnerEvent(raw.winner, raw.allPlayersStats));
-        this.gameEnd ??= { winner: raw.winner, allPlayersStats: raw.allPlayersStats, tick };
+        this.eventBus.emit(
+          new SendWinnerEvent(raw.winner, raw.allPlayersStats),
+        );
+        this.gameEnd ??= {
+          winner: raw.winner,
+          allPlayersStats: raw.allPlayersStats,
+          tick,
+        };
         void this.updateXp(true);
         void this.updateFfaRating();
       }
@@ -1346,7 +1414,10 @@ export class WinModal extends LitElement implements Controller {
     }
     this.nationalCrisis = nationalCrisisAt(politics, activeActor, tick);
     this.nationalResolution = this.crisisTracker.observe(
-      game.gameID(), activeActor, tick, politics,
+      game.gameID(),
+      activeActor,
+      tick,
+      politics,
     );
     const pending = this.crisisRequest;
     if (
@@ -1359,17 +1430,21 @@ export class WinModal extends LitElement implements Controller {
       this.nationalTransferStatus = "";
       if (!this.nationalCrisis) this.nationalSuccessor = "";
     } else if (pending) {
-      const receipt = game.nationalPoliticalResults().find((r) =>
-        r.type === "national_transfer_crown" &&
-        r.actorId === pending.actorId &&
-        r.recipientId === pending.actorId &&
-        r.requestId === pending.requestId &&
-        r.commandTargetId === pending.successorId &&
-        r.tick <= tick,
-      );
+      const receipt = game
+        .nationalPoliticalResults()
+        .find(
+          (r) =>
+            r.type === "national_transfer_crown" &&
+            r.actorId === pending.actorId &&
+            r.recipientId === pending.actorId &&
+            r.requestId === pending.requestId &&
+            r.commandTargetId === pending.successorId &&
+            r.tick <= tick,
+        );
       if (receipt && !receipt.accepted) {
         this.crisisRequest = null;
-        this.nationalTransferStatus = "The game rejected the transfer. Choose an eligible member and retry before expiry.";
+        this.nationalTransferStatus =
+          "The game rejected the transfer. Choose an eligible member and retry before expiry.";
       }
     }
   }

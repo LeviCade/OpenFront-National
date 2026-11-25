@@ -104,14 +104,16 @@ export class NationalCrisisTracker {
         !empire &&
         !politics.empires.some((e) => e.id === this.empireId)
       ) {
-        this.resolution = "Empire dissolved — your independent sovereignty is restored. War and peace remain governed by their recorded scopes.";
+        this.resolution =
+          "Empire dissolved — your independent sovereignty is restored. War and peace remain governed by their recorded scopes.";
       } else if (
         empire &&
         empire.id === this.empireId &&
         this.wasEmperor &&
         empire.leaderId !== actor
       ) {
-        this.resolution = "Crown transferred — the new emperor now holds authority.";
+        this.resolution =
+          "Crown transferred — the new emperor now holds authority.";
       } else if (
         this.wasWarned &&
         empire?.leaderId === actor &&

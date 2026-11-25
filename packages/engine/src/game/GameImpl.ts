@@ -29,6 +29,10 @@ import {
   GameUpdateType,
 } from "@openfront/engine-api/game/GameUpdates";
 import {
+  NationalConfirmedVictorySchema,
+  type NationalConfirmedVictory,
+} from "@openfront/engine-api/game/NationalVictoryView";
+import {
   ReadonlyTileSet,
   UnitPredicate,
 } from "@openfront/engine-api/game/ReadViews";
@@ -131,10 +135,6 @@ import {
   type NationalConflictPoliticsPort,
 } from "../national/politics/PoliticalAuthorityAdapter";
 import type { LastSovereignResult } from "../national/politics/sovereignty";
-import {
-  NationalConfirmedVictorySchema,
-  type NationalConfirmedVictory,
-} from "@openfront/engine-api/game/NationalVictoryView";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathFinder } from "../pathfinding/types";
@@ -1244,9 +1244,12 @@ export class GameImpl implements Game {
     // Freeze the actual awards; post-game political changes cannot rewrite them.
     return {
       ...view,
-      victory: this._nationalConfirmedVictory === null
-        ? null
-        : NationalConfirmedVictorySchema.parse(this._nationalConfirmedVictory),
+      victory:
+        this._nationalConfirmedVictory === null
+          ? null
+          : NationalConfirmedVictorySchema.parse(
+              this._nationalConfirmedVictory,
+            ),
     };
   }
 
@@ -3473,7 +3476,8 @@ export class GameImpl implements Game {
       (!this._config.nationalMode() ||
         this._winner === null ||
         typeof this._winner === "string" ||
-        this._nationalConfirmedVictory.prizes[0].nationId !== this._winner.id() ||
+        this._nationalConfirmedVictory.prizes[0].nationId !==
+          this._winner.id() ||
         this._nationalConfirmedVictory.confirmedTick > this._ticks)
     ) {
       throw new Error("NATIONAL inconsistent saved victory");

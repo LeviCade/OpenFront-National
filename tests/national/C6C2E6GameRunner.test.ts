@@ -6,11 +6,17 @@ import { encodeNationalRecipientProjection } from "../../src/server/national/Nat
 import { readNationalConfirmedVictory } from "@openfront/engine-api/game/NationalVictoryView";
 import { readVersioned } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { GameSnapshot } from "@openfront/engine/game/GameImpl";
-import { evaluateUngovernable, METRIC_KEYS } from "@openfront/engine/national/politics/sovereignty";
+import {
+  evaluateUngovernable,
+  METRIC_KEYS,
+} from "@openfront/engine/national/politics/sovereignty";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
 import { readNationalPolitics } from "../../src/client/NationalDiplomacyState";
-import { nationalVictoryAt, nationalVictoryPresentation } from "../../src/client/NationalVictoryExperience";
+import {
+  nationalVictoryAt,
+  nationalVictoryPresentation,
+} from "../../src/client/NationalVictoryExperience";
 import { roundTrip } from "../util/Snapshot";
 import { A, B, C, EMPIRE, I, infos, scenario } from "./C6C2E6Scenario";
 
@@ -42,7 +48,13 @@ describe("Sixth Conductor Second Class E6 GameRunner endgame", () => {
     m.transfer(A, B);
     expect(m.game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(B);
     expect(m.game.nationalUngovernableWarnings()).toEqual([]);
+    const recipient = m.registerRecipient(B);
     const packet = m.conquer();
+    expect(recipient.packet().nationalPolitics?.victory).toEqual(packet.nationalPolitics?.victory);
+    const recipientWire = encodeNationalRecipientProjection(recipient.packet());
+    const recipientDecoded = materializeTrustedNationalUpdate(parseTrustedNationalProjection(recipientWire, packet.tick), packet.tick - 1);
+    expect(recipientDecoded.nationalPolitics?.victory).toEqual(packet.nationalPolitics?.victory);
+    expect(recipientWire).not.toContain("allPlayersStats");
     expect(m.wins[0].winner).toEqual(["player", infos[1].clientID]);
     const victory = nationalVictoryAt(readNationalPolitics(packet.nationalPolitics), packet.tick, packet.tick)!;
     expect(victory).not.toBeNull();
@@ -78,15 +90,20 @@ describe("Sixth Conductor Second Class E6 GameRunner endgame", () => {
     const m = await scenario(true);
     const packet = m.conquer();
     expect(m.wins[0].winner).toEqual(["player", infos[1].clientID]);
-    expect(packet.nationalPolitics?.victory?.prizes).toEqual([{ kind: "SovereignVictor", nationId: B }]);
+    expect(packet.nationalPolitics?.victory?.prizes).toEqual([
+      { kind: "SovereignVictor", nationId: B },
+    ]);
   }, 120_000);
 
   it("expired deadline dissolves real empire without WIN", async () => {
     const m = await scenario();
     const deadline = m.game.nationalUngovernableWarnings()[0].deadlineMs;
     while (m.game.ticks() * 100 < deadline + 100) m.tick();
-    expect(m.game.nationalPoliticalAuthority()?.empireExists(EMPIRE)).toBe(false);
-    for (const id of [A,B,C]) expect(m.game.nationalPoliticalAuthority()?.empireOf(id)).toBeNull();
+    expect(m.game.nationalPoliticalAuthority()?.empireExists(EMPIRE)).toBe(
+      false,
+    );
+    for (const id of [A, B, C])
+      expect(m.game.nationalPoliticalAuthority()?.empireOf(id)).toBeNull();
     expect(m.game.getWinner()).toBeNull();
     expect(m.wins).toEqual([]);
     expect(m.packet().nationalPolitics?.victory).toBeNull();

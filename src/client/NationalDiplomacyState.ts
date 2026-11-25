@@ -206,7 +206,10 @@ export function readNationalPolitics(
     pacts?.some((pact) => pact.memberIds.some((id) => members.has(id)))
   )
     return null;
-  const victory = readNationalConfirmedVictory(source.victory, Number.MAX_SAFE_INTEGER);
+  const victory = readNationalConfirmedVictory(
+    source.victory,
+    Number.MAX_SAFE_INTEGER,
+  );
   return {
     empires,
     warnings,
