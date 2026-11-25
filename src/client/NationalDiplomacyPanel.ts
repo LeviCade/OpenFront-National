@@ -2187,7 +2187,9 @@ export class NationalDiplomacyPanel extends LitElement {
                                         submit(e, (data) => {
                                           const terms = this.readPactTerms(
                                             data,
-                                            p.kind === "MDA" ? d.terms : undefined,
+                                            p.kind === "MDA"
+                                              ? d.terms
+                                              : undefined,
                                           );
                                           const admin = String(
                                             data.get("administrator") ?? "",

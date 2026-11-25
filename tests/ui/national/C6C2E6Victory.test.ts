@@ -100,7 +100,7 @@ function mount(m: Match, actor: string | null, privateMode = false) {
     updatesSinceLastTick: () => frame.updates,
     isTrustedNationalProjection: () => privateMode,
     trustedProjectionReady: () => true,
-    trustedNationalPrincipal: () => privateMode ? actor : null,
+    trustedNationalPrincipal: () => (privateMode ? actor : null),
     myPlayer: () => players.find((p) => p.id() === actor) ?? null,
     players: () => players,
     isSpectator: () => actor === null || replay,

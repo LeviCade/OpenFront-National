@@ -196,14 +196,16 @@ describe("C6 C2 E3 player-directed physical blockade", () => {
     const run = runner(game);
     step(game, run, [order(ship, enemy, "restore-active")]);
     until(game, run, () =>
-      NationalBlockadeExecution.viewFor(game, a).some((r) => r.phase === "active"),
+      NationalBlockadeExecution.viewFor(game, a).some(
+        (r) => r.phase === "active",
+      ),
     );
     const active = await roundTrip(game, MAP);
     expect(active.again).toEqual(active.bytes);
     const restored = active.restored;
-    expect(NationalBlockadeExecution.viewFor(restored, restored.player(A))).toEqual(
-      NationalBlockadeExecution.viewFor(game, a),
-    );
+    expect(
+      NationalBlockadeExecution.viewFor(restored, restored.player(A)),
+    ).toEqual(NationalBlockadeExecution.viewFor(game, a));
     const restoreRun = runner(restored);
     const before = gold(game);
     const voyage = sail(game, run, c, home, enemy);
