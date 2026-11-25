@@ -49,7 +49,18 @@ export class NationalBlockadeExecution implements Execution {
     private actor: Player,
     private command: NationalBlockadeIntent,
     private clientId: ClientID,
-  ) {}
+  ) {
+    // Keep only schema fields, in canonical order. The stamped principal is
+    // retained separately; including it in command broke active snapshot replay.
+    this.command = {
+      type: command.type,
+      warId: command.warId,
+      shipId: command.shipId,
+      portId: command.portId,
+      portTile: command.portTile,
+      requestId: command.requestId,
+    };
+  }
 
   private static records(game: Game): NationalBlockadeExecution[] {
     return game

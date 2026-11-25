@@ -12,7 +12,7 @@ import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
 import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
-import { roundTrip } from "../util/Snapshot";
+import { diffSnapshots, roundTrip } from "../util/Snapshot";
 import { TestConfig } from "../util/TestConfig";
 
 const MAP = "half_land_half_ocean";
@@ -201,6 +201,7 @@ describe("C6 C2 E3 player-directed physical blockade", () => {
       ),
     );
     const active = await roundTrip(game, MAP);
+    expect(diffSnapshots(active.bytes, active.again)).toEqual([]);
     expect(active.again).toEqual(active.bytes);
     const restored = active.restored;
     expect(
@@ -226,6 +227,7 @@ describe("C6 C2 E3 player-directed physical blockade", () => {
     expect(gold(restored)).toEqual(before);
     const final = await roundTrip(game, MAP);
     const replay = await roundTrip(restored, MAP);
+    expect(diffSnapshots(final.bytes, replay.bytes)).toEqual([]);
     expect(final.bytes).toEqual(replay.bytes);
     expect(final.again).toEqual(final.bytes);
     console.info("C6C2_ACTIVE_BLOCKADE_REPLAY_BYTES=" + final.bytes.length);
