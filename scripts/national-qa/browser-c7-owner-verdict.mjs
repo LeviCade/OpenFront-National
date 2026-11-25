@@ -20,7 +20,13 @@ const failureCodes = new Set([
   "SPAWN_NOT_ACCEPTED_AFTER_REAL_MAP_INPUT",
 ]);
 
-export function classifyOwnerResolution(mode, sha, exitCode, report, software = false) {
+export function classifyOwnerResolution(
+  mode,
+  sha,
+  exitCode,
+  report,
+  software = false,
+) {
   const base = classifyFunctional(mode, sha, exitCode, report);
   const summary = summarizeBrowserEvidence(report, sha);
   const events = Array.isArray(report?.events) ? report.events : [];
@@ -33,11 +39,19 @@ export function classifyOwnerResolution(mode, sha, exitCode, report, software = 
   const config = unique("owner-functional-bounded-native-config");
   const combat = unique("legacy-real-combat-engine-correlated");
   const battle = unique("authoritative-solo-playability-complete");
-  const inputName = mode.endsWith("mobile") ? "actual-touch-input" : "actual-mouse-input";
+  const inputName = mode.endsWith("mobile")
+    ? "actual-touch-input"
+    : "actual-mouse-input";
   const inputObserved = events.some((e) => e?.name === inputName);
-  const modeMatches = MODES.includes(mode) && report?.scenarioKind === (legacy ? "legacy" : "national-solo") && report?.viewport === (mode.endsWith("mobile") ? "390x844 mobile" : "1280x800 desktop") && report?.hardwareAcceptanceRequired === false;
+  const modeMatches =
+    MODES.includes(mode) &&
+    report?.scenarioKind === (legacy ? "legacy" : "national-solo") &&
+    report?.viewport ===
+      (mode.endsWith("mobile") ? "390x844 mobile" : "1280x800 desktop") &&
+    report?.hardwareAcceptanceRequired === false;
   const terminalObserved =
-    modeMatches && base.sourceMatches &&
+    modeMatches &&
+    base.sourceMatches &&
     result?.verified === true &&
     result.uiConfirmed === true &&
     result.sameGameId === true &&
@@ -64,7 +78,8 @@ export function classifyOwnerResolution(mode, sha, exitCode, report, software = 
     unique("owner-functional-launch-config")?.verified === true &&
     inputObserved &&
     terminalObserved &&
-    Array.isArray(report.restrictedRuntimeAssets) && report.restrictedRuntimeAssets.length === 0;
+    Array.isArray(report.restrictedRuntimeAssets) &&
+    report.restrictedRuntimeAssets.length === 0;
   return {
     mode,
     sourceMatches: base.sourceMatches,
@@ -92,7 +107,9 @@ export function classifyOwnerResolution(mode, sha, exitCode, report, software = 
               ? "INCOMPLETE_OWNER_FUNCTIONAL_CONTRACT"
               : base.reason,
     failureCodes: (Array.isArray(report?.errors) ? report.errors : [])
-      .map((e) => failureCodes.has(e?.error) ? e.error : "OTHER_BROWSER_FAILURE")
+      .map((e) =>
+        failureCodes.has(e?.error) ? e.error : "OTHER_BROWSER_FAILURE",
+      )
       .slice(0, 8),
     releaseCertified: false,
     signedPreflightAccepted: false,

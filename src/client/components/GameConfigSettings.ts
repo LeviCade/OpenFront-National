@@ -552,7 +552,11 @@ export class GameConfigSettings extends LitElement {
                             stroke-width="1.5"
                             stroke-linejoin="round"
                           />
-                          <path d="M16 34h16" stroke="#fde68a" stroke-width="2" />
+                          <path
+                            d="M16 34h16"
+                            stroke="#fde68a"
+                            stroke-width="2"
+                          />
                         </svg>
                         <strong
                           class="${CARD_LABEL_CLASS} text-center text-white"
@@ -564,7 +568,8 @@ export class GameConfigSettings extends LitElement {
                           data-national-description
                           class="text-xs text-center text-white/75 normal-case"
                         >
-                          Every nation fights to win. Deep diplomacy, sovereign empires, and one final world power.
+                          Every nation fights to win. Deep diplomacy, sovereign
+                          empires, and one final world power.
                         </span>
                       </button>
                     </div>`
@@ -576,8 +581,8 @@ export class GameConfigSettings extends LitElement {
                 ? html`<p role="status" class="mt-3 text-sm text-yellow-200">
                     NATIONAL selected. The last surviving sovereign nation or
                     empire wins, not the largest land share. Start Game, place
-                    your nation, then open the crown Diplomacy panel. Choose
-                    any standard difficulty to return to ordinary Solo.
+                    your nation, then open the crown Diplomacy panel. Choose any
+                    standard difficulty to return to ordinary Solo.
                   </p>`
                 : nothing
             }

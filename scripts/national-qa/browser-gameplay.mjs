@@ -89,12 +89,15 @@ const start = performance.now();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let stage = "boot";
 
-const watchdog = setTimeout(() => {
-  record("deadline", { stage, error: "hard acceptance deadline" });
-  persist();
-  for (const child of childProcesses) child.kill("SIGKILL");
-  process.exit(1);
-}, ownerResolution ? 570_000 : 180_000);
+const watchdog = setTimeout(
+  () => {
+    record("deadline", { stage, error: "hard acceptance deadline" });
+    persist();
+    for (const child of childProcesses) child.kill("SIGKILL");
+    process.exit(1);
+  },
+  ownerResolution ? 570_000 : 180_000,
+);
 
 function record(name, extra = {}) {
   records.push({
@@ -587,11 +590,21 @@ async function main() {
       };
     })()`);
   const selectNational = async () => {
-    const before = await nationalSelection();
-    if (!before || before.label !== NATIONAL_BUTTON_LABEL) {
-      throw Error("NATIONAL_DIFFICULTY_BUTTON_MISSING_OR_MISLABELED");
-    }
-    if (!before.disabled && before.pressed !== "true") {
+    // The Solo modal renders before the asynchronous map manifest loads.
+    // Its difficulty controls are disabled while the nation count is zero.
+    // Do not skip the only actual click merely because the first read is early.
+    const before = await poll(
+      async () => {
+        const state = await nationalSelection();
+        return state?.label === NATIONAL_BUTTON_LABEL && !state.disabled
+          ? state
+          : null;
+      },
+      "operable NATIONAL difficulty after map manifest load",
+      100,
+      200,
+    );
+    if (before.pressed !== "true") {
       await clickSelector(NATIONAL_BUTTON_SELECTOR);
     }
     const selected = await poll(
@@ -608,7 +621,13 @@ async function main() {
       150,
     );
     assertSoloSelection(selected, true);
-    if (ownerResolution && (!selected.emblem || !selected.descriptionLinked || !selected.description.includes("one final world power"))) throw Error("OWNER_FUNCTIONAL_NATIONAL_IDENTITY_UNVERIFIED");
+    if (
+      ownerResolution &&
+      (!selected.emblem ||
+        !selected.descriptionLinked ||
+        !selected.description.includes("one final world power"))
+    )
+      throw Error("OWNER_FUNCTIONAL_NATIONAL_IDENTITY_UNVERIFIED");
     record("national-difficulty-selected", {
       ariaPressed: selected.pressed,
       difficulty: selected.difficulty,
@@ -722,7 +741,13 @@ async function main() {
     );
     if (ownerResolution) {
       const config = launches[0];
-      if (String(config.gameMapSize).toLowerCase() !== "compact" || config.bots !== 0 || config.nations !== 2 || config.customRules !== false) throw Error("OWNER_FUNCTIONAL_CONFIGURATION_UNVERIFIED");
+      if (
+        String(config.gameMapSize).toLowerCase() !== "compact" ||
+        config.bots !== 0 ||
+        config.nations !== 2 ||
+        config.customRules !== false
+      )
+        throw Error("OWNER_FUNCTIONAL_CONFIGURATION_UNVERIFIED");
       record("owner-functional-launch-config", { verified: true });
     }
   };
@@ -961,18 +986,26 @@ async function main() {
             legacyTick:modal.gameEnd?.tick ?? null,
           };
         })()`);
-        if (!state || state.gameId !== match.gameId ||
-            state.actorId !== match.actorId || !Number.isSafeInteger(state.tick))
+        if (
+          !state ||
+          state.gameId !== match.gameId ||
+          state.actorId !== match.actorId ||
+          !Number.isSafeInteger(state.tick)
+        )
           return null;
         const packets = await worker();
         if (national) {
           const v = state.victory;
           const first = v?.prizes?.[0];
-          if (state.politicsTick !== state.tick || !v?.resolved ||
-              v.sovereignPowerCount !== 1 ||
-              !Number.isSafeInteger(v.confirmedTick) ||
-              v.confirmedTick <= 0 || v.confirmedTick > state.tick ||
-              !["SovereignVictor", "ImperialVictor"].includes(first?.kind))
+          if (
+            state.politicsTick !== state.tick ||
+            !v?.resolved ||
+            v.sovereignPowerCount !== 1 ||
+            !Number.isSafeInteger(v.confirmedTick) ||
+            v.confirmedTick <= 0 ||
+            v.confirmedTick > state.tick ||
+            !["SovereignVictor", "ImperialVictor"].includes(first?.kind)
+          )
             return null;
           const own = v.prizes.find((p) => p.nationId === match.actorId);
           const titles = {
@@ -980,31 +1013,49 @@ async function main() {
             ImperialVictor: "Imperial Victor",
             EmpireVictor: "Empire Victor",
           };
-          if (own
-            ? state.award !== own.kind || state.title !== titles[own.kind]
-            : state.award !== null ||
-              !state.title.startsWith("NATIONAL victory: " + titles[first.kind] + " — "))
+          if (
+            own
+              ? state.award !== own.kind || state.title !== titles[own.kind]
+              : state.award !== null ||
+                !state.title.startsWith(
+                  "NATIONAL victory: " + titles[first.kind] + " — ",
+                )
+          )
             return null;
-          if (!packets.some((p) =>
-            JSON.stringify(p.publicPolitics?.victory) === JSON.stringify(v)))
+          if (
+            !packets.some(
+              (p) =>
+                JSON.stringify(p.publicPolitics?.victory) === JSON.stringify(v),
+            )
+          )
             return null;
           return {
             tick: v.confirmedTick,
-            classification: first.kind === "SovereignVictor"
-              ? "NATIONAL_SOVEREIGN"
-              : "NATIONAL_IMPERIAL",
+            classification:
+              first.kind === "SovereignVictor"
+                ? "NATIONAL_SOVEREIGN"
+                : "NATIONAL_IMPERIAL",
           };
         }
         const winner = state.legacyWinner;
-        if (!Array.isArray(winner) ||
-            !["player", "nation"].includes(winner[0]) ||
-            typeof winner[1] !== "string" || !winner[1] ||
-            !Number.isSafeInteger(state.legacyTick) ||
-            state.legacyTick <= 0 || state.legacyTick > state.tick ||
-            !packets.some((p) => p.winResults?.some((w) =>
-              w.type === winType && JSON.stringify(w.winner) === JSON.stringify(winner))))
+        if (
+          !Array.isArray(winner) ||
+          !["player", "nation"].includes(winner[0]) ||
+          typeof winner[1] !== "string" ||
+          !winner[1] ||
+          !Number.isSafeInteger(state.legacyTick) ||
+          state.legacyTick <= 0 ||
+          state.legacyTick > state.tick ||
+          !packets.some((p) =>
+            p.winResults?.some(
+              (w) =>
+                w.type === winType &&
+                JSON.stringify(w.winner) === JSON.stringify(winner),
+            ),
+          )
+        )
           return null;
-        return {tick: state.legacyTick,classification:"LEGACY_WINNER"};
+        return { tick: state.legacyTick, classification: "LEGACY_WINNER" };
       },
       "genuine same-game terminal worker result and visible outcome",
       420,
@@ -1031,8 +1082,13 @@ async function main() {
     const ready = await poll(
       async () => {
         const state = await legacyMatch();
-        return state?.gameId === match.gameId && state.actorId === match.actorId &&
-          state.spawned && state.alive && !state.spawning ? state : null;
+        return state?.gameId === match.gameId &&
+          state.actorId === match.actorId &&
+          state.spawned &&
+          state.alive &&
+          !state.spawning
+          ? state
+          : null;
       },
       "legacy live player after spawn phase",
       100,
@@ -1048,7 +1104,8 @@ async function main() {
       }));
       return true;
     })()`);
-    if (!attached) throw Error("OWNER_FUNCTIONAL_LEGACY_ATTACK_OBSERVER_MISSING");
+    if (!attached)
+      throw Error("OWNER_FUNCTIONAL_LEGACY_ATTACK_OBSERVER_MISSING");
     const baseline = Math.max(0, ...(await worker()).map((p) => p.sequence));
     for (const fraction of soloSpawnFractions()) {
       const point = await mapPoint([fraction]);
@@ -1078,9 +1135,13 @@ async function main() {
               return target!==undefined && attacks.some(a=>a.targetID===target);
             });
           })()`);
-          return own && (await worker()).some((p) =>
-            p.sequence > baseline && p.hasAuthoritativeAttackDelta === true)
-            ? state : null;
+          return own &&
+            (await worker()).some(
+              (p) =>
+                p.sequence > baseline && p.hasAuthoritativeAttackDelta === true,
+            )
+            ? state
+            : null;
         },
         "legacy native attack correlated with own live engine attack",
         4,
