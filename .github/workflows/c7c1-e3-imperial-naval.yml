@@ -33,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           case "$GATE" in
-            focused) npx --no-install vitest run --project node tests/national/C7C1E3ImperialNaval.test.ts tests/national/C5ImperialCentralCombat.test.ts tests/national/C6C2E3Blockade.test.ts tests/national/C6Class1NavalEscort.test.ts tests/core/executions/TransportShipExecution.test.ts ;;
+            focused) npx --no-install vitest run --project node tests/national/C7C1E3ImperialNaval.test.ts tests/national/C5ImperialCentralCombat.test.ts tests/national/C6C2E3Blockade.test.ts tests/national/C6Class1NavalEscort.test.ts tests/core/executions/TransportShipExecution.test.ts tests/ui/national/C7C1E3NavalControls.test.ts ;;
             typecheck) npm run typecheck ;;
             lint) npm run lint ;;
             format)

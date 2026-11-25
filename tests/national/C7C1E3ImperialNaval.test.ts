@@ -64,7 +64,12 @@ function move(game: Game, hull: number, tile: number, requestId: string) {
   });
 }
 
-function expedition(game: Game, amount: number, requestId: string) {
+function expedition(
+  game: Game,
+  amount: number,
+  requestId: string,
+  tile = game.ref(7, 14),
+) {
   return StampedIntentSchema.parse({
     type: "national_imperial_administration",
     clientID: A,
@@ -76,7 +81,7 @@ function expedition(game: Game, amount: number, requestId: string) {
       expectedVersion: epoch(game),
       memberId: B,
       targetId: C,
-      tile: game.ref(7, 14),
+      tile,
       amount,
     },
   });
@@ -299,7 +304,13 @@ describe("C7C1E3 B: pooled amphibious expedition", () => {
     until(game, run, () => !boats[0].isActive());
     expect(c.numTilesOwned()).toBeLessThan(targetTiles);
     expect(b.units(UnitType.TransportShip)).toHaveLength(0);
-    expect(account(game, A)).toBeLessThanOrEqual(1300n);
+    expect(account(game, A)).toBe(1300n);
+    expect(b.outgoingAttacks().map((attack) => attack.troops())).toEqual([200]);
+    console.info("C7C1E3_LANDING_WITNESS", {
+      reserve: pool(game).toString(),
+      landed: b.outgoingAttacks()[0].troops(),
+      total: account(game, A).toString(),
+    });
   });
 
   it("preserves exact embarkation accounting across snapshot, succession and peace return", async () => {
@@ -350,6 +361,81 @@ describe("C7C1E3 B: pooled amphibious expedition", () => {
     expect(account(game, null)).toBe(1300n);
     until(game, run, () => b.units(UnitType.TransportShip).length === 0);
     expect(account(game, null)).toBe(1300n);
+  });
+});
+
+describe("C7C1E3 independent route and session negatives", () => {
+  it("rejects both real crown orders across disconnected seas without changing reserve or hull", () => {
+    const width = 40;
+    const height = 18;
+    const game = createGame(
+      {
+        width,
+        height,
+        grid: Array.from({ length: width * height }, (_, i) => {
+          const x = i % width;
+          return x < 4 || x >= width - 4 || (x >= 18 && x <= 23) ? L : W;
+        }),
+      },
+      { nationalMode: true, instantBuild: true },
+    );
+    for (const id of [A, B, C])
+      game.addPlayer(new PlayerInfo(id, PlayerType.Human, id, id));
+    game.endSpawnPhase();
+    const [a, b, c] = [A, B, C].map((id) => game.player(id));
+    for (const [player, tile] of [
+      [a, game.ref(3, 2)],
+      [b, game.ref(3, 8)],
+      [c, game.ref(width - 4, 8)],
+    ] as const) {
+      player.conquer(tile);
+      player.setSpawnTile(tile);
+      player.addGold(1_000_000_000n);
+      player.buildUnit(UnitType.Port, tile, {});
+    }
+    a.setTroops(400);
+    b.setTroops(900);
+    game.performNationalCommand(a, { kind: "found-empire", empireId: EMPIRE });
+    game.performNationalCommand(a, {
+      kind: "offer-empire",
+      empireId: EMPIRE,
+      candidateId: B,
+    });
+    game.performNationalCommand(b, {
+      kind: "accept-empire",
+      empireId: EMPIRE,
+      candidateId: B,
+    });
+    game.performNationalImperialAdministration(a, {
+      kind: "set-army-mode",
+      empireId: EMPIRE,
+      mode: "centralized",
+      thresholdBps: 0,
+    });
+    declare(game);
+    const start = game.ref(4, 8);
+    const isolatedWater = game.ref(width - 5, 8);
+    const ship = b.buildUnit(UnitType.Warship, start, { patrolTile: start });
+    expect(game.getWaterComponent(start)).not.toBe(game.getWaterComponent(isolatedWater));
+    const run = runner(game);
+    const otherGame = move(game, ship.id(), game.ref(5, 8), "other-game");
+    if (otherGame.type !== "national_imperial_administration")
+      throw Error("wrong intent");
+    submit(game, run, [
+      move(game, ship.id(), isolatedWater, "disconnected-hull"),
+      expedition(game, 200, "disconnected-transport", game.ref(width - 4, 8)),
+      { ...otherGame, command: { ...otherGame.command, gameId: "wrong-match" } },
+    ]);
+    expect(ship.warshipState().patrolTile).toBe(start);
+    expect(b.units(UnitType.TransportShip)).toHaveLength(0);
+    expect(account(game, A)).toBe(1300n);
+    expect(pool(game)).toBe(1300n);
+    expect(game.nationalPoliticalCommandResults(a)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ requestId: "disconnected-hull", accepted: false }),
+        expect.objectContaining({ requestId: "disconnected-transport", accepted: false }),
+      ]),
+    );
   });
 });
 
