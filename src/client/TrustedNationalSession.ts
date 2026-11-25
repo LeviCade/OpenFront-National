@@ -1,4 +1,5 @@
 import type { GameUpdates } from "@openfront/engine-api/game/GameTypes";
+import { readNationalConfirmedVictory } from "@openfront/engine-api/game/NationalVictoryView";
 import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/NationalAssessmentView";
 import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
@@ -327,24 +328,9 @@ export function readTrustedVictory(
   actor: string,
 ): "victory" | "defeat" | "unresolved" {
   const politics = packet.nationalPolitics;
-  if (!record(politics) || !record(politics.victory)) return "unresolved";
-  const victory = politics.victory;
-  if (
-    victory.resolved !== true ||
-    victory.sovereignPowerCount !== 1 ||
-    !Array.isArray(victory.prizes) ||
-    !victory.prizes.length ||
-    victory.prizes.some(
-      (p) =>
-        !record(p) ||
-        typeof p.nationId !== "string" ||
-        (p.kind !== "SovereignVictor" &&
-          p.kind !== "ImperialVictor" &&
-          p.kind !== "EmpireVictor") ||
-        (p.kind !== "SovereignVictor" && typeof p.empireId !== "string"),
-    )
-  )
-    return "unresolved";
+  if (!record(politics)) return "unresolved";
+  const victory = readNationalConfirmedVictory(politics.victory, packet.tick);
+  if (!victory) return "unresolved";
   return victory.prizes.some((p) => p.nationId === actor)
     ? "victory"
     : "defeat";

@@ -14,6 +14,11 @@ import {
   type NationalPublicPactView,
 } from "@openfront/engine-api/game/NationalPactView";
 
+import {
+  readNationalConfirmedVictory,
+  type NationalConfirmedVictory,
+} from "@openfront/engine-api/game/NationalVictoryView";
+
 export interface NationalPublicEmpire {
   id: string;
   leaderId: string;
@@ -26,11 +31,6 @@ export interface NationalUngovernableWarning {
   remainingMs: number;
   blockedByAssetDisposition: boolean;
 }
-
-import {
-  readNationalConfirmedVictory,
-  type NationalConfirmedVictory,
-} from "@openfront/engine-api/game/NationalVictoryView";
 
 export interface NationalPublicPolitics {
   readonly victory?: NationalConfirmedVictory;

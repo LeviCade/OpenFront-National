@@ -64,7 +64,23 @@ import {
 import { requeueModeForRankedType } from "../../RequeueUrl";
 import { PlaySoundEffectEvent } from "../../sound/Sounds";
 import { steamSDK } from "../../SteamSDK";
-import { SendWinnerEvent } from "../../Transport";
+import {
+  NationalTransportStatusEvent,
+  SendNationalTransferCrownIntentEvent,
+  SendWinnerEvent,
+} from "../../Transport";
+import { createNationalPoliticalRequestId } from "../../NationalDiplomacyState";
+import {
+  hasTrustedNationalPrivateCapability,
+  NationalPrivateCapabilityChangedEvent,
+} from "../../NationalPrivateCapability";
+import {
+  NationalCrisisTracker,
+  nationalCrisisAt,
+  nationalVictoryAt,
+  nationalVictoryPresentation,
+  type NationalCrisis,
+} from "../../NationalVictoryExperience";
 import { shareGame } from "../../utilities/ShareGame";
 import { GameView } from "../../view";
 
@@ -191,6 +207,31 @@ export class WinModal extends LitElement implements Controller {
     import("../../components/LegendCeremony");
 
   private _title: string;
+  private readonly crisisTracker = new NationalCrisisTracker();
+  private nationalIdentity: string | null = null;
+  private nationalVictoryKey: string | null = null;
+  private nationalSubscribed = false;
+  private crisisRequest: {
+    actorId: string;
+    empireId: string;
+    successorId: string;
+    requestId: string;
+  } | null = null;
+
+  @state()
+  private nationalAward: string | null = null;
+
+  @state()
+  private nationalCrisis: NationalCrisis | null = null;
+
+  @state()
+  private nationalResolution = "";
+
+  @state()
+  private nationalSuccessor = "";
+
+  @state()
+  private nationalTransferStatus = "";
 
   private rand = Math.random();
 
@@ -205,6 +246,7 @@ export class WinModal extends LitElement implements Controller {
 
   render() {
     return html`
+      ${this.renderNationalCrisis()}
       <div
         class="${
           this.isVisible
@@ -212,7 +254,11 @@ export class WinModal extends LitElement implements Controller {
             : "hidden"
         }"
       >
-        <h2 class="m-0 mb-4 text-[26px] text-center text-white shrink-0">
+        <h2
+          class="m-0 mb-4 text-[26px] text-center text-white shrink-0"
+          data-national-award=${this.nationalAward ?? nothing}
+          aria-live=${this.nationalAward ? "polite" : nothing}
+        >
           ${this._title || ""}
         </h2>
         <div class="min-h-0 flex-1 overflow-y-auto pr-0.5">
@@ -709,6 +755,7 @@ export class WinModal extends LitElement implements Controller {
 
   connectedCallback(): void {
     super.connectedCallback();
+    this.subscribeNationalTransport();
     if (this.xpPollAborted) {
       this.xpPollAborted = false;
       void this.updateXp(true);
@@ -716,6 +763,8 @@ export class WinModal extends LitElement implements Controller {
   }
 
   disconnectedCallback(): void {
+    this.unsubscribeNationalTransport();
+    this.clearNationalExperience();
     this.xpAbort?.abort();
     super.disconnectedCallback();
   }
@@ -1029,6 +1078,7 @@ export class WinModal extends LitElement implements Controller {
   }
 
   init() {
+    this.subscribeNationalTransport();
     if (this.game.config().isReplay()) return;
     loadGameXpPanel();
     void this.captureStartProgress();
@@ -1049,6 +1099,267 @@ export class WinModal extends LitElement implements Controller {
     }
   }
 
+  private subscribeNationalTransport(): void {
+    if (
+      this.nationalSubscribed ||
+      !this.eventBus ||
+      this.game?.config().gameConfig().nationalMode !== true
+    )
+      return;
+    this.eventBus.on(NationalPrivateCapabilityChangedEvent, this.onNationalTransport);
+    this.eventBus.on(NationalTransportStatusEvent, this.onNationalTransport);
+    this.nationalSubscribed = true;
+  }
+
+  private unsubscribeNationalTransport(): void {
+    if (!this.nationalSubscribed) return;
+    this.eventBus.off(NationalPrivateCapabilityChangedEvent, this.onNationalTransport);
+    this.eventBus.off(NationalTransportStatusEvent, this.onNationalTransport);
+    this.nationalSubscribed = false;
+  }
+
+  private readonly onNationalTransport = (event: {
+    gameID: string;
+    ready: boolean;
+  }): void => {
+    if (event.gameID === this.game?.gameID() && !event.ready)
+      this.clearNationalExperience();
+  };
+
+  private clearNationalExperience(): void {
+    this.crisisTracker.clear();
+    this.nationalIdentity = null;
+    this.nationalCrisis = null;
+    this.nationalResolution = "";
+    this.nationalSuccessor = "";
+    this.crisisRequest = null;
+    this.nationalTransferStatus = "";
+    if (this.nationalVictoryKey !== null) {
+      this.nationalVictoryKey = null;
+      this.nationalAward = null;
+      this._title = "";
+      this.hide();
+    }
+  }
+
+  private nationalActor(): string | null {
+    const game = this.game;
+    const player = game.myPlayer();
+    if (!player || game.config().isReplay()) return null;
+    const mode = game.config().gameConfig().gameType;
+    if (mode === GameType.Singleplayer) return player.id();
+    if (
+      mode === GameType.Private &&
+      player.clientID() !== null &&
+      hasTrustedNationalPrivateCapability(this.eventBus, game.gameID(), player.clientID())
+    )
+      return player.id();
+    return null;
+  }
+
+  private activeNationalActor(): string | null {
+    const game = this.game;
+    const actor = this.nationalActor();
+    if (
+      actor === null ||
+      game.isSpectator() ||
+      game.inSpawnPhase() ||
+      !game.myPlayer()?.hasSpawned() ||
+      !game.myPlayer()?.isAlive() ||
+      (game.config().gameConfig().gameType === GameType.Private &&
+        !game.trustedProjectionReady())
+    )
+      return null;
+    return actor;
+  }
+
+  private nationalName(id: string): string {
+    return this.game.players().find((p) => p.id() === id)?.displayName() ?? id;
+  }
+
+  private renderNationalCrisis() {
+    const crisis = this.nationalCrisis;
+    if (!crisis && !this.nationalResolution) return nothing;
+    return html`
+      <section
+        aria-label="NATIONAL imperial transition"
+        class="fixed top-2 left-1/2 z-[10009] w-[min(94vw,32rem)] max-h-[55dvh] -translate-x-1/2 overflow-y-auto rounded-lg border-2 border-amber-400 bg-slate-950 p-3 text-white shadow-xl"
+        data-national-crisis=${crisis ? "active" : "resolved"}
+      >
+        ${crisis
+          ? html`
+              <div role="alert">
+                <h2 class="text-lg font-bold text-amber-200">Ungovernable empire</h2>
+                <p>Your nation is strictly lowest across all eight required metrics. Transfer the crown before the simulation deadline.</p>
+              </div>
+              <p role="timer" aria-live="off" class="mt-2 text-xl font-bold tabular-nums">
+                ${Math.ceil(crisis.remainingMs / 1000)} seconds remaining
+              </p>
+              ${crisis.blockedByAssetDisposition
+                ? html`<p role="status">Deadline expired. Awaiting authoritative asset disposition; transfer is no longer available.</p>`
+                : html`
+                    <form @submit=${this.transferNationalCrown} class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+                      <label class="min-w-0 flex-1">
+                        <span class="block">Successor</span>
+                        <select
+                          class="min-h-11 w-full rounded border border-slate-400 bg-slate-900 px-2 text-base focus-visible:outline-2 focus-visible:outline-amber-300"
+                          .value=${this.nationalSuccessor}
+                          ?disabled=${this.crisisRequest !== null}
+                          @change=${(e: Event) => {
+                            this.nationalSuccessor = (e.target as HTMLSelectElement).value;
+                          }}
+                        >
+                          <option value="">Choose a living member</option>
+                          ${crisis.successorIds.map((id) => html`<option value=${id}>${this.nationalName(id)}</option>`)}
+                        </select>
+                      </label>
+                      <button
+                        type="submit"
+                        class="min-h-11 rounded bg-amber-300 px-3 font-semibold text-slate-950 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-white"
+                        ?disabled=${this.crisisRequest !== null || !crisis.successorIds.includes(this.nationalSuccessor)}
+                      >Transfer crown</button>
+                    </form>
+                  `}
+              <p role="status" class="mt-2 text-sm">${this.nationalTransferStatus}</p>
+            `
+          : html`<p role="status">${this.nationalResolution} <button
+              type="button"
+              class="ml-2 min-h-11 underline focus-visible:outline-2"
+              @click=${() => {
+                this.crisisTracker.clear();
+                this.nationalResolution = "";
+              }}
+            >Dismiss</button></p>`}
+      </section>
+    `;
+  }
+
+  private readonly transferNationalCrown = (event: SubmitEvent): void => {
+    event.preventDefault();
+    const game = this.game;
+    const actor = this.activeNationalActor();
+    const tick = game.ticks();
+    const politics = game.nationalPoliticsTick() === tick
+      ? game.nationalPolitics()
+      : null;
+    const crisis = nationalCrisisAt(politics, actor, tick);
+    if (
+      !actor ||
+      !crisis ||
+      crisis.remainingMs === 0 ||
+      this.crisisRequest !== null ||
+      !crisis.successorIds.includes(this.nationalSuccessor) ||
+      nationalVictoryAt(politics, tick, tick) !== null
+    )
+      return;
+    try {
+      const requestId = createNationalPoliticalRequestId();
+      this.crisisRequest = {
+        actorId: actor,
+        empireId: crisis.empireId,
+        successorId: this.nationalSuccessor,
+        requestId,
+      };
+      this.eventBus.emit(new SendNationalTransferCrownIntentEvent(
+        crisis.empireId, this.nationalSuccessor, requestId,
+      ));
+      this.nationalTransferStatus = "Transfer requested. Awaiting the game; the crown has not changed yet.";
+    } catch {
+      this.crisisRequest = null;
+      this.nationalTransferStatus = "Transfer could not be sent.";
+    }
+  };
+
+  private tickNational(winUpdates: readonly import("@openfront/engine-api/game/GameUpdates").WinUpdate[]): void {
+    const game = this.game;
+    const tick = game.ticks();
+    const actor = this.nationalActor();
+    const identity = JSON.stringify([game.gameID(), actor]);
+    if (this.nationalIdentity !== identity) {
+      this.clearNationalExperience();
+      this.nationalIdentity = identity;
+    }
+    const politics = game.nationalPoliticsTick() === tick
+      ? game.nationalPolitics()
+      : null;
+    const activeActor = this.activeNationalActor();
+    const victory = nationalVictoryAt(politics, game.nationalPoliticsTick(), tick);
+    if (victory) {
+      this.nationalCrisis = null;
+      this.nationalResolution = "";
+      this.crisisRequest = null;
+      this.crisisTracker.clear();
+      const canonical = victory.prizes[0].nationId;
+      // A raw WIN is optional on filtered Private and Solo projections. Never
+      // trust an inconsistent raw winner or forward the public DTO as XP stats.
+      const raw = winUpdates[0];
+      if (winUpdates.length > 0) {
+        const winner = raw.winner;
+        const nation = game.players().find((p) => p.id() === canonical);
+        if (
+          winUpdates.length !== 1 ||
+          !nation ||
+          !winner ||
+          (winner[0] === "player"
+            ? nation.clientID() !== winner[1]
+            : winner[0] !== "nation" || nation.name() !== winner[1])
+        )
+          return;
+      }
+      const key = JSON.stringify([identity, victory.confirmedTick, victory.prizes]);
+      if (this.nationalVictoryKey === key) return;
+      if (this.nationalVictoryKey !== null) return;
+      this.nationalVictoryKey = key;
+      const display = nationalVictoryPresentation(victory, actor, (id) => this.nationalName(id));
+      this.nationalAward = display.award;
+      this._title = display.title;
+      this.isWin = display.won;
+      this.gameOverSeen = true;
+      if (raw && !game.isTrustedNationalProjection()) {
+        this.eventBus.emit(new SendWinnerEvent(raw.winner, raw.allPlayersStats));
+        this.gameEnd ??= { winner: raw.winner, allPlayersStats: raw.allPlayersStats, tick };
+        void this.updateXp(true);
+        void this.updateFfaRating();
+      }
+      if (display.won) void gamePortal.happytime();
+      if (actor) this.playEndOfGameSound();
+      void this.show();
+      return;
+    }
+    if (this.nationalVictoryKey !== null) {
+      this.clearNationalExperience();
+      return;
+    }
+    this.nationalCrisis = nationalCrisisAt(politics, activeActor, tick);
+    this.nationalResolution = this.crisisTracker.observe(
+      game.gameID(), activeActor, tick, politics,
+    );
+    const pending = this.crisisRequest;
+    if (
+      !this.nationalCrisis ||
+      !pending ||
+      activeActor !== pending.actorId ||
+      this.nationalCrisis.empireId !== pending.empireId
+    ) {
+      this.crisisRequest = null;
+      this.nationalTransferStatus = "";
+      if (!this.nationalCrisis) this.nationalSuccessor = "";
+    } else {
+      const receipt = game.nationalPoliticalResults().find((r) =>
+        r.type === "national_transfer_crown" &&
+        r.actorId === pending.actorId &&
+        r.recipientId === pending.actorId &&
+        r.requestId === pending.requestId &&
+        r.commandTargetId === pending.successorId &&
+        r.tick <= tick,
+      );
+      if (receipt && !receipt.accepted) {
+        this.crisisRequest = null;
+        this.nationalTransferStatus = "The game rejected the transfer. Choose an eligible member and retry before expiry.";
+      }
+    }
+  }
+
   tick() {
     const myPlayer = this.game.myPlayer();
     if (
@@ -1066,6 +1377,10 @@ export class WinModal extends LitElement implements Controller {
     }
     const updates = this.game.updatesSinceLastTick();
     const winUpdates = updates?.[GameUpdateType.Win] ?? [];
+    if (this.game.config().gameConfig().nationalMode === true) {
+      this.tickNational(winUpdates);
+      return;
+    }
     if (winUpdates.length > 0) this.gameOverSeen = true;
     // Votes the result to the server. The result voted is what a figure from
     // the end is worked out from: a Win update this client doesn't vote
