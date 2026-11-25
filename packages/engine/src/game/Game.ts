@@ -71,6 +71,10 @@ import type {
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import type { RegionalReconGrant } from "../national/observation/NationalReconnaissance";
 import type {
+  NationalSatelliteAdmission,
+  NationalSatelliteLease,
+} from "@openfront/engine-api/game/NationalSatelliteView";
+import type {
   NationalFoundEmpireResult,
   NationalPoliticalCommandResult,
   NationalWarCommandOutcome,
@@ -728,6 +732,13 @@ export interface Game extends GameLike {
   ): RegionalReconGrant;
   /** Own purchases ONLY; LiveObservation performs reciprocal empire sharing. */
   nationalReconnaissanceFor(payerId: PlayerID): readonly RegionalReconGrant[];
+  performNationalSatellite(
+    actor: Player,
+    requestId: string,
+    admission: NationalSatelliteAdmission,
+    authenticatedClientID?: ClientID,
+  ): NationalSatelliteLease;
+  nationalSatelliteFor(payerId: PlayerID): NationalSatelliteLease | null;
   performNationalAssessment(
     actor: Player,
     targetId: PlayerID,

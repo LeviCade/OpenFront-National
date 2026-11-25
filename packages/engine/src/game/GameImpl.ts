@@ -112,6 +112,11 @@ import {
 } from "../national/observation/NationalAssessment";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import {
+  NATIONAL_SATELLITE_REQUEST_WINDOW,
+  type NationalSatelliteAdmission,
+  type NationalSatelliteLease,
+} from "@openfront/engine-api/game/NationalSatelliteView";
+import {
   NationalReconnaissance,
   NationalReconnaissanceSnapshotSchema,
   REGIONAL_RECON_COST,
@@ -1862,6 +1867,55 @@ export class GameImpl implements Game {
     return this._nationalRecon?.activeFor(payerId, this._ticks) ?? [];
   }
 
+  /** Separate personal-gold satellite lease, bound to the original session. */
+  performNationalSatellite(
+    actor: Player,
+    requestId: string,
+    admission: NationalSatelliteAdmission,
+    authenticatedClientID?: ClientID,
+  ): NationalSatelliteLease {
+    if (this._nationalRecon === null || !this._config.nationalMode())
+      throw new Error("NATIONAL satellite: mode not enabled");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
+    if (
+      (actor.type() === PlayerType.Human &&
+        (authenticatedClientID === undefined ||
+          actor.disconnectedAtTick() !== null)) ||
+      this.inSpawnPhase() ||
+      !actor.hasSpawned() ||
+      !actor.isAlive() ||
+      !Number.isSafeInteger(admission.issuedTick) ||
+      admission.issuedTick < 0 ||
+      admission.issuedTick > this._ticks ||
+      this._ticks - admission.issuedTick > NATIONAL_SATELLITE_REQUEST_WINDOW
+    )
+      throw new Error("NATIONAL satellite: inactive or stale principal");
+    this.assertWarPolicyAdmission(actor.id(), {
+      admissionEmpireId: admission.empireId,
+      policyVersion: admission.policyVersion,
+    });
+    return this._nationalRecon.satellite.buy(
+      actor.id(),
+      requestId,
+      this._ticks,
+      (cost) => {
+        if (actor.gold() < cost)
+          throw new Error("NATIONAL satellite: insufficient gold");
+        const spent = actor.removeGold(cost);
+        if (spent !== cost) {
+          actor.addGold(spent);
+          throw new Error("NATIONAL satellite: non-atomic gold debit");
+        }
+      },
+    );
+  }
+
+  nationalSatelliteFor(payerId: PlayerID): NationalSatelliteLease | null {
+    const payer = this._players.get(payerId);
+    if (!payer?.isAlive() || !payer.hasSpawned()) return null;
+    return this._nationalRecon?.satellite.activeFor(payerId, this._ticks) ?? null;
+  }
+
   /** Game-owned gold debit and post-admission bounded foreign assessment. */
   performNationalAssessment(
     actor: Player,
@@ -3583,6 +3637,10 @@ export class GameImpl implements Game {
         s.nationalRecon === null
           ? new NationalReconnaissance()
           : NationalReconnaissance.restore(s.nationalRecon, this._ticks);
+      for (const attempt of this._nationalRecon.satellite.snapshot()) {
+        if (!this._players.has(attempt.payerId))
+          throw new Error("NATIONAL satellite: invalid restored payer");
+      }
       // A restored lease must still point to real match participants and
       // a real coordinate; a forged snapshot must never manufacture intel.
       for (const grant of this._nationalRecon.snapshot().grants) {

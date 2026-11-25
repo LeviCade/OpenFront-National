@@ -74,7 +74,8 @@ export type Intent =
   | NationalReconnaissanceIntent
   | NationalAssessmentIntent
   | NationalCounterassessmentIntent
-  | NationalBlockadeIntent;
+  | NationalBlockadeIntent
+  | NationalSatelliteIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -1083,6 +1084,17 @@ export type NationalBlockadeIntent = z.infer<
   typeof NationalBlockadeIntentSchema
 >;
 
+/** Append-only variant: price, actor and epoch are never client-controlled. */
+export const NationalSatelliteIntentSchema = z.object({
+  type: z.literal("national_buy_satellite_recon"),
+  gameId: NationalPoliticalId,
+  issuedTick: zb.uint({ min: 0, max: 0xffffffff }),
+  requestId: NationalPoliticalRequestId,
+});
+export type NationalSatelliteIntent = z.infer<
+  typeof NationalSatelliteIntentSchema
+>;
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -1137,6 +1149,7 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalAssessmentIntentSchema,
   NationalCounterassessmentIntentSchema,
   NationalBlockadeIntentSchema,
+  NationalSatelliteIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

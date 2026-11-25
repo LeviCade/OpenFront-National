@@ -4,6 +4,7 @@ import {
   NATIONAL_RECON_DURATION_TICKS,
 } from "@openfront/engine-api/game/NationalReconView";
 import { z } from "zod";
+import { NationalSatelliteJournal, SatelliteJournalSchema } from "./NationalSatellite";
 
 /**
  * M7 paid NATIONAL regional reconnaissance. Gold remains solely in Player;
@@ -38,6 +39,7 @@ export type RegionalReconGrant = z.infer<typeof grantSchema>;
 export const NationalReconnaissanceSnapshotSchema = z.object({
   version: z.literal(1),
   grants: z.array(grantSchema).max(MAX_RECON_PURCHASES),
+  satellitePurchases: SatelliteJournalSchema.optional(),
 });
 export type NationalReconnaissanceSnapshot = z.infer<
   typeof NationalReconnaissanceSnapshotSchema
@@ -45,6 +47,7 @@ export type NationalReconnaissanceSnapshot = z.infer<
 
 export class NationalReconnaissance {
   private grants: RegionalReconGrant[] = [];
+  satellite = new NationalSatelliteJournal();
   private ids = new Set<string>();
   private byPayer = new Map<string, RegionalReconGrant[]>();
 
@@ -126,12 +129,19 @@ export class NationalReconnaissance {
     return NationalReconnaissanceSnapshotSchema.parse({
       version: 1,
       grants: this.grants,
+      ...(this.satellite.snapshot().length === 0
+        ? {}
+        : { satellitePurchases: this.satellite.snapshot() }),
     });
   }
 
   static restore(raw: unknown, currentTick: number): NationalReconnaissance {
     const state = NationalReconnaissanceSnapshotSchema.parse(raw);
     const service = new NationalReconnaissance();
+    service.satellite = NationalSatelliteJournal.restore(
+      state.satellitePurchases ?? [],
+      currentTick,
+    );
     for (const g of state.grants) {
       const key = service.key(g.payerId, g.requestId);
       if (

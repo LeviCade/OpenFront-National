@@ -259,6 +259,24 @@ export class Executor {
           intent.requestId,
           intent.clientID,
         );
+      case "national_buy_satellite_recon": {
+        if (intent.gameId !== this.gameID_) return new NoOpExecution();
+        const authority = this.mg.nationalPoliticalAuthority();
+        if (authority === null) return new NoOpExecution();
+        return new NationalReconExecution(
+          player,
+          player.id(),
+          0,
+          0,
+          intent.requestId,
+          intent.clientID,
+          {
+            issuedTick: intent.issuedTick,
+            empireId: authority.empireOf(player.id()),
+            policyVersion: authority.warPolicyVersionFor(player.id()),
+          },
+        );
+      }
       case "national_buy_regional_recon":
         return new NationalReconExecution(
           player,

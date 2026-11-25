@@ -376,6 +376,12 @@ export function collectLiveNationalObservation(
       purchasedByTarget.set(grant.targetId, list);
     }
   }
+  // A satellite scans the current geographic positions of structures and
+  // vessels worldwide, not every map cell or any confidential unit field.
+  // One reciprocal living payer is enough; own/ordinary sight takes priority.
+  const satellitePayer = observer.isAlive()
+    ? sightOrder.find((id) => game.nationalSatelliteFor(id) !== null)
+    : undefined;
   const assets: NationalWorld["assets"][number][] = [];
   const sightGrants: NationalWorld["sightGrants"][number][] = [];
   const tick = game.ticks();
@@ -440,8 +446,21 @@ export function collectLiveNationalObservation(
               return dx * dx + dy * dy <= lease.radius * lease.radius;
             })
           : undefined;
+      const satellite =
+        (isShip || kind(unit.type()) === "structure") &&
+        fromBorder === null &&
+        fromCoast === null &&
+        fromWarship === null &&
+        recon === undefined
+          ? satellitePayer
+          : undefined;
       const contributorId =
-        fromBorder ?? fromCoast ?? fromWarship ?? recon?.payerId ?? null;
+        fromBorder ??
+        fromCoast ??
+        fromWarship ??
+        recon?.payerId ??
+        satellite ??
+        null;
       if (contributorId !== null) {
         // The same independently verified visible tile feeds BOTH AI's
         // NationalObservation and the human GameRunner's packet whitelist.
@@ -457,7 +476,9 @@ export function collectLiveNationalObservation(
                 ? "coast"
                 : fromWarship !== null
                   ? "warship"
-                  : "recon",
+                  : satellite === undefined
+                    ? "recon"
+                    : "satellite",
           observedAtTick: tick,
           expiresAtTick: recon?.expiry ?? tick,
         });
