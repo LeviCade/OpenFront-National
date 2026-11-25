@@ -1,0 +1,127 @@
+name: C7 First Class E6 authenticated Private gameplay
+on:
+  push:
+    branches:
+      - stage3/c7c1-e6-release-operations
+      - stage3/conductor7-class1-integration-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c7c1-e6-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [focused, regression, typecheck, lint, formatting, production]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Install exact source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(node -v)" = v24.15.0
+          test "$(npm -v)" = 12.1.0
+          npm run inst
+      - name: Required source gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.gate }}" in
+            focused)
+              node --check scripts/national-qa/private-staging-browser.mjs
+              node --check scripts/national-qa/c7c1e6-private-gameplay.mjs
+              node --test scripts/national-qa/c7c1e6-private-gameplay.test.mjs
+              npx --no-install vitest run tests/client/initGL.test.ts tests/client/C7C1E6SoftwareDiagnostic.test.ts tests/client/sound/NationalMissingMusic.test.ts tests/server/NationalSocketOrigin.test.ts tests/server/NationalAccountGate.test.ts tests/server/NationalAccountLease.test.ts tests/server/TrustedNationalRealWebSocket.test.ts
+              ;;
+            regression) npm test ;;
+            typecheck) npm run typecheck ;;
+            lint) npm run lint ;;
+            formatting) npm run format:check ;;
+            production) npm run build-prod ;;
+          esac
+  private-native-software:
+    name: Actual three-profile graphical gameplay (software, not GPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Exact source and native Chrome
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(node -v)" = v24.15.0
+          test "$(npm -v)" = 12.1.0
+          command -v google-chrome
+          npm run inst
+      - name: Same-match native gameplay and durable recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "C7C1E6_EXACT_SOURCE=$GITHUB_SHA SOFTWARE_ONLY=1"
+          node --import tsx scripts/national-qa/private-staging-browser.mjs --functional-software | tee c7c1e6-native.log
+          grep -F '"privateJourney":"NATIVE_GAMEPLAY_AND_RECOVERY_PASS"' c7c1e6-native.log
+      - name: Upload only sanitized stage and verdict records
+        if: always()
+        shell: bash
+        run: |
+          if test -f c7c1e6-native.log; then
+            grep -E '^C7C1E6_STAGE |^\{"exactSource":' c7c1e6-native.log > c7c1e6-evidence.jsonl || true
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: c7c1e6-native-redacted-${{ github.run_id }}-${{ github.run_attempt }}
+          path: c7c1e6-evidence.jsonl
+          if-no-files-found: warn
+          retention-days: 7
+  hostile-wire-and-durable:
+    name: Independent real WSS adversarial and recovery regression (separate match)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(node -v)" = v24.15.0
+          test "$(npm -v)" = 12.1.0
+          npm run inst
+      - name: Actual authenticated WSS and durable replay denials
+        env:
+          NATIONAL_TEST_DURABLE_RECOVERY: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types scripts/national-staging/durable-store.nodecheck.mjs
+          node --import tsx scripts/national-staging/worker-journey.mjs | tee c7c1e6-wire.log
+          grep -F 'DURABLE_RECOVERY_EVIDENCE ' c7c1e6-wire.log
+          grep -F 'restart_recovery=1' c7c1e6-wire.log
