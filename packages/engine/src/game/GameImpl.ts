@@ -1240,13 +1240,14 @@ export class GameImpl implements Game {
     if (this._national === null) return null;
     this.synchronizeNationalState();
     const view = this._national.publicPoliticalView();
-    // A last-sovereign candidate is not a WIN until WinCheck commits it.
-    // Freeze the actual awards; post-game political changes cannot rewrite them.
+    // Preserve the historical engine-only candidate query. It is not a WIN
+    // unless the canonical terminal marker is present; recipient projections
+    // omit the candidate. Once committed, later politics cannot rewrite it.
     return {
       ...view,
       victory:
         this._nationalConfirmedVictory === null
-          ? null
+          ? view.victory
           : NationalConfirmedVictorySchema.parse(
               this._nationalConfirmedVictory,
             ),
