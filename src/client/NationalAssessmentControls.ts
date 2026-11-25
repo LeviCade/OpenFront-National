@@ -17,6 +17,7 @@ interface PendingPurchase {
   readonly game: GameView;
   readonly bus: EventBus;
   readonly gameId: string;
+  readonly streamId: string | null | undefined;
   readonly actorId: string;
   readonly targetId: string;
   readonly requestId: string;
@@ -97,6 +98,7 @@ export class NationalAssessmentControls extends LitElement {
         context.game !== pending.game ||
         context.bus !== pending.bus ||
         context.game.gameID() !== pending.gameId ||
+        context.game.nationalReceiptStreamId?.() !== pending.streamId ||
         context.actor.id() !== pending.actorId ||
         tick < pending.tick
       ) {
@@ -136,7 +138,7 @@ export class NationalAssessmentControls extends LitElement {
     this.requestUpdate();
   }
 
-  private submit(event: SubmitEvent): void {
+  private submit(event: SubmitEvent, displayedGame: GameView, displayedBus: EventBus, displayedActor: string, displayedGameId: string, displayedStream: string | null | undefined): void {
     event.preventDefault();
     if (!(event.currentTarget instanceof HTMLFormElement)) return;
     // Do not replace the one outstanding receipt when a second click arrives.
@@ -146,6 +148,9 @@ export class NationalAssessmentControls extends LitElement {
     const targetId = form.get("target");
     if (
       !context ||
+      context.game !== displayedGame || context.bus !== displayedBus ||
+      context.actor.id() !== displayedActor || context.game.gameID() !== displayedGameId ||
+      context.game.nationalReceiptStreamId?.() !== displayedStream ||
       !this.candidates(context).some((player) => player.id() === targetId) ||
       form.get("confirm") !== "on" ||
       context.actor.gold() < NATIONAL_ASSESSMENT_QUOTE.cost
@@ -167,6 +172,7 @@ export class NationalAssessmentControls extends LitElement {
       game,
       bus,
       gameId: game.gameID(),
+      streamId: game.nationalReceiptStreamId?.(),
       actorId: actor.id(),
       targetId: targetId as string,
       requestId,
@@ -208,6 +214,9 @@ export class NationalAssessmentControls extends LitElement {
     const context = this.activeContext;
     if (!context) return nothing;
     const candidates = this.candidates(context);
+    const displayedActor = context.actor.id();
+    const displayedGameId = context.game.gameID();
+    const displayedStream = context.game.nationalReceiptStreamId?.();
     const reports = this.currentReports;
     const pending = this.pending !== null;
     const canAfford = context.actor.gold() >= NATIONAL_ASSESSMENT_QUOTE.cost;
@@ -230,7 +239,7 @@ export class NationalAssessmentControls extends LitElement {
       <form
         class="space-y-2"
         data-national-assessment-form
-        @submit=${this.submit}
+        @submit=${(event: SubmitEvent) => this.submit(event, context.game, context.bus, displayedActor, displayedGameId, displayedStream)}
       >
         <label class="block" for="national-assessment-target">
           Target nation

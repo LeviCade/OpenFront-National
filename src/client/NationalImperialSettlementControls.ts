@@ -134,7 +134,7 @@ export class NationalImperialSettlementControls extends LitElement {
             <p>Game diplomatic trade permission: ${row.tradePermitted ? "permitted" : "restricted"}. Permission alone does not prove a paid voyage.</p>
             ${row.offer ? html`<p>Game offer: ${row.offer.gold} gold — ${row.offer.status}.</p>` : nothing}
             ${row.offer?.status === "accepted" ? html`<p>Game recorded a paid settlement; other trade restrictions may remain.</p>` : nothing}
-            ${row.lastPaidCommerce ? html`<p data-settlement-paid-voyage>Game-confirmed paid voyage with ${row.lastPaidCommerce.counterpartyId}: ${row.lastPaidCommerce.grossGold} gross gold at tick ${row.lastPaidCommerce.tick}.</p>` : nothing}
+            ${row.lastPaidCommerce ? html`<p data-settlement-paid-voyage>Game-confirmed paid voyage: ${row.payerId} and ${row.lastPaidCommerce.counterpartyId}: ${row.lastPaidCommerce.grossGold} gross gold at tick ${row.lastPaidCommerce.tick}.</p>` : nothing}
             ${row.role === "payer" && !row.offer && !row.canOffer ? html`<p>No payment is authorized by the current Game ledger.</p>` : nothing}
             ${row.canOffer ? html`
               <form class="space-y-2" @submit=${(event: SubmitEvent) => {

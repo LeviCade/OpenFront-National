@@ -134,8 +134,14 @@ describe("C6C2-E1-NATIVE-IMPERIAL real client intent to GameRunner", () => {
     expect(member.gold()).toBe(grant);
     const placement = member.canBuild(UnitType.City, tile);
     if (placement === false) throw new Error("no lawful City placement");
-    const structure = member.buildUnit(UnitType.City, placement, {});
-    expect(structure.owner()).toBe(member);
+    runner.addTurn({
+      turnNumber: turnNumber++,
+      intents: [StampedIntentSchema.parse({ type: "build_unit", unit: UnitType.City, tile: placement, clientID: member.clientID() })],
+    });
+    expect(runner.executeNextTick()).toBe(true);
+    game.executeNextTick();
+    const structure = member.units(UnitType.City).find((unit) => unit.tile() === placement);
+    expect(structure?.owner()).toBe(member);
     expect(member.gold()).toBe(37n);
     expect(treasury()).toBe(19n);
     const secondRequest = "np_" + "5".repeat(32);

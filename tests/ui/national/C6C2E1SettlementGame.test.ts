@@ -151,8 +151,10 @@ describe("C6C2 E1 native settlement wire through authenticated GameRunner", () =
       amountGold: "25000",
       requestId: "c6-host-forged-offer",
       clientID: clients[1],
+      lastPaidCommerce: { tick: game.ticks(), counterpartyId: ISSUER, grossGold: "999999999" },
     });
     expect(view(issuer)[0].settlements).toEqual([]);
+    expect(native(1)?.items[0].lastPaidCommerce ?? null).toBeNull();
     expect(
       host.submit(sockets[1], {
         type: "national_offer_sanction_settlement",

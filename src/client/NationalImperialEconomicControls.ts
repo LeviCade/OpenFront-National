@@ -91,6 +91,7 @@ export class NationalImperialEconomicControls extends LitElement {
     const key = context
       ? JSON.stringify([
           context.game.gameID(),
+          context.game.nationalReceiptStreamId?.(),
           context.actor.id(),
           context.empire.id,
           context.empire.leaderId,
@@ -242,6 +243,7 @@ export class NationalImperialEconomicControls extends LitElement {
         bus: context.bus,
         key: JSON.stringify([
           context.game.gameID(),
+          context.game.nationalReceiptStreamId?.(),
           context.actor.id(),
           context.empire.id,
           context.empire.leaderId,
@@ -272,6 +274,7 @@ export class NationalImperialEconomicControls extends LitElement {
     const { actor, view, rows, game, bus, empire } = context;
     const displayedKey = JSON.stringify([
       game.gameID(),
+      game.nationalReceiptStreamId?.(),
       actor.id(),
       empire.id,
       empire.leaderId,

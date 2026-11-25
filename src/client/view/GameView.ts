@@ -604,6 +604,11 @@ export class GameView implements GameLike {
     return this._nationalReconnaissance;
   }
 
+  /** A receipt is only meaningful in the same authenticated observer stream. */
+  public nationalReceiptStreamId(): string | null | undefined {
+    return this._trustedNationalProjection ? (this.trustedSight?.lastAcceptedStreamId ?? null) : undefined;
+  }
+
   /** Private, current, strictly validated sanction settlement rows. */
   public nationalSettlements(): NationalSettlementView | null {
     const actor = this.myPlayer()?.id();
