@@ -11,11 +11,15 @@ import { NationExecution } from "@openfront/engine/execution/NationExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import type { Game } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
-import { planNationalPeace } from "@openfront/engine/national/ai/NationalPeaceStrategy";
+import {
+  holdsNationalPeace,
+  planNationalPeace,
+  recordNationalPeaceOutcome,
+} from "@openfront/engine/national/ai/NationalPeaceStrategy";
 import { collectLiveNationalObservation } from "@openfront/engine/national/observation/LiveObservation";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { createHash } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { setup } from "../util/Setup";
 import { roundTrip } from "../util/Snapshot";
 
@@ -171,6 +175,10 @@ describe("C6C2-E5-AI-PEACE canonical GameRunner witness", () => {
           .peaceNegotiations,
       ).toBeUndefined();
 
+      const strategyBefore = planNationalPeace(
+        collectLiveNationalObservation(game, bot.id).observation,
+        null,
+      ).memory;
       const { restored, bytes, again } = await roundTrip(game, "plains");
       expect(again).toEqual(bytes);
       const replay = runner(restored);
@@ -201,9 +209,24 @@ describe("C6C2-E5-AI-PEACE canonical GameRunner witness", () => {
         .outgoingAttacks()
         .reduce((sum, attack) => sum + attack.troops(), 0);
       expect(surviving).toBeGreaterThan(0);
+      const strategyAfter = planNationalPeace(
+        collectLiveNationalObservation(game, bot.id).observation,
+        strategyBefore,
+      ).memory;
+      expect(holdsNationalPeace(strategyAfter, human.id, game.ticks())).toBe(
+        !layered,
+      );
+      const returnTroops = layered ? null : vi.spyOn(b, "addTroops");
       for (let i = 0; i < (layered ? 5 : 35); i++) {
         advance();
         replay();
+        if (i === 0 && returnTroops !== null) {
+          // Observe the actual call-through refund, not a mock return or a
+          // later balance that could be explained by normal regeneration.
+          expect(returnTroops).toHaveBeenCalledWith(surviving);
+          expect(b.outgoingAttacks()).toHaveLength(0);
+          returnTroops.mockRestore();
+        }
         expect(snapshotGameData(restored)).toEqual(snapshotGameData(game));
       }
       if (!layered) {
@@ -475,6 +498,33 @@ describe("C6C2-E5-AI-PEACE canonical GameRunner witness", () => {
       }),
     );
     expect(game.nationalWarAuthority()?.atWar(bot.id, human.id)).toBe(true);
+  });
+
+  it("rejected negotiations retain a deterministic 120-tick retry cooldown", async () => {
+    const game = await fixture();
+    const view = collectLiveNationalObservation(game, bot.id).observation;
+    const first = planNationalPeace(view, null);
+    expect(first.choice).toEqual({ kind: "propose-peace", warId: WAR });
+    const rejected = recordNationalPeaceOutcome(
+      first.memory,
+      first.choice!,
+      view.tick,
+      false,
+    );
+    const next = planNationalPeace(
+      { ...view, tick: view.tick + 119 },
+      rejected,
+    );
+    expect(next.choice).toBeNull();
+    expect(next.memory.wars[0].lastOutcome).toBe("rejected");
+    const retry = planNationalPeace(
+      { ...view, tick: view.tick + 120 },
+      next.memory,
+    );
+    expect(retry.choice).toEqual(first.choice);
+    expect(
+      planNationalPeace({ ...view, tick: view.tick + 120 }, next.memory),
+    ).toEqual(retry);
   });
 
   it("no foreign balance or controller identity changes the peace decision", async () => {

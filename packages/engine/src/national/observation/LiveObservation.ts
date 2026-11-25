@@ -557,14 +557,11 @@ export function collectLiveNationalObservation(
   // Capability is scoped to the current crown/delegation, not membership.
   const peaceNegotiations: ObservedPeaceNegotiation[] = [];
   if (authority && wars.length > 0 && observer.isAlive()) {
-    const conflict = projectNationalPublicConflict(game, observerId, tick);
+    // Most viewers are not negotiating any of the world's wars. Do not
+    // build a second global projection for those viewers.
+    let conflict: ReturnType<typeof projectNationalPublicConflict> | null =
+      null;
     for (const war of wars) {
-      if (
-        !conflict?.layers.some(
-          (layer) => layer.id === war.id && layer.endedTick === null,
-        )
-      )
-        continue;
       const canNegotiate = (side: typeof war.first): boolean => {
         if (war.scope === "imperial") {
           return side.kind === "nation"
@@ -585,6 +582,14 @@ export function collectLiveNationalObservation(
           ? 1
           : null;
       if (side === null) continue;
+      if (conflict === null)
+        conflict = projectNationalPublicConflict(game, observerId, tick);
+      if (
+        !conflict?.layers.some(
+          (layer) => layer.id === war.id && layer.endedTick === null,
+        )
+      )
+        continue;
       const pending = conflict.motions.filter(
         (motion) => motion.layerId === war.id && motion.acceptedTick === null,
       );
