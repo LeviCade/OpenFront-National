@@ -58,7 +58,25 @@ jobs:
                 tests/national/NationalPoliticalPackets.test.ts
               ;;
             lint) npm run lint ;;
-            pinned-format) npm run format:check ;;
+            pinned-format)
+              npm run format:check || {
+                npx --no-install oxfmt --write \
+                  packages/engine-api/src/Schemas.ts \
+                  packages/engine-api/src/game/NationalPactView.ts \
+                  packages/engine/src/execution/NationalFoundEmpireExecution.ts \
+                  packages/engine/src/national/NationalRuntime.ts \
+                  packages/engine/src/national/observation/LiveObservation.ts \
+                  packages/engine/src/national/politics/PoliticalAuthorityAdapter.ts \
+                  packages/engine/src/national/politics/sovereignty.ts \
+                  src/client/NationalPactState.ts \
+                  src/client/NationalDiplomacyPanel.ts \
+                  tests/national/C6C2E2CoalitionVotes.test.ts
+                echo C6C2_E2_FORMAT_PATCH_BEGIN
+                git diff --no-color --no-ext-diff
+                echo C6C2_E2_FORMAT_PATCH_END
+                exit 1
+              }
+              ;;
             production-build) npm run build-prod ;;
             full-tests) npm test ;;
             *) echo "unknown gate" >&2; exit 1 ;;

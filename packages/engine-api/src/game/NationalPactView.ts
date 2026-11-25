@@ -205,6 +205,7 @@ export function readNationalPactDisclosure(
           candidates.has(i.targetId) || !ids(i.approvedBy) ||
           i.approvedBy.length === 0 || i.approvedBy.length > 256 ||
           !i.approvedBy.every((v) => eligible.includes(v)) ||
+          typeof i.authorized !== "boolean" ||
           i.authorized !== (eligible.length > 0 && i.approvedBy.length >= required)
         ) return null;
         candidates.add(i.targetId);

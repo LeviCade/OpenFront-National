@@ -109,6 +109,10 @@ function attach(game: Game) {
 }
 type Match = Awaited<ReturnType<typeof match>>;
 
+function gameHash(game: Game): number {
+  return (game as unknown as { hash(): number }).hash();
+}
+
 function issue(m: Match, client: Client, intent: Record<string, unknown>) {
   expect(m.host.submit(client, intent)).toBe(true);
   const queued = m.host.tick();
@@ -217,6 +221,7 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
       ]);
       assertNoInvite(m);
       command(m, m.d, D, "premature-accept", accept(epoch), false);
+      command(m, m.d, D, "premature-withdraw", election(epoch, "withdraw"), false);
       command(m, m.d, D, "forged-vote", {
         ...election(epoch, "approve"), clientID: BCLIENT,
       }, false);
@@ -256,10 +261,10 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
       expect(final.restored.nationalMdaAllies(D)).toEqual(m.game.nationalMdaAllies(D));
       const replayFinal = await roundTrip(replay.game, "plains");
       expect(replayFinal.bytes).toEqual(final.bytes);
-      expect(replay.game.hash()).toBe(m.game.hash());
+      expect(gameHash(replay.game)).toBe(gameHash(m.game));
       const digest = createHash("sha256").update(final.bytes).digest("hex");
-      console.log("C6C2-E2-COALITION-VOTES", policy, "1/3 => 2/3 => 4 members",
-        "snapshot_sha256", digest, "replay_hash", m.game.hash());
+      console.log("C6C2-E2-COALITION-VOTES", policy, policy === "selected" ? "1/2 => 2/2 eligible => 4 members" : "1/3 => 2/3 => 4 members",
+        "snapshot_sha256", digest, "replay_hash", gameHash(m.game));
     },
   );
 
@@ -336,6 +341,49 @@ describe("C6C2-E2-COALITION-VOTES: authenticated political transitions", () => {
       const bad = structuredClone(saved);
       corrupt(bad);
       expect(() => NationalRuntime.restore(bad, [A, B, C, D], 0)).toThrow();
+    }
+  });
+
+  it("five-member electorate distinguishes majority from two-thirds", () => {
+    const ids = [A, B, C, "C6EXTRAE", "C6EXTRAF", D];
+    const members = ids.slice(0, 5);
+    for (const policy of ["majority", "supermajority"] as const) {
+      const runtime = new NationalRuntime(ids);
+      runtime.perform(A, {
+        kind: "found-pact", pactId, name: "Five", pactKind: "MDA",
+        terms: { admission: "leader", expulsion: "forbidden" },
+      });
+      for (const id of members.slice(1)) {
+        runtime.perform(A, { kind: "invite-pact", pactId, candidateId: id });
+        runtime.perform(id, { kind: "accept-pact", pactId });
+      }
+      runtime.perform(A, {
+        kind: "propose-pact-amendment", pactId, administratorId: A,
+        terms: { admission: policy, expulsion: "forbidden" },
+      });
+      for (const id of members.slice(1))
+        runtime.perform(id, { kind: "approve-pact-amendment", pactId });
+      const version = runtime.snapshot().politics.pacts[0].constitutionVersion!;
+      runtime.perform(A, {
+        kind: "invite-pact", pactId, candidateId: D,
+        admissionAction: "propose", constitutionVersion: version,
+      });
+      const approve = (id: string) => runtime.perform(id, {
+        kind: "invite-pact", pactId, candidateId: D,
+        admissionAction: "approve", constitutionVersion: version,
+      });
+      approve(B);
+      approve(C);
+      const consent = () => runtime.perform(D, {
+        kind: "accept-pact", pactId, constitutionVersion: version,
+      });
+      if (policy === "supermajority") {
+        expect(consent).toThrow();
+        expect(runtime.snapshot().politics.pacts[0].memberIds).toHaveLength(5);
+        approve(members[3]);
+      }
+      consent();
+      expect(runtime.snapshot().politics.pacts[0].memberIds).toHaveLength(6);
     }
   });
 

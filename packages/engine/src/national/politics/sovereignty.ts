@@ -732,8 +732,10 @@ export function withdrawPactInvitation(
   requireRule(
     usesAdmissionElection(p.terms.admission) &&
       actorId === candidateId &&
-      p.invitations.some((i) => i.targetId === actorId),
-    "only an existing applicant may withdraw",
+      p.invitations.some(
+        (i) => i.targetId === actorId && pactAdmissionAuthorized(p, i.approvedBy),
+      ),
+    "only an authorized applicant may withdraw",
   );
   const next = copy(world);
   revokeAdmissionElections(next, pact(next, pactId));
