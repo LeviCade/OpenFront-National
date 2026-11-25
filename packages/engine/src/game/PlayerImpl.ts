@@ -2083,7 +2083,12 @@ export class PlayerImpl implements Player {
   }
 
   hash(): number {
+    const causes = [...this.embargoes.values()]
+      .filter((entry) => entry.reasons !== undefined)
+      .map((entry) => [entry.target.id(), entry.reasons]);
+    const causeHash = causes.length === 0 ? 0 : simpleHash(JSON.stringify(causes));
     return (
+      causeHash +
       simpleHash(this.id()) * (this.troops() + this.numTilesOwned()) +
       this._units.reduce((acc, unit) => acc + unit.hash(), 0)
     );

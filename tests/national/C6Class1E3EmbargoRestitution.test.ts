@@ -11,7 +11,8 @@ import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import { snapshotGameData } from "@openfront/engine/snapshot/GameSnapshot";
 import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
-import { roundTrip } from "../util/Snapshot";
+import { encodeSnapshotValue } from "@openfront/engine/snapshot/SnapshotCodec";
+import { restoreTestGame, roundTrip } from "../util/Snapshot";
 
 const MAP = "half_land_half_ocean";
 const [CROWN, ISSUER, DELEGATE, MEMBER, TARGET] = [
@@ -187,6 +188,25 @@ function status(game: Game, issuer: Player, sanctionId: string) {
 }
 
 describe("C6 Class 1 E3: actual enforced bilateral restitution", () => {
+  it("fails closed on historical embargo provenance lost from a snapshot", async () => {
+    const { game, b, c } = await world();
+    const id = enforce(game, b, c, "legacy-ambiguous");
+    offer(game, c, id, "10000", "legacy-offer");
+    const snapshot = snapshotGameData(game);
+    for (const player of snapshot.players) {
+      const data = player.d as { embargoes?: { reasons?: string[] }[] };
+      for (const embargo of data.embargoes ?? []) delete embargo.reasons;
+    }
+    const restored = await restoreTestGame(encodeSnapshotValue(snapshot), MAP);
+    const issuer = restored.player(ISSUER);
+    const payer = restored.player(DELEGATE);
+    const before = [issuer.gold(), payer.gold()];
+    decide(restored, issuer, id, DELEGATE, "legacy-offer", "accept", "legacy-accept");
+    issuer.stopEmbargo(payer);
+    expect(issuer.canTrade(payer)).toBe(false);
+    expect([issuer.gold(), payer.gold()]).toEqual(before);
+  });
+
   it("blocks real paid B-to-C maritime commerce, settles conserved gold after issuer acceptance, and restores actual paid voyages across replay", async () => {
     const { game, b, c, src, other } = await world();
     const paidBefore = trade(game, b, other, src);

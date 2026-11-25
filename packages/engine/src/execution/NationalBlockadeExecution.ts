@@ -4,6 +4,7 @@ import {
   NationalBlockadeIntentSchema,
   type NationalBlockadeIntent,
 } from "@openfront/engine-api/Schemas";
+import { simpleHash } from "@openfront/engine-lib/Util";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import type { Execution, Game, Player, Unit } from "../game/Game";
@@ -53,7 +54,8 @@ export class NationalBlockadeExecution implements Execution {
   private static records(game: Game): NationalBlockadeExecution[] {
     return game.executions().filter(
       (execution): execution is NationalBlockadeExecution =>
-        execution instanceof NationalBlockadeExecution && execution.mission !== null,
+        execution instanceof NationalBlockadeExecution &&
+        execution.game !== null && execution.retained,
     );
   }
 
@@ -119,6 +121,7 @@ export class NationalBlockadeExecution implements Execution {
     if (records.length >= MAX_MISSIONS ||
         records.some((record) => record.actor === this.actor &&
           record.command.requestId === this.command.requestId)) return;
+    this.retained = true;
     // Sight is obtained before accepting the foreign ID or its claimed tile.
     // Rejections are silent; callers cannot query for hidden port coordinates.
     const visible = collectLiveNationalObservation(game, this.actor.id()).observation;
@@ -200,7 +203,7 @@ export class NationalBlockadeExecution implements Execution {
    * interdict its actual target while its own mandate and physical cover hold. */
   static allowsInterdiction(game: Game, ship: Unit, port: Unit): boolean {
     const record = this.records(game)
-      .filter((item) => item.actor === ship.owner() && item.command.shipId === ship.id())
+      .filter((item) => item.mission !== null && item.actor === ship.owner() && item.command.shipId === ship.id())
       .at(-1);
     if (!record) return true;
     const units = record.current();
@@ -215,8 +218,18 @@ export class NationalBlockadeExecution implements Execution {
         requestId: record.command.requestId,
         shipId: record.command.shipId,
         portId: record.command.portId,
-        phase: record.mission!.phase,
+        phase: record.mission?.phase ?? "rejected",
       }));
+  }
+
+  static stateHash(game: Game): number {
+    const records = this.records(game);
+    if (records.length === 0) return 0;
+    return simpleHash(JSON.stringify(records.map((record) => ({
+      actor: record.actor.id(),
+      command: record.command,
+      mission: record.mission,
+    }))));
   }
 
   isActive(): boolean {

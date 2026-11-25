@@ -210,7 +210,7 @@ export class WarshipSelectionController implements Controller {
   /** Selecting a single owned hull, then a visible hostile port, orders a blockade. */
   private tryBlockade(tile: TileRef): boolean {
     const ship = this.selectedUnit;
-    if (!ship || !this.game.config?.().gameConfig().nationalMode) return false;
+    if (!ship || !this.game.config?.().gameConfig?.()?.nationalMode) return false;
     const actor = this.game.myPlayer();
     if (!actor || ship.owner() !== actor || !ship.isActive()) return false;
     const port = this.game

@@ -68,6 +68,7 @@ import {
   SharedWaterCache,
   SharedWaterCacheSnapshot,
 } from "../execution/nation/SharedWaterCache";
+import { NationalBlockadeExecution } from "../execution/NationalBlockadeExecution";
 import { NationalSanctionExecution } from "../execution/NationalSanctionExecution";
 import { NationalUltimatumExecution } from "../execution/NationalUltimatumExecution";
 import { NationExecution } from "../execution/NationExecution";
@@ -2434,6 +2435,7 @@ export class GameImpl implements Game {
     if (this._national !== null) {
       hash += this._national.stateHash();
       hash += NationalSanctionExecution.stateHash(this);
+      hash += NationalBlockadeExecution.stateHash(this);
       hash += NationalUltimatumExecution.stateHash(this);
     }
     if (this._nationalWar !== null)
