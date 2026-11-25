@@ -118,8 +118,8 @@ jobs:
             full) npm test ;;
             lint) npm run lint ;;
             format) npm run format:check || {
-              npx --no-install oxfmt --write tests/core/snapshot/C7C1E4Malformed.test.ts tests/national/C7C1E4CrossBuild.test.ts
-              for file in tests/core/snapshot/C7C1E4Malformed.test.ts tests/national/C7C1E4CrossBuild.test.ts; do
+              npx --no-install oxfmt --write packages/engine/src/snapshot/GameSnapshot.ts tests/core/snapshot/C7C1E4Malformed.test.ts tests/national/C7C1E4CrossBuild.test.ts
+              for file in packages/engine/src/snapshot/GameSnapshot.ts tests/core/snapshot/C7C1E4Malformed.test.ts tests/national/C7C1E4CrossBuild.test.ts; do
                 echo "C7E4_FORMAT_BEGIN $file"
                 cat "$file"
                 echo C7E4_FORMAT_END

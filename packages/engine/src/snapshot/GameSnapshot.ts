@@ -25,7 +25,7 @@ import {
 } from "../game/AllianceRequestImpl";
 import { AttackImpl, AttackSnapshot } from "../game/AttackImpl";
 import { Attack, Execution, Game, MutableAlliance, Unit } from "../game/Game";
-import { GameImpl, GameSnapshot } from "../game/GameImpl";
+import { GameImpl, GameSnapshot, type GameState } from "../game/GameImpl";
 import { PlayerImpl, PlayerSnapshot } from "../game/PlayerImpl";
 import { Railroad, RailroadSnapshot } from "../game/Railroad";
 import { StatsImpl } from "../game/StatsImpl";
@@ -258,6 +258,120 @@ export function readSnapshotHeader(bytes: Uint8Array): SnapshotHeader {
   };
 }
 
+/**
+ * A valid-looking journal row is not proof that its claimed conflict exists.
+ * Historical WAR layers are never discarded. Superseded pending peace
+ * motions may be removed when a different motion settles their layer.
+ * Validate against the migrated canonical records, not the present crown:
+ * a legitimate historical receipt must survive subsequent political changes.
+ */
+function validateWarReceiptLinks(state: GameState): void {
+  const receipts = state.nationalGovernance?.receipts ?? [];
+  const wars = state.nationalWar?.wars;
+  const layers = new Map(wars?.layers.map((layer) => [layer.id, layer]) ?? []);
+  const motions = new Map(
+    wars?.motions.map((motion) => [motion.id, motion]) ?? [],
+  );
+  const party = z.object({ kind: z.enum(["nation", "empire"]), id: z.string() });
+  const fingerprint = z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("declare-national"),
+      aggressorId: z.string(),
+      targetId: z.string(),
+    }),
+    z.object({
+      kind: z.literal("declare-imperial"),
+      aggressor: party,
+      target: party,
+    }),
+    z.object({ kind: z.literal("propose-peace"), warId: z.string() }),
+    z.object({ kind: z.literal("accept-peace"), motionId: z.string() }),
+  ]);
+  const invalid = () =>
+    new SnapshotError("NATIONAL journal: unprovable WAR receipt linkage");
+  for (const receipt of receipts) {
+    const kind = receipt.commandKind;
+    if (
+      !receipt.accepted ||
+      (kind !== "national_declare_war" &&
+        kind !== "national_propose_peace" &&
+        kind !== "national_accept_peace")
+    )
+      continue;
+    const layer = layers.get(receipt.warId ?? "");
+    if (
+      !layer ||
+      receipt.tick < layer.startedTick ||
+      (layer.endedTick !== null && receipt.tick > layer.endedTick)
+    )
+      throw invalid();
+    let payload: unknown;
+    try {
+      payload = JSON.parse(receipt.commandFingerprint ?? "");
+    } catch {
+      throw invalid();
+    }
+    const parsed = fingerprint.safeParse(payload);
+    if (!parsed.success) throw invalid();
+    const command = parsed.data;
+    if (kind === "national_declare_war") {
+      if (
+        receipt.actorId !== layer.declaredBy ||
+        receipt.tick !== layer.startedTick ||
+        receipt.commandTargetId !== layer.second.id
+      )
+        throw invalid();
+      if (layer.scope === "national") {
+        if (
+          command.kind !== "declare-national" ||
+          command.aggressorId !== layer.first.id ||
+          command.targetId !== layer.second.id
+        )
+          throw invalid();
+      } else if (
+        command.kind !== "declare-imperial" ||
+        command.aggressor.kind !== layer.first.kind ||
+        command.aggressor.id !== layer.first.id ||
+        command.target.kind !== layer.second.kind ||
+        command.target.id !== layer.second.id
+      )
+        throw invalid();
+    } else if (kind === "national_propose_peace") {
+      if (
+        command.kind !== "propose-peace" ||
+        command.warId !== layer.id ||
+        receipt.commandTargetId !== layer.id
+      )
+        throw invalid();
+      const motion = motions.get(receipt.motionId ?? "");
+      if (motion) {
+        if (
+          motion.layerId !== layer.id ||
+          motion.proposedBy !== receipt.actorId ||
+          motion.proposedTick !== receipt.tick
+        )
+          throw invalid();
+      } else if (layer.endedTick === null) {
+        // An active layer cannot have discarded an accepted proposal.
+        throw invalid();
+      }
+    } else {
+      const motion = motions.get(receipt.motionId ?? "");
+      if (
+        command.kind !== "accept-peace" ||
+        command.motionId !== receipt.motionId ||
+        receipt.commandTargetId !== receipt.motionId ||
+        !motion ||
+        motion.layerId !== layer.id ||
+        motion.acceptedBy !== receipt.actorId ||
+        motion.acceptedTick !== receipt.tick ||
+        layer.endedTick !== receipt.tick
+      )
+        throw invalid();
+    }
+  }
+}
+
 export interface RestoreDeps {
   config: (gameConfig: GameConfig) => EngineConfig;
   /** Freshly loaded maps for header.gameConfig; they are mutated. */
@@ -278,6 +392,7 @@ export function restoreGame(bytes: Uint8Array, deps: RestoreDeps): Game {
   const state = readVersioned(GameSnapshot, root.game);
   if (state.ticks !== root.tick)
     throw new SnapshotError("snapshot header tick disagrees with game state");
+  validateWarReceiptLinks(state);
   (deps.gameMap as GameMapImpl).restoreSnapshot(
     readVersioned(GameMapSnapshot, root.map),
   );

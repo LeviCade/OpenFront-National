@@ -339,6 +339,9 @@ async function rejectForgedReceipts(bytes: Uint8Array) {
     { recipientId: B },
     { actorId: "unknown-principal", recipientId: "unknown-principal" },
     { commandFingerprint: undefined },
+    { warId: "unrecorded-war" },
+    { warId: war },
+    { commandFingerprint: JSON.stringify({ kind: "declare-national", aggressorId: A, targetId: D }) },
   ]) {
     const root = decodeSnapshotValue(bytes) as {
       game: {
