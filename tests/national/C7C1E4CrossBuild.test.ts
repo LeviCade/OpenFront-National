@@ -257,7 +257,7 @@ function continueGame(m: ReturnType<typeof attach>) {
   );
   expect(result.contributions.some((c) => c.nationId === C)).toBe(true);
   // Real stamped intent through GameRunner/Executor, on restored actor.
-  m.tick({
+  tick({
     type: "national_declare_war",
     scope: "national",
     nationId: A,
@@ -270,6 +270,7 @@ function continueGame(m: ReturnType<typeof attach>) {
   expect(m.game.nationalWarAuthority()?.atWar(A, C)).toBe(true);
   expect(m.game.nationalWarAuthority()?.atWar(A, B)).toBe(true);
   expect(m.game.ticks()).toBe(before.tick + 7);
+  expect(timeline).toHaveLength(7);
   expect(m.game.nationalPoliticalAuthority()?.emperorOf(empire)).toBe(A);
   expect(m.game.nationalMdaAllies(B)).toContain(C);
   const after = state(m.game);
@@ -458,9 +459,7 @@ test("C7 E4 pinned historical writer / independent consumer / same-build continu
       expect(() =>
         verify(bytes, { ...manifest, driverSource: "" }, writer),
       ).toThrow();
-      expect(() =>
-        verify(bytes, { ...manifest, run: "0" }, writer),
-      ).toThrow();
+      expect(() => verify(bytes, { ...manifest, run: "0" }, writer)).toThrow();
       const corrupt = bytes.slice();
       corrupt[corrupt.length - 1] ^= 1;
       expect(() => verify(corrupt, manifest, writer)).toThrow();

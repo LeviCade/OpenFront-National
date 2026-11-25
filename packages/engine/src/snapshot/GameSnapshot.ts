@@ -272,7 +272,10 @@ function validateWarReceiptLinks(state: GameState): void {
   const motions = new Map(
     wars?.motions.map((motion) => [motion.id, motion]) ?? [],
   );
-  const party = z.object({ kind: z.enum(["nation", "empire"]), id: z.string() });
+  const party = z.object({
+    kind: z.enum(["nation", "empire"]),
+    id: z.string(),
+  });
   const fingerprint = z.discriminatedUnion("kind", [
     z.object({
       kind: z.literal("declare-national"),
