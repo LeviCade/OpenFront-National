@@ -4,6 +4,7 @@ import {
   readNationalSatelliteView,
 } from "@openfront/engine-api/game/NationalSatelliteView";
 import type { GameUpdateViewData } from "@openfront/engine-api/game/GameUpdates";
+import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
 import { unpackUnitUpdates } from "@openfront/engine-lib/game/PackedUnitUpdates";
 import { Executor } from "@openfront/engine/execution/ExecutionManager";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
@@ -261,7 +262,7 @@ describe("C7C1 E2 satellite gameplay", () => {
     });
     actor.addGold(NATIONAL_SATELLITE_COST);
     const lease = game.performNationalSatellite(actor, "wire", admission(game, buyer.id), buyer.clientID!);
-    const packets = new Map<string, GameUpdateViewData>();
+    const packets = new Map<string, GameUpdateViewData & { nationalObserverMap?: NationalObserverMapV1 }>();
     const runner = new GameRunner(game, new Executor(game, match, undefined), () => {}, undefined);
     let connected = true;
     const register = (info: PlayerInfo, stream: string) => {
