@@ -10,6 +10,7 @@ import { TradeShipExecution } from "@openfront/engine/execution/TradeShipExecuti
 import { WarshipExecution } from "@openfront/engine/execution/WarshipExecution";
 import type { Game, Player, Unit } from "@openfront/engine/game/Game";
 import { GameRunner } from "@openfront/engine/GameRunner";
+import { decodeSnapshotValue } from "@openfront/engine/snapshot/SnapshotCodec";
 import { describe, expect, it } from "vitest";
 import { setup } from "../util/Setup";
 import { diffSnapshots, roundTrip } from "../util/Snapshot";
@@ -201,6 +202,10 @@ describe("C6 C2 E3 player-directed physical blockade", () => {
       ),
     );
     const active = await roundTrip(game, MAP);
+    const decoded = decodeSnapshotValue(active.bytes) as {
+      execs: { t: string }[];
+    };
+    expect(decoded.execs.map((e) => e.t)).toContain("NationalBlockade");
     expect(diffSnapshots(active.bytes, active.again)).toEqual([]);
     expect(active.again).toEqual(active.bytes);
     const restored = active.restored;
