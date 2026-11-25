@@ -795,6 +795,12 @@ export class NationalOutboundFilter {
     );
     const privateUltimatums = projectNationalUltimatums(game, this.observerId);
     // Same post-entitlement Game projection for human and AI; no raw state.
+    const receipts =
+      verified !== null &&
+      this.observerId !== null &&
+      game.hasPlayer(this.observerId)
+        ? game.nationalAssessmentReceiptsFor?.(game.player(this.observerId)) ?? []
+        : [];
     const privateAssessments =
       verified !== null &&
       this.observerId !== null &&
@@ -804,6 +810,7 @@ export class NationalOutboundFilter {
         ? {
             version: 1 as const,
             recipientId: this.observerId,
+            ...(receipts.length === 0 ? {} : { receipts }),
             items: (verified.observation.assessments ?? []).map((report) => ({
               targetId: report.targetId,
               paidBy: report.paidBy,

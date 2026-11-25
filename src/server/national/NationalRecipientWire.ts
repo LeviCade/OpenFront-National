@@ -170,6 +170,13 @@ export function encodeNationalRecipientProjection(
           nationalAssessments: {
             version: 1 as const,
             recipientId: filtered.nationalAssessments.recipientId,
+            ...(filtered.nationalAssessments.receipts === undefined
+              ? {}
+              : {
+                  receipts: filtered.nationalAssessments.receipts.map((receipt) => ({
+                    ...receipt,
+                  })),
+                }),
             items: filtered.nationalAssessments.items.map((r) => ({
               targetId: r.targetId,
               paidBy: r.paidBy,

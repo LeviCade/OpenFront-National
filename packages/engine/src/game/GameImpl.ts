@@ -80,6 +80,7 @@ import type {
   TroopDebitTransactionAdapter,
   TroopSource,
 } from "../national/conflict/DefenseLevy";
+import type { NationalAssessmentReceipt } from "@openfront/engine-api/game/NationalAssessmentView";
 import { treatyDefensePolicy } from "../national/conflict/NationalTreatyDefensePolicy";
 import {
   NationalRuntime,
@@ -1849,51 +1850,61 @@ export class GameImpl implements Game {
     if (this._nationalAssessment === null || !this._config.nationalMode())
       throw new Error("NATIONAL assessment: mode not enabled");
     this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
-    const target = this._players.get(targetId);
-    if (
-      this.inSpawnPhase() ||
-      !actor.hasSpawned() ||
-      !actor.isAlive() ||
-      !target ||
-      !target.hasSpawned() ||
-      !target.isAlive() ||
-      targetId === actor.id()
-    )
-      throw new Error("NATIONAL assessment: inactive or invalid target");
-    return this._nationalAssessment.buy(
-      actor.id(),
-      targetId,
-      this._ticks,
-      requestId,
-      () => {
-        if (actor.gold() < NATIONAL_ASSESSMENT_COST)
-          throw new Error("NATIONAL assessment: insufficient gold");
-        const spent = actor.removeGold(NATIONAL_ASSESSMENT_COST);
-        if (spent !== NATIONAL_ASSESSMENT_COST) {
-          actor.addGold(spent);
-          throw new Error("NATIONAL assessment: non-atomic debit");
-        }
-      },
-      () => {
-        actor.addGold(NATIONAL_ASSESSMENT_COST);
-      },
-      () => {
-        const authority = this.nationalPoliticalAuthority();
-        const actorEmpire = authority?.empireOf(actor.id()) ?? null;
-        const targetEmpire = authority?.empireOf(targetId) ?? null;
-        const allies =
-          actorEmpire !== null &&
-          actorEmpire === targetEmpire &&
-          authority?.membersOf(actorEmpire).includes(actor.id()) === true &&
-          authority?.membersOf(actorEmpire).includes(targetId) === true;
-        return captureNationalAssessmentBands(
-          target.gold(),
-          target.troops(),
-          !allies &&
-            this._nationalAssessment!.isShielded(targetId, this._ticks),
-        );
-      },
-    );
+    try {
+      const target = this._players.get(targetId);
+      if (
+        this.inSpawnPhase() ||
+        !actor.hasSpawned() ||
+        !actor.isAlive() ||
+        !target ||
+        !target.hasSpawned() ||
+        !target.isAlive() ||
+        targetId === actor.id()
+      )
+        throw new Error("NATIONAL assessment: inactive or invalid target");
+      return this._nationalAssessment.buy(
+        actor.id(),
+        targetId,
+        this._ticks,
+        requestId,
+        () => {
+          if (actor.gold() < NATIONAL_ASSESSMENT_COST)
+            throw new Error("NATIONAL assessment: insufficient gold");
+          const spent = actor.removeGold(NATIONAL_ASSESSMENT_COST);
+          if (spent !== NATIONAL_ASSESSMENT_COST) {
+            actor.addGold(spent);
+            throw new Error("NATIONAL assessment: non-atomic debit");
+          }
+        },
+        () => {
+          actor.addGold(NATIONAL_ASSESSMENT_COST);
+        },
+        () => {
+          const authority = this.nationalPoliticalAuthority();
+          const actorEmpire = authority?.empireOf(actor.id()) ?? null;
+          const targetEmpire = authority?.empireOf(targetId) ?? null;
+          const allies =
+            actorEmpire !== null &&
+            actorEmpire === targetEmpire &&
+            authority?.membersOf(actorEmpire).includes(actor.id()) === true &&
+            authority?.membersOf(actorEmpire).includes(targetId) === true;
+          return captureNationalAssessmentBands(
+            target.gold(),
+            target.troops(),
+            !allies &&
+              this._nationalAssessment!.isShielded(targetId, this._ticks),
+          );
+        },
+      );
+    } catch (error) {
+      this._nationalAssessment.recordRejectedPurchase(
+        actor.id(),
+        targetId,
+        requestId,
+        this._ticks,
+      );
+      throw error;
+    }
   }
   /** No target or duration can be chosen by an untrusted client. */
   performNationalCounterassessment(
@@ -1922,6 +1933,20 @@ export class GameImpl implements Game {
       () => actor.addGold(NATIONAL_COUNTERASSESSMENT_COST),
     );
   }
+  nationalAssessmentReceiptsFor(
+    observer: Player,
+  ): readonly NationalAssessmentReceipt[] {
+    if (
+      this._players.get(observer.id()) !== observer ||
+      observer.type() !== PlayerType.Human ||
+      !observer.hasSpawned() ||
+      !observer.isAlive() ||
+      this.inSpawnPhase()
+    )
+      return [];
+    return this._nationalAssessment?.receiptsFor(observer.id(), this._ticks) ?? [];
+  }
+
   nationalAssessmentsFor(
     payerId: PlayerID,
   ): readonly NationalAssessmentGrant[] {
@@ -3482,6 +3507,10 @@ export class GameImpl implements Game {
           throw new Error(
             "NATIONAL counterassessment: invalid restored defender",
           );
+      }
+      for (const receipt of this._nationalAssessment.snapshot().rejectedPurchases ?? []) {
+        if (!this._players.has(receipt.payerId))
+          throw new Error("NATIONAL assessment: invalid restored receipt owner");
       }
       for (const grant of this._nationalAssessment.snapshot().grants) {
         if (

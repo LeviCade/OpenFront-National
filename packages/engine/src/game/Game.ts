@@ -739,6 +739,10 @@ export interface Game extends GameLike {
   ): NationalAssessmentShield;
   /** Internal trusted-source records; never public wire without projection. */
   nationalAssessmentsFor(payerId: PlayerID): readonly NationalAssessmentGrant[];
+  /** Exact payer-only outcomes, optional for older projection fixtures. */
+  nationalAssessmentReceiptsFor?(
+    observer: Player,
+  ): readonly import("@openfront/engine-api/game/NationalAssessmentView").NationalAssessmentReceipt[];
   performNationalCommand(
     actor: Player,
     command: NationalCommand,

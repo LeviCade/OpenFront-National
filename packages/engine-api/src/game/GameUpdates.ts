@@ -160,6 +160,8 @@ export interface NationalUltimatumViewData {
 export interface NationalAssessmentViewData {
   readonly version: 1;
   readonly recipientId: PlayerID;
+  /** Game-owned exact click outcomes; never shared with empire members. */
+  readonly receipts?: readonly import("./NationalAssessmentView").NationalAssessmentReceipt[];
   readonly items: readonly {
     readonly targetId: PlayerID;
     readonly paidBy: PlayerID;
