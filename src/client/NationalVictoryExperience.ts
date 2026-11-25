@@ -104,7 +104,7 @@ export class NationalCrisisTracker {
         !empire &&
         !politics.empires.some((e) => e.id === this.empireId)
       ) {
-        this.resolution = "Empire dissolved — your independent sovereignty is restored.";
+        this.resolution = "Empire dissolved — your independent sovereignty is restored. War and peace remain governed by their recorded scopes.";
       } else if (
         empire &&
         empire.id === this.empireId &&
