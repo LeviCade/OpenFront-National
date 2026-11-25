@@ -1,0 +1,66 @@
+name: Conductor VI Class II E1 immutable native economics
+on:
+  push:
+    branches:
+      - feature/conductor6-class2-e1-native-imperial-20261123
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: c6c2-e1-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source:
+    name: E1 exact-head ${{ matrix.gate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        gate:
+          - typecheck
+          - focused
+          - inherited-authority
+          - lint
+          - format
+          - build
+          - full-regression
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Verify exact triggering commit
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: test "$(node --version)" = "v24.15.0" && test "$(npm --version)" = "12.1.0"
+      - run: npm run inst
+      - name: Execute immutable source gate
+        shell: bash
+        env:
+          GATE: ${{ matrix.gate }}
+        run: |
+          set -euo pipefail
+          case "$GATE" in
+            typecheck) npm run typecheck ;;
+            focused)
+              npx --no-install vitest run --project node tests/ui/national/C6C2E1*.test.ts
+              ;;
+            inherited-authority)
+              npx --no-install vitest run --project node tests/national/C6Class1ImperialRelief.test.ts tests/national/C6Class1E3EmbargoRestitution.test.ts tests/national/C6Class1E3SettlementIngress.test.ts tests/ui/national/C6Class1NationalAssessmentControls.test.ts
+              ;;
+            lint) npm run lint ;;
+            format)
+              npm run format:check || {
+                npx --no-install oxfmt --write src/client/NationalImperial*Controls.ts src/client/NationalDiplomacyPanel.ts src/client/view/GameView.ts tests/ui/national/C6C2E1*.test.ts .github/workflows/c6c2-e1-native-imperial.yml
+                git diff
+                exit 1
+              }
+              ;;
+            build) npm run build-prod ;;
+            full-regression) npm test ;;
+            *) exit 2 ;;
+          esac

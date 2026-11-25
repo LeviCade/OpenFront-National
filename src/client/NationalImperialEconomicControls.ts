@@ -19,11 +19,8 @@ const button =
   "min-h-11 rounded border border-amber-400/50 px-3 py-2 disabled:opacity-50 focus-visible:outline focus-visible:outline-2";
 
 interface Attempt {
-  readonly game: GameView;
-  readonly bus: EventBus;
   readonly actorId: string;
   readonly pactId: string;
-  readonly leaderId: string;
   readonly tick: number;
   readonly requestId: string;
   readonly type: "national_imperial_administration";
@@ -69,9 +66,9 @@ export class NationalImperialEconomicControls extends LitElement {
           !hasTrustedNationalPrivateCapability(bus, game.gameID())))
     )
       return null;
-    const empire = game.nationalPolitics()?.empires.find((e) =>
-      e.memberIds.includes(actor.id()),
-    );
+    const empire = game
+      .nationalPolitics()
+      ?.empires.find((e) => e.memberIds.includes(actor.id()));
     const view = game.nationalImperialAdministration?.();
     if (
       !empire ||
@@ -145,7 +142,8 @@ export class NationalImperialEconomicControls extends LitElement {
             : "Game confirmed the relief decision. Balances below are authoritative.";
       } else if (tick - attempt.tick >= 200) {
         this.pending = null;
-        this.status = "Exact relief outcome unconfirmed. Review the Game ledger before retrying.";
+        this.status =
+          "Exact relief outcome unconfirmed. Review the Game ledger before retrying.";
       }
     }
     this.requestUpdate();
@@ -159,11 +157,24 @@ export class NationalImperialEconomicControls extends LitElement {
     super.disconnectedCallback();
   }
 
-  private submitRequest(event: SubmitEvent): void {
+  private submitRequest(
+    event: SubmitEvent,
+    displayed: string,
+    game: GameView,
+    bus: EventBus,
+  ): void {
     event.preventDefault();
     this.refresh();
     const context = this.context;
-    if (!context || context.view.canAmend || this.pending) return;
+    if (
+      !context ||
+      context.view.canAmend ||
+      this.pending ||
+      this.identity?.key !== displayed ||
+      context.game !== game ||
+      context.bus !== bus
+    )
+      return;
     if (!(event.currentTarget instanceof HTMLFormElement)) return;
     const form = new FormData(event.currentTarget);
     const amount = form.get("amount");
@@ -182,10 +193,20 @@ export class NationalImperialEconomicControls extends LitElement {
   private decide(
     displayed: ImperialReliefView,
     decision: "approve" | "reject",
+    displayedKey: string,
+    game: GameView,
+    bus: EventBus,
   ): void {
     this.refresh();
     const context = this.context;
-    if (!context || this.pending) return;
+    if (
+      !context ||
+      this.pending ||
+      this.identity?.key !== displayedKey ||
+      context.game !== game ||
+      context.bus !== bus
+    )
+      return;
     const row = context.rows.find((r) => r.reliefId === displayed.reliefId);
     if (
       !row ||
@@ -225,11 +246,8 @@ export class NationalImperialEconomicControls extends LitElement {
         ]),
       };
       this.pending = {
-        game: context.game,
-        bus: context.bus,
         actorId: context.actor.id(),
         pactId: context.empire.id,
-        leaderId: context.empire.leaderId,
         requestId,
         tick: context.game.ticks(),
         type: "national_imperial_administration",
@@ -239,7 +257,8 @@ export class NationalImperialEconomicControls extends LitElement {
       context.bus.emit(new SendNationalImperialPolicyIntentEvent(intent));
     } catch {
       this.pending = null;
-      this.status = "Relief command unavailable or transport failed; outcome unconfirmed.";
+      this.status =
+        "Relief command unavailable or transport failed; outcome unconfirmed.";
     }
     this.requestUpdate();
   }
@@ -247,7 +266,13 @@ export class NationalImperialEconomicControls extends LitElement {
   override render() {
     const context = this.context;
     if (!context) return nothing;
-    const { actor, view, rows } = context;
+    const { actor, view, rows, game, bus, empire } = context;
+    const displayedKey = JSON.stringify([
+      game.gameID(),
+      actor.id(),
+      empire.id,
+      empire.leaderId,
+    ]);
     const busy = this.pending !== null;
     return html`
       <section
@@ -261,7 +286,8 @@ export class NationalImperialEconomicControls extends LitElement {
         ${view.canAmend
           ? nothing
           : html`
-              <form @submit=${this.submitRequest} class="space-y-2">
+              <form @submit=${(event: SubmitEvent) =>
+                this.submitRequest(event, displayedKey, game, bus)} class="space-y-2">
                 <label class="block">
                   Requested gold
                   <input
@@ -316,7 +342,7 @@ export class NationalImperialEconomicControls extends LitElement {
                             class=${button}
                             ?disabled=${busy ||
                             !reliefDecisionAllowed(view, actor.id(), row, "approve")}
-                            @click=${() => this.decide(row, "approve")}
+                            @click=${() => this.decide(row, "approve", displayedKey, game, bus)}
                           >
                             Approve ${row.amount} gold
                           </button>
@@ -326,7 +352,7 @@ export class NationalImperialEconomicControls extends LitElement {
                             class=${button}
                             ?disabled=${busy ||
                             !reliefDecisionAllowed(view, actor.id(), row, "reject")}
-                            @click=${() => this.decide(row, "reject")}
+                            @click=${() => this.decide(row, "reject", displayedKey, game, bus)}
                           >
                             Reject request
                           </button>

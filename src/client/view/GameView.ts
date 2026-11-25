@@ -243,7 +243,11 @@ export class GameView implements GameLike {
     if (!this._trustedNationalProjection) return;
     this._trustedProjectionReady = ready;
     // No assessment survives revoked Private authority into a future socket.
-    if (!ready) this._nationalAssessments = null;
+    if (!ready) {
+      this._nationalAssessments = null;
+      this._nationalImperialAdministration = null;
+      this._nationalPactReceipts = [];
+    }
   }
 
   /**
@@ -522,6 +526,12 @@ export class GameView implements GameLike {
   }
 
   public nationalImperialAdministration(): NationalImperialAdministrationView | null {
+    if (
+      this._trustedNationalProjection &&
+      (!this._trustedProjectionReady ||
+        this.trustedPrincipal !== this.myPlayer()?.id())
+    )
+      return null;
     return this._nationalImperialAdministration;
   }
 
