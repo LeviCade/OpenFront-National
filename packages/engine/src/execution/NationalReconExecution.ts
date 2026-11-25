@@ -1,5 +1,5 @@
-import type { ClientID } from "@openfront/engine-api/Schemas";
 import type { NationalSatelliteAdmission } from "@openfront/engine-api/game/NationalSatelliteView";
+import type { ClientID } from "@openfront/engine-api/Schemas";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import type { Execution, Game, Player } from "../game/Game";

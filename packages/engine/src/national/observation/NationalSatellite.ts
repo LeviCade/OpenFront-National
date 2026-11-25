@@ -8,7 +8,11 @@ import { z } from "zod";
 const MAX_ATTEMPTS = 4096;
 const MAX_PER_PAYER = 64;
 const tick = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
-const request = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
+const request = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9_-]+$/);
 const payer = z.string().min(1).max(256);
 
 export const SatelliteAttemptSchema = z.object({
@@ -107,7 +111,9 @@ export class NationalSatelliteJournal {
       if (
         a.effectiveTick < priorTick ||
         a.effectiveTick > now ||
-        !Number.isSafeInteger(a.effectiveTick + NATIONAL_SATELLITE_DURATION_TICKS) ||
+        !Number.isSafeInteger(
+          a.effectiveTick + NATIONAL_SATELLITE_DURATION_TICKS,
+        ) ||
         (a.accepted && journal.activeFor(a.payerId, a.effectiveTick) !== null)
       )
         throw new Error("NATIONAL satellite: invalid restored journal");

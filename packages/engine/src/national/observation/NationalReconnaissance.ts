@@ -4,7 +4,10 @@ import {
   NATIONAL_RECON_DURATION_TICKS,
 } from "@openfront/engine-api/game/NationalReconView";
 import { z } from "zod";
-import { NationalSatelliteJournal, SatelliteJournalSchema } from "./NationalSatellite";
+import {
+  NationalSatelliteJournal,
+  SatelliteJournalSchema,
+} from "./NationalSatellite";
 
 /**
  * M7 paid NATIONAL regional reconnaissance. Gold remains solely in Player;

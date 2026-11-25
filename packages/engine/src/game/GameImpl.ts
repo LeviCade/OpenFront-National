@@ -30,6 +30,11 @@ import {
 } from "@openfront/engine-api/game/GameUpdates";
 import type { NationalAssessmentReceipt } from "@openfront/engine-api/game/NationalAssessmentView";
 import {
+  NATIONAL_SATELLITE_REQUEST_WINDOW,
+  type NationalSatelliteAdmission,
+  type NationalSatelliteLease,
+} from "@openfront/engine-api/game/NationalSatelliteView";
+import {
   NationalConfirmedVictorySchema,
   type NationalConfirmedVictory,
 } from "@openfront/engine-api/game/NationalVictoryView";
@@ -111,11 +116,6 @@ import {
   type NationalAssessmentShield,
 } from "../national/observation/NationalAssessment";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
-import {
-  NATIONAL_SATELLITE_REQUEST_WINDOW,
-  type NationalSatelliteAdmission,
-  type NationalSatelliteLease,
-} from "@openfront/engine-api/game/NationalSatelliteView";
 import {
   NationalReconnaissance,
   NationalReconnaissanceSnapshotSchema,
@@ -1913,7 +1913,9 @@ export class GameImpl implements Game {
   nationalSatelliteFor(payerId: PlayerID): NationalSatelliteLease | null {
     const payer = this._players.get(payerId);
     if (!payer?.isAlive() || !payer.hasSpawned()) return null;
-    return this._nationalRecon?.satellite.activeFor(payerId, this._ticks) ?? null;
+    return (
+      this._nationalRecon?.satellite.activeFor(payerId, this._ticks) ?? null
+    );
   }
 
   /** Game-owned gold debit and post-admission bounded foreign assessment. */

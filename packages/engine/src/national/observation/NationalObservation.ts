@@ -20,7 +20,12 @@ export type {
 
 export type NationId = string;
 export type CoalitionKind = "nap" | "mda" | "empire";
-export type SightSource = "border" | "coast" | "warship" | "recon" | "satellite";
+export type SightSource =
+  | "border"
+  | "coast"
+  | "warship"
+  | "recon"
+  | "satellite";
 
 export interface NationalNation {
   readonly id: NationId;

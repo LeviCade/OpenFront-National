@@ -27,9 +27,14 @@ export interface NationalSatelliteAdmission {
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-function exact(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  return Object.keys(value).length === keys.length &&
-    keys.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+function exact(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+): boolean {
+  return (
+    Object.keys(value).length === keys.length &&
+    keys.every((key) => Object.prototype.hasOwnProperty.call(value, key))
+  );
 }
 function tick(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
@@ -63,7 +68,8 @@ export function readNationalSatelliteView(
     !tick(lease.expiresAtTick) ||
     lease.effectiveTick > now ||
     lease.expiresAtTick <= now ||
-    lease.expiresAtTick - lease.effectiveTick !== NATIONAL_SATELLITE_DURATION_TICKS
+    lease.expiresAtTick - lease.effectiveTick !==
+      NATIONAL_SATELLITE_DURATION_TICKS
   )
     return null;
   return {
@@ -84,6 +90,9 @@ export function validateNationalSatellitePacket(
   recipient: string | null,
   now: number,
 ): void {
-  if (input !== undefined && readNationalSatelliteView(input, recipient, now) === null)
+  if (
+    input !== undefined &&
+    readNationalSatelliteView(input, recipient, now) === null
+  )
     throw new Error("NATIONAL satellite: invalid recipient receipt");
 }

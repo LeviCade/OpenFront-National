@@ -33,6 +33,10 @@ import {
   PlayerUpdate,
   UnitUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
+import type {
+  NationalSatelliteAdmission,
+  NationalSatelliteLease,
+} from "@openfront/engine-api/game/NationalSatelliteView";
 import {
   GameLike,
   PlayerLike,
@@ -70,10 +74,6 @@ import type {
 } from "../national/observation/NationalAssessment";
 import type { NationalSightMemory } from "../national/observation/NationalObservation";
 import type { RegionalReconGrant } from "../national/observation/NationalReconnaissance";
-import type {
-  NationalSatelliteAdmission,
-  NationalSatelliteLease,
-} from "@openfront/engine-api/game/NationalSatelliteView";
 import type {
   NationalFoundEmpireResult,
   NationalPoliticalCommandResult,
