@@ -315,12 +315,18 @@ export function decodeSnapshotValue(bytes: Uint8Array): unknown {
         return readString(tag);
       case Tag.Array: {
         const n = r.uint();
+        if (n > r.remaining) {
+          throw new SnapshotCodecError("truncated array");
+        }
         const out = new Array(n);
         for (let i = 0; i < n; i++) out[i] = read();
         return out;
       }
       case Tag.Object: {
         const n = r.uint();
+        if (n > Math.floor(r.remaining / 3)) {
+          throw new SnapshotCodecError("truncated object");
+        }
         const out: Record<string, unknown> = {};
         for (let i = 0; i < n; i++) {
           const k = readString(r.u8());
@@ -328,6 +334,9 @@ export function decodeSnapshotValue(bytes: Uint8Array): unknown {
           // replace the object's prototype instead of adding a field.
           if (k === "__proto__") {
             throw new SnapshotCodecError("invalid object key __proto__");
+          }
+          if (Object.hasOwn(out, k)) {
+            throw new SnapshotCodecError(`duplicate object key ${k}`);
           }
           out[k] = read();
         }

@@ -50,7 +50,7 @@ export interface Versioned {
 }
 
 export const VersionedSchema = z.object({
-  v: z.number().int(),
+  v: z.number().int().positive(),
   d: z.unknown(),
 });
 
