@@ -11,10 +11,12 @@ import { PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import type { Game, Player } from "../../game/Game";
 import type { NationalRecipientDiplomacy } from "../politics/PoliticalAuthorityAdapter";
 import { projectLiveNationalAssessments } from "./NationalAssessment";
+import { projectNationalPublicConflict } from "./NationalOutbound";
 import {
   projectNationalObservation,
   type AssetKind,
   type NationalObservation,
+  type ObservedPeaceNegotiation,
   type NationalWorld,
   type SovereignStatus,
 } from "./NationalObservation";
@@ -24,6 +26,7 @@ interface PoliticalReadFacade {
   emperorOf(id: string): string | null;
   membersOf(id: string): readonly string[];
   recipientDiplomacy(observerId: string): NationalRecipientDiplomacy;
+  maySettleNational(memberId: string): boolean;
 }
 
 type GameWithReadFacade = Game & {
@@ -292,8 +295,8 @@ export function collectLiveNationalObservation(
       status,
       controllerKind:
         p.type() === PlayerType.Human ? ("human" as const) : ("ai" as const),
-      troops: p.troops(),
-      treasury: Number(p.gold()),
+      troops: p.id() === observerId ? p.troops() : 0,
+      treasury: p.id() === observerId ? Number(p.gold()) : 0,
     };
   });
 
@@ -550,6 +553,46 @@ export function collectLiveNationalObservation(
       }
     }
   }
+  // Reuse the same recipient-filtered motion projector as the human wire.
+  // Capability is scoped to the current crown/delegation, not membership.
+  const peaceNegotiations: ObservedPeaceNegotiation[] = [];
+  if (authority && wars.length > 0 && observer.isAlive()) {
+    const conflict = projectNationalPublicConflict(game, observerId, tick);
+    for (const war of wars) {
+      const canNegotiate = (side: typeof war.first): boolean => {
+        if (war.scope === "imperial") {
+          return side.kind === "nation"
+            ? side.stableId === observerId
+            : authority.emperorOf(side.stableId) === observerId;
+        }
+        if (side.kind !== "nation") return false;
+        const empire = authority.empireOf(side.stableId);
+        return empire === null
+          ? side.stableId === observerId
+          : authority.emperorOf(empire) === observerId ||
+              (side.stableId === observerId &&
+                authority.maySettleNational(observerId));
+      };
+      const side = canNegotiate(war.first)
+        ? 0
+        : canNegotiate(war.second)
+          ? 1
+          : null;
+      if (side === null) continue;
+      const pending = (conflict?.motions ?? []).filter(
+        (motion) => motion.layerId === war.id && motion.acceptedTick === null,
+      );
+      peaceNegotiations.push({
+        warId: war.id,
+        side,
+        incomingMotionIds: pending
+          .filter((motion) => motion.proposingSide !== side)
+          .map((motion) => motion.id)
+          .sort(),
+        outgoingPending: pending.some((motion) => motion.proposingSide === side),
+      });
+    }
+  }
   const world: NationalWorld = {
     tick,
     nations,
@@ -567,6 +610,7 @@ export function collectLiveNationalObservation(
     observation: {
       ...projectNationalObservation(world, observerId),
       assessments: projectLiveNationalAssessments(game, observerId),
+      ...(peaceNegotiations.length === 0 ? {} : { peaceNegotiations }),
     },
     visibleTiles,
   };
