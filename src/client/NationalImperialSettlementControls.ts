@@ -44,7 +44,7 @@ export class NationalImperialSettlementControls extends LitElement {
         !hasTrustedNationalPrivateCapability(bus, game.gameID()))) ||
       !view || view.recipientId !== actor.id() || view.tick !== game.ticks()
     ) return null;
-    return { game, bus, actor, rows: view.items };
+    return { game, bus, actor, rows: view.items, paidMaritimeGold: view.paidMaritimeGold };
   }
 
   public refresh(): void {
@@ -116,13 +116,14 @@ export class NationalImperialSettlementControls extends LitElement {
   override render() {
     const c = this.context;
     if (!c || c.rows.length === 0) return nothing;
-    const { game, bus, actor, rows } = c;
+    const { game, bus, actor, rows, paidMaritimeGold } = c;
     const actorId = actor.id();
     const busy = this.pending !== null;
     return html`
       <section aria-label="Embargo restitution" data-national-settlement class="space-y-3 border-t border-white/15 pt-3">
         <h2 class="font-semibold text-amber-200">Embargo restitution</h2>
         <p>Game wallet: ${actor.gold().toString()} gold</p>
+        <p>Game-recorded lifetime maritime earnings: ${paidMaritimeGold} gold (all routes, not a specific voyage receipt).</p>
         <p role="status" aria-live="polite">${this.status}</p>
         ${rows.map((row) => html`
           <article data-sanction-id=${row.sanctionId} class="space-y-2 rounded border border-white/20 p-2">

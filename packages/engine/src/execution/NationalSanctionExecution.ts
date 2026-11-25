@@ -773,6 +773,7 @@ export class NationalSanctionExecution implements Execution {
       version: 1,
       recipientId: observer.id(),
       tick,
+      paidMaritimeGold: observer.tradeGold().toString(),
       ...(streamId === undefined ? {} : { streamId }),
       items,
     };

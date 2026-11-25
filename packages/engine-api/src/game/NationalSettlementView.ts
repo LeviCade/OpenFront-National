@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const id = z.string().min(1).max(256).regex(/^[A-Za-z0-9_-]+$/);
+const id = z.string().min(1).max(256);
 const tick = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const gold = z.string().regex(/^[1-9][0-9]{0,17}$/);
 const offerSchema = z
@@ -31,6 +31,7 @@ const schema = z
     recipientId: id,
     tick,
     streamId: z.string().min(1).max(256).optional(),
+    paidMaritimeGold: z.string().regex(/^(0|[1-9][0-9]{0,39})$/),
     items: z.array(rowSchema).max(2048),
   })
   .strict();
