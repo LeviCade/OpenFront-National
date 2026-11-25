@@ -131,6 +131,10 @@ import {
   type NationalConflictPoliticsPort,
 } from "../national/politics/PoliticalAuthorityAdapter";
 import type { LastSovereignResult } from "../national/politics/sovereignty";
+import {
+  NationalConfirmedVictorySchema,
+  type NationalConfirmedVictory,
+} from "@openfront/engine-api/game/NationalVictoryView";
 import { AbstractGraph } from "../pathfinding/algorithms/AbstractGraph";
 import { WaterPathFinder } from "../pathfinding/PathFinder";
 import { PathFinder } from "../pathfinding/types";
@@ -235,6 +239,7 @@ export class GameImpl implements Game {
 
   private _isPaused: boolean = false;
   private _winner: Player | Team | null = null;
+  private _nationalConfirmedVictory: NationalConfirmedVictory | null = null;
   private _national: NationalRuntime | null = null;
   private _nationalRecon: NationalReconnaissance | null = null;
   private _nationalAssessment: NationalAssessment | null = null;
@@ -1234,7 +1239,15 @@ export class GameImpl implements Game {
   nationalPublicPoliticalView(): NationalPublicPoliticalView | null {
     if (this._national === null) return null;
     this.synchronizeNationalState();
-    return this._national.publicPoliticalView();
+    const view = this._national.publicPoliticalView();
+    // A last-sovereign candidate is not a WIN until WinCheck commits it.
+    // Freeze the actual awards; post-game political changes cannot rewrite them.
+    return {
+      ...view,
+      victory: this._nationalConfirmedVictory === null
+        ? null
+        : NationalConfirmedVictorySchema.parse(this._nationalConfirmedVictory),
+    };
   }
 
   /**
@@ -2879,6 +2892,20 @@ export class GameImpl implements Game {
     winner: Player | Team | null,
     allPlayersStats: AllPlayersStats,
   ): void {
+    if (
+      this._national !== null &&
+      this._nationalConfirmedVictory === null &&
+      winner !== null &&
+      typeof winner !== "string"
+    ) {
+      const result = this.nationalVictoryRoster();
+      if (result?.prizes[0]?.nationId === winner.id()) {
+        this._nationalConfirmedVictory = NationalConfirmedVictorySchema.parse({
+          ...result,
+          confirmedTick: this._ticks,
+        });
+      }
+    }
     this._winner = winner;
     // OFM: snapshot final tiles for standings (bots skipped in recordFinalTiles).
     for (const player of this.players()) {
@@ -3376,6 +3403,9 @@ export class GameImpl implements Game {
           : typeof this._winner === "string"
             ? { team: this._winner }
             : { player: w.player(this._winner) },
+      ...(this._nationalConfirmedVictory === null
+        ? {}
+        : { nationalConfirmedVictory: this._nationalConfirmedVictory }),
       unitsVersion: this._unitsVersion,
       territoryVersion: this._territoryVersion,
       shipStaggers: { ...this.shipStaggers },
@@ -3437,6 +3467,16 @@ export class GameImpl implements Game {
         : "team" in s.winner
           ? s.winner.team
           : r.player(s.winner.player);
+    this._nationalConfirmedVictory = s.nationalConfirmedVictory ?? null;
+    if (
+      this._nationalConfirmedVictory !== null &&
+      (this._winner === null ||
+        typeof this._winner === "string" ||
+        this._nationalConfirmedVictory.prizes[0].nationId !== this._winner.id() ||
+        this._nationalConfirmedVictory.confirmedTick > this._ticks)
+    ) {
+      throw new Error("NATIONAL inconsistent saved victory");
+    }
     this._unitsVersion = s.unitsVersion;
     this._territoryVersion = s.territoryVersion;
     // Not snapshotted: it only keys memos, which must not outlive the restore.
@@ -3672,6 +3712,7 @@ export const GameSnapshot = snapshotType({
         z.object({ team: z.string() }),
       ])
       .nullable(),
+    nationalConfirmedVictory: NationalConfirmedVictorySchema.optional(),
     unitsVersion: zInt(),
     territoryVersion: zInt(),
     shipStaggers: z.object({ tradeShip: zInt(), transportShip: zInt() }),

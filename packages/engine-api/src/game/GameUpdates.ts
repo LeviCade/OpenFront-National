@@ -45,6 +45,8 @@ export interface NationalPoliticsViewData {
   readonly victory: {
     readonly sovereignPowerCount: number;
     readonly resolved: boolean;
+    /** Present only after the canonical Game WIN decision. */
+    readonly confirmedTick?: number;
     readonly prizes: readonly (
       | { readonly kind: "SovereignVictor"; readonly nationId: PlayerID }
       | {

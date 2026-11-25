@@ -27,7 +27,13 @@ export interface NationalUngovernableWarning {
   blockedByAssetDisposition: boolean;
 }
 
+import {
+  readNationalConfirmedVictory,
+  type NationalConfirmedVictory,
+} from "@openfront/engine-api/game/NationalVictoryView";
+
 export interface NationalPublicPolitics {
+  readonly victory?: NationalConfirmedVictory;
   pacts?: readonly NationalPublicPactView[];
   empires: readonly NationalPublicEmpire[];
   warnings: readonly NationalUngovernableWarning[];
@@ -200,7 +206,13 @@ export function readNationalPolitics(
     pacts?.some((pact) => pact.memberIds.some((id) => members.has(id)))
   )
     return null;
-  return { empires, warnings, ...(pacts === undefined ? {} : { pacts }) };
+  const victory = readNationalConfirmedVictory(source.victory, Number.MAX_SAFE_INTEGER);
+  return {
+    empires,
+    warnings,
+    ...(pacts === undefined ? {} : { pacts }),
+    ...(victory === null ? {} : { victory }),
+  };
 }
 
 /** Reject the WHOLE invitation projection if it is missing, foreign,

@@ -510,7 +510,7 @@ export interface NationalPublicPoliticalView {
     readonly memberIds: readonly PlayerID[];
   }[];
   readonly warnings: readonly NationalUngovernableWarning[];
-  readonly victory: LastSovereignResult | null;
+  readonly victory: (LastSovereignResult & { confirmedTick?: number }) | null;
 }
 
 function requireCommandId(id: string): void {

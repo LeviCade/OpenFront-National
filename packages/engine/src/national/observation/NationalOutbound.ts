@@ -147,6 +147,9 @@ function publicPolitics(
         : {
             sovereignPowerCount: source.victory.sovereignPowerCount,
             resolved: source.victory.resolved,
+            ...(source.victory.confirmedTick === undefined
+              ? {}
+              : { confirmedTick: source.victory.confirmedTick }),
             prizes: source.victory.prizes.map((prize) =>
               prize.kind === "SovereignVictor"
                 ? { kind: prize.kind, nationId: prize.nationId }

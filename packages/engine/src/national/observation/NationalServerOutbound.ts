@@ -198,6 +198,9 @@ export class NationalServerRecipientSession {
             : {
                 sovereignPowerCount: publicView.victory.sovereignPowerCount,
                 resolved: publicView.victory.resolved,
+                ...(publicView.victory.confirmedTick === undefined
+                  ? {}
+                  : { confirmedTick: publicView.victory.confirmedTick }),
                 prizes: publicView.victory.prizes.map((prize) =>
                   prize.kind === "SovereignVictor"
                     ? { kind: prize.kind, nationId: prize.nationId }

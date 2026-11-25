@@ -104,7 +104,9 @@ export function revokeTrustedNationalPrivateCapability(
 export function hasTrustedNationalPrivateCapability(
   bus: EventBus | null,
   gameID: string,
+  clientID?: string | null,
 ): boolean {
   const seat = bus ? accepted.get(bus) : null;
-  return seat?.gameID === gameID;
+  return seat?.gameID === gameID &&
+    (clientID === undefined || seat.clientID === clientID);
 }
