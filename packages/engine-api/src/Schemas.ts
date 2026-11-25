@@ -967,6 +967,26 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       sanctionId: NationalPoliticalId,
       decision: z.enum(["comply", "refuse"]),
     }),
+    // C7C1E3: append-only, match-bound commands using the current crown epoch.
+    z.object({
+      kind: z.literal("imperial-move-warship"),
+      empireId: NationalPoliticalId,
+      gameId: z.string().min(1).max(128),
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      memberId: MappedID,
+      unitId: zb.uint(),
+      tile: zb.uint(),
+    }),
+    z.object({
+      kind: z.literal("imperial-transport"),
+      empireId: NationalPoliticalId,
+      gameId: z.string().min(1).max(128),
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      memberId: MappedID,
+      targetId: MappedID,
+      tile: zb.uint(),
+      amount: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }),
+    }),
   ],
 );
 

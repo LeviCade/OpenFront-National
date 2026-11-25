@@ -69,11 +69,35 @@ export class TransportShipExecution implements Execution {
     return false;
   }
 
-  init(mg: Game, ticks: number) {
+  /** Atomic command-time launch: validate the real voyage, debit the pool,
+   * and embark before acknowledging. The ordinary execution then owns the
+   * paid vessel, including snapshot, combat, peace return and dissolution. */
+  static launchImperial(
+    mg: Game,
+    member: Player,
+    ref: TileRef,
+    troops: number,
+    fund: () => void,
+  ): void {
+    const execution = new TransportShipExecution(member, ref, troops);
+    execution.init(mg, mg.ticks(), fund);
+    if (!execution.active || !execution.boat)
+      throw new Error("NATIONAL: no lawful imperial transport route");
+    mg.addExecution(execution);
+  }
+
+  init(mg: Game, ticks: number, fund?: () => void) {
+    // A command-time launch is already initialized when the scheduler admits
+    // it. This also handles a snapshot taken between admission and that tick.
+    if (this.boat !== undefined) return;
     // Do not allow a subordinate to bypass central military control by sea.
     // Boats that already launched keep their existing, paid in-flight state.
     const military = mg.nationalImperialAdministrationFor(this.attacker);
-    if (military?.armyMode === "centralized" && !military.canAmend) {
+    if (
+      !fund &&
+      military?.armyMode === "centralized" &&
+      !military.canAmend
+    ) {
       this.active = false;
       return;
     }
@@ -128,7 +152,7 @@ export class TransportShipExecution implements Execution {
         targetPlayer.type() !== PlayerType.Bot &&
         this.attacker.type() !== PlayerType.Bot
       ) {
-        this.rejectIncomingAllianceRequests(targetPlayer);
+        if (!fund) this.rejectIncomingAllianceRequests(targetPlayer);
       }
     }
 
@@ -145,7 +169,16 @@ export class TransportShipExecution implements Execution {
     this.troops ??= this.mg
       .config()
       .boatAttackAmount(this.attacker, this.target);
-    this.troops = Math.min(this.troops, this.attacker.troops());
+    if (!fund) this.troops = Math.min(this.troops, this.attacker.troops());
+    if (
+      mg.nationalPoliticalAuthority() !== null &&
+      (!Number.isFinite(this.troops) || this.troops < 1)
+    ) {
+      this.active = false;
+      return;
+    }
+    if (mg.nationalPoliticalAuthority() !== null)
+      this.troops = Math.floor(this.troops);
 
     this.dst = targetTransportTile(this.mg, this.attacker, this.ref);
 
@@ -168,13 +201,29 @@ export class TransportShipExecution implements Execution {
     }
 
     this.src = src;
+    // A pooled order never debits reserves for a disconnected/failed route.
+    // The ordinary FFA fallback remains unchanged.
+    const preflightPath = fund ? this.pathFinder.findPath(src, this.dst) : null;
+    if (fund && (!preflightPath || preflightPath.length === 0)) {
+      this.active = false;
+      return;
+    }
+    fund?.();
+    if (
+      fund &&
+      this.target.isPlayer() &&
+      this.target.type() !== PlayerType.Bot &&
+      this.attacker.type() !== PlayerType.Bot
+    )
+      this.rejectIncomingAllianceRequests(this.target);
 
     this.boat = this.attacker.buildUnit(UnitType.TransportShip, this.src, {
       troops: this.troops,
       targetTile: this.dst,
     });
 
-    const fullPath = this.pathFinder.findPath(this.src, this.dst) ?? [this.src];
+    const fullPath =
+      preflightPath ?? this.pathFinder.findPath(this.src, this.dst) ?? [this.src];
     if (fullPath.length === 0 || fullPath[0] !== this.src) {
       fullPath.unshift(this.src);
     }

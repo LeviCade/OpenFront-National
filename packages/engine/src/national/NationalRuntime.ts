@@ -339,6 +339,25 @@ export type NationalImperialAdministrationCommand =
       memberId: PlayerID;
       sanctionId: string;
       decision: "comply" | "refuse";
+    }
+  | {
+      kind: "imperial-move-warship";
+      empireId: string;
+      gameId: string;
+      expectedVersion: number;
+      memberId: PlayerID;
+      unitId: number;
+      tile: number;
+    }
+  | {
+      kind: "imperial-transport";
+      empireId: string;
+      gameId: string;
+      expectedVersion: number;
+      memberId: PlayerID;
+      targetId: PlayerID;
+      tile: number;
+      amount: number;
     };
 
 export interface NationalImperialAdministrationView extends Omit<

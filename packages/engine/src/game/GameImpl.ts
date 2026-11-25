@@ -73,7 +73,9 @@ import {
   SharedWaterCache,
   SharedWaterCacheSnapshot,
 } from "../execution/nation/SharedWaterCache";
+import { MoveWarshipExecution } from "../execution/MoveWarshipExecution";
 import { NationalBlockadeExecution } from "../execution/NationalBlockadeExecution";
+import { TransportShipExecution } from "../execution/TransportShipExecution";
 import { NationalSanctionExecution } from "../execution/NationalSanctionExecution";
 import { NationalUltimatumExecution } from "../execution/NationalUltimatumExecution";
 import { NationExecution } from "../execution/NationExecution";
@@ -1645,6 +1647,67 @@ export class GameImpl implements Game {
             this.commitImperialDisposition(credits, empireIds, troops),
         );
         break;
+      case "imperial-move-warship":
+      case "imperial-transport": {
+        const authority = this._national.authority();
+        const member = this._players.get(command.memberId);
+        if (
+          authenticatedClientID === undefined ||
+          actor.isDisconnected() ||
+          !Number.isSafeInteger(command.expectedVersion) ||
+          authority.warPolicyVersionFor(actor.id()) !== command.expectedVersion ||
+          this._national.imperialAdministrationFor(actor.id())?.armyMode !==
+            "centralized" ||
+          !member ||
+          !member.hasSpawned() ||
+          !member.isAlive() ||
+          authority.empireOf(member.id()) !== command.empireId
+        )
+          throw new Error("NATIONAL: stale or unauthorized imperial naval order");
+        if (command.kind === "imperial-move-warship") {
+          MoveWarshipExecution.moveImperialHull(
+            this,
+            member,
+            command.unitId,
+            command.tile,
+          );
+          break;
+        }
+        const target = this._players.get(command.targetId);
+        if (
+          !target ||
+          !target.hasSpawned() ||
+          !target.isAlive() ||
+          authority.empireOf(target.id()) === command.empireId ||
+          !this.isValidRef(command.tile) ||
+          this.owner(command.tile) !== target ||
+          member.isFriendly(target) ||
+          !member.canAttackPlayer(target) ||
+          this._nationalWar?.authority.authorizeOffensiveAction(
+            member.id(),
+            target.id(),
+          ) !== true ||
+          !Number.isSafeInteger(command.amount) ||
+          command.amount <= 0
+        )
+          throw new Error("NATIONAL: imperial transport requires a lawful WAR target");
+        TransportShipExecution.launchImperial(
+          this,
+          member,
+          command.tile,
+          command.amount,
+          () =>
+            this._national!.releaseImperialTroops(
+              actor.id(),
+              command.empireId,
+              member.id(),
+              command.amount,
+              (credits, empireIds, troops) =>
+                this.commitImperialDisposition(credits, empireIds, troops),
+            ),
+        );
+        break;
+      }
       case "imperial-attack": {
         // No virtual attackers: transfer this empire-owned reserve to the
         // actual constituent, then use ordinary AttackExecution and WAR/LEVY.
@@ -2107,6 +2170,15 @@ export class GameImpl implements Game {
       if (authority.emperorOf(command.command.empireId) !== actorId)
         return false;
       const detail = command.command;
+      if (
+        detail.kind === "imperial-move-warship" ||
+        detail.kind === "imperial-transport"
+      )
+        return (
+          authority.warPolicyVersionFor(actorId) === detail.expectedVersion &&
+          this._national?.imperialAdministrationFor(actorId)?.armyMode ===
+            "centralized"
+        );
       if (
         detail.kind === "set-economic-charter" ||
         detail.kind === "set-member-trade" ||

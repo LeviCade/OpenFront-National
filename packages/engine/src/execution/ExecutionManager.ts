@@ -85,6 +85,12 @@ export class Executor {
         );
       }
       case "national_imperial_administration":
+        if (
+          (intent.command.kind === "imperial-move-warship" ||
+            intent.command.kind === "imperial-transport") &&
+          intent.command.gameId !== this.gameID_
+        )
+          return new NoOpExecution();
         return new NationalFoundEmpireExecution(
           player,
           "",
