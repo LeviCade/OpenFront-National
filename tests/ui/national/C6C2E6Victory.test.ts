@@ -130,65 +130,62 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("C6C2 E6 native NATIONAL victory UI", () => {
-  it("binds the actual registered Private recipient through GameView, revokes stale crown controls", async () => {
-    const m = await scenario();
-    const recipient = m.registerRecipient(A);
-    const clientID = infos[0].clientID!;
-    const bus = new EventBus();
-    const config = stubConfig({
-      gameConfig: () => ({
-        ...m.game.config().gameConfig(),
-        gameType: GameType.Private,
-      }),
-      isReplay: () => false,
-    });
-    const view = makeGameView({
-      width: m.game.width(),
-      height: m.game.height(),
-      config,
-      myClientID: clientID,
-      trustedProjection: true,
-    });
-    view.setTrustedPrincipal(A);
-    const continuity = new NationalObserverMapContinuity(A);
-    const start = {
-      gameID: view.gameID(),
-      config: config.gameConfig(),
-      players: infos.map((p) => ({ clientID: p.clientID })),
-    } as WireGameStartInfo;
-    expect(
-      acceptTrustedNationalPrivateCapability(
-        bus,
-        {
-          type: "national_start",
-          gameStartInfo: start,
-          myClientID: clientID,
-          tick: m.game.ticks(),
-        },
-        {
-          gameID: view.gameID(),
-          start,
-          startClientID: clientID,
-          remoteSocketOpen: true,
-          sessionReady: true,
-          replay: false,
-          spectator: false,
-        },
-      ),
-    ).toBe(true);
-    const modal = document.createElement("win-modal") as WinModal;
-    modal.eventBus = bus;
-    modal.game = view;
-    vi.spyOn(modal, "innerHtml").mockReturnValue(html``);
-    const events: SendNationalTransferCrownIntentEvent[] = [];
-    bus.on(SendNationalTransferCrownIntentEvent, (e) => events.push(e));
-    document.body.append(modal);
-    modals.push(modal);
-    let prior = -1;
-    const advance = async () => {
-      m.tick();
-      const raw = recipient.packet();
+function mountPrivate(m: Match, actor: string) {
+  const recipient = m.registerRecipient(actor);
+  const clientID = infos.find((p) => p.id === actor)!.clientID!;
+  const bus = new EventBus();
+  const config = stubConfig({
+    gameConfig: () => ({
+      ...m.game.config().gameConfig(),
+      gameType: GameType.Private,
+    }),
+    isReplay: () => false,
+  });
+  const view = makeGameView({
+    width: m.game.width(),
+    height: m.game.height(),
+    config,
+    myClientID: clientID,
+    trustedProjection: true,
+  });
+  view.setTrustedPrincipal(actor);
+  const continuity = new NationalObserverMapContinuity(actor);
+  const start = {
+    gameID: view.gameID(),
+    config: config.gameConfig(),
+    players: infos.map((p) => ({ clientID: p.clientID })),
+  } as WireGameStartInfo;
+  expect(
+    acceptTrustedNationalPrivateCapability(
+      bus,
+      {
+        type: "national_start",
+        gameStartInfo: start,
+        myClientID: clientID,
+        tick: m.game.ticks(),
+      },
+      {
+        gameID: view.gameID(),
+        start,
+        startClientID: clientID,
+        remoteSocketOpen: true,
+        sessionReady: true,
+        replay: false,
+        spectator: false,
+      },
+    ),
+  ).toBe(true);
+  const modal = document.createElement("win-modal") as WinModal;
+  modal.eventBus = bus;
+  modal.game = view;
+  vi.spyOn(modal, "innerHtml").mockReturnValue(html``);
+  const events: SendNationalTransferCrownIntentEvent[] = [];
+  bus.on(SendNationalTransferCrownIntentEvent, (e) => events.push(e));
+  document.body.append(modal);
+  modals.push(modal);
+  let prior = -1;
+  const flush = async () => {
+    for (const raw of recipient.drain()) {
       const decoded = parseTrustedNationalProjection(
         encodeNationalRecipientProjection(raw),
         raw.tick,
@@ -208,9 +205,19 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
       view.update(update);
       modal.tick();
       await modal.updateComplete;
-    };
-    for (let i = 0; i < 10 && !view.trustedProjectionReady(); i++)
-      await advance();
+    }
+  };
+  return { recipient, bus, view, modal, events, flush };
+}
+
+describe("C6C2 E6 native NATIONAL victory UI", () => {
+  it("binds the actual registered Private recipient through GameView, revokes stale crown controls", async () => {
+    const m = await scenario();
+    const { recipient, bus, view, modal, events, flush } = mountPrivate(m, A);
+    for (let i = 0; i < 10 && !view.trustedProjectionReady(); i++) {
+      m.tick();
+      await flush();
+    }
     expect(view.myPlayer()?.id()).toBe(A);
     expect(view.nationalConflicts()?.recipientId).toBe(A);
     expect(view.nationalPoliticsTick()).toBe(view.ticks());
@@ -230,7 +237,8 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
     expect(events).toEqual([]);
     await modal.updateComplete;
     expect(modal.querySelector("[data-national-crisis]")).toBeNull();
-    await advance();
+    m.tick();
+    await flush();
     expect(modal.querySelector("[data-national-crisis]")).toBeNull();
     // Rebind the server connection's identity: the original recipient must stop.
     const last = recipient.packet().tick;
@@ -238,6 +246,48 @@ describe("C6C2 E6 native NATIONAL victory UI", () => {
     m.tick();
     expect(recipient.packet().tick).toBe(last);
     expect(m.game.nationalPoliticalAuthority()?.emperorOf(EMPIRE)).toBe(A);
+  }, 120_000);
+
+  it("renders all three winning titles from real Private recipient GameViews", async () => {
+    const m = await scenario();
+    const a = mountPrivate(m, A);
+    const b = mountPrivate(m, B);
+    const c = mountPrivate(m, C);
+    const viewers = [a, b, c];
+    const flush = () => Promise.all(viewers.map((v) => v.flush()));
+    for (
+      let i = 0;
+      i < 10 && viewers.some((v) => !v.view.trustedProjectionReady());
+      i++
+    ) {
+      m.tick();
+      await flush();
+    }
+    expect(viewers.every((v) => v.view.trustedProjectionReady())).toBe(true);
+    const select = a.modal.querySelector("select")!;
+    select.value = B;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await a.modal.updateComplete;
+    a.modal.querySelector<HTMLButtonElement>(
+      '[data-national-crisis] button[type="submit"]',
+    )!.click();
+    expect(a.events).toHaveLength(1);
+    m.transfer(A, B, a.events[0].requestId);
+    await flush();
+    expect(a.modal.textContent).toContain("Crown transferred");
+    m.conquer();
+    await flush();
+    for (const [v, title] of [
+      [a, "Empire Victor"],
+      [b, "Imperial Victor"],
+      [c, "Empire Victor"],
+    ] as const) {
+      expect(v.modal.isVisible).toBe(true);
+      expect(
+        v.modal.querySelector("[data-national-award]")?.textContent?.trim(),
+      ).toBe(title);
+      expect(v.view.nationalPoliticsTick()).toBe(v.view.ticks());
+    }
   }, 120_000);
 
   it("clicks a real crown intent and renders the committed GameRunner WIN for every award", async () => {

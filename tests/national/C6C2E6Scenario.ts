@@ -193,6 +193,7 @@ export async function scenario(independent = false) {
     registerRecipient(actor: string) {
       const clientID = infos.find((p) => p.id === actor)!.clientID!;
       let latest: GameUpdateViewData | undefined;
+      const frames: GameUpdateViewData[] = [];
       const connection = {
         clientID,
         sessionId: `e6-${clientID}`,
@@ -201,8 +202,13 @@ export async function scenario(independent = false) {
       };
       runner.registerTrustedNationalRecipient(clientID, connection, (frame) => {
         latest = frame;
+        frames.push(frame);
       });
-      return { packet: () => latest!, connection };
+      return {
+        packet: () => latest!,
+        connection,
+        drain: () => frames.splice(0),
+      };
     },
   };
 }
