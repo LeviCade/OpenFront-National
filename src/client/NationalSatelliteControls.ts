@@ -82,11 +82,11 @@ export class NationalSatelliteControls extends LitElement {
     this.requestUpdate();
   }
 
-  private submit(event: SubmitEvent, displayedKey: string): void {
+  private submit(event: SubmitEvent, displayedKey: string, displayedGame: GameView, displayedBus: EventBus): void {
     event.preventDefault();
     if (!(event.currentTarget instanceof HTMLFormElement)) return;
     const context = this.context;
-    if (!context || context.key !== displayedKey || this.pending ||
+    if (!context || context.game !== displayedGame || context.bus !== displayedBus || context.key !== displayedKey || this.pending ||
       context.lease !== null || context.actor.gold() < NATIONAL_SATELLITE_COST ||
       new FormData(event.currentTarget).get("confirm") !== "on") return;
     const { game, bus, key } = context;
@@ -110,7 +110,7 @@ export class NationalSatelliteControls extends LitElement {
   render() {
     const context = this.context;
     if (!context) return nothing;
-    const { lease, game, actor, key } = context;
+    const { lease, game, actor, key, bus } = context;
     return html`<section class="space-y-2 border-t border-white/15 pt-3"
       aria-label="Global satellite reconnaissance" data-national-satellite>
       <h2 class="font-semibold text-amber-200">Global satellite intelligence</h2>
@@ -120,7 +120,7 @@ export class NationalSatelliteControls extends LitElement {
         positions appear on the existing intelligence map; no foreign resources,
         private terms or transport destinations. Shared with current empire members.
       </p>
-      <form @submit=${(event: SubmitEvent) => this.submit(event, key)}>
+      <form @submit=${(event: SubmitEvent) => this.submit(event, key, game, bus)}>
         <label class="flex gap-2"><input type="checkbox" name="confirm" required />
           Confirm satellite purchase</label>
         <button type="submit" data-national-buy-satellite
@@ -131,7 +131,7 @@ export class NationalSatelliteControls extends LitElement {
       <p role="status" aria-live="polite" data-national-satellite-status>
         ${lease !== null
           ? "Active paid satellite lease: " + (lease.expiresAtTick - game.ticks()) + " ticks remaining"
-          : this.status}
+          : this.status || "No active personal satellite lease."}
       </p>
     </section>`;
   }

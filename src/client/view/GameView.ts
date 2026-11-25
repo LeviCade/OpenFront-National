@@ -879,7 +879,8 @@ export class GameView implements GameLike {
       gu.nationalPactDisclosure === undefined &&
       gu.nationalImperialAdministration === undefined &&
       assessed.nationalAssessments === undefined &&
-      gu.nationalSettlements === undefined
+      gu.nationalSettlements === undefined &&
+      gu.nationalSatellite === undefined
         ? gu
         : { ...gu };
     delete this.lastUpdate.nationalPactDisclosure;
@@ -937,7 +938,11 @@ export class GameView implements GameLike {
         this._config.isReplay?.() === true ||
         (this._trustedNationalProjection && !this._trustedProjectionReady)
           ? null
-          : readNationalSatelliteView(gu.nationalSatellite, currentActorId, gu.tick);
+          : readNationalSatelliteView(
+              gu.nationalSatellite,
+              currentActorId,
+              gu.tick,
+            );
       // E4 owns the DTO and authenticated recipient filtering; E1 only consumes.
       this._nationalAssessments =
         gu.tick < previousTick ||
