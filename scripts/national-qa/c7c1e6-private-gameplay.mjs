@@ -149,20 +149,29 @@ export function chooseAdjacentSpawnSites(width, height, free, reachable) {
   };
   const candidates = [];
   for (let y = 12; y < height - 12; y += 3)
-    for (let x = 12; x < width - 12; x += 3)
-      candidates.push({ x, y });
+    for (let x = 12; x < width - 12; x += 3) candidates.push({ x, y });
   candidates.sort(
     (a, b) =>
-      (a.x - width / 2) ** 2 + (a.y - height / 2) ** 2 -
-      (b.x - width / 2) ** 2 - (b.y - height / 2) ** 2,
+      (a.x - width / 2) ** 2 +
+      (a.y - height / 2) ** 2 -
+      (b.x - width / 2) ** 2 -
+      (b.y - height / 2) ** 2,
   );
   for (const a of candidates) {
     if (!patch(a.x, a.y)) continue;
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
       const c = { x: a.x + dx * 9, y: a.y + dy * 9 };
       if (!patch(c.x, c.y)) continue;
       for (const direction of [1, -1]) {
-        const b = { x: a.x - dy * 18 * direction, y: a.y + dx * 18 * direction };
+        const b = {
+          x: a.x - dy * 18 * direction,
+          y: a.y + dx * 18 * direction,
+        };
         if (patch(b.x, b.y)) return [a, b, c];
       }
     }
@@ -203,7 +212,7 @@ async function nativeSpawnPoint(profile, site) {
     const tile = game.ref(site.x, site.y);
     return mapped.x === site.x && mapped.y === site.y &&
       game.isLand(tile) && !game.isImpassable(tile) && !game.hasOwner(tile) &&
-      (hit === input || input.contains(hit)) ? point : null;
+      (hit === input || input.contains(hit)) ? {x: point.x, y: point.y, tile} : null;
   })()`);
 }
 
@@ -297,22 +306,41 @@ export async function runPrivateNativeGameplay({
   stage("three real native map spawn inputs");
   await Promise.all(profiles.map((p) => panel(p, false)));
   let sites;
-  await until(async () => {
-    sites = await nativeSpawnSites(a);
-    return Array.isArray(sites) && sites.length === 3;
-  }, "three reachable legal initial sites", 15_000);
-  await Promise.all(profiles.map(async (p, i) => {
-    let point;
-    await until(async () => {
-      point = await nativeSpawnPoint(p, sites[i]);
-      return Boolean(point);
-    }, "native spawn coordinate on real input surface", 10_000);
-    await hit(p, point);
-    await until(async () => {
-      const now = await p.evaluate(observation);
-      return now?.spawned && now.tiles > 0;
-    }, "native spawn accepted by authority", 20_000);
-  }));
+  await until(
+    async () => {
+      sites = await nativeSpawnSites(a);
+      return Array.isArray(sites) && sites.length === 3;
+    },
+    "three reachable legal initial sites",
+    15_000,
+  );
+  await Promise.all(
+    profiles.map(async (p, i) => {
+      let point;
+      await until(
+        async () => {
+          point = await nativeSpawnPoint(p, sites[i]);
+          return Boolean(point);
+        },
+        "native spawn coordinate on real input surface",
+        10_000,
+      );
+      const priorIntents = p.observed.spawnIntents.length;
+      await hit(p, { x: point.x, y: point.y });
+      await until(
+        async () => {
+          const now = await p.evaluate(observation);
+          return (
+            p.observed.spawnIntents.slice(priorIntents).includes(point.tile) &&
+            now?.spawned &&
+            now.tiles > 0
+          );
+        },
+        "native spawn accepted by authority",
+        20_000,
+      );
+    }),
+  );
   await wait(
     "three spawned seats and authoritative phase end",
     (ss) =>
@@ -545,7 +573,16 @@ export async function runPrivateNativeGameplay({
     "native enabled attack",
     30_000,
   );
+  const priorAttackIntents = a.observed.attackIntents.length;
   await hit(a, radial);
+  await until(
+    () =>
+      a.observed.attackIntents
+        .slice(priorAttackIntents)
+        .some((intent) => intent.targetID === actors[2] && intent.troops > 0),
+    "native attack transmitted for the intended opponent",
+    20_000,
+  );
   await wait(
     "authoritative outgoing military attack",
     (ss) =>

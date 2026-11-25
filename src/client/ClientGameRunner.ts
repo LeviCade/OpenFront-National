@@ -797,9 +797,15 @@ function mountWebGLFrameLoop(
   // renderer's captured frame callback (which draws). One RAF = one
   // synchronized camera-update + WebGL render.
   let rafId: number | null = null;
+  let lastSoftwareFrame = -Infinity;
   const driveFrame = (nowMs: number): void => {
-    onFrame(nowMs);
-    syncCamera();
+    // Local, explicitly opted-in software diagnostics share a CPU across
+    // three full browsers. Bound visual work, never authoritative ticks.
+    if (!view.glSoftwareDiagnostic || nowMs - lastSoftwareFrame >= 100) {
+      lastSoftwareFrame = nowMs;
+      onFrame(nowMs);
+      syncCamera();
+    }
     rafId = requestAnimationFrame(driveFrame);
   };
   rafId = requestAnimationFrame(driveFrame);

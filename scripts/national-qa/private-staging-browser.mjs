@@ -89,7 +89,10 @@ async function openProfile(executable, index, email) {
       ...(diagnosticOnly || functionalSoftware ? ["--headless=new"] : []),
       ...(functionalSoftware
         ? [
-            "--window-size=1280,900",
+            "--window-size=1024,768",
+            "--disable-background-timer-throttling",
+            "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded-windows",
             "--enable-webgl",
             "--use-gl=angle",
             "--use-angle=swiftshader",
@@ -160,6 +163,8 @@ async function openProfile(executable, index, email) {
     lobby: null,
     authority: null,
     politicalIntents: new Map(),
+    spawnIntents: [],
+    attackIntents: [],
     receipts: new Map(),
     projection: null,
     authorityStarts: 0,
@@ -188,6 +193,8 @@ async function openProfile(executable, index, email) {
     invalidAuthorityFrame: observed.invalidAuthorityFrame,
     observedLobbySeats: observed.lobby?.lobby?.clients?.length ?? 0,
     activeGame: Boolean(observed.authority),
+    nativeSpawnIntents: observed.spawnIntents.length,
+    nativeAttackIntents: observed.attackIntents.length,
   }));
   function send(method, params = {}) {
     return new Promise((resolve, reject) => {
@@ -195,7 +202,7 @@ async function openProfile(executable, index, email) {
       const timeout = setTimeout(() => {
         pending.delete(id);
         reject(new Error("browser command timed out"));
-      }, 12_000);
+      }, functionalSoftware ? 45_000 : 12_000);
       pending.set(id, { resolve, reject, timeout });
       ws.send(JSON.stringify({ id, method, params }));
     });
@@ -261,6 +268,12 @@ async function openProfile(executable, index, email) {
             Buffer.from(m.params.response.payloadData, "base64"),
             binding.context,
           );
+          if (message.type === "intent") {
+            if (message.intent.type === "spawn")
+              observed.spawnIntents.push(message.intent.tile);
+            if (message.intent.type === "attack")
+              observed.attackIntents.push(message.intent);
+          }
           if (
             message.type === "intent" &&
             message.intent.type.startsWith("national_") &&
@@ -466,8 +479,8 @@ async function openProfile(executable, index, email) {
   await send("Page.enable");
   if (functionalSoftware) {
     await send("Emulation.setDeviceMetricsOverride", {
-      width: 1280,
-      height: 900,
+      width: 1024,
+      height: 768,
       deviceScaleFactor: 1,
       mobile: false,
     });
@@ -732,12 +745,13 @@ try {
       stage = "native all-map tab";
       await nativeClick(a, 'map-picker button[role="tab"]', "All");
       stage = "native Arcade map category";
-      await nativeClick(a, 'map-picker button[aria-expanded] span', "Arcade");
+      await nativeClick(a, "map-picker button[aria-expanded] span", "Arcade");
       stage = "native Onion map selection";
       await nativeClick(a, '[role="button"][aria-label="Onion"]');
       stage = "server acknowledges Onion map";
       await until(
-        () => a.observed.lobby?.lobby?.gameConfig?.gameMap === GameMapType.Onion,
+        () =>
+          a.observed.lobby?.lobby?.gameConfig?.gameMap === GameMapType.Onion,
         stage,
         45_000,
       );
@@ -1103,7 +1117,13 @@ try {
         ? "ASSERTION"
         : error instanceof TypeError
           ? "TYPE"
-          : "OTHER"),
+          : error.message === "browser command timed out"
+            ? "CDP_TIMEOUT"
+            : error.message === "browser UI evaluation failed"
+              ? "CDP_EVALUATION"
+              : error.message === "browser CDP command rejected"
+                ? "CDP_REJECTED"
+                : "OTHER"),
   );
   // Never expose DevTools errors, URLs, credential bodies or profile IDs.
   console.error("LOCAL_STAGING_BROWSER_AUTH_FAIL stage=" + stage);

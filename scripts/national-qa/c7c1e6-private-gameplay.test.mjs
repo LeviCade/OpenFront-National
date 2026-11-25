@@ -91,11 +91,32 @@ await test("victory witness rejects unresolved, two sovereigns, false crown and 
 });
 
 await test("spawn site planner keeps the attack pair adjacent without overlapping", () => {
-  const sites = chooseAdjacentSpawnSites(128, 128, () => true, () => true);
+  const sites = chooseAdjacentSpawnSites(
+    128,
+    128,
+    () => true,
+    () => true,
+  );
   assert(sites);
   const [a, b, c] = sites;
   assert.equal(Math.abs(a.x - c.x) + Math.abs(a.y - c.y), 9);
   assert(Math.hypot(a.x - b.x, a.y - b.y) >= 18);
-  assert.equal(chooseAdjacentSpawnSites(128, 128, () => false, () => true), null);
-  assert.equal(chooseAdjacentSpawnSites(128, 128, () => true, () => false), null);
+  assert.equal(
+    chooseAdjacentSpawnSites(
+      128,
+      128,
+      () => false,
+      () => true,
+    ),
+    null,
+  );
+  assert.equal(
+    chooseAdjacentSpawnSites(
+      128,
+      128,
+      () => true,
+      () => false,
+    ),
+    null,
+  );
 });
