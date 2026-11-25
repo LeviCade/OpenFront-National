@@ -132,11 +132,12 @@ function publicPolitics(
   if (source === null || source === undefined) return undefined;
   // The terminal marker is owned by the real Game, not by a caller-supplied
   // view object. Do not attach present truth to a stale packet.
-  const candidate =
+  // Preserve the historical, whitelisted candidate DTO. Clients must only
+  // present an award when the Game has supplied its committed WIN marker.
+  const victory =
     packet.tick === game.ticks()
       ? (game.nationalPublicPoliticalView()?.victory ?? null)
       : null;
-  const victory = candidate?.confirmedTick === undefined ? null : candidate;
   return {
     empires: source.empires.map((empire) => ({
       id: empire.id,

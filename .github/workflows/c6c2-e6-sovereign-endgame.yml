@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: |
           case "${{ matrix.gate }}" in
-            focused) npx --no-install vitest run tests/national/C6C2E6GameRunner.test.ts tests/ui/national/C6C2E6Victory.test.ts tests/client/graphics/layers/WinModalTick.test.ts tests/client/graphics/layers/WinModalXp.test.ts tests/ui/national/C4NativeObserverRevocation.test.ts ;;
+            focused) npx --no-install vitest run tests/national/C6C2E6GameRunner.test.ts tests/national/NationalReceiptCorrelation.test.ts tests/national/NationalStrategicSimulationR8.test.ts tests/ui/national/C6C2E6Victory.test.ts tests/client/graphics/layers/WinModalTick.test.ts tests/client/graphics/layers/WinModalXp.test.ts tests/ui/national/C4NativeObserverRevocation.test.ts ;;
             typecheck) npm run typecheck ;;
             regression) npm test ;;
             lint) npm run lint ;;

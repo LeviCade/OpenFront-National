@@ -1241,8 +1241,9 @@ export class GameImpl implements Game {
     this.synchronizeNationalState();
     const view = this._national.publicPoliticalView();
     // Preserve the historical engine-only candidate query. It is not a WIN
-    // unless the canonical terminal marker is present; recipient projections
-    // omit the candidate. Once committed, later politics cannot rewrite it.
+    // unless the canonical terminal marker is present. Recipient projections
+    // may carry the candidate as historical public data, never as a WIN.
+    // Once committed, later politics cannot rewrite it.
     return {
       ...view,
       victory:
