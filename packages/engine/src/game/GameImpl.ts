@@ -3470,7 +3470,8 @@ export class GameImpl implements Game {
     this._nationalConfirmedVictory = s.nationalConfirmedVictory ?? null;
     if (
       this._nationalConfirmedVictory !== null &&
-      (this._winner === null ||
+      (!this._config.nationalMode() ||
+        this._winner === null ||
         typeof this._winner === "string" ||
         this._nationalConfirmedVictory.prizes[0].nationId !== this._winner.id() ||
         this._nationalConfirmedVictory.confirmedTick > this._ticks)
@@ -3665,7 +3666,7 @@ export class GameImpl implements Game {
 
 export const GameSnapshot = snapshotType({
   name: "Game",
-  version: 6,
+  version: 7,
   migrations: {
     1: (data: unknown) => ({
       ...(data as Record<string, unknown>),
@@ -3687,6 +3688,8 @@ export const GameSnapshot = snapshotType({
       ...(data as Record<string, unknown>),
       nationalAssessment: null,
     }),
+    // Old saves did not record the terminal award roster. Never reconstruct it.
+    6: (data: unknown) => ({ ...(data as Record<string, unknown>) }),
   },
   schema: z.object({
     ticks: zInt(),

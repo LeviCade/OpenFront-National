@@ -112,7 +112,11 @@ export class NationalCrisisTracker {
         empire.leaderId !== actor
       ) {
         this.resolution = "Crown transferred — the new emperor now holds authority.";
-      } else if (this.wasWarned && !warning && empire?.leaderId === actor) {
+      } else if (
+        this.wasWarned &&
+        empire?.leaderId === actor &&
+        !politics.warnings.some((w) => w.empireId === empire.id)
+      ) {
         this.resolution = "The game cleared the Ungovernable warning.";
       }
     }

@@ -209,6 +209,7 @@ export class WinModal extends LitElement implements Controller {
   private _title: string;
   private readonly crisisTracker = new NationalCrisisTracker();
   private nationalIdentity: string | null = null;
+  private nationalLastTick = -1;
   private nationalVictoryKey: string | null = null;
   private nationalSubscribed = false;
   private crisisRequest: {
@@ -1103,7 +1104,7 @@ export class WinModal extends LitElement implements Controller {
     if (
       this.nationalSubscribed ||
       !this.eventBus ||
-      this.game?.config().gameConfig().nationalMode !== true
+      this.game?.config?.().gameConfig?.().nationalMode !== true
     )
       return;
     this.eventBus.on(NationalPrivateCapabilityChangedEvent, this.onNationalTransport);
@@ -1129,6 +1130,7 @@ export class WinModal extends LitElement implements Controller {
   private clearNationalExperience(): void {
     this.crisisTracker.clear();
     this.nationalIdentity = null;
+    this.nationalLastTick = -1;
     this.nationalCrisis = null;
     this.nationalResolution = "";
     this.nationalSuccessor = "";
@@ -1192,7 +1194,7 @@ export class WinModal extends LitElement implements Controller {
                 <h2 class="text-lg font-bold text-amber-200">Ungovernable empire</h2>
                 <p>Your nation is strictly lowest across all eight required metrics. Transfer the crown before the simulation deadline.</p>
               </div>
-              <p role="timer" aria-live="off" class="mt-2 text-xl font-bold tabular-nums">
+              <p role="timer" aria-live="polite" class="mt-2 text-xl font-bold tabular-nums">
                 ${Math.ceil(crisis.remainingMs / 1000)} seconds remaining
               </p>
               ${crisis.blockedByAssetDisposition
@@ -1279,6 +1281,15 @@ export class WinModal extends LitElement implements Controller {
       this.clearNationalExperience();
       this.nationalIdentity = identity;
     }
+    if (tick < this.nationalLastTick) {
+      this.nationalCrisis = null;
+      this.nationalResolution = "";
+      this.crisisRequest = null;
+      this.nationalTransferStatus = "";
+      this.crisisTracker.clear();
+      return;
+    }
+    this.nationalLastTick = tick;
     const politics = game.nationalPoliticsTick() === tick
       ? game.nationalPolitics()
       : null;
@@ -1337,14 +1348,14 @@ export class WinModal extends LitElement implements Controller {
     const pending = this.crisisRequest;
     if (
       !this.nationalCrisis ||
-      !pending ||
-      activeActor !== pending.actorId ||
-      this.nationalCrisis.empireId !== pending.empireId
+      (pending !== null &&
+        (activeActor !== pending.actorId ||
+          this.nationalCrisis.empireId !== pending.empireId))
     ) {
       this.crisisRequest = null;
       this.nationalTransferStatus = "";
       if (!this.nationalCrisis) this.nationalSuccessor = "";
-    } else {
+    } else if (pending) {
       const receipt = game.nationalPoliticalResults().find((r) =>
         r.type === "national_transfer_crown" &&
         r.actorId === pending.actorId &&
@@ -1377,7 +1388,7 @@ export class WinModal extends LitElement implements Controller {
     }
     const updates = this.game.updatesSinceLastTick();
     const winUpdates = updates?.[GameUpdateType.Win] ?? [];
-    if (this.game.config().gameConfig().nationalMode === true) {
+    if (this.game.config().gameConfig?.().nationalMode === true) {
       this.tickNational(winUpdates);
       return;
     }
