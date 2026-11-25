@@ -45,7 +45,13 @@ const authOnly = process.argv.includes("--auth-only");
 const lobbyOnly = process.argv.includes("--lobby-only");
 const diagnosticOnly = authOnly || lobbyOnly;
 const functionalSoftware = process.argv.includes("--functional-software");
-assert(!(functionalSoftware && diagnosticOnly), "exclusive diagnostic modes");
+const functionalGpu = process.argv.includes("--functional-gpu");
+const functionalGameplay = functionalSoftware || functionalGpu;
+assert(
+  !(functionalGameplay && diagnosticOnly) &&
+    !(functionalSoftware && functionalGpu),
+  "exclusive diagnostic modes",
+);
 const fixture = makeEnvironment();
 const head = fixture.env.GIT_COMMIT;
 const worldRoot = join(fixture.dir, "world");
@@ -206,7 +212,7 @@ async function openProfile(executable, index, email) {
           pending.delete(id);
           reject(new Error("browser command timed out"));
         },
-        functionalSoftware ? 45_000 : 12_000,
+        functionalGameplay ? 45_000 : 12_000,
       );
       pending.set(id, { resolve, reject, timeout });
       ws.send(JSON.stringify({ id, method, params }));
@@ -262,7 +268,7 @@ async function openProfile(executable, index, email) {
         }
       }
       if (
-        functionalSoftware &&
+        functionalGameplay &&
         m.method === "Network.webSocketFrameSent" &&
         authoritySockets.has(m.params.requestId) &&
         m.params.response.opcode === 2
@@ -305,7 +311,7 @@ async function openProfile(executable, index, email) {
             authoritySockets.get(socket)?.context,
           );
           if (packet.type === "lobby_info") observed.lobby = packet;
-          if (functionalSoftware && packet.type === "national_start") {
+          if (functionalGameplay && packet.type === "national_start") {
             const binding = {
               context: createGameWireContext(packet.gameStartInfo.players),
               actor: trustedNationalPrincipal(packet),
@@ -324,7 +330,7 @@ async function openProfile(executable, index, email) {
             observed.authority = binding;
             observed.authorityStarts++;
           }
-          if (functionalSoftware && packet.type === "national_projection") {
+          if (functionalGameplay && packet.type === "national_projection") {
             const binding = authoritySockets.get(socket);
             assert(binding, "projection without admitted socket");
             const parsed = parseTrustedNationalProjection(
@@ -364,14 +370,14 @@ async function openProfile(executable, index, email) {
         } catch {
           // The Vite dev socket is not a game authority. A malformed frame
           // on an admitted game socket, however, invalidates the witness.
-          if (functionalSoftware && authoritySockets.has(socket))
+          if (functionalGameplay && authoritySockets.has(socket))
             observed.invalidAuthorityFrame = true;
         }
       }
       if (m.method === "Network.responseReceived") {
         const u = new URL(m.params.response.url);
         if (
-          functionalSoftware &&
+          functionalGameplay &&
           u.origin === origin &&
           m.params.response.status >= 400 &&
           /\.(?:mp3|ogg|webp|png|svg|woff2?)$/i.test(u.pathname)
@@ -568,7 +574,7 @@ async function openProfile(executable, index, email) {
   // No successful action is injected: this helper is exclusively for deliberate
   // denial/replay probes against the very same native gameplay match.
   async function sendNegative(intent) {
-    assert(functionalSoftware);
+    assert(functionalGameplay);
     assert(
       [
         "national_accept_pact",
@@ -635,7 +641,7 @@ try {
   );
   for (const email of emails) accountCommand(fixture.env, "register", email);
   children.push(await startIdentity(fixture.env));
-  if (functionalSoftware) {
+  if (functionalGameplay) {
     stage = "initialize isolated durable world";
     execFileSync(
       process.execPath,
@@ -712,7 +718,7 @@ try {
       stage,
       60_000,
     );
-    if (functionalSoftware) {
+    if (functionalGameplay) {
       // Creating the modal is not the same as joining the server lobby.
       // Wait for the actual host socket before changing any configuration.
       stage = "host admitted before native configuration";
@@ -740,7 +746,7 @@ try {
         ),
       stage,
     );
-    if (functionalSoftware) {
+    if (functionalGameplay) {
       stage = "server acknowledges NATIONAL configuration";
       await until(
         () => a.observed.lobby?.lobby?.gameConfig?.nationalMode === true,
@@ -849,7 +855,7 @@ try {
         stage,
         90_000,
       );
-      if (functionalSoftware)
+      if (functionalGameplay)
         console.log(
           "C7C1E6_STAGE " +
             JSON.stringify({
@@ -924,19 +930,22 @@ try {
         stage,
         90_000,
       );
-      if (functionalSoftware) {
-        stage = "explicit software WebGL2 rendering";
+      if (functionalGameplay) {
+        stage = functionalSoftware
+          ? "explicit software WebGL2 rendering"
+          : "normal hardware-gated WebGL2 rendering";
+        const rendererWitnesses = await Promise.all(
+          profiles.map((p) =>
+            p.evaluate(
+              '(() => { const canvas = document.querySelector("#webgl-debug-canvas"); return canvas ? {software: canvas.dataset.nationalE6SoftwareDiagnostic === "true", visible: canvas.getBoundingClientRect().width > 150} : null; })()',
+            ),
+          ),
+        );
         assert(
-          (
-            await Promise.all(
-              profiles.map((p) =>
-                p.evaluate(
-                  'document.querySelector("canvas[data-national-e6-software-diagnostic=true]") !== null',
-                ),
-              ),
-            )
-          ).every(Boolean),
-          "not explicitly labelled software diagnostics",
+          rendererWitnesses.every(
+            (w) => w?.visible && w.software === functionalSoftware,
+          ),
+          "renderer mode or visible graphical witness mismatch",
         );
         const hostTick = () =>
           Math.max(
@@ -1036,7 +1045,7 @@ try {
           },
           recover,
           hostTick,
-          software: true,
+          software: functionalSoftware,
         });
         assert(
           profiles.every(
