@@ -397,24 +397,48 @@ export class NationExecution implements Execution {
         if (politics === null) return;
         // This is the same authenticated Game command/journal used by the
         // human Executor. The registered Nation Player is the principal.
-        const requestId = `ai-peace-${player.smallID()}-${ticks}`;
+        // A human can preclaim a predictable request token. Let the canonical
+        // journal allocate a collision-safe auto receipt; motion identity is
+        // separately engine-owned and never accepted from the wire.
+        const motionId =
+          choice.kind === "propose-peace"
+            ? `ai-peace-${player.smallID()}-${ticks}`
+            : choice.motionId;
         const command =
           choice.kind === "propose-peace"
-            ? { kind: choice.kind, warId: choice.warId, motionId: requestId }
-            : { kind: choice.kind, motionId: choice.motionId };
-        const outcome = this.mg.performNationalWarCommandWithOutcome(
-          player,
-          {
+            ? { kind: choice.kind, warId: choice.warId, motionId }
+            : { kind: choice.kind, motionId };
+        let outcome: ReturnType<Game["performNationalWarCommandWithOutcome"]>;
+        try {
+          outcome = this.mg.performNationalWarCommandWithOutcome(player, {
             ...command,
             admissionEmpireId: politics.empireOf(player.id()),
             policyVersion: politics.warPolicyVersionFor(player.id()),
-          },
-          requestId,
-        );
+          });
+        } catch (error) {
+          if (
+            !(error instanceof Error) ||
+            ![
+              "NATIONAL command journal: lifetime request cap reached",
+              "NATIONAL command journal: sequence exhausted",
+            ].includes(error.message)
+          )
+            throw error;
+          // No receipt exists: back off without manufacturing a rejection.
+          this.nationalPeaceMemory = recordNationalPeaceOutcome(
+            peace.memory,
+            choice,
+            ticks,
+            null,
+          );
+          return;
+        }
         if (
           outcome.actorId !== player.id() ||
           outcome.recipientId !== player.id() ||
-          outcome.requestId !== requestId ||
+          outcome.tick !== observation.tick ||
+          outcome.warId !== choice.warId ||
+          outcome.motionId !== motionId ||
           outcome.commandKind !==
             (choice.kind === "propose-peace"
               ? "national_propose_peace"

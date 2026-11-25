@@ -101,7 +101,9 @@ export function planNationalPeace(
       0,
     );
     const reachable = opposing.activeMemberIds.some((id) => fronts.has(id));
-    const visibleThreat = opposing.activeMemberIds.some((id) => military.has(id));
+    const visibleThreat = opposing.activeMemberIds.some((id) =>
+      military.has(id),
+    );
     const overmatched = enemyLand >= Math.max(1, ownLand * 1.5);
     const attrition =
       peakTroops >= 1000 && ownResources.troops <= peakTroops * 0.55;
@@ -130,7 +132,7 @@ export function recordNationalPeaceOutcome(
   memory: NationalPeaceMemory,
   choice: NationalPeaceChoice,
   tick: number,
-  accepted: boolean,
+  accepted: boolean | null,
 ): NationalPeaceMemory {
   return {
     ...memory,
@@ -139,7 +141,8 @@ export function recordNationalPeaceOutcome(
         ? {
             ...row,
             retryAfterTick: tick + RETRY_TICKS,
-            lastOutcome: accepted ? "accepted" : "rejected",
+            lastOutcome:
+              accepted === null ? null : accepted ? "accepted" : "rejected",
           }
         : row,
     ),
@@ -151,7 +154,9 @@ export function holdsNationalPeace(
   targetId: string,
   tick: number,
 ): boolean {
-  return memory?.truces.some(
-    (row) => row.targetId === targetId && row.untilTick > tick,
-  ) ?? false;
+  return (
+    memory?.truces.some(
+      (row) => row.targetId === targetId && row.untilTick > tick,
+    ) ?? false
+  );
 }

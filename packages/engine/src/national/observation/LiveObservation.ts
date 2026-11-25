@@ -559,6 +559,12 @@ export function collectLiveNationalObservation(
   if (authority && wars.length > 0 && observer.isAlive()) {
     const conflict = projectNationalPublicConflict(game, observerId, tick);
     for (const war of wars) {
+      if (
+        !conflict?.layers.some(
+          (layer) => layer.id === war.id && layer.endedTick === null,
+        )
+      )
+        continue;
       const canNegotiate = (side: typeof war.first): boolean => {
         if (war.scope === "imperial") {
           return side.kind === "nation"
@@ -579,7 +585,7 @@ export function collectLiveNationalObservation(
           ? 1
           : null;
       if (side === null) continue;
-      const pending = (conflict?.motions ?? []).filter(
+      const pending = conflict.motions.filter(
         (motion) => motion.layerId === war.id && motion.acceptedTick === null,
       );
       peaceNegotiations.push({
