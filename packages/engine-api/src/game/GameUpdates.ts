@@ -193,6 +193,7 @@ export interface GameUpdateViewData {
   nationalUltimatums?: NationalUltimatumViewData;
   nationalAssessments?: NationalAssessmentViewData;
   nationalReconnaissance?: import("./NationalReconView").NationalReconnaissanceViewData;
+  nationalSatellite?: import("./NationalSatelliteView").NationalSatelliteView;
   nationalPactDisclosure?: NationalPactDisclosureWireData;
   nationalImperialAdministration?: NationalImperialAdministrationWire;
   nationalSettlements?: import("./NationalSettlementView").NationalSettlementView;

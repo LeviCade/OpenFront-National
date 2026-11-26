@@ -30,6 +30,10 @@ import {
 } from "@openfront/engine-api/game/NationalPactView";
 import type { NationalReconnaissanceViewData } from "@openfront/engine-api/game/NationalReconView";
 import {
+  readNationalSatelliteView,
+  type NationalSatelliteView,
+} from "@openfront/engine-api/game/NationalSatelliteView";
+import {
   readNationalSettlementView,
   type NationalSettlementView,
 } from "@openfront/engine-api/game/NationalSettlementView";
@@ -136,6 +140,7 @@ export class GameView implements GameLike {
   private _nationalPoliticalResults: readonly NationalPoliticalResult[] = [];
   private _nationalUltimatums: NationalUltimatumViewData | null = null;
   private _nationalReconnaissance: NationalReconnaissanceViewData | null = null;
+  private _nationalSatellite: NationalSatelliteView | null = null;
   private _nationalAssessments: NationalAssessmentClientView | null = null;
   private _nationalSettlements: NationalSettlementView | null = null;
   private _trustedProjectionReady = false;
@@ -149,6 +154,7 @@ export class GameView implements GameLike {
       this._nationalPactReceipts = [];
       this._nationalUltimatums = null;
       this._nationalReconnaissance = null;
+      this._nationalSatellite = null;
       this._nationalAssessments = null;
       this._nationalSettlements = null;
       this._nationalPolitics = null;
@@ -256,6 +262,7 @@ export class GameView implements GameLike {
       this._nationalPolitics = null;
       this._nationalPoliticsTick = null;
       this._nationalConflicts = null;
+      this._nationalSatellite = null;
       this._nationalAssessments = null;
       this._nationalSettlements = null;
       this._nationalImperialAdministration = null;
@@ -275,6 +282,7 @@ export class GameView implements GameLike {
     this._nationalPactReceipts = [];
     this._nationalUltimatums = null;
     this._nationalReconnaissance = null;
+    this._nationalSatellite = null;
     this._nationalAssessments = null;
     this._nationalSettlements = null;
     this._trustedProjectionReady = false;
@@ -635,6 +643,12 @@ export class GameView implements GameLike {
       : null;
   }
 
+  public nationalSatellite(): Readonly<NationalSatelliteView> | null {
+    return this._trustedNationalProjection && !this._trustedProjectionReady
+      ? null
+      : this._nationalSatellite;
+  }
+
   /** Private, current, strictly validated E4 Game-funded strength reports. */
   public nationalAssessments(): Readonly<NationalAssessmentClientView> | null {
     return this._trustedNationalProjection && !this._trustedProjectionReady
@@ -667,6 +681,7 @@ export class GameView implements GameLike {
     this._nationalPoliticalResults = [];
     this._nationalUltimatums = null;
     this._nationalReconnaissance = null;
+    this._nationalSatellite = null;
     this._nationalAssessments = null;
     this._nationalSettlements = null;
   }
@@ -867,16 +882,19 @@ export class GameView implements GameLike {
       gu.nationalPactDisclosure === undefined &&
       gu.nationalImperialAdministration === undefined &&
       assessed.nationalAssessments === undefined &&
-      gu.nationalSettlements === undefined
+      gu.nationalSettlements === undefined &&
+      gu.nationalSatellite === undefined
         ? gu
         : { ...gu };
     delete this.lastUpdate.nationalPactDisclosure;
     delete this.lastUpdate.nationalImperialAdministration;
     delete this.lastUpdate.nationalSettlements;
+    delete this.lastUpdate.nationalSatellite;
     delete (
       this.lastUpdate as GameUpdateViewData & { nationalAssessments?: unknown }
     ).nationalAssessments;
     // An FFA view or an absent report must never preserve an earlier private lease.
+    this._nationalSatellite = null;
     this._nationalAssessments = null;
     this._nationalSettlements = null;
 
@@ -915,6 +933,16 @@ export class GameView implements GameLike {
           ? null
           : readNationalReconnaissanceView(
               gu.nationalReconnaissance,
+              currentActorId,
+              gu.tick,
+            );
+      this._nationalSatellite =
+        gu.tick < previousTick ||
+        this._config.isReplay?.() === true ||
+        (this._trustedNationalProjection && !this._trustedProjectionReady)
+          ? null
+          : readNationalSatelliteView(
+              gu.nationalSatellite,
               currentActorId,
               gu.tick,
             );

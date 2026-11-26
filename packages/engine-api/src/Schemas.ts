@@ -74,7 +74,9 @@ export type Intent =
   | NationalReconnaissanceIntent
   | NationalAssessmentIntent
   | NationalCounterassessmentIntent
-  | NationalBlockadeIntent;
+  | NationalBlockadeIntent
+  | NationalCoalitionV2Intent
+  | NationalSatelliteIntent;
 
 export type AttackIntent = z.infer<typeof AttackIntentSchema>;
 export type CancelAttackIntent = z.infer<typeof CancelAttackIntentSchema>;
@@ -839,6 +841,51 @@ export const NationalExpelPactIntentSchema = z.object({
   requestId: NationalPoliticalRequestId,
 });
 
+/** C7: separate versioned intent variants preserve existing positional zbin layouts. */
+const NationalCoalitionV2TermsSchema =
+  NationalFoundPactIntentSchema.shape.terms.extend({
+    expulsion: z.enum([
+      "leader",
+      "unanimous",
+      "forbidden",
+      "selected",
+      "majority",
+      "supermajority",
+    ]),
+    membershipCap: zb.uint({ min: 2, max: 256 }).optional(),
+    invitationDurationTicks: zb.uint({ min: 1, max: 36000 }).optional(),
+    selectedExpellerIds: z.array(MappedID).max(256).optional(),
+  });
+export const NationalFoundPactV2IntentSchema =
+  NationalFoundPactIntentSchema.extend({
+    type: z.literal("national_found_pact_v2"),
+    terms: NationalCoalitionV2TermsSchema,
+  });
+export const NationalProposePactAmendmentV2IntentSchema =
+  NationalProposePactAmendmentIntentSchema.extend({
+    type: z.literal("national_propose_pact_amendment_v2"),
+    terms: NationalCoalitionV2TermsSchema,
+    constitutionVersion: zb
+      .uint({ min: 1, max: Number.MAX_SAFE_INTEGER - 1 })
+      .optional(),
+  });
+export const NationalExpelPactV2IntentSchema =
+  NationalExpelPactIntentSchema.extend({
+    type: z.literal("national_expel_pact_v2"),
+    constitutionVersion: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER - 1 }),
+  });
+export const NationalRejectPactAmendmentV2IntentSchema = z.object({
+  type: z.literal("national_reject_pact_amendment_v2"),
+  pactId: NationalPoliticalId,
+  expectedDefenseVersion: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }),
+  requestId: NationalPoliticalRequestId,
+});
+export type NationalCoalitionV2Intent =
+  | z.infer<typeof NationalFoundPactV2IntentSchema>
+  | z.infer<typeof NationalProposePactAmendmentV2IntentSchema>
+  | z.infer<typeof NationalExpelPactV2IntentSchema>
+  | z.infer<typeof NationalRejectPactAmendmentV2IntentSchema>;
+
 /** Class Two M5: append only; client identity is never an action field. */
 export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
   "kind",
@@ -967,6 +1014,26 @@ export const NationalImperialAdministrationCommandSchema = z.discriminatedUnion(
       sanctionId: NationalPoliticalId,
       decision: z.enum(["comply", "refuse"]),
     }),
+    // C7C1E3: append-only, match-bound commands using the current crown epoch.
+    z.object({
+      kind: z.literal("imperial-move-warship"),
+      empireId: NationalPoliticalId,
+      gameId: z.string().min(1).max(128),
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      memberId: MappedID,
+      unitId: zb.uint(),
+      tile: zb.uint(),
+    }),
+    z.object({
+      kind: z.literal("imperial-transport"),
+      empireId: NationalPoliticalId,
+      gameId: z.string().min(1).max(128),
+      expectedVersion: zb.uint({ min: 0, max: Number.MAX_SAFE_INTEGER - 1 }),
+      memberId: MappedID,
+      targetId: MappedID,
+      tile: zb.uint(),
+      amount: zb.uint({ min: 1, max: Number.MAX_SAFE_INTEGER }),
+    }),
   ],
 );
 
@@ -1083,6 +1150,17 @@ export type NationalBlockadeIntent = z.infer<
   typeof NationalBlockadeIntentSchema
 >;
 
+/** Append-only variant: price, actor and epoch are never client-controlled. */
+export const NationalSatelliteIntentSchema = z.object({
+  type: z.literal("national_buy_satellite_recon"),
+  gameId: NationalPoliticalId,
+  issuedTick: zb.uint({ min: 0, max: 0xffffffff }),
+  requestId: NationalPoliticalRequestId,
+});
+export type NationalSatelliteIntent = z.infer<
+  typeof NationalSatelliteIntentSchema
+>;
+
 export const IntentSchema = z.discriminatedUnion("type", [
   AttackIntentSchema,
   CancelAttackIntentSchema,
@@ -1137,6 +1215,11 @@ export const IntentSchema = z.discriminatedUnion("type", [
   NationalAssessmentIntentSchema,
   NationalCounterassessmentIntentSchema,
   NationalBlockadeIntentSchema,
+  NationalFoundPactV2IntentSchema,
+  NationalProposePactAmendmentV2IntentSchema,
+  NationalExpelPactV2IntentSchema,
+  NationalRejectPactAmendmentV2IntentSchema,
+  NationalSatelliteIntentSchema,
 ]);
 
 // StampedIntent = Intent with server-stamped clientID (used in turns and execution)

@@ -173,9 +173,24 @@ const NationalFoundEmpireStateSchema = z.object({
             "supermajority",
           ]),
           selectedApproverIds: z.array(z.string()).max(256).optional(),
-          expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+          expulsion: z.enum([
+            "leader",
+            "unanimous",
+            "forbidden",
+            "selected",
+            "majority",
+            "supermajority",
+          ]),
           defenseContributionBps: z.number().int().min(0).max(1000).optional(),
           defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
+          membershipCap: z.number().int().min(2).max(256).optional(),
+          invitationDurationTicks: z
+            .number()
+            .int()
+            .min(1)
+            .max(36000)
+            .optional(),
+          selectedExpellerIds: z.array(z.string()).max(256).optional(),
         }),
       }),
       z.object({
@@ -202,11 +217,27 @@ const NationalFoundEmpireStateSchema = z.object({
             "supermajority",
           ]),
           selectedApproverIds: z.array(z.string()).max(256).optional(),
-          expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+          expulsion: z.enum([
+            "leader",
+            "unanimous",
+            "forbidden",
+            "selected",
+            "majority",
+            "supermajority",
+          ]),
           defenseContributionBps: z.number().int().min(0).max(1000).optional(),
           defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
+          membershipCap: z.number().int().min(2).max(256).optional(),
+          invitationDurationTicks: z
+            .number()
+            .int()
+            .min(1)
+            .max(36000)
+            .optional(),
+          selectedExpellerIds: z.array(z.string()).max(256).optional(),
         }),
         administratorId: z.string().nullable(),
+        constitutionVersion: z.number().int().positive().optional(),
       }),
       z.object({
         kind: z.literal("approve-pact-amendment"),
@@ -217,6 +248,7 @@ const NationalFoundEmpireStateSchema = z.object({
           .positive()
           .max(Number.MAX_SAFE_INTEGER)
           .optional(),
+        reject: z.boolean().optional(),
       }),
       z.object({ kind: z.literal("betray-pact"), pactId: z.string() }),
       z.object({
@@ -224,6 +256,7 @@ const NationalFoundEmpireStateSchema = z.object({
         pactId: z.string(),
         memberId: z.string(),
         approvingIds: z.array(z.string()).optional(),
+        constitutionVersion: z.number().int().positive().optional(),
       }),
     ])
     .nullable(),

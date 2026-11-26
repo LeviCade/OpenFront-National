@@ -85,6 +85,12 @@ export class Executor {
         );
       }
       case "national_imperial_administration":
+        if (
+          (intent.command.kind === "imperial-move-warship" ||
+            intent.command.kind === "imperial-transport") &&
+          intent.command.gameId !== this.gameID_
+        )
+          return new NoOpExecution();
         return new NationalFoundEmpireExecution(
           player,
           "",
@@ -92,6 +98,7 @@ export class Executor {
           intent.requestId,
           intent.clientID,
         );
+      case "national_propose_pact_amendment_v2":
       case "national_propose_pact_amendment":
         return new NationalFoundEmpireExecution(
           player,
@@ -101,10 +108,15 @@ export class Executor {
             pactId: intent.pactId,
             terms: intent.terms,
             administratorId: intent.administratorId,
+            ...(intent.type === "national_propose_pact_amendment_v2" &&
+            intent.constitutionVersion !== undefined
+              ? { constitutionVersion: intent.constitutionVersion }
+              : {}),
           },
           intent.requestId,
           intent.clientID,
         );
+      case "national_reject_pact_amendment_v2":
       case "national_approve_pact_amendment":
         return new NationalFoundEmpireExecution(
           player,
@@ -115,10 +127,14 @@ export class Executor {
             ...(intent.expectedDefenseVersion === undefined
               ? {}
               : { expectedDefenseVersion: intent.expectedDefenseVersion }),
+            ...(intent.type === "national_reject_pact_amendment_v2"
+              ? { reject: true }
+              : {}),
           },
           intent.requestId,
           intent.clientID,
         );
+      case "national_expel_pact_v2":
       case "national_expel_pact":
         return new NationalFoundEmpireExecution(
           player,
@@ -127,6 +143,9 @@ export class Executor {
             kind: "expel-pact",
             pactId: intent.pactId,
             memberId: intent.memberId,
+            ...(intent.type === "national_expel_pact_v2"
+              ? { constitutionVersion: intent.constitutionVersion }
+              : {}),
           },
           intent.requestId,
           intent.clientID,
@@ -139,6 +158,7 @@ export class Executor {
           intent.requestId,
           intent.clientID,
         );
+      case "national_found_pact_v2":
       case "national_found_pact":
         return new NationalFoundEmpireExecution(
           player,
@@ -259,6 +279,24 @@ export class Executor {
           intent.requestId,
           intent.clientID,
         );
+      case "national_buy_satellite_recon": {
+        if (intent.gameId !== this.gameID_) return new NoOpExecution();
+        const authority = this.mg.nationalPoliticalAuthority();
+        if (authority === null) return new NoOpExecution();
+        return new NationalReconExecution(
+          player,
+          player.id(),
+          0,
+          0,
+          intent.requestId,
+          intent.clientID,
+          {
+            issuedTick: intent.issuedTick,
+            empireId: authority.empireOf(player.id()),
+            policyVersion: authority.warPolicyVersionFor(player.id()),
+          },
+        );
+      }
       case "national_buy_regional_recon":
         return new NationalReconExecution(
           player,

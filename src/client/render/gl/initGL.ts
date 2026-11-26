@@ -17,6 +17,11 @@ export type GLResult =
   | { gl: WebGL2RenderingContext; status: "ok" }
   | {
       gl: WebGL2RenderingContext;
+      status: "software-diagnostic";
+      renderer: string;
+    }
+  | {
+      gl: WebGL2RenderingContext;
       status: "limited";
       renderer: string;
       maxTextureSize: number;
@@ -44,10 +49,44 @@ const SOFTWARE_RENDERER = /swiftshader|llvmpipe|software/i;
  *   call on the same canvas returns the already-created context (ignoring
  *   attrs), so these must be the attributes the renderer wants.
  */
+export function e6SoftwareDiagnosticAllowed(
+  development: boolean,
+  optIn: unknown,
+  origin: string,
+): boolean {
+  return development && optIn === "1" && origin === "http://localhost:9000";
+}
+
 export function initGL(
   canvas: HTMLCanvasElement,
   attrs: WebGLContextAttributes = {},
 ): GLResult {
+  // E6 disposable Vite localhost only: exercise actual WebGL2 without
+  // impersonating hardware. Production builds and ordinary development
+  // continue to demand acceleration, and missing/undersized GL still fails.
+  if (
+    e6SoftwareDiagnosticAllowed(
+      import.meta.env.DEV,
+      import.meta.env.VITE_NATIONAL_E6_SOFTWARE_DIAGNOSTIC,
+      window.location.origin,
+    )
+  ) {
+    const diagnostic = canvas.getContext("webgl2", {
+      ...attrs,
+      failIfMajorPerformanceCaveat: false,
+    });
+    if (!diagnostic) return { gl: null, status: "unsupported", renderer: "" };
+    const renderer = readRenderer(diagnostic);
+    const maxTextureSize = Number(
+      diagnostic.getParameter(diagnostic.MAX_TEXTURE_SIZE),
+    );
+    if (maxTextureSize < REQUIRED_TEXTURE_SIZE)
+      return { gl: null, status: "unsupported", renderer };
+    if (!SOFTWARE_RENDERER.test(renderer))
+      return { gl: null, status: "software", renderer };
+    return { gl: diagnostic, status: "software-diagnostic", renderer };
+  }
+
   // 1. demand a GPU-accelerated context
   const accel = canvas.getContext("webgl2", {
     ...attrs,
