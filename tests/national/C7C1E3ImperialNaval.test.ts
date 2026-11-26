@@ -571,7 +571,10 @@ describe("C7 integrated imperial authority lifecycle", () => {
       empireId: EMPIRE,
     });
     expect(() =>
-      game.performNationalCommand(a, { kind: "found-empire", empireId: EMPIRE }),
+      game.performNationalCommand(a, {
+        kind: "found-empire",
+        empireId: EMPIRE,
+      }),
     ).toThrow(/empire id already used/);
     const { restored } = await roundTrip(game, MAP);
     expect(() =>

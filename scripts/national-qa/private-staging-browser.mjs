@@ -645,12 +645,21 @@ try {
     assert.equal(process.env.NATIONAL_E6_APPROVED_CANDIDATE_SHA, head);
     assert.match(process.env.NATIONAL_E6_APPROVED_RUN_ID ?? "", /^[0-9]+$/);
     if (functionalGpu) {
-      assert.equal(process.env.GITHUB_REPOSITORY, "LeviCade/OpenFront-National");
+      assert.equal(
+        process.env.GITHUB_REPOSITORY,
+        "LeviCade/OpenFront-National",
+      );
       assert.equal(process.env.GITHUB_ACTOR, "LeviCade");
       assert.equal(process.env.RUNNER_ENVIRONMENT, "self-hosted");
-      assert.equal(process.env.GITHUB_REF, "refs/heads/stage3/conductor7-class1-integration-20261125");
+      assert.equal(
+        process.env.GITHUB_REF,
+        "refs/heads/stage3/conductor7-class1-integration-20261125",
+      );
       assert.equal(process.env.GITHUB_SHA, head);
-      assert.equal(process.env.NATIONAL_E6_APPROVED_RUN_ID, process.env.GITHUB_RUN_ID);
+      assert.equal(
+        process.env.NATIONAL_E6_APPROVED_RUN_ID,
+        process.env.GITHUB_RUN_ID,
+      );
       assert(process.getuid?.() !== 0 && process.env.CHROME_BIN);
     } else {
       assert(process.env.DISPLAY, "physical display required");
@@ -986,11 +995,20 @@ try {
               (functionalSoftware ||
                 (typeof w.renderer === "string" &&
                   /intel|amd|radeon|nvidia|virgl/i.test(w.renderer) &&
-                  !/swiftshader|llvmpipe|softpipe|software|swrast|lavapipe/i.test(w.renderer))),
+                  !/swiftshader|llvmpipe|softpipe|software|swrast|lavapipe/i.test(
+                    w.renderer,
+                  ))),
           ),
           "renderer mode or visible graphical witness mismatch",
         );
-        console.log("C7C1E6_STAGE " + JSON.stringify({ name: "renderer-mode", software: functionalSoftware, renderers: rendererWitnesses.map((w) => w.renderer) }));
+        console.log(
+          "C7C1E6_STAGE " +
+            JSON.stringify({
+              name: "renderer-mode",
+              software: functionalSoftware,
+              renderers: rendererWitnesses.map((w) => w.renderer),
+            }),
+        );
         const hostTick = () =>
           Math.max(
             -1,
