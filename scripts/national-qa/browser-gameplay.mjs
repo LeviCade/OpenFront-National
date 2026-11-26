@@ -549,7 +549,7 @@ async function main() {
       walk(root);
       const picked = found.sort((a,b) => a.text.length-b.text.length)[0];
       if (!picked) return null;
-      picked.element.scrollIntoView({ block: "center", inline: "nearest" });
+      picked.element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
       const bounds = picked.element.getBoundingClientRect();
       if (bounds.width <= 0 || bounds.height <= 0) return null;
       return {
@@ -687,23 +687,55 @@ async function main() {
       "window.__nationalQaFind('single-player-modal')?.compactMap === true",
     );
     if (!compact) await click("^compact map$", "single-player-modal");
+    await poll(
+      () =>
+        evaluate(
+          "window.__nationalQaFind('single-player-modal')?.compactMap === true",
+        ),
+      "native compact map selection committed",
+    );
     for (const [key, value] of [
       ["bots", 0],
       ["nations", 2],
     ]) {
-      const selector = 'fluent-slider[labelkey="game_settings.' + key + '"]';
-      await clickSelector(selector + ' [role="button"]');
-      await fill(selector + ' input[type="number"]', String(value));
-      await send("Input.dispatchKeyEvent", {
-        type: "keyDown",
-        key: "Enter",
-        code: "Enter",
-      });
-      await send("Input.dispatchKeyEvent", {
-        type: "keyUp",
-        key: "Enter",
-        code: "Enter",
-      });
+      const focused = await poll(
+        () =>
+          evaluate(`(() => {
+            const modal = window.__nationalQaFind('single-player-modal');
+            const slider = [...modal.querySelectorAll('fluent-slider')].find(
+              (item) => item.labelKey === 'game_settings.' + ${JSON.stringify(key)},
+            );
+            const input = slider?.querySelector('input[type="range"]');
+            if (!input || input.disabled) return false;
+            input.scrollIntoView({ block: 'center', behavior: 'instant' });
+            input.focus({ preventScroll: true });
+            return document.activeElement === input;
+          })()`),
+        "focus native " + key + " range input",
+      );
+      if (!focused) throw Error("OWNER_FUNCTIONAL_RANGE_FOCUS_FAILED");
+      const press = async (key, windowsVirtualKeyCode) => {
+        for (const type of ["keyDown", "keyUp"]) {
+          await send("Input.dispatchKeyEvent", {
+            type,
+            key,
+            code: key,
+            windowsVirtualKeyCode,
+          });
+        }
+      };
+      await press("Home", 36);
+      for (let i = 0; i < value; i++) await press("ArrowRight", 39);
+      await poll(
+        () =>
+          evaluate(
+            "window.__nationalQaFind('single-player-modal')?." +
+              key +
+              " === " +
+              value,
+          ),
+        "native slider committed " + key,
+      );
     }
     const configured = await poll(
       () =>
@@ -757,7 +789,7 @@ async function main() {
         evaluate(`(() => {
       const node = window.__nationalQaFind(${JSON.stringify(selector)});
       if (!node || node.disabled) return null;
-      node.scrollIntoView({ block: "center", inline: "nearest" });
+      node.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
       const bounds = node.getBoundingClientRect();
       return bounds.width && bounds.height
         ? { x: bounds.x + bounds.width/2, y: bounds.y + bounds.height/2 }
@@ -881,7 +913,7 @@ async function main() {
         evaluate(`(() => {
       const element = window.__nationalQaFind(${JSON.stringify(selector)});
       if (!element || element.disabled) return null;
-      element.scrollIntoView({ block: "center", inline: "nearest" });
+      element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
       const rect=element.getBoundingClientRect();
       return rect.width && rect.height ? { x:rect.x+rect.width/2, y:rect.y+rect.height/2 } : null;
     })()`),

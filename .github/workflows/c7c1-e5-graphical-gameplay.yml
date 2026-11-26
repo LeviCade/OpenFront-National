@@ -117,3 +117,65 @@ jobs:
           path: national-qa-artifacts/c7-owner-functional/
           retention-days: 7
           if-no-files-found: warn
+
+  owner-private-functional:
+    name: Existing Skybot automated Private functional journey (not release)
+    needs: owner-functional
+    if: >-
+      always() && github.repository == 'LeviCade/OpenFront-National' &&
+      github.actor == 'LeviCade' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/stage3/conductor7-class1-integration-20261125'
+    runs-on: skybot-ci-gpu
+    timeout-minutes: 55
+    concurrency:
+      group: national-c7c1-e5-owner-functional
+      cancel-in-progress: false
+    env:
+      CHROME_BIN: /opt/skybot-gpu-runtime/chrome-headless-shell-linux64/chrome-headless-shell
+      NATIONAL_GPU_CANDIDATE_SHA: ${{ github.sha }}
+      NATIONAL_E6_APPROVED_CANDIDATE_SHA: ${{ github.sha }}
+      NATIONAL_E6_APPROVED_RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - name: Verify owner-only exact reviewed disposable GPU source
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = LeviCade/OpenFront-National
+          test "$GITHUB_ACTOR" = LeviCade
+          test "$GITHUB_REF" = refs/heads/stage3/conductor7-class1-integration-20261125
+          test "$RUNNER_ENVIRONMENT" = self-hosted
+          test "$(id -u)" -ne 0
+          test -x "$CHROME_BIN"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 00673dce1ff61c61e44b026e6bd8c7a92f642ff8 "$GITHUB_SHA"
+          test "$(git ls-remote --exit-code origin "$GITHUB_REF" | cut -f1)" = "$GITHUB_SHA"
+          npm install --global --ignore-scripts npm@12.1.0
+          test "$(node -v)" = v24.15.0
+          test "$(npm -v)" = 12.1.0
+          npm run inst
+      - name: Three automated graphical accounts, actual native gameplay and durable recovery
+        run: |
+          set -euo pipefail
+          node --import tsx scripts/national-qa/private-staging-browser.mjs --functional-gpu | tee c7c1e6-gpu.log
+          grep -F '"privateJourney":"NATIVE_GAMEPLAY_AND_RECOVERY_PASS"' c7c1e6-gpu.log
+      - name: Extract bounded functional verdict
+        if: always()
+        run: |
+          if test -f c7c1e6-gpu.log; then
+            grep -E '^C7C1E6_STAGE |^\{"exactSource":' c7c1e6-gpu.log > c7c1e6-gpu-evidence.jsonl || true
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: c7c1e6-gpu-functional-${{ github.run_id }}-${{ github.run_attempt }}
+          path: c7c1e6-gpu-evidence.jsonl
+          if-no-files-found: warn
+          retention-days: 7

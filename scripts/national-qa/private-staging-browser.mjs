@@ -1,6 +1,6 @@
 // E5 operator extension of E2's pinned national-staging/browser-auth-check.mjs.
 // Auth, profiles, native lobby creation/join and host tick correlation.
-// This is partial automated participation, NEVER a victory or human witness.
+// Automated functional gameplay is never a human or public-release witness.
 import { GameMapSize, GameMapType } from "@openfront/engine-api/game/GameTypes";
 import {
   createGameWireContext,
@@ -92,7 +92,21 @@ async function openProfile(executable, index, email) {
   mkdirSync(directory, { mode: 0o700 });
   const child = launch(
     [
-      ...(diagnosticOnly || functionalSoftware ? ["--headless=new"] : []),
+      ...(diagnosticOnly || functionalGameplay ? ["--headless=new"] : []),
+      ...(functionalGpu
+        ? [
+            "--window-size=1024,768",
+            "--ozone-platform=headless",
+            "--enable-webgl",
+            "--ignore-gpu-blocklist",
+            "--disable-software-rasterizer",
+            "--use-gl=angle",
+            "--use-angle=gl-egl",
+            "--disable-background-timer-throttling",
+            "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded-windows",
+          ]
+        : []),
       ...(functionalSoftware
         ? [
             "--window-size=1024,768",
@@ -120,6 +134,7 @@ async function openProfile(executable, index, email) {
     ],
     {
       ...fixture.env,
+      ...(functionalGpu ? { EGL_PLATFORM: "surfaceless" } : {}),
       ...(process.env.DISPLAY ? { DISPLAY: process.env.DISPLAY } : {}),
       ...(process.env.XAUTHORITY ? { XAUTHORITY: process.env.XAUTHORITY } : {}),
       ...(process.env.XDG_RUNTIME_DIR
@@ -629,13 +644,25 @@ try {
     assert.equal(process.env.NATIONAL_GPU_CANDIDATE_SHA, head);
     assert.equal(process.env.NATIONAL_E6_APPROVED_CANDIDATE_SHA, head);
     assert.match(process.env.NATIONAL_E6_APPROVED_RUN_ID ?? "", /^[0-9]+$/);
-    assert(process.env.DISPLAY, "physical display required");
+    if (functionalGpu) {
+      assert.equal(process.env.GITHUB_REPOSITORY, "LeviCade/OpenFront-National");
+      assert.equal(process.env.GITHUB_ACTOR, "LeviCade");
+      assert.equal(process.env.RUNNER_ENVIRONMENT, "self-hosted");
+      assert.equal(process.env.GITHUB_REF, "refs/heads/stage3/conductor7-class1-integration-20261125");
+      assert.equal(process.env.GITHUB_SHA, head);
+      assert.equal(process.env.NATIONAL_E6_APPROVED_RUN_ID, process.env.GITHUB_RUN_ID);
+      assert(process.getuid?.() !== 0 && process.env.CHROME_BIN);
+    } else {
+      assert(process.env.DISPLAY, "physical display required");
+    }
     mkdirSync("national-qa-artifacts", { recursive: true, mode: 0o700 });
     screenshotDir = mkdtempSync("national-qa-artifacts/private-staging-");
   }
-  const executable = execFileSync("which", ["google-chrome"], {
-    encoding: "utf8",
-  }).trim();
+  const executable = functionalGpu
+    ? process.env.CHROME_BIN
+    : execFileSync("which", ["google-chrome"], {
+        encoding: "utf8",
+      }).trim();
   const emails = ["alpha", "bravo", "charlie"].map(
     (name) => name + "@staging.invalid",
   );
@@ -937,16 +964,33 @@ try {
         const rendererWitnesses = await Promise.all(
           profiles.map((p) =>
             p.evaluate(
-              '(() => { const canvas = document.querySelector("#webgl-debug-canvas"); return canvas ? {software: canvas.dataset.nationalE6SoftwareDiagnostic === "true", visible: canvas.getBoundingClientRect().width > 150} : null; })()',
+              `(() => {
+                const canvas = document.querySelector("#webgl-debug-canvas");
+                const gl = canvas?.getContext('webgl2');
+                const info = gl?.getExtension('WEBGL_debug_renderer_info');
+                const renderer = info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : '';
+                return canvas && gl && !gl.isContextLost() ? {
+                  software: canvas.dataset.nationalE6SoftwareDiagnostic === "true",
+                  visible: canvas.getBoundingClientRect().width > 150,
+                  renderer,
+                } : null;
+              })()`,
             ),
           ),
         );
         assert(
           rendererWitnesses.every(
-            (w) => w?.visible && w.software === functionalSoftware,
+            (w) =>
+              w?.visible &&
+              w.software === functionalSoftware &&
+              (functionalSoftware ||
+                (typeof w.renderer === "string" &&
+                  /intel|amd|radeon|nvidia|virgl/i.test(w.renderer) &&
+                  !/swiftshader|llvmpipe|softpipe|software|swrast|lavapipe/i.test(w.renderer))),
           ),
           "renderer mode or visible graphical witness mismatch",
         );
+        console.log("C7C1E6_STAGE " + JSON.stringify({ name: "renderer-mode", software: functionalSoftware, renderers: rendererWitnesses.map((w) => w.renderer) }));
         const hostTick = () =>
           Math.max(
             -1,

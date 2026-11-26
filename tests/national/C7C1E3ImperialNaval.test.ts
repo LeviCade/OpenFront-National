@@ -536,3 +536,49 @@ describe("C7C1E3 existing blockade debt: hostile negative regressions", () => {
     );
   }
 });
+
+describe("C7 integrated imperial authority lifecycle", () => {
+  it("revokes a queued naval order across military-mode changes and never reuses dissolved identity", async () => {
+    const { game, a, b } = await world();
+    const start = game.ref(8, 8);
+    const destination = game.ref(12, 12);
+    const ship = b.buildUnit(UnitType.Warship, start, { patrolTile: start });
+    const stale = move(game, ship.id(), destination, "stale-mode");
+    const previous = epoch(game);
+    game.performNationalImperialAdministration(a, {
+      kind: "set-army-mode",
+      empireId: EMPIRE,
+      mode: "decentralized",
+      thresholdBps: 0,
+    });
+    game.performNationalImperialAdministration(a, {
+      kind: "set-army-mode",
+      empireId: EMPIRE,
+      mode: "centralized",
+      thresholdBps: 0,
+    });
+    expect(epoch(game)).toBe(previous + 1);
+    const run = runner(game);
+    submit(game, run, [stale]);
+    expect(ship.warshipState().patrolTile).toBe(start);
+    expect(game.nationalPoliticalCommandResults(a)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ requestId: "stale-mode", accepted: false }),
+      ]),
+    );
+    game.performNationalImperialAdministration(a, {
+      kind: "dissolve",
+      empireId: EMPIRE,
+    });
+    expect(() =>
+      game.performNationalCommand(a, { kind: "found-empire", empireId: EMPIRE }),
+    ).toThrow(/empire id already used/);
+    const { restored } = await roundTrip(game, MAP);
+    expect(() =>
+      restored.performNationalCommand(restored.player(A), {
+        kind: "found-empire",
+        empireId: EMPIRE,
+      }),
+    ).toThrow(/empire id already used/);
+  });
+});

@@ -175,6 +175,7 @@ const politicsSchema = z.object({
   simulationMs: counter,
   admissionEpoch: counter.optional(),
   defenseAmendmentSequence: counter.optional(),
+  retiredEmpireIds: z.array(z.string()).max(4096).optional(),
 });
 
 // One authority record per empire, attached to the canonical NATIONAL runtime.
@@ -936,16 +937,24 @@ export class NationalRuntime {
       },
     });
     const slots = this.armySlots(this.politics, empire.memberIds);
+    const next = clonePoliticalProjection(this.politics);
+    // Leaving exclusive military authority revokes outstanding naval orders,
+    // even if the same emperor subsequently centralizes the army again.
+    if (previous?.military?.mode === "centralized") {
+      const current = next.empires.find((e) => e.id === empireId)!;
+      current.warPolicyVersion = (current.warPolicyVersion ?? 0) + 1;
+    }
     if (mode === "hybrid") {
       if (pool > hybridPoolCapacity(slots, thresholdBps))
         throw new Error(
           "NATIONAL: release excess pooled reserves before reducing hybrid cap",
         );
+      validatePolitics(next);
       this.administration.set(empireId, row);
+      this.politics = next;
       return;
     }
     const allocation = distributeImperialTroops(pool, slots);
-    const next = clonePoliticalProjection(this.politics);
     const deferred = new Map(this.deferredTroops);
     for (const [id, amount] of allocation.deferred)
       deferred.set(id, (deferred.get(id) ?? 0n) + amount);

@@ -145,6 +145,8 @@ export interface PoliticsProjection {
   /** Optional for original v1 snapshots. Monotonic across pact lifetimes. */
   admissionEpoch?: number;
   defenseAmendmentSequence?: number;
+  /** Retired identities cannot confer authority on a newly founded empire. */
+  retiredEmpireIds?: string[];
 }
 
 export type PoliticalPrize =
@@ -446,6 +448,9 @@ function copy(world: PoliticsProjection): PoliticsProjection {
           }),
     })),
     accessionOffers: world.accessionOffers.map((o) => ({ ...o })),
+    ...(world.retiredEmpireIds === undefined
+      ? {}
+      : { retiredEmpireIds: [...world.retiredEmpireIds] }),
     simulationMs: world.simulationMs,
     ...(world.admissionEpoch === undefined
       ? {}
@@ -495,6 +500,15 @@ export function validatePolitics(world: PoliticsProjection): void {
   requireRule(unique(world.nations.map((n) => n.id)), "duplicate nation");
   requireRule(unique(world.pacts.map((p) => p.id)), "duplicate pact");
   requireRule(unique(world.empires.map((e) => e.id)), "duplicate empire");
+  const retired = world.retiredEmpireIds ?? [];
+  requireRule(
+    unique(retired) &&
+      retired.length + world.empires.length <= 4096 &&
+      retired.every(
+        (id) => id.length > 0 && !world.empires.some((e) => e.id === id),
+      ),
+    "invalid retired empire identities",
+  );
   const nationById = new Map(world.nations.map((n) => [n.id, n]));
   const empireMemberIds: string[] = [];
   for (const n of world.nations) {
@@ -1343,8 +1357,13 @@ export function foundEmpire(
   validatePolitics(world);
   independent(world, founderId);
   requireRule(
-    !world.empires.some((e) => e.id === empireId),
+    !world.empires.some((e) => e.id === empireId) &&
+      !(world.retiredEmpireIds ?? []).includes(empireId),
     "empire id already used",
+  );
+  requireRule(
+    (world.retiredEmpireIds?.length ?? 0) + world.empires.length < 4096,
+    "empire identity capacity exhausted",
   );
   const next = copy(world);
   removePactMember(next, founderId);
@@ -1605,6 +1624,10 @@ export function transferCrown(
 }
 
 function dissolve(world: PoliticsProjection, empireId: string): void {
+  world.retiredEmpireIds = sorted([
+    ...(world.retiredEmpireIds ?? []),
+    empireId,
+  ]);
   world.empires = world.empires.filter((e) => e.id !== empireId);
   world.accessionOffers = world.accessionOffers.filter(
     (o) => o.empireId !== empireId,
