@@ -30,6 +30,11 @@ import {
 } from "@openfront/engine-api/game/GameUpdates";
 import type { NationalAssessmentReceipt } from "@openfront/engine-api/game/NationalAssessmentView";
 import {
+  NATIONAL_SATELLITE_REQUEST_WINDOW,
+  type NationalSatelliteAdmission,
+  type NationalSatelliteLease,
+} from "@openfront/engine-api/game/NationalSatelliteView";
+import {
   NationalConfirmedVictorySchema,
   type NationalConfirmedVictory,
 } from "@openfront/engine-api/game/NationalVictoryView";
@@ -69,6 +74,7 @@ import { z } from "zod";
 import { EngineConfig } from "../configuration/EngineConfig";
 import { AttackExecution } from "../execution/AttackExecution";
 import { ConstructionExecution } from "../execution/ConstructionExecution";
+import { MoveWarshipExecution } from "../execution/MoveWarshipExecution";
 import {
   SharedWaterCache,
   SharedWaterCacheSnapshot,
@@ -78,6 +84,7 @@ import { NationalSanctionExecution } from "../execution/NationalSanctionExecutio
 import { NationalUltimatumExecution } from "../execution/NationalUltimatumExecution";
 import { NationExecution } from "../execution/NationExecution";
 import { SpawnTimerExecution } from "../execution/SpawnTimerExecution";
+import { TransportShipExecution } from "../execution/TransportShipExecution";
 import { TribeExecution } from "../execution/TribeExecution";
 import type {
   DefenseResult,
@@ -1645,6 +1652,72 @@ export class GameImpl implements Game {
             this.commitImperialDisposition(credits, empireIds, troops),
         );
         break;
+      case "imperial-move-warship":
+      case "imperial-transport": {
+        const authority = this._national.authority();
+        const member = this._players.get(command.memberId);
+        if (
+          authenticatedClientID === undefined ||
+          actor.isDisconnected() ||
+          !Number.isSafeInteger(command.expectedVersion) ||
+          authority.warPolicyVersionFor(actor.id()) !==
+            command.expectedVersion ||
+          this._national.imperialAdministrationFor(actor.id())?.armyMode !==
+            "centralized" ||
+          !member ||
+          !member.hasSpawned() ||
+          !member.isAlive() ||
+          authority.empireOf(member.id()) !== command.empireId
+        )
+          throw new Error(
+            "NATIONAL: stale or unauthorized imperial naval order",
+          );
+        if (command.kind === "imperial-move-warship") {
+          MoveWarshipExecution.moveImperialHull(
+            this,
+            member,
+            command.unitId,
+            command.tile,
+          );
+          break;
+        }
+        const target = this._players.get(command.targetId);
+        if (
+          !target ||
+          !target.hasSpawned() ||
+          !target.isAlive() ||
+          authority.empireOf(target.id()) === command.empireId ||
+          !this.isValidRef(command.tile) ||
+          this.owner(command.tile) !== target ||
+          member.isFriendly(target) ||
+          !member.canAttackPlayer(target) ||
+          this._nationalWar?.authority.authorizeOffensiveAction(
+            member.id(),
+            target.id(),
+          ) !== true ||
+          !Number.isSafeInteger(command.amount) ||
+          command.amount <= 0
+        )
+          throw new Error(
+            "NATIONAL: imperial transport requires a lawful WAR target",
+          );
+        TransportShipExecution.launchImperial(
+          this,
+          member,
+          command.tile,
+          command.amount,
+          () =>
+            this._national!.releaseImperialTroops(
+              actor.id(),
+              command.empireId,
+              member.id(),
+              command.amount,
+              (credits, empireIds, troops) =>
+                this.commitImperialDisposition(credits, empireIds, troops),
+            ),
+        );
+        break;
+      }
       case "imperial-attack": {
         // No virtual attackers: transfer this empire-owned reserve to the
         // actual constituent, then use ordinary AttackExecution and WAR/LEVY.
@@ -1860,6 +1933,57 @@ export class GameImpl implements Game {
 
   nationalReconnaissanceFor(payerId: PlayerID): readonly RegionalReconGrant[] {
     return this._nationalRecon?.activeFor(payerId, this._ticks) ?? [];
+  }
+
+  /** Separate personal-gold satellite lease, bound to the original session. */
+  performNationalSatellite(
+    actor: Player,
+    requestId: string,
+    admission: NationalSatelliteAdmission,
+    authenticatedClientID?: ClientID,
+  ): NationalSatelliteLease {
+    if (this._nationalRecon === null || !this._config.nationalMode())
+      throw new Error("NATIONAL satellite: mode not enabled");
+    this.assertNationalExecutionPrincipal(actor, authenticatedClientID);
+    if (
+      (actor.type() === PlayerType.Human &&
+        (authenticatedClientID === undefined ||
+          actor.disconnectedAtTick() !== null)) ||
+      this.inSpawnPhase() ||
+      !actor.hasSpawned() ||
+      !actor.isAlive() ||
+      !Number.isSafeInteger(admission.issuedTick) ||
+      admission.issuedTick < 0 ||
+      admission.issuedTick > this._ticks ||
+      this._ticks - admission.issuedTick > NATIONAL_SATELLITE_REQUEST_WINDOW
+    )
+      throw new Error("NATIONAL satellite: inactive or stale principal");
+    this.assertWarPolicyAdmission(actor.id(), {
+      admissionEmpireId: admission.empireId,
+      policyVersion: admission.policyVersion,
+    });
+    return this._nationalRecon.satellite.buy(
+      actor.id(),
+      requestId,
+      this._ticks,
+      (cost) => {
+        if (actor.gold() < cost)
+          throw new Error("NATIONAL satellite: insufficient gold");
+        const spent = actor.removeGold(cost);
+        if (spent !== cost) {
+          actor.addGold(spent);
+          throw new Error("NATIONAL satellite: non-atomic gold debit");
+        }
+      },
+    );
+  }
+
+  nationalSatelliteFor(payerId: PlayerID): NationalSatelliteLease | null {
+    const payer = this._players.get(payerId);
+    if (!payer?.isAlive() || !payer.hasSpawned()) return null;
+    return (
+      this._nationalRecon?.satellite.activeFor(payerId, this._ticks) ?? null
+    );
   }
 
   /** Game-owned gold debit and post-admission bounded foreign assessment. */
@@ -2101,12 +2225,28 @@ export class GameImpl implements Game {
     if (!authority?.alive(actorId)) return false;
     if (command.kind === "invite-pact" || command.kind === "accept-pact")
       return this._national?.mayReplayAdmission(actorId, command) === true;
+    if (command.kind === "expel-pact")
+      return this._national?.mayReplayExpulsion(actorId, command) === true;
+    if (
+      command.kind === "propose-pact-amendment" ||
+      command.kind === "approve-pact-amendment"
+    )
+      return this._national?.mayReplayAmendment(actorId, command) === true;
     if (command.kind === "imperial-administration") {
       if (command.command.kind === "request-relief")
         return authority.empireOf(actorId) === command.command.empireId;
       if (authority.emperorOf(command.command.empireId) !== actorId)
         return false;
       const detail = command.command;
+      if (
+        detail.kind === "imperial-move-warship" ||
+        detail.kind === "imperial-transport"
+      )
+        return (
+          authority.warPolicyVersionFor(actorId) === detail.expectedVersion &&
+          this._national?.imperialAdministrationFor(actorId)?.armyMode ===
+            "centralized"
+        );
       if (
         detail.kind === "set-economic-charter" ||
         detail.kind === "set-member-trade" ||
@@ -3583,6 +3723,10 @@ export class GameImpl implements Game {
         s.nationalRecon === null
           ? new NationalReconnaissance()
           : NationalReconnaissance.restore(s.nationalRecon, this._ticks);
+      for (const attempt of this._nationalRecon.satellite.snapshot()) {
+        if (!this._players.has(attempt.payerId))
+          throw new Error("NATIONAL satellite: invalid restored payer");
+      }
       // A restored lease must still point to real match participants and
       // a real coordinate; a forged snapshot must never manufacture intel.
       for (const grant of this._nationalRecon.snapshot().grants) {

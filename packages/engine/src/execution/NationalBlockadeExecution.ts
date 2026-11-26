@@ -85,6 +85,12 @@ export class NationalBlockadeExecution implements Execution {
       this.actor.clientID() === this.clientId &&
       game.playerByClientID(this.clientId) === this.actor &&
       politics !== null &&
+      !(
+        game.nationalImperialAdministrationFor(this.actor)?.armyMode ===
+          "centralized" &&
+        politics.emperorOf(politics.empireOf(this.actor.id()) ?? "") !==
+          this.actor.id()
+      ) &&
       politics.delegatedNationalWar(this.actor.id(), "declare")
     );
   }

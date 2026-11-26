@@ -11,7 +11,10 @@ import type {
   NationalPublicPolitics,
 } from "../../../src/client/NationalDiplomacyState";
 import { imperialPolicyIntentAvailable } from "../../../src/client/NationalImperialState";
-import type { PactReceipt } from "../../../src/client/NationalPactState";
+import {
+  pactReceiptType,
+  type PactReceipt,
+} from "../../../src/client/NationalPactState";
 import {
   SendNationalPactIntentEvent,
   SendNationalImperialPolicyIntentEvent,
@@ -803,7 +806,7 @@ describe("C4 E4 native constitutional controls", () => {
       optionsState.tick++;
       optionsState.pactReceipts = [
         {
-          type: intent.type,
+          type: pactReceiptType(intent.type),
           requestId: intent.requestId,
           actorId: "nation-a",
           recipientId: "nation-a",
@@ -1256,5 +1259,136 @@ describe("C4 E4 native constitutional controls", () => {
         Reflect.deleteProperty(window, "innerWidth");
       }
     }
+  });
+});
+
+describe("C7C1E1 extended constitutional controls", () => {
+  it("submits cap and duration, displays the approved constitution, and casts only an eligible epoch-bound vote", async () => {
+    const { element, eventBus, optionsState } = await mount();
+    const requests: SendNationalPactIntentEvent[] = [];
+    eventBus.on(SendNationalPactIntentEvent, (event) => requests.push(event));
+    optionsState.politics = { empires: [], warnings: [], pacts: [] };
+    optionsState.disclosure = {
+      version: 1,
+      recipientId: "nation-a",
+      pacts: [],
+    };
+    const publish = async () => {
+      element.refresh();
+      await element.updateComplete;
+    };
+    await publish();
+    const found = element.querySelector<HTMLButtonElement>(
+      '[data-national-pact-action="found"]',
+    )!;
+    const form = found.closest("form")!;
+    const fill = (name: string, value: string) => {
+      form.querySelector<HTMLInputElement | HTMLSelectElement>(
+        '[name="' + name + '"]',
+      )!.value = value;
+    };
+    fill("id", "extended");
+    fill("name", "Extended constitution");
+    fill("kind", "MDA");
+    fill("expulsion", "majority");
+    fill("membership-cap", "3");
+    fill("invitation-duration", "25");
+    found.click();
+    await element.updateComplete;
+    expect(requests).toHaveLength(1);
+    expect(requests[0].intent).toMatchObject({
+      type: "national_found_pact_v2",
+      pactId: "extended",
+      terms: {
+        admission: "leader",
+        expulsion: "majority",
+        membershipCap: 3,
+        invitationDurationTicks: 25,
+      },
+    });
+    expect(element.querySelector("[data-national-pact-id]")).toBeNull();
+    optionsState.tick++;
+    const roster = {
+      id: "extended",
+      name: "Extended constitution",
+      kind: "MDA" as const,
+      administratorId: "nation-a",
+      memberIds: ["nation-a", "nation-b", "nation-c"],
+    };
+    optionsState.politics = {
+      empires: [],
+      warnings: [],
+      pacts: [roster],
+    };
+    optionsState.disclosure = {
+      version: 1,
+      recipientId: "nation-a",
+      pacts: [
+        {
+          pactId: roster.id,
+          relationship: "member",
+          constitutionVersion: 7,
+          extendedGovernance: true,
+          terms: {
+            admission: "leader",
+            expulsion: "majority",
+            membershipCap: 3,
+            invitationDurationTicks: 25,
+          },
+          invitations: [],
+          expulsionBallots: [
+            { targetId: "nation-c", approvedBy: ["nation-b"] },
+          ],
+        },
+      ],
+    };
+    optionsState.pactReceipts = [
+      {
+        type: pactReceiptType(requests[0].intent.type),
+        requestId: requests[0].intent.requestId,
+        actorId: "nation-a",
+        recipientId: "nation-a",
+        commandTargetId: roster.id,
+        tick: optionsState.tick,
+        sequence: 1,
+        accepted: true,
+        reason: "accepted",
+      },
+    ];
+    await publish();
+    expect(element.textContent).toContain("Membership 3/3");
+    expect(element.textContent).toContain("25 simulation ticks");
+    expect(element.textContent).toContain("1/2");
+    expect(
+      element.querySelector<HTMLButtonElement>(
+        '[data-national-pact-action="invite"]',
+      )!.disabled,
+    ).toBe(true);
+    const expel = element.querySelector<HTMLButtonElement>(
+      '[data-national-pact-action="expel"]',
+    )!;
+    const expelForm = expel.closest("form")!;
+    const target =
+      expelForm.querySelector<HTMLSelectElement>('[name="member"]')!;
+    expect([...target.options].map((option) => option.value)).not.toContain(
+      "nation-a",
+    );
+    target.value = "nation-c";
+    expelForm.querySelector<HTMLInputElement>('[name="confirm"]')!.checked =
+      true;
+    expel.click();
+    await element.updateComplete;
+    expect(requests).toHaveLength(2);
+    expect(requests[1].intent).toMatchObject({
+      type: "national_expel_pact_v2",
+      pactId: roster.id,
+      memberId: "nation-c",
+      constitutionVersion: 7,
+    });
+    expect(element.textContent).toContain("C Nation");
+    expect(
+      element.querySelector("[data-national-expulsion-ballot]"),
+    ).not.toBeNull();
+    // No optimistic member removal: the server's recipient projection is decisive.
   });
 });

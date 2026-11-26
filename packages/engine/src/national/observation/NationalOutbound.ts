@@ -847,6 +847,28 @@ export class NationalOutboundFilter {
             page?.streamId,
           )
         : undefined;
+    const satelliteActor =
+      this.observerId !== null &&
+      verified !== null &&
+      game.hasPlayer(this.observerId)
+        ? game.player(this.observerId)
+        : null;
+    const satelliteLease =
+      satelliteActor?.type() === PlayerType.Human &&
+      satelliteActor.isAlive() &&
+      satelliteActor.hasSpawned()
+        ? (game.nationalSatelliteFor?.(satelliteActor.id()) ?? null)
+        : null;
+    // Absent means revoked. Preserve baseline packet shapes for non-payers.
+    const privateSatellite =
+      satelliteActor !== null && satelliteLease !== null
+        ? {
+            version: 1 as const,
+            recipientId: satelliteActor.id(),
+            tick: game.ticks(),
+            lease: satelliteLease,
+          }
+        : undefined;
     const privateReconnaissance = projectNationalReconnaissance(
       game,
       this.observerId,
@@ -889,6 +911,9 @@ export class NationalOutboundFilter {
       ...(privateSettlements === undefined
         ? {}
         : { nationalSettlements: privateSettlements }),
+      ...(privateSatellite === undefined
+        ? {}
+        : { nationalSatellite: privateSatellite }),
       ...(privateReconnaissance === undefined
         ? {}
         : { nationalReconnaissance: privateReconnaissance }),

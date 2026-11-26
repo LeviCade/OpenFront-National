@@ -30,7 +30,10 @@ import {
   approvePactAmendment,
   clonePactTerms,
   pactAdmissionAuthorized,
-  usesAdmissionElection,
+  usesVersionedPact,
+  hasExtendedPactTerms,
+  eligibleExpulsionVoters,
+  votePactExpulsion,
   withdrawPactInvitation,
   type AdmissionAction,
   betrayPact,
@@ -79,7 +82,17 @@ const pactTerms = z.object({
     "supermajority",
   ]),
   selectedApproverIds: z.array(z.string().min(1).max(256)).max(256).optional(),
-  expulsion: z.enum(["leader", "unanimous", "forbidden"]),
+  expulsion: z.enum([
+    "leader",
+    "unanimous",
+    "forbidden",
+    "selected",
+    "majority",
+    "supermajority",
+  ]),
+  membershipCap: z.number().int().min(2).max(256).optional(),
+  invitationDurationTicks: z.number().int().min(1).max(36000).optional(),
+  selectedExpellerIds: z.array(z.string().min(1).max(256)).max(256).optional(),
   defenseContributionBps: z.number().int().min(0).max(1000).optional(),
   defenseReserveBps: z.number().int().min(3000).max(10000).optional(),
 });
@@ -100,12 +113,28 @@ const politicsSchema = z.object({
       administratorId: z.string().nullable(),
       terms: pactTerms,
       constitutionVersion: counter.optional(),
+      extendedGovernance: z.literal(true).optional(),
+      memberAdmissionEpochs: z
+        .array(z.object({ memberId: z.string(), invitationVersion: counter }))
+        .max(256)
+        .optional(),
+      expulsionBallots: z
+        .array(
+          z.object({
+            targetId: z.string(),
+            constitutionVersion: counter,
+            approvedBy: z.array(z.string()),
+          }),
+        )
+        .max(256)
+        .optional(),
       invitations: z.array(
         z.object({
           targetId: z.string(),
           approvedBy: z.array(z.string()),
           constitutionVersion: counter.optional(),
           proposerId: z.string().min(1).max(256).optional(),
+          expiresAtMs: counter.optional(),
         }),
       ),
       // Absent in older v1 snapshots. No authority is inferred from absence.
@@ -339,6 +368,25 @@ export type NationalImperialAdministrationCommand =
       memberId: PlayerID;
       sanctionId: string;
       decision: "comply" | "refuse";
+    }
+  | {
+      kind: "imperial-move-warship";
+      empireId: string;
+      gameId: string;
+      expectedVersion: number;
+      memberId: PlayerID;
+      unitId: number;
+      tile: number;
+    }
+  | {
+      kind: "imperial-transport";
+      empireId: string;
+      gameId: string;
+      expectedVersion: number;
+      memberId: PlayerID;
+      targetId: PlayerID;
+      tile: number;
+      amount: number;
     };
 
 export interface NationalImperialAdministrationView extends Omit<
@@ -439,11 +487,13 @@ export type NationalCommand =
       pactId: string;
       terms: PactTerms;
       administratorId: PlayerID | null;
+      constitutionVersion?: number;
     }
   | {
       kind: "approve-pact-amendment";
       pactId: string;
       expectedDefenseVersion?: number;
+      reject?: boolean;
     }
   | { kind: "betray-pact"; pactId: string }
   | {
@@ -451,6 +501,7 @@ export type NationalCommand =
       pactId: string;
       memberId: PlayerID;
       approvingIds?: PlayerID[];
+      constitutionVersion?: number;
     };
 
 export interface NationalLivePlayer {
@@ -500,12 +551,19 @@ export interface NationalPublicPactView {
 
 export interface NationalRecipientPactView extends NationalPublicPactView {
   readonly role: "member" | "invited";
+  readonly extendedGovernance?: true;
+  readonly invitationExpiresAtTick?: number;
+  readonly expulsionBallots?: readonly {
+    readonly targetId: PlayerID;
+    readonly approvedBy: readonly PlayerID[];
+  }[];
   readonly constitutionVersion?: number;
   readonly terms: Readonly<PactTerms>;
   readonly invitations: readonly {
     readonly targetId: PlayerID;
     readonly approvedBy: readonly PlayerID[];
     readonly authorized: boolean;
+    readonly expiresAtTick?: number;
   }[];
   readonly pendingAmendment: {
     readonly defenseVersion?: number;
@@ -526,11 +584,18 @@ export interface NationalPactDisclosureViewData {
   readonly pacts: readonly {
     readonly pactId: string;
     readonly relationship: "member" | "invited";
+    readonly extendedGovernance?: true;
+    readonly invitationExpiresAtTick?: number;
+    readonly expulsionBallots?: readonly {
+      readonly targetId: PlayerID;
+      readonly approvedBy: readonly PlayerID[];
+    }[];
     readonly constitutionVersion?: number;
     readonly invitations?: readonly {
       readonly targetId: PlayerID;
       readonly approvedBy: readonly PlayerID[];
       readonly authorized: boolean;
+      readonly expiresAtTick?: number;
     }[];
     readonly terms: Readonly<PactTerms>;
     readonly pendingAmendment?: {
@@ -1512,7 +1577,6 @@ export class NationalRuntime {
         }
       }
     }
-    next.simulationMs = tick * 100;
     // Settlement distributes treasury and separately owned hybrid reserves.
     // Active and in-flight national troops retain their actual owners.
     next = evaluateUngovernable(
@@ -1631,13 +1695,34 @@ export class NationalRuntime {
         );
       if (!member && !invited) continue;
       const pending = member ? p.pendingAmendment : undefined;
+      const expiry = invited
+        ? p.invitations.find((i) => i.targetId === recipientId)?.expiresAtMs
+        : undefined;
       views.push(
         Object.freeze({
           ...publicById.get(p.id)!,
           role: member ? "member" : "invited",
           terms: Object.freeze(clonePactTerms(p.terms)),
-          ...(usesAdmissionElection(p.terms.admission)
+          ...(usesVersionedPact(p)
             ? { constitutionVersion: p.constitutionVersion }
+            : {}),
+          ...(p.extendedGovernance
+            ? { extendedGovernance: true as const }
+            : {}),
+          ...(expiry === undefined
+            ? {}
+            : { invitationExpiresAtTick: expiry / 100 }),
+          ...(member && p.extendedGovernance
+            ? {
+                expulsionBallots: Object.freeze(
+                  (p.expulsionBallots ?? []).map((b) =>
+                    Object.freeze({
+                      targetId: b.targetId,
+                      approvedBy: Object.freeze([...b.approvedBy]),
+                    }),
+                  ),
+                ),
+              }
             : {}),
           invitations: Object.freeze(
             member
@@ -1646,6 +1731,9 @@ export class NationalRuntime {
                     targetId: i.targetId,
                     approvedBy: Object.freeze([...i.approvedBy].sort()),
                     authorized: authorized(i.approvedBy),
+                    ...(i.expiresAtMs === undefined
+                      ? {}
+                      : { expiresAtTick: i.expiresAtMs / 100 }),
                   }),
                 )
               : [],
@@ -1668,12 +1756,23 @@ export class NationalRuntime {
           // The stamped command cannot impersonate other voters. A two-member
           // unanimous pact has only one remaining voter, the requesting member.
           expellableMemberIds: Object.freeze(
-            member &&
-              ((p.terms.expulsion === "leader" &&
-                p.administratorId === recipientId) ||
-                (p.terms.expulsion === "unanimous" && p.memberIds.length === 2))
-              ? p.memberIds.filter((id) => id !== recipientId).sort()
-              : [],
+            member && p.extendedGovernance
+              ? p.memberIds
+                  .filter(
+                    (id) =>
+                      eligibleExpulsionVoters(p, id).includes(recipientId) &&
+                      !p.expulsionBallots
+                        ?.find((b) => b.targetId === id)
+                        ?.approvedBy.includes(recipientId),
+                  )
+                  .sort()
+              : member &&
+                  ((p.terms.expulsion === "leader" &&
+                    p.administratorId === recipientId) ||
+                    (p.terms.expulsion === "unanimous" &&
+                      p.memberIds.length === 2))
+                ? p.memberIds.filter((id) => id !== recipientId).sort()
+                : [],
           ),
         }),
       );
@@ -1690,9 +1789,19 @@ export class NationalRuntime {
   ): boolean {
     const p = this.politics.pacts.find((entry) => entry.id === command.pactId);
     if (command.constitutionVersion === undefined)
-      return !p || !usesAdmissionElection(p.terms.admission);
+      return !p || !usesVersionedPact(p);
     if (!p || this.authority().empireOf(actorId) !== null) return false;
-    if (command.kind === "accept-pact") return p.memberIds.includes(actorId);
+    if (command.kind === "accept-pact") {
+      if (!p.memberIds.includes(actorId)) return false;
+      return (
+        !p.extendedGovernance ||
+        p.memberAdmissionEpochs?.some(
+          (entry) =>
+            entry.memberId === actorId &&
+            entry.invitationVersion === command.constitutionVersion,
+        ) === true
+      );
+    }
     if (command.admissionAction === "withdraw")
       return (
         command.candidateId === actorId &&
@@ -1708,6 +1817,51 @@ export class NationalRuntime {
     );
   }
 
+  mayReplayAmendment(
+    actorId: PlayerID,
+    command: Extract<
+      NationalCommand,
+      { kind: "propose-pact-amendment" | "approve-pact-amendment" }
+    >,
+  ): boolean {
+    const p = this.politics.pacts.find((entry) => entry.id === command.pactId);
+    if (command.kind === "propose-pact-amendment") {
+      // A proposal receipt does not identify its resulting proposal generation.
+      // Fail closed for extended proposals rather than revive an old receipt.
+      return (
+        command.constitutionVersion === undefined &&
+        !hasExtendedPactTerms(command.terms) &&
+        !p?.extendedGovernance
+      );
+    }
+    if (command.expectedDefenseVersion === undefined)
+      return !p?.extendedGovernance && command.reject !== true;
+    return (
+      command.reject !== true &&
+      p !== undefined &&
+      p.memberIds.includes(actorId) &&
+      p.pendingAmendment?.defenseVersion === command.expectedDefenseVersion &&
+      p.pendingAmendment.approvedBy.includes(actorId)
+    );
+  }
+
+  mayReplayExpulsion(
+    actorId: PlayerID,
+    command: Extract<NationalCommand, { kind: "expel-pact" }>,
+  ): boolean {
+    const p = this.politics.pacts.find((entry) => entry.id === command.pactId);
+    if (command.constitutionVersion === undefined)
+      return !p || !p.extendedGovernance;
+    return (
+      p?.extendedGovernance === true &&
+      p.constitutionVersion === command.constitutionVersion &&
+      p.expulsionBallots?.some(
+        (b) =>
+          b.targetId === command.memberId && b.approvedBy.includes(actorId),
+      ) === true
+    );
+  }
+
   /** Minimal canonical disclosure contract consumed by E4's strict encoder. */
   pactDisclosure(recipientId: PlayerID): NationalPactDisclosureViewData {
     return Object.freeze({
@@ -1719,6 +1873,15 @@ export class NationalRuntime {
             pactId: p.id,
             relationship: p.role,
             terms: p.terms,
+            ...(p.extendedGovernance
+              ? { extendedGovernance: true as const }
+              : {}),
+            ...(p.invitationExpiresAtTick === undefined
+              ? {}
+              : { invitationExpiresAtTick: p.invitationExpiresAtTick }),
+            ...(p.expulsionBallots === undefined
+              ? {}
+              : { expulsionBallots: p.expulsionBallots }),
             ...(p.constitutionVersion === undefined
               ? {}
               : {
@@ -1867,10 +2030,16 @@ export class NationalRuntime {
         break;
       case "propose-pact-amendment":
         requireCommandId(command.pactId);
-        next = proposePactAmendment(this.politics, command.pactId, actorId, {
-          terms: command.terms,
-          administratorId: command.administratorId,
-        });
+        next = proposePactAmendment(
+          this.politics,
+          command.pactId,
+          actorId,
+          {
+            terms: command.terms,
+            administratorId: command.administratorId,
+          },
+          command.constitutionVersion,
+        );
         break;
       case "approve-pact-amendment":
         requireCommandId(command.pactId);
@@ -1879,6 +2048,7 @@ export class NationalRuntime {
           command.pactId,
           actorId,
           command.expectedDefenseVersion,
+          command.reject,
         );
         break;
       case "betray-pact":
@@ -1887,19 +2057,27 @@ export class NationalRuntime {
         break;
       case "expel-pact":
         requireCommandId(command.pactId);
-        // A single command cannot forge other members' unanimous consent.
-        // Separate authenticated expulsion ballots must be implemented before
-        // a unanimous-expulsion pact may be enforced through this port.
+        // A single command cannot forge another member’s consent. Extended
+        // pacts count separate authenticated ballots; legacy authority is unchanged.
         if (command.approvingIds?.some((id) => id !== actorId)) {
           throw new Error("NATIONAL: other members cannot be impersonated");
         }
-        next = expelPactMember(
-          this.politics,
-          command.pactId,
-          actorId,
-          command.memberId,
-          command.approvingIds ?? [actorId],
-        );
+        next =
+          command.constitutionVersion === undefined
+            ? expelPactMember(
+                this.politics,
+                command.pactId,
+                actorId,
+                command.memberId,
+                command.approvingIds ?? [actorId],
+              )
+            : votePactExpulsion(
+                this.politics,
+                command.pactId,
+                actorId,
+                command.memberId,
+                command.constitutionVersion,
+              );
         break;
       default:
         throw new Error("NATIONAL: unsupported political command");

@@ -1,7 +1,13 @@
 // E5 operator extension of E2's pinned national-staging/browser-auth-check.mjs.
 // Auth, profiles, native lobby creation/join and host tick correlation.
 // This is partial automated participation, NEVER a victory or human witness.
-import { decodeServerMessage } from "@openfront/shared/ZbinWire";
+import { GameMapSize, GameMapType } from "@openfront/engine-api/game/GameTypes";
+import {
+  createGameWireContext,
+  decodeServerMessage,
+  decodeClientMessage,
+  encodeClientMessage,
+} from "@openfront/shared/ZbinWire";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -13,7 +19,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { WebSocket } from "ws";
+import {
+  assertTrustedPublicProjection,
+  parseTrustedNationalProjection,
+  readTrustedNationalObserverMap,
+  trustedNationalPrincipal,
+} from "../../src/client/TrustedNationalSession.ts";
 import {
   accountCommand,
   issuer,
@@ -23,12 +36,28 @@ import {
   startIdentity,
   until,
 } from "../national-staging/operator-harness.mjs";
+import {
+  nativeClick,
+  runPrivateNativeGameplay,
+} from "./c7c1e6-private-gameplay.mjs";
 
 const authOnly = process.argv.includes("--auth-only");
 const lobbyOnly = process.argv.includes("--lobby-only");
 const diagnosticOnly = authOnly || lobbyOnly;
+const functionalSoftware = process.argv.includes("--functional-software");
+const functionalGpu = process.argv.includes("--functional-gpu");
+const functionalGameplay = functionalSoftware || functionalGpu;
+assert(
+  !(functionalGameplay && diagnosticOnly) &&
+    !(functionalSoftware && functionalGpu),
+  "exclusive diagnostic modes",
+);
 const fixture = makeEnvironment();
 const head = fixture.env.GIT_COMMIT;
+const worldRoot = join(fixture.dir, "world");
+if (functionalSoftware) {
+  fixture.env.VITE_NATIONAL_E6_SOFTWARE_DIAGNOSTIC = "1";
+}
 const screenshotHashes = new Set();
 let screenshotDir;
 const withheld = new Set([
@@ -41,7 +70,8 @@ const children = [];
 const sockets = [];
 const passed = (name) => console.log("BROWSER_AUTH_STAGE_PASS " + name);
 let stage = "startup";
-let diagnostic = () => ({});
+const profileDiagnostics = [];
+const diagnostic = () => profileDiagnostics.map((read) => read());
 
 function allowedLocal(value) {
   try {
@@ -62,7 +92,19 @@ async function openProfile(executable, index, email) {
   mkdirSync(directory, { mode: 0o700 });
   const child = launch(
     [
-      ...(diagnosticOnly ? ["--headless=new"] : []),
+      ...(diagnosticOnly || functionalSoftware ? ["--headless=new"] : []),
+      ...(functionalSoftware
+        ? [
+            "--window-size=1024,768",
+            "--disable-background-timer-throttling",
+            "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded-windows",
+            "--enable-webgl",
+            "--use-gl=angle",
+            "--use-angle=swiftshader",
+            "--enable-unsafe-swiftshader",
+          ]
+        : []),
       "--lang=en-US",
       "--no-sandbox",
       "--disable-dev-shm-usage",
@@ -115,6 +157,8 @@ async function openProfile(executable, index, email) {
   const pending = new Map();
   const profileRequests = new Set();
   const localSockets = new Set();
+  const authoritySockets = new Map();
+  const socketUrls = new Map();
   const observed = {
     mail: 0,
     exchange: 0,
@@ -123,13 +167,24 @@ async function openProfile(executable, index, email) {
     account: null,
     missingMusicRequests: 0,
     lobby: null,
+    authority: null,
+    politicalIntents: new Map(),
+    spawnIntents: [],
+    attackIntents: [],
+    receipts: new Map(),
+    projection: null,
+    authorityStarts: 0,
+    authorityCloses: 0,
+    authorityFrames: 0,
+    invalidAuthorityFrame: false,
+    failedRuntimeResources: 0,
   };
   let seq = 0;
   let protocolFailure = false;
   let profileReadFailures = 0;
   let accountMismatch = false;
   const statuses = { mail: [], exchange: [], refresh: [], profile: [] };
-  diagnostic = () => ({
+  profileDiagnostics.push(() => ({
     status: statuses,
     mail: observed.mail,
     exchange: observed.exchange,
@@ -139,15 +194,26 @@ async function openProfile(executable, index, email) {
     profileReadFailures,
     accountMismatch,
     missingMusicRequests: observed.missingMusicRequests,
+    failedRuntimeResources: observed.failedRuntimeResources,
+    authorityFrames: observed.authorityFrames,
+    invalidAuthorityFrame: observed.invalidAuthorityFrame,
     observedLobbySeats: observed.lobby?.lobby?.clients?.length ?? 0,
-  });
+    activeGame: Boolean(observed.authority),
+    authorityStarts: observed.authorityStarts,
+    authorityCloses: observed.authorityCloses,
+    nativeSpawnIntents: observed.spawnIntents.length,
+    nativeAttackIntents: observed.attackIntents.length,
+  }));
   function send(method, params = {}) {
     return new Promise((resolve, reject) => {
       const id = ++seq;
-      const timeout = setTimeout(() => {
-        pending.delete(id);
-        reject(new Error("browser command timed out"));
-      }, 12_000);
+      const timeout = setTimeout(
+        () => {
+          pending.delete(id);
+          reject(new Error("browser command timed out"));
+        },
+        functionalGameplay ? 45_000 : 12_000,
+      );
       pending.set(id, { resolve, reject, timeout });
       ws.send(JSON.stringify({ id, method, params }));
     });
@@ -187,8 +253,50 @@ async function openProfile(executable, index, email) {
         void task.catch(() => {});
         return;
       }
+      if (
+        m.method === "Network.webSocketClosed" &&
+        authoritySockets.has(m.params.requestId)
+      ) {
+        observed.authorityCloses++;
+        authoritySockets.delete(m.params.requestId);
+        socketUrls.delete(m.params.requestId);
+      }
       if (m.method === "Network.webSocketCreated") {
-        if (allowedLocal(m.params.url)) localSockets.add(m.params.requestId);
+        if (allowedLocal(m.params.url)) {
+          localSockets.add(m.params.requestId);
+          socketUrls.set(m.params.requestId, m.params.url);
+        }
+      }
+      if (
+        functionalGameplay &&
+        m.method === "Network.webSocketFrameSent" &&
+        authoritySockets.has(m.params.requestId) &&
+        m.params.response.opcode === 2
+      ) {
+        const binding = authoritySockets.get(m.params.requestId);
+        try {
+          const message = decodeClientMessage(
+            Buffer.from(m.params.response.payloadData, "base64"),
+            binding.context,
+          );
+          if (message.type === "intent") {
+            if (message.intent.type === "spawn")
+              observed.spawnIntents.push(message.intent.tile);
+            if (message.intent.type === "attack")
+              observed.attackIntents.push(message.intent);
+          }
+          if (
+            message.type === "intent" &&
+            message.intent.type.startsWith("national_") &&
+            typeof message.intent.requestId === "string"
+          )
+            observed.politicalIntents.set(
+              message.intent.requestId,
+              message.intent,
+            );
+        } catch {
+          observed.invalidAuthorityFrame = true;
+        }
       }
       if (
         m.method === "Network.webSocketFrameReceived" &&
@@ -196,18 +304,85 @@ async function openProfile(executable, index, email) {
         m.params.response.opcode === 2
       ) {
         // Passive observation of real server frames, never an injected client intent.
+        const socket = m.params.requestId;
         try {
           const packet = decodeServerMessage(
             Buffer.from(m.params.response.payloadData, "base64"),
+            authoritySockets.get(socket)?.context,
           );
           if (packet.type === "lobby_info") observed.lobby = packet;
+          if (functionalGameplay && packet.type === "national_start") {
+            const binding = {
+              context: createGameWireContext(packet.gameStartInfo.players),
+              actor: trustedNationalPrincipal(packet),
+              seat: packet.myClientID,
+              match: packet.gameStartInfo.gameID,
+              socketUrl: socketUrls.get(socket),
+            };
+            if (
+              observed.authority &&
+              (observed.authority.actor !== binding.actor ||
+                observed.authority.seat !== binding.seat ||
+                observed.authority.match !== binding.match)
+            )
+              throw new Error("identity changed");
+            authoritySockets.set(socket, binding);
+            observed.authority = binding;
+            observed.authorityStarts++;
+          }
+          if (functionalGameplay && packet.type === "national_projection") {
+            const binding = authoritySockets.get(socket);
+            assert(binding, "projection without admitted socket");
+            const parsed = parseTrustedNationalProjection(
+              packet.payload,
+              packet.tick,
+            );
+            const map = readTrustedNationalObserverMap(
+              parsed.nationalObserverMap,
+              packet.tick,
+            );
+            if (map) assert.equal(map.observerId, binding.actor);
+            else
+              assertTrustedPublicProjection(
+                parsed,
+                binding.actor,
+                binding.seat,
+              );
+            for (const key of [
+              "nationalPactDisclosure",
+              "nationalAccessionOffers",
+              "nationalImperialAdministration",
+              "nationalAssessments",
+              "nationalSettlements",
+            ]) {
+              if (parsed[key])
+                assert.equal(parsed[key].recipientId, binding.actor);
+            }
+            for (const receipt of parsed.nationalCommandResults ?? []) {
+              assert.equal(receipt.actorId, binding.actor);
+              assert.equal(receipt.recipientId, binding.actor);
+              if (receipt.requestId)
+                observed.receipts.set(receipt.requestId, receipt);
+            }
+            observed.projection = parsed;
+            observed.authorityFrames++;
+          }
         } catch {
-          // Other local sockets or post-start frames may need a different codec.
-          // No undecoded frame can become a roster witness.
+          // The Vite dev socket is not a game authority. A malformed frame
+          // on an admitted game socket, however, invalidates the witness.
+          if (functionalGameplay && authoritySockets.has(socket))
+            observed.invalidAuthorityFrame = true;
         }
       }
       if (m.method === "Network.responseReceived") {
         const u = new URL(m.params.response.url);
+        if (
+          functionalGameplay &&
+          u.origin === origin &&
+          m.params.response.status >= 400 &&
+          /\.(?:mp3|ogg|webp|png|svg|woff2?)$/i.test(u.pathname)
+        )
+          observed.failedRuntimeResources++;
         if (u.origin !== issuer) return;
         const status = m.params.response.status;
         const key = {
@@ -281,7 +456,18 @@ async function openProfile(executable, index, email) {
         if (el) {
           el.scrollIntoView({block:"center"});
           const rect = el.getBoundingClientRect();
-          return {x:rect.x + rect.width/2,y:rect.y + rect.height/2};
+          const x = rect.x + rect.width/2, y = rect.y + rect.height/2;
+          let hit = document.elementFromPoint(x,y);
+          while (hit?.shadowRoot) {
+            const next = hit.shadowRoot.elementFromPoint(x,y);
+            if (!next || next === hit) break;
+            hit = next;
+          }
+          let candidate = hit;
+          while (candidate && candidate !== el && !el.contains(candidate)) {
+            candidate = candidate.parentElement ?? candidate.getRootNode()?.host ?? null;
+          }
+          return candidate ? {x,y} : null;
         }
       }
       return null;
@@ -302,6 +488,14 @@ async function openProfile(executable, index, email) {
     return true;
   };
   await send("Page.enable");
+  if (functionalSoftware) {
+    await send("Emulation.setDeviceMetricsOverride", {
+      width: 1024,
+      height: 768,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+  }
   await send("Network.enable");
   await send("Fetch.enable", {
     patterns: [{ urlPattern: "*", requestStage: "Request" }],
@@ -376,12 +570,61 @@ async function openProfile(executable, index, email) {
   );
   assert((await refreshCredential()) !== first, "refresh cookie unchanged");
   passed("independent-profile-" + index + "-normal-login-and-rotating-reload");
-  return { account: observed.account, send, evaluate, click, observed };
+  // Only the isolated QA browser's existing authenticated socket is used.
+  // No successful action is injected: this helper is exclusively for deliberate
+  // denial/replay probes against the very same native gameplay match.
+  async function sendNegative(intent) {
+    assert(functionalGameplay);
+    assert(
+      [
+        "national_accept_pact",
+        "national_declare_war",
+        "national_found_pact",
+      ].includes(intent.type),
+    );
+    const binding = observed.authority;
+    assert(binding && binding.socketUrl && allowedLocal(binding.socketUrl));
+    const data = Buffer.from(
+      encodeClientMessage({ type: "intent", intent }, binding.context),
+    ).toString("base64");
+    const objectGroup = "e6-negative-wire-probe";
+    try {
+      const prototype = await send("Runtime.evaluate", {
+        expression: "WebSocket.prototype",
+        objectGroup,
+        returnByValue: false,
+      });
+      assert(prototype.result.objectId);
+      const result = await send("Runtime.queryObjects", {
+        prototypeObjectId: prototype.result.objectId,
+        objectGroup,
+      });
+      assert(result.objects.objectId);
+      const sent = await send("Runtime.callFunctionOn", {
+        objectId: result.objects.objectId,
+        functionDeclaration:
+          "function(url, data) { const live = this.filter(s => s.readyState === WebSocket.OPEN && s.url === url); if (live.length !== 1) return false; live[0].send(Uint8Array.from(atob(data), c => c.charCodeAt(0))); return true; }",
+        arguments: [{ value: binding.socketUrl }, { value: data }],
+        returnByValue: true,
+      });
+      assert.equal(sent.result.value, true, "unique live game socket required");
+    } finally {
+      await send("Runtime.releaseObjectGroup", { objectGroup });
+    }
+  }
+  return {
+    account: observed.account,
+    send,
+    evaluate,
+    click,
+    observed,
+    sendNegative,
+  };
 }
 
 try {
   assert.match(head, /^[a-f0-9]{40}$/);
-  if (!diagnosticOnly) {
+  if (!diagnosticOnly && !functionalSoftware) {
     stage = "E6 physical operator authorization";
     assert.equal(process.env.NATIONAL_GPU_CANDIDATE_SHA, head);
     assert.equal(process.env.NATIONAL_E6_APPROVED_CANDIDATE_SHA, head);
@@ -398,17 +641,38 @@ try {
   );
   for (const email of emails) accountCommand(fixture.env, "register", email);
   children.push(await startIdentity(fixture.env));
-  const host = launch(["--import", "tsx", "src/server/Server.ts"], fixture.env);
-  children.push(host);
-  await until(
-    () =>
-      host.alive() &&
-      host.messages.some(
-        (message) => message.message === "running on http://localhost:3001",
-      ),
-    "Master/Worker",
-    45_000,
-  );
+  if (functionalGameplay) {
+    stage = "initialize isolated durable world";
+    execFileSync(
+      process.execPath,
+      [
+        "--experimental-strip-types",
+        "scripts/national-staging/init-durable-world.mjs",
+        worldRoot,
+        "1",
+      ],
+      { env: fixture.env, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    fixture.env.NATIONAL_RECOVERY_ROOT = worldRoot;
+  }
+  async function startHost() {
+    const process = launch(
+      ["--import", "tsx", "src/server/Server.ts"],
+      fixture.env,
+    );
+    children.push(process);
+    await until(
+      () =>
+        process.alive() &&
+        process.messages.some(
+          (message) => message.message === "running on http://localhost:3001",
+        ),
+      "Master/Worker",
+      45_000,
+    );
+    return process;
+  }
+  let host = await startHost();
   const vite = launch(
     ["node_modules/vite/bin/vite.js", "--host", "localhost", "--strictPort"],
     fixture.env,
@@ -454,6 +718,18 @@ try {
       stage,
       60_000,
     );
+    if (functionalGameplay) {
+      // Creating the modal is not the same as joining the server lobby.
+      // Wait for the actual host socket before changing any configuration.
+      stage = "host admitted before native configuration";
+      await until(
+        () =>
+          Boolean(a.observed.lobby?.myClientID) &&
+          a.observed.lobby?.lobby?.clients?.length === 1,
+        stage,
+        60_000,
+      );
+    }
     stage = "native NATIONAL configuration";
     await until(
       () =>
@@ -470,6 +746,41 @@ try {
         ),
       stage,
     );
+    if (functionalGameplay) {
+      stage = "server acknowledges NATIONAL configuration";
+      await until(
+        () => a.observed.lobby?.lobby?.gameConfig?.nationalMode === true,
+        stage,
+        45_000,
+      );
+      stage = "native all-map tab";
+      await nativeClick(a, 'map-picker button[role="tab"]', "All");
+      stage = "native Arcade map category";
+      await nativeClick(a, "map-picker button[aria-expanded] span", "Arcade");
+      stage = "native Onion map selection";
+      await nativeClick(a, '[role="button"][aria-label="Onion"]');
+      stage = "server acknowledges Onion map";
+      await until(
+        () =>
+          a.observed.lobby?.lobby?.gameConfig?.gameMap === GameMapType.Onion,
+        stage,
+        45_000,
+      );
+      stage = "native compact map selection";
+      if (
+        a.observed.lobby?.lobby?.gameConfig?.gameMapSize !== GameMapSize.Compact
+      )
+        await nativeClick(a, "button", "Compact Map");
+      stage = "authoritative compact Onion configuration";
+      await until(
+        () =>
+          a.observed.lobby?.lobby?.gameConfig?.gameMap === GameMapType.Onion &&
+          a.observed.lobby?.lobby?.gameConfig?.gameMapSize ===
+            GameMapSize.Compact,
+        stage,
+        45_000,
+      );
+    }
     let url;
     await until(async () => {
       const current = new URL(await a.evaluate("location.href"));
@@ -544,6 +855,17 @@ try {
         stage,
         90_000,
       );
+      if (functionalGameplay)
+        console.log(
+          "C7C1E6_STAGE " +
+            JSON.stringify({
+              name: "authoritative-host-admitted",
+              match: admission.gameID,
+              authenticatedSeats: admission.authenticatedSeats,
+              distinctAccounts: admission.distinctAccounts,
+              authoritativeRunners: admission.authoritativeRunners,
+            }),
+        );
       const snapshots = () =>
         Promise.all(
           profiles.map((p) =>
@@ -608,44 +930,226 @@ try {
         stage,
         90_000,
       );
-      stage = "distinct graphical artifacts";
-      for (let i = 0; i < profiles.length; i++) {
-        const response = await profiles[i].send("Page.captureScreenshot", {
-          format: "png",
-        });
-        const bytes = Buffer.from(response.data, "base64");
-        assert(
-          bytes
-            .subarray(0, 8)
-            .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+      if (functionalGameplay) {
+        stage = functionalSoftware
+          ? "explicit software WebGL2 rendering"
+          : "normal hardware-gated WebGL2 rendering";
+        const rendererWitnesses = await Promise.all(
+          profiles.map((p) =>
+            p.evaluate(
+              '(() => { const canvas = document.querySelector("#webgl-debug-canvas"); return canvas ? {software: canvas.dataset.nationalE6SoftwareDiagnostic === "true", visible: canvas.getBoundingClientRect().width > 150} : null; })()',
+            ),
+          ),
         );
-        const hash = createHash("sha256").update(bytes).digest("hex");
-        assert(!screenshotHashes.has(hash));
-        screenshotHashes.add(hash);
-        writeFileSync(join(screenshotDir, `participant-${i + 1}.png`), bytes, {
-          mode: 0o600,
-          flag: "wx",
+        assert(
+          rendererWitnesses.every(
+            (w) => w?.visible && w.software === functionalSoftware,
+          ),
+          "renderer mode or visible graphical witness mismatch",
+        );
+        const hostTick = () =>
+          Math.max(
+            -1,
+            ...host.messages
+              .filter(
+                (m) =>
+                  m.message === "NATIONAL authoritative tick" &&
+                  m.gameID === admission.gameID &&
+                  Number.isSafeInteger(m.tick),
+              )
+              .map((m) => m.tick),
+          );
+        const recover = async (previous) => {
+          // Only the process group created by THIS harness is killed.
+          const closures = profiles.map((p) => p.observed.authorityCloses);
+          const committed = hostTick();
+          assert(committed >= Math.max(...previous.map((p) => p.tick)));
+          await host.hardKill();
+          await until(
+            () =>
+              profiles.every(
+                (p, i) => p.observed.authorityCloses > closures[i],
+              ),
+            "actual browser game sockets disconnected",
+            30_000,
+          );
+          const db = new DatabaseSync(join(worldRoot, "worker-0.sqlite"), {
+            readOnly: true,
+          });
+          let row;
+          try {
+            row = db
+              .prepare("SELECT * FROM checkpoints WHERE gameID = ?")
+              .get(admission.gameID);
+            assert(row);
+            const digest = createHash("sha256")
+              .update(
+                JSON.stringify([
+                  1,
+                  admission.gameID,
+                  row.generation,
+                  row.tick,
+                  row.payload,
+                ]),
+              )
+              .digest("hex");
+            assert.equal(digest, row.digest);
+            const state = JSON.parse(row.payload);
+            assert.equal(state.source, head);
+            assert.equal(state.info.gameID, admission.gameID);
+            assert.equal(state.seats.length, 3);
+            assert(row.tick >= committed);
+          } finally {
+            db.close();
+          }
+          host = await startHost();
+          let restored;
+          await until(
+            () => {
+              restored = host.messages.find(
+                (m) =>
+                  m.message === "NATIONAL durable match restored" &&
+                  m.gameID === admission.gameID,
+              );
+              return Boolean(restored);
+            },
+            "actual durable world restored",
+            45_000,
+          );
+          assert.equal(restored.authoritativeRunners, 1);
+          assert.equal(restored.authenticatedSeats, 0);
+          assert.equal(restored.tick, row.tick);
+          assert.equal(restored.stateCommitment, row.digest);
+          assert.equal(
+            host.messages.filter(
+              (m) =>
+                m.message === "NATIONAL durable match restored" &&
+                m.gameID === admission.gameID,
+            ).length,
+            1,
+          );
+          return {
+            sameMatch: true,
+            disconnectedBrowsers: 3,
+            lastCommittedTick: committed,
+            durableTick: row.tick,
+            restoredTick: restored.tick,
+            commitment: row.digest,
+          };
+        };
+        const result = await runPrivateNativeGameplay({
+          profiles,
+          match: admission.gameID,
+          stage: (label) => {
+            stage = label;
+          },
+          recover,
+          hostTick,
+          software: functionalSoftware,
         });
+        assert(
+          profiles.every(
+            (p) =>
+              p.observed.authority?.match === admission.gameID &&
+              p.observed.authorityFrames > 0 &&
+              !p.observed.invalidAuthorityFrame &&
+              p.observed.missingMusicRequests === 0 &&
+              p.observed.failedRuntimeResources === 0,
+          ),
+        );
+        stage = "sanitized graphical evidence hashes";
+        for (const p of profiles) {
+          const response = await p.send("Page.captureScreenshot", {
+            format: "png",
+          });
+          const bytes = Buffer.from(response.data, "base64");
+          assert(
+            bytes
+              .subarray(0, 8)
+              .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+          );
+          const hash = createHash("sha256").update(bytes).digest("hex");
+          assert(!screenshotHashes.has(hash));
+          screenshotHashes.add(hash);
+        }
+        console.log(
+          JSON.stringify({
+            exactSource: head,
+            privateJourney: "NATIVE_GAMEPLAY_AND_RECOVERY_PASS",
+            ...result,
+            browserProfiles: 3,
+            hostAuthenticatedSeats: 3,
+            independentHumanWitnesses: 0,
+            gpuAttested: false,
+            releaseCertified: false,
+            adversarialProtocolAcceptance:
+              "separate exact-head worker journey required",
+            screenshotSha256: [...screenshotHashes],
+            observedAuthorityFrames: profiles.map(
+              (p) => p.observed.authorityFrames,
+            ),
+          }),
+        );
+      } else {
+        stage = "distinct graphical artifacts";
+        for (let i = 0; i < profiles.length; i++) {
+          const response = await profiles[i].send("Page.captureScreenshot", {
+            format: "png",
+          });
+          const bytes = Buffer.from(response.data, "base64");
+          assert(
+            bytes
+              .subarray(0, 8)
+              .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+          );
+          const hash = createHash("sha256").update(bytes).digest("hex");
+          assert(!screenshotHashes.has(hash));
+          screenshotHashes.add(hash);
+          writeFileSync(
+            join(screenshotDir, `participant-${i + 1}.png`),
+            bytes,
+            {
+              mode: 0o600,
+              flag: "wx",
+            },
+          );
+        }
+        assert(profiles.every((p) => p.observed.missingMusicRequests === 0));
+        console.log(
+          JSON.stringify({
+            exactSource: head,
+            browserProfiles: 3,
+            hostAuthenticatedSeats: 3,
+            independentHumanWitnesses: 0,
+            screenshotSha256: [...screenshotHashes],
+            browserTickDeltas: last.map((s, i) => s.tick - first[i].tick),
+            privateJourney: "BLOCKED",
+            firstUnverifiedStage:
+              "native political and military controls followed by canonical victory",
+            gpuAttested: false,
+          }),
+        );
+        process.exitCode = 2;
       }
-      assert(profiles.every((p) => p.observed.missingMusicRequests === 0));
-      console.log(
-        JSON.stringify({
-          exactSource: head,
-          browserProfiles: 3,
-          hostAuthenticatedSeats: 3,
-          independentHumanWitnesses: 0,
-          screenshotSha256: [...screenshotHashes],
-          browserTickDeltas: last.map((s, i) => s.tick - first[i].tick),
-          privateJourney: "BLOCKED",
-          firstUnverifiedStage:
-            "native political and military controls followed by canonical victory",
-          gpuAttested: false,
-        }),
-      );
-      process.exitCode = 2;
     }
   }
-} catch {
+} catch (error) {
+  // Only a fixed diagnostic category, never error text (which can contain
+  // credentials, raw frames, paths or private browser data).
+  console.error(
+    "SAFE_FAILURE_KIND " +
+      (error instanceof assert.AssertionError
+        ? "ASSERTION"
+        : error instanceof TypeError
+          ? "TYPE"
+          : error.message === "browser command timed out"
+            ? "CDP_TIMEOUT"
+            : error.message === "browser UI evaluation failed"
+              ? "CDP_EVALUATION"
+              : error.message === "browser CDP command rejected"
+                ? "CDP_REJECTED"
+                : "OTHER"),
+  );
   // Never expose DevTools errors, URLs, credential bodies or profile IDs.
   console.error("LOCAL_STAGING_BROWSER_AUTH_FAIL stage=" + stage);
   console.error("SAFE_BROWSER_STATUS " + JSON.stringify(diagnostic()));

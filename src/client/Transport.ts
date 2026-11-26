@@ -68,6 +68,7 @@ import {
   type TrustedNationalStartLike,
 } from "./NationalPrivateCapability";
 import { parseNationalReconnaissanceIntent } from "./NationalReconPurchase";
+import { parseNationalSatelliteIntent } from "./NationalSatelliteClient";
 import { parseNationalUltimatumIntent } from "./NationalSovereignActions";
 import { describeSocketClose } from "./SocketClose";
 import { TrustedNationalProjectionRejectedEvent } from "./TrustedNationalSession";
@@ -136,6 +137,10 @@ export class SendNationalImperialPolicyIntentEvent implements GameEvent {
 
 /** Ordinary authenticated NATIONAL transport for one paid recon request. */
 export class SendNationalReconnaissanceIntentEvent implements GameEvent {
+  constructor(public readonly candidate: unknown) {}
+}
+
+export class SendNationalSatelliteIntentEvent implements GameEvent {
   constructor(public readonly candidate: unknown) {}
 }
 
@@ -456,6 +461,11 @@ export class Transport {
     this.subscribe(SendNationalReconnaissanceIntentEvent, (e) => {
       if (!this.nationalDiplomacyWireEnabled()) return;
       const parsed = parseNationalReconnaissanceIntent(e.candidate);
+      if (parsed !== null) this.sendIntent(parsed);
+    });
+    this.subscribe(SendNationalSatelliteIntentEvent, (e) => {
+      if (!this.nationalDiplomacyWireEnabled()) return;
+      const parsed = parseNationalSatelliteIntent(e.candidate);
       if (parsed !== null) this.sendIntent(parsed);
     });
     this.subscribe(SendNationalAssessmentIntentEvent, (e) => {

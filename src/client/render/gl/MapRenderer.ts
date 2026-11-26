@@ -154,6 +154,10 @@ export class MapRenderer {
    * below what the game needs (fingerprinting protection, #4357). The game
    * runs, but the map may render with black areas — the owner should warn.
    */
+  get glSoftwareDiagnostic(): string | null {
+    return this.renderer?.glSoftwareDiagnostic ?? null;
+  }
+
   get glLimited(): { renderer: string; maxTextureSize: number } | null {
     return this.renderer?.glLimited ?? null;
   }

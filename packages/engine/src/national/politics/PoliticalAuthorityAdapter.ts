@@ -14,7 +14,7 @@ import type { PlayerID } from "@openfront/engine-api/game/GameTypes";
 import {
   lastSovereignVictory,
   pactAdmissionAuthorized,
-  usesAdmissionElection,
+  usesVersionedPact,
   viewPact,
   type PactTerms,
   type LastSovereignResult,
@@ -126,7 +126,7 @@ export class PoliticalAuthorityAdapter
             ? {}
             : { terms: { ...publicPact.terms } }),
           invited,
-          ...((member || invited) && usesAdmissionElection(p.terms.admission)
+          ...((member || invited) && usesVersionedPact(p)
             ? { constitutionVersion: p.constitutionVersion }
             : {}),
           ...(member

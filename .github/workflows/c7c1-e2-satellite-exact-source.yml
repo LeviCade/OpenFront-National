@@ -1,0 +1,48 @@
+name: C7C1 E2 Satellite Exact Source
+on:
+  push:
+    branches:
+      - stage3/c7c1-e2-satellite-intelligence
+      - stage3/conductor7-class1-integration-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  exact-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [typecheck, focused, full, lint, format, production]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: npm
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - run: npm run inst
+      - name: Verify immutable source identity
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}" && git rev-parse HEAD
+      - name: Execute required gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.gate }}" in
+            typecheck) npm run typecheck ;;
+            focused) npx --no-install vitest run --project node tests/national/C7C1E2Satellite.test.ts tests/ui/national/C7C1E2SatelliteControls.test.ts tests/national/C5Class2FundedRecon.test.ts tests/national/C5CoastalVisibility.test.ts tests/national/C5Class3PaidNationalAssessment.test.ts ;;
+            full) npm test ;;
+            lint) npm run lint ;;
+            production) npm run build-prod ;;
+            format)
+              npm run format:check || {
+                npx --no-install oxfmt --write
+                git -c color.ui=false diff
+                exit 1
+              }
+              ;;
+          esac

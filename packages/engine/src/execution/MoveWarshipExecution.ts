@@ -17,7 +17,37 @@ export class MoveWarshipExecution implements Execution {
     private position: TileRef,
   ) {}
 
+  /** Called only after the imperial administration journal validates the crown. */
+  static moveImperialHull(
+    mg: Game,
+    member: Player,
+    unitId: number,
+    position: TileRef,
+  ): void {
+    const hull = mg.unit(unitId);
+    if (
+      !hull ||
+      hull.owner() !== member ||
+      hull.type() !== UnitType.Warship ||
+      !hull.isActive() ||
+      hull.isMarkedForDeletion() ||
+      hull.isUnderConstruction() ||
+      hull.health() <= 0 ||
+      !mg.isWater(hull.tile()) ||
+      !mg.isValidRef(position) ||
+      !mg.isWater(position)
+    )
+      throw new Error("NATIONAL: invalid constituent hull or patrol tile");
+    const component = mg.getWaterComponent(position);
+    if (component === null || !mg.hasWaterComponent(hull.tile(), component))
+      throw new Error("NATIONAL: disconnected imperial patrol destination");
+    hull.updateWarshipState({ patrolTile: position });
+    hull.setTargetTile(undefined);
+  }
+
   init(mg: Game, _ticks: number): void {
+    const military = mg.nationalImperialAdministrationFor(this.owner);
+    if (military?.armyMode === "centralized" && !military.canAmend) return;
     if (!mg.isValidRef(this.position)) {
       console.warn(`MoveWarshipExecution: position ${this.position} not valid`);
       return;

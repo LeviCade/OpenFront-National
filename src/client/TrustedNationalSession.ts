@@ -3,6 +3,7 @@ import { validateNationalAssessmentPacket } from "@openfront/engine-api/game/Nat
 import { validateNationalImperialPacket } from "@openfront/engine-api/game/NationalImperialView";
 import { validateNationalPactPacket } from "@openfront/engine-api/game/NationalPactView";
 import type { NationalObserverMapV1 } from "@openfront/engine-api/game/NationalRecipientView";
+import { validateNationalSatellitePacket } from "@openfront/engine-api/game/NationalSatelliteView";
 import { validateNationalSettlementPacket } from "@openfront/engine-api/game/NationalSettlementView";
 import { readNationalConfirmedVictory } from "@openfront/engine-api/game/NationalVictoryView";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
@@ -35,6 +36,7 @@ const allowedFields = new Set([
   "nationalImperialAdministration",
   "nationalAssessments",
   "nationalSettlements",
+  "nationalSatellite",
   "nationalObserverMap",
 ]);
 const permittedUpdates = new Set<number>([
@@ -237,6 +239,11 @@ export function parseTrustedNationalProjection(
     typeof map?.observerId === "string" ? map.observerId : null,
     expectedTick,
   );
+  validateNationalSatellitePacket(
+    parsed.nationalSatellite,
+    typeof map?.observerId === "string" ? map.observerId : null,
+    expectedTick,
+  );
   return parsed as TrustedNationalProjection;
 }
 
@@ -269,6 +276,7 @@ export function assertTrustedPublicProjection(
       "nationalImperialAdministration",
       "nationalAssessments",
       "nationalSettlements",
+      "nationalSatellite",
     ].some((key) => packet[key] !== undefined) ||
     !record(packet.updates)
   )
@@ -406,6 +414,11 @@ export function materializeTrustedNationalUpdate(
     observerMap?.observerId ?? null,
     packet.tick,
   );
+  validateNationalSatellitePacket(
+    packet.nationalSatellite,
+    observerMap?.observerId ?? null,
+    packet.tick,
+  );
   const units = decodeNationalObserverNativeUnits(packet.packedUnitUpdates);
   const players = numericArray(packet.packedPlayerUpdates, 25_000);
   if (players !== undefined && players.length % 5 !== 0)
@@ -446,6 +459,9 @@ export function materializeTrustedNationalUpdate(
     ...(packet.nationalAccessionOffers === undefined
       ? {}
       : { nationalAccessionOffers: packet.nationalAccessionOffers }),
+    ...(packet.nationalSatellite === undefined
+      ? {}
+      : { nationalSatellite: packet.nationalSatellite }),
     ...(packet.nationalSettlements === undefined
       ? {}
       : { nationalSettlements: packet.nationalSettlements }),

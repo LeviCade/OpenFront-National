@@ -1,0 +1,130 @@
+name: C7 Class 1 E4 historical snapshot compatibility
+on:
+  push:
+    branches:
+      - stage3/c7c1-e4-cross-build-compat
+      - stage3/conductor7-class1-integration-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  historical-writer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        writer:
+          - 5e956e13f9e3b054c15cfd75110284c5a48fdd5c
+          - 86b476d3ea8aa04821f2caac421738fe2fe1db21
+          - e9eb83cd9a18663d6e40d2b2e88219bed7fccb57
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: current
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.writer }}
+          path: historical
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Execute historical writer
+        working-directory: historical
+        env:
+          C7E4_MODE: writer
+          C7E4_WRITER: ${{ matrix.writer }}
+          C7E4_ARTIFACT_DIR: ${{ runner.temp }}/c7e4-artifact
+          CURRENT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$C7E4_WRITER"
+          test "$(git -C ../current rev-parse HEAD)" = "$CURRENT_SHA"
+          test "$(node -v)" = v24.15.0
+          test "$(npm -v)" = 12.1.0
+          npm run inst
+          cp ../current/tests/national/C7C1E4CrossBuild.test.ts tests/national/
+          npx --no-install vitest run --project node tests/national/C7C1E4CrossBuild.test.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: c7e4-${{ matrix.writer }}
+          path: ${{ runner.temp }}/c7e4-artifact/
+          if-no-files-found: error
+  independent-consumer:
+    needs: historical-writer
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: c7e4-*
+          path: ${{ runner.temp }}/c7e4-download
+      - name: Restore historical bytes
+        env:
+          C7E4_MODE: consumer
+          C7E4_ARTIFACT_DIR: ${{ runner.temp }}/c7e4-input
+          CURRENT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CURRENT_SHA"
+          test "$(node -v)" = v24.15.0
+          test "$(npm -v)" = 12.1.0
+          mkdir -p "$C7E4_ARTIFACT_DIR"
+          for dir in "${{ runner.temp }}"/c7e4-download/c7e4-*; do
+            mv "$dir" "$C7E4_ARTIFACT_DIR/${dir##*/c7e4-}"
+          done
+          npm run inst
+          npx --no-install vitest run --project node tests/national/C7C1E4CrossBuild.test.ts
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [focused, typecheck, full, lint, format, production]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: npm install --global --ignore-scripts npm@12.1.0
+      - name: Exact-head gate
+        env:
+          CURRENT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CURRENT_SHA"
+          test "$(node -v)" = v24.15.0
+          test "$(npm -v)" = 12.1.0
+          npm run inst
+          case "${{ matrix.gate }}" in
+            focused) npx --no-install vitest run --project node tests/core/snapshot tests/national/C7C1E4CrossBuild.test.ts ;;
+            typecheck) npm run typecheck ;;
+            full) npm test ;;
+            lint) npm run lint ;;
+            format) npm run format:check || {
+              npx --no-install oxfmt --write packages/engine/src/snapshot/GameSnapshot.ts tests/core/snapshot/C7C1E4Malformed.test.ts tests/national/C7C1E4CrossBuild.test.ts
+              for file in packages/engine/src/snapshot/GameSnapshot.ts tests/core/snapshot/C7C1E4Malformed.test.ts tests/national/C7C1E4CrossBuild.test.ts; do
+                echo "C7E4_FORMAT_BEGIN $file"
+                cat "$file"
+                echo C7E4_FORMAT_END
+              done
+              exit 1
+            } ;;
+            production) npm run build-prod ;;
+          esac

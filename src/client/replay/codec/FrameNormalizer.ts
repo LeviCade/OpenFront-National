@@ -112,6 +112,7 @@ export const VIEW_DATA_ROUTING: Record<
   nationalAssessments: "dropped",
   // Recipient-private settlement evidence must never enter a replay frame.
   nationalSettlements: "dropped",
+  nationalSatellite: "dropped",
   // Private purchased map intelligence must never be recorded in public replay.
   nationalReconnaissance: "dropped",
   nationalPactDisclosure: "dropped",

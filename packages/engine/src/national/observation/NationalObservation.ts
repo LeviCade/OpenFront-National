@@ -20,7 +20,12 @@ export type {
 
 export type NationId = string;
 export type CoalitionKind = "nap" | "mda" | "empire";
-export type SightSource = "border" | "coast" | "warship" | "recon";
+export type SightSource =
+  | "border"
+  | "coast"
+  | "warship"
+  | "recon"
+  | "satellite";
 
 export interface NationalNation {
   readonly id: NationId;
@@ -160,6 +165,8 @@ export interface VisibleAsset {
   readonly x: number;
   readonly y: number;
   readonly source: SightSource | "own" | "empire";
+  /** Satellite-only facts are live observations, never retained as memory. */
+  readonly satellite?: true;
   /** Origin of inherited empire sight, for revocation after dissolution. */
   readonly sourceNationId?: NationId;
   /** Paid sight memory expires no later than its original authorized lease. */
@@ -344,6 +351,7 @@ export function projectNationalObservation(
       ...(grant.source === "recon"
         ? { reconExpiresAtTick: grant.expiresAtTick }
         : {}),
+      ...(grant.source === "satellite" ? { satellite: true as const } : {}),
     });
   }
 
@@ -471,6 +479,11 @@ export function advanceLastKnown(
     }
   }
   for (const unit of observation.visibleAssets) {
+    if (unit.satellite) {
+      // No current satellite coordinate survives a collapse, expiry or split.
+      remembered.delete(unit.id);
+      continue;
+    }
     remembered.set(unit.id, {
       id: unit.id,
       ownerId: unit.ownerId,

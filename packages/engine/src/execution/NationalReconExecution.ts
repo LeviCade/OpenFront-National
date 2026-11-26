@@ -1,3 +1,4 @@
+import type { NationalSatelliteAdmission } from "@openfront/engine-api/game/NationalSatelliteView";
 import type { ClientID } from "@openfront/engine-api/Schemas";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
@@ -25,6 +26,7 @@ export class NationalReconExecution implements Execution {
     private centerY: number,
     private requestId: string,
     private authenticatedClientID: ClientID,
+    private satelliteAdmission?: NationalSatelliteAdmission,
   ) {}
 
   init(game: Game): void {
@@ -36,6 +38,15 @@ export class NationalReconExecution implements Execution {
     if (this.game === null)
       throw new Error("NATIONAL recon execution not initialized");
     try {
+      if (this.satelliteAdmission !== undefined) {
+        this.game.performNationalSatellite(
+          this.actor,
+          this.requestId,
+          this.satelliteAdmission,
+          this.authenticatedClientID,
+        );
+        return;
+      }
       this.game.performNationalReconnaissance(
         this.actor,
         this.targetId,
@@ -68,6 +79,9 @@ export class NationalReconExecution implements Execution {
       centerY: this.centerY,
       requestId: this.requestId,
       authenticatedClientID: this.authenticatedClientID,
+      ...(this.satelliteAdmission === undefined
+        ? {}
+        : { satelliteAdmission: this.satelliteAdmission }),
     });
   }
 
@@ -80,6 +94,7 @@ export class NationalReconExecution implements Execution {
     this.centerY = s.centerY;
     this.requestId = s.requestId;
     this.authenticatedClientID = s.authenticatedClientID;
+    this.satelliteAdmission = s.satelliteAdmission;
   }
 }
 
@@ -96,6 +111,13 @@ const NationalReconExecutionStateSchema = z.object({
     .max(128)
     .regex(/^[A-Za-z0-9_-]+$/),
   authenticatedClientID: z.string().min(1).max(256),
+  satelliteAdmission: z
+    .object({
+      issuedTick: z.number().int().nonnegative().max(0xffffffff),
+      empireId: z.string().min(1).max(256).nullable(),
+      policyVersion: z.number().int().nonnegative().nullable(),
+    })
+    .optional(),
 });
 type NationalReconExecutionState = z.infer<
   typeof NationalReconExecutionStateSchema
